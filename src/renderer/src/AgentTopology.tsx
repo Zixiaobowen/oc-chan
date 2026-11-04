@@ -218,7 +218,12 @@ function TopologyCanvas({ graph, selectedId, onSelect, onToggleCollapse, filterK
       const previous = lastVisibleCollapsed.current.get(node.agent.id)
       return previous !== undefined && previous !== node.collapsed
     })
-    const preservePositions = !structureChanged || filterChanged || collapseChanged
+    // A filter change starts a fresh arrangement; ordinary updates retain manual positions.
+    if (filterChanged) {
+      manualPositions.current.clear()
+      positions.current.clear()
+    }
+    const preservePositions = !structureChanged || collapseChanged
     lastVisibleCollapsed.current = new Map(graph.nodes.map(node => [node.agent.id, node.collapsed]))
     if (structureChanged) automaticPositions.current = layoutAgentTopology(graph)
     lastLayoutKey.current = graph.layoutKey
@@ -389,7 +394,7 @@ function TopologyCanvas({ graph, selectedId, onSelect, onToggleCollapse, filterK
     onSelect(id)
   }
 
-  return <div ref={canvasRef} className="topology-canvas" role="region" aria-label={t('Agent 拓扑画布', 'Agent topology canvas')} onKeyDownCapture={openWithKeyboard}>
+  return <div ref={canvasRef} className="topology-canvas" role="region" aria-label={t('协作拓扑画布', 'Agent topology canvas')} onKeyDownCapture={openWithKeyboard}>
     <ReactFlow<AgentFlowNode>
       nodes={localizedNodes}
       edges={edges}

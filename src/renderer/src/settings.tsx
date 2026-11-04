@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { AppSettings, SettingsSnapshot, SettingsUpdateFailure } from '../../shared/settings'
+import { THEMES, type ThemeId } from '../../shared/themes'
 import { LanguageProvider } from './i18n'
 
 export const UI_FONTS = {
@@ -23,6 +24,7 @@ interface SettingsContextValue {
   error: SettingsSaveFailure | null
   update: (patch: Partial<AppSettings>) => Promise<void>
   retry: () => Promise<void>
+  previewTheme: (theme: ThemeId | null) => void
 }
 const SettingsContext = createContext<SettingsContextValue | null>(null)
 
@@ -37,11 +39,32 @@ export default function SettingsProvider({ children }: { children: ReactNode }) 
   const [loadError, setLoadError] = useState<string | null>(null)
   const [error, setError] = useState<SettingsSaveFailure | null>(null)
   const [saving, setSaving] = useState(false)
+  const [themePreview, previewTheme] = useState<ThemeId | null>(null)
   const [attempt, setAttempt] = useState(0)
   const pending = useRef(false)
   const originalControl = useRef<HTMLElement | null>(null)
   const retryFocus = useRef<{ trigger: Element | null; moved: boolean } | null>(null)
   const restoreFocus = useRef<HTMLElement | null>(null)
+  const appearance = snapshot ? snapshot.resolvedTheme : 'light'
+  const savedTheme = snapshot ? snapshot.settings[appearance === 'dark' ? 'darkTheme' : 'lightTheme'] : 'oc-chan'
+  const displayedTheme = saving ? savedTheme : themePreview ?? savedTheme
+  const colors = THEMES[displayedTheme][appearance]
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    root.dataset.theme = appearance
+    root.dataset.palette = displayedTheme
+    for (const [name, value] of Object.entries(colors)) root.style.setProperty(`--${name}`, value)
+  }, [appearance, displayedTheme, colors])
+  useEffect(() => {
+    const clearPreview = () => previewTheme(null)
+    const onVisibility = () => { if (document.hidden) clearPreview() }
+    window.addEventListener('blur', clearPreview)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('blur', clearPreview)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [])
   useEffect(() => {
     const onFocus = (event: FocusEvent) => {
       if (retryFocus.current && event.target !== retryFocus.current.trigger) retryFocus.current.moved = true
@@ -83,7 +106,6 @@ export default function SettingsProvider({ children }: { children: ReactNode }) 
   useLayoutEffect(() => {
     if (!snapshot) return
     const root = document.documentElement
-    root.dataset.theme = snapshot.resolvedTheme
     root.lang = snapshot.resolvedLanguage
     root.style.setProperty('--font-scale', String(FONT_SCALES[snapshot.settings.textSize]))
     root.style.setProperty('--ui-font', UI_FONTS[snapshot.settings.uiFont])
@@ -93,6 +115,7 @@ export default function SettingsProvider({ children }: { children: ReactNode }) 
   async function save(patch: Partial<AppSettings>, retrying: boolean) {
     if (pending.current) return
     pending.current = true
+    previewTheme(null)
     if (retrying) retryFocus.current = { trigger: document.activeElement, moved: false }
     else {
       originalControl.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -124,7 +147,7 @@ export default function SettingsProvider({ children }: { children: ReactNode }) 
     <h1>OC Chan</h1>
     {loadError ? <><p role="alert">{loadError}</p><button className="button secondary" onClick={() => setAttempt(value => value + 1)}>重试 / Retry</button></> : <p role="status">正在读取设置 / Loading settings…</p>}
   </main>
-  return <SettingsContext.Provider value={{ snapshot, saving, error, update, retry }}>
+  return <SettingsContext.Provider value={{ snapshot, saving, error, update, retry, previewTheme }}>
     <LanguageProvider language={snapshot.resolvedLanguage}>{children}</LanguageProvider>
   </SettingsContext.Provider>
 }
