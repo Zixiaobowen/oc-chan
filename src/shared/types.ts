@@ -97,13 +97,18 @@ export interface SystemSnapshot {
   memoryTotal: number
   memoryUsed: number
   memoryAvailable: number
+  memoryApp: number
+  memoryWired: number
+  memoryCompressed: number
   swapUsed: number
   diskTotal: number | null
   diskUsed: number | null
   diskAvailable: number | null
   rxBytesPerSecond: number | null
   txBytesPerSecond: number | null
+  networkInterface: string | null
   processes: ProcessInfo[]
+  memoryProcesses: ProcessInfo[]
   history: SystemSample[]
   sources: SourceStatus[]
 }

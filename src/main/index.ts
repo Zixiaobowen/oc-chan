@@ -113,7 +113,7 @@ function presentTrayWindow(): void {
 
 function createTrayWindow(): void {
   const target = new BrowserWindow({
-    width: 360, height: 430, show: false, frame: false,
+    width: 380, height: 560, show: false, frame: false,
     resizable: false, maximizable: false, minimizable: false,
     fullscreenable: false, skipTaskbar: true, alwaysOnTop: true,
     title: 'OC Chan', backgroundColor: windowBackground(desktop.snapshot(settings!.value)),
