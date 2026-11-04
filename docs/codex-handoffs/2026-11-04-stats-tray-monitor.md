@@ -102,3 +102,12 @@
 - 功能提交 `d163aa17814fdbe62c451b18e1d2f124169578dc` 已推送并从远程 `refs/heads/main` 读回。独立提交快照 `npm run build` 通过，系统／Monitor 9 项测试和设置／拓扑 24 项测试均通过。
 - 核对工作流后确认 CI 仅监听默认分支 master，因此继续创建 PR #2，使用固定提交的 `feat/system-tray-metrics` 分支合入 master。完整范围为 main 上已有的拓扑、主题和本次监控三个提交，共 30 个文件；Git 原生差异与 GitHub 文件列表完全一致。
 - 首个 PR 构建 `41815365370` 的 macOS arm64 与 x64 均通过，DMG／ZIP、应用架构、校验和与产物上传完成。拓扑独立复核未发现阻断；主题复核发现跨明暗模式的保存错误隐藏，已在 `SettingsView.tsx` 修复并完成双向实际回归，详见主题交接。修复后的提交须重新通过 PR 构建后才执行合并，不把旧 head 的通过记录当作最终通过。
+
+## 最新主线集成
+
+- 修复提交 `8ad1e92051afc2386f4f2bc52b8eb4bfb7ede975` 增量复审通过，PR 构建 `41816807077` 的 macOS arm64／x64、DMG／ZIP、应用架构、校验和与上传全部通过。
+- 合并接口返回 HTTP 502，随后读回 PR 仍为 OPEN；同期 master 已合入任务详情与历史的 PR #1，当前基线为 `5c43fc9d22b2991c97a0ed43c1436a4b71e875ce`。旧基线上的标准 Git 推送被拒绝为非快进，未强推或覆盖新提交。
+- 在独立克隆中将已复审提交与最新 master 合并为 `91e7d2c07ab44dd7e8084208399ca61efb083521`。自动合并涉及 README、DESIGN、主进程入口和共享类型；已逐项核对任务历史 IPC、取消与退出释放仍完整，系统指标和主题修复保持原实现。相对最新 master 的功能范围仍为原来的 30 个文件。
+- 集成快照 `npm run build` 通过；Monitor、ScheduleHistoryReader、HermesHistoryProvider 的 15 项定向测试通过。系统采集、设置与拓扑未变化部分复用前述有效测试及实际界面记录，不执行全仓测试。
+- 真实数据 smoke 调用当前集成源码的系统采集和只读 Hermes 历史 provider：系统与网络来源均为 ok，三项内存分项有效，10 条 RSS 排行按内存递减；所选 Hermes 任务读取成功、0 条历史、每页上限 25、hasMore=false。该补充 smoke 不替代渲染界面或 IPC 验收，分页与取消由上述定向测试覆盖。
+- 最新合并内容还需通过该 PR 最终 head 的双架构构建后合入；实际 merged 状态、合并时间与 SHA 以 GitHub 读回为准。本机安装、部署、删除分支及无关工作区修改均不在本次操作范围内。
