@@ -139,6 +139,7 @@ const sourceLabels: Record<string, string> = {
   '近期调用元数据': 'Recent call metadata', '会话事件订阅': 'Session event subscription',
   '系统指标': 'System metrics', '内存': 'Memory', '磁盘': 'Disk', '网络': 'Network', '进程': 'Processes', '网络接口': 'Network interface',
   '系统调度': 'System schedules', 'OMP 任务元数据': 'OMP task metadata', 'Hermes 任务元数据': 'Hermes task metadata',
+  'Hermes 执行状态': 'Hermes execution status',
   'OMP 任务': 'OMP task', 'Hermes 任务': 'Hermes task', '当前用户 crontab': 'Current user crontab', '调度边界': 'Scheduling boundaries'
 }
 
@@ -181,6 +182,7 @@ function sourceDetail(source: SourceStatus): string {
     case 'crontab': return value.replace(/^(\d+) 条；不读取其他用户 crontab；cron 不提供每条任务的运行状态$/, '$1 entries; other users’ crontabs are not read. cron does not report per-task runtime status.')
     case 'omp-cron':
     case 'hermes-cron': return value.replace(/^(\d+) 条任务元数据；仅使用名称、标识、调度与状态$/, '$1 task metadata entries; only names, identifiers, schedules and status are used.')
+    case 'hermes-runtime': return value.replace(/^已核对 (\d+) 条任务的执行记录与心跳；(\d+) 条当前状态未确认。每次最多读取 256 条任务、4096 条执行记录；不读取执行正文。$/, 'Checked execution records and heartbeats for $1 tasks; $2 current states are unconfirmed. Each pass reads at most 256 tasks and 4096 execution records, without execution content.')
   }
   if (source.id.startsWith('launchctl:')) return value.split('；').map(part => part
     .replace(/^已加载服务：(\d+) 项$/, 'Loaded services: $1 entries')

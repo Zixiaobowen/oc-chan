@@ -1,10 +1,11 @@
 import os from 'node:os'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
-import { readdir, readFile, stat } from 'node:fs/promises'
+import { readdir, stat } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { ScheduledJob, ScheduleSnapshot, SourceStatus } from '../../shared/types'
+import { collectHermesRuntime, readScheduleMetadata, ReadFailure, type HermesJobMetadata } from './hermes-runtime'
 
 const exec = promisify(execFile)
 type RecordValue = Record<string, unknown>
@@ -15,12 +16,9 @@ interface DomainStatus {
   loadedKnown: boolean
   disabledKnown: boolean
 }
-interface MetadataJob {
-  id: string
+interface MetadataJob extends HermesJobMetadata {
   name?: string
   label?: string
-  enabled?: boolean
-  state?: string
   schedule?: RecordValue
   calendar?: unknown
   nextRun?: string
@@ -34,6 +32,7 @@ const integer = (value: unknown): value is number => typeof value === 'number' &
 
 // Never surface subprocess stderr: it may include a command, environment, or job payload.
 function errorDetail(error: unknown): string {
+  if (error instanceof ReadFailure) return error.message
   const code = record(error) ? error.code : undefined
   if (code === 'EACCES' || code === 'EPERM') return '权限不足'
   if (record(error) && typeof error.stderr === 'string' && /permission denied|operation not permitted|not privileged/i.test(error.stderr)) return '权限不足'
@@ -218,18 +217,20 @@ function metadataSchedule(job: MetadataJob): Pick<ScheduledJob, 'kind' | 'schedu
 
 async function readMetadata(file: string, id: string, label: string, sources: SourceStatus[]): Promise<MetadataJob[]> {
   try {
-    const raw: unknown = JSON.parse(await readFile(file, 'utf8'))
+    const raw = await readScheduleMetadata(file)
     if (!record(raw) || !Array.isArray(raw.jobs)) throw new Error('无效 jobs 数据')
     const jobs: MetadataJob[] = []
     let invalid = 0
     for (const item of raw.jobs) {
       if (!record(item) || !text(item.id) || (item.enabled !== undefined && typeof item.enabled !== 'boolean')) { invalid++; continue }
-      // Whitelist metadata. Prompt, script, provider, delivery, and token fields are never accessed.
+      // Whitelist scheduling and execution metadata; never expose prompts, commands or error bodies.
       const schedule = record(item.schedule) ? { kind: item.schedule.kind, expr: item.schedule.expr,
         minutes: item.schedule.minutes, run_at: item.schedule.run_at } : undefined
       const job: MetadataJob = { id: item.id as string, name: text(item.name), label: text(item.label),
         enabled: typeof item.enabled === 'boolean' ? item.enabled : undefined, state: text(item.state),
-        schedule, calendar: item.calendar, nextRun: text(item.next_run_at), notBefore: text(item.not_before) }
+        schedule, calendar: item.calendar, nextRun: text(item.next_run_at), notBefore: text(item.not_before),
+        fireClaimAt: item.fire_claim == null ? undefined : record(item.fire_claim) ? text(item.fire_claim.at) ?? null : null,
+        lastRunAt: text(item.last_run_at), lastStatus: text(item.last_status) }
       try { metadataSchedule(job) }
       catch { invalid++; continue }
       jobs.push(job)
@@ -340,10 +341,13 @@ export async function collectSchedules(): Promise<ScheduleSnapshot> {
   const sources: SourceStatus[] = []
   const home = os.homedir()
   const uid = process.getuid!()
+  const hermesMetadata = readMetadata(path.join(home, '.hermes/cron/jobs.json'), 'hermes-cron', 'Hermes 任务元数据', sources)
+  const hermesRuntimePromise = hermesMetadata.then(jobs => jobs.length
+    ? collectHermesRuntime(jobs, path.join(home, '.hermes/cron/executions.db')) : undefined)
   const [gui, user, system, omp, hermes] = await Promise.all([
     readDomain(`gui/${uid}`, sources), readDomain(`user/${uid}`, sources), readDomain('system', sources),
     readMetadata(path.join(home, '.omp/cron/jobs.json'), 'omp-cron', 'OMP 任务元数据', sources),
-    readMetadata(path.join(home, '.hermes/cron/jobs.json'), 'hermes-cron', 'Hermes 任务元数据', sources)
+    hermesMetadata
   ])
   const directories = [
     { directory: path.join(home, 'Library/LaunchAgents'), scope: 'user' as const },
@@ -425,6 +429,8 @@ export async function collectSchedules(): Promise<ScheduleSnapshot> {
     try { merged = mergeOmpMetadata(merged, [item], path.join(home, '.omp/cron/jobs.json')) }
     catch (error) { sources.push({ id: `omp-job:${item.id}`, label: 'OMP 任务', state: 'error', detail: errorDetail(error) }) }
   }
+  const hermesRuntime = await hermesRuntimePromise
+  if (hermesRuntime) sources.push(hermesRuntime.source)
   const hermesSeen = new Set<string>()
   for (const item of hermes) {
     if (hermesSeen.has(item.id)) continue
@@ -433,7 +439,7 @@ export async function collectSchedules(): Promise<ScheduleSnapshot> {
       const disabled = item.enabled === false || item.state === 'paused' || item.state === 'completed'
       const next = item.nextRun && /(?:Z|[+-]\d\d:\d\d)$/.test(item.nextRun) ? Date.parse(item.nextRun) : NaN
       merged.push({ id: `hermes-job:${item.id}`, name: item.name ?? item.id, source: 'Hermes 任务（由调度器执行）', scope: 'user', origin: 'personal',
-        ...metadataSchedule(item), state: disabled ? 'disabled' : 'unknown',
+        ...metadataSchedule(item), ...hermesRuntime!.statuses.get(item.id)!,
         nextRun: !disabled && Number.isFinite(next) && next > Date.now() ? new Date(next).toISOString() : undefined,
         file: path.join(home, '.hermes/cron/jobs.json') })
     } catch (error) { sources.push({ id: `hermes-job:${item.id}`, label: 'Hermes 任务', state: 'error', detail: errorDetail(error) }) }

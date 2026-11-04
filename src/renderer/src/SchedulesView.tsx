@@ -52,6 +52,18 @@ function jobSource(source: string, language: ResolvedLanguage): string {
   return labels[source] ?? source
 }
 
+const stateReasons: Record<NonNullable<ScheduledJob['stateReason']>, [string, string]> = {
+  'hermes-read-failed': ['无法读取 Hermes 执行状态，请在「数据来源」查看原因。', 'Hermes execution status could not be read. See Data sources for the cause.'],
+  'hermes-dispatching': ['Hermes 已领取本次任务，尚未确认开始执行。', 'Hermes has claimed this run; execution has not been confirmed.'],
+  'hermes-unconfirmed': ['执行记录、心跳或进程信息不足，无法确认任务是否仍在运行。', 'The execution record, heartbeat or process information is insufficient to confirm an active run.'],
+  'hermes-state-unsupported': ['Hermes 未提供可识别的调度状态。', 'Hermes did not provide a recognized scheduling state.']
+}
+const runResults: Record<NonNullable<ScheduledJob['lastRun']>['result'], [string, string]> = {
+  succeeded: ['执行成功', 'Succeeded'], failed: ['执行失败', 'Failed'],
+  'delivery-failed': ['执行成功，投递失败', 'Succeeded; delivery failed'],
+  blocked: ['配置阻止执行', 'Blocked by configuration'], unknown: ['结果未确认', 'Result unconfirmed']
+}
+
 export function ScheduleTable({ jobs, onSelect, selectedId }: { jobs: ScheduledJob[]; onSelect: (job: ScheduledJob) => void; selectedId?: string | null }) {
   const { language, t } = useI18n()
   return <div className="table-scroll"><table className="data-table schedule-table">
@@ -142,7 +154,19 @@ export default function SchedulesView({ data, error }: { data: ScheduleSnapshot 
     {selectedId && <section id="schedule-task-details" ref={detailRef} tabIndex={-1} aria-label={t('任务详情', 'Task details')} className="detail-panel schedule-detail" onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); closeDetails() } }}>
       <div className="section-heading"><h2>{selected?.name ?? t('任务已不在当前列表', 'Task no longer in the current list')}</h2><button className="icon-button" aria-label={t('关闭任务详情', 'Close task details')} onClick={closeDetails}><X size={18} /></button></div>
       {selected && !selectedVisible && <p className="footnote">{t('该任务不在当前筛选结果中，详情保留当前快照。', 'This task is outside the current filters. Its details remain available from the current snapshot.')}</p>}
-      {selected && <dl className="detail-grid"><div><dt>{t('状态', 'Status')}</dt><dd><Badge state={selected.state} /></dd></div><div><dt>{t('最近退出码', 'Last exit code')}</dt><dd>{selected.lastExitCode ?? t('来源未提供', 'Not provided by source')}</dd></div><div className="span-2"><dt>{t('执行计划', 'Schedule')}</dt><dd>{scheduleText(selected.schedule, language)}</dd></div><div className="span-2"><dt>{t('配置文件', 'Configuration file')}</dt><dd className="mono">{selected.file || t('来源未提供文件路径', 'Source did not provide a file path')}</dd></div><div className="span-2"><dt>{t('可执行程序', 'Executable')}</dt><dd className="mono">{selected.executable || t('来源未提供', 'Not provided by source')}</dd></div>{selected.pid && <div><dt>{t('当前 PID', 'Current PID')}</dt><dd className="mono">{selected.pid}</dd></div>}{selected.nextRun && <div><dt>{t('下次计划', 'Next run')}</dt><dd>{new Date(selected.nextRun).toLocaleString(language)}</dd></div>}</dl>}
+      {selected && <dl className="detail-grid">
+        <div><dt>{t('当前状态', 'Current status')}</dt><dd><Badge state={selected.state} /></dd></div>
+        {selected.id.startsWith('hermes-job:') ? <>
+          <div><dt>{t('最近执行结果', 'Last run result')}</dt><dd>{selected.lastRun ? t(...runResults[selected.lastRun.result]) : t('暂无执行记录', 'No run recorded')}</dd></div>
+          {selected.lastRun?.at && <div><dt>{t('结果记录时间', 'Result recorded at')}</dt><dd>{new Date(selected.lastRun.at).toLocaleString(language)}</dd></div>}
+        </> : <div><dt>{t('最近退出码', 'Last exit code')}</dt><dd>{selected.lastExitCode ?? t('来源未提供', 'Not provided by source')}</dd></div>}
+        {selected.stateReason && <div className="span-2"><dt>{t('状态说明', 'Status details')}</dt><dd>{t(...stateReasons[selected.stateReason])}</dd></div>}
+        <div className="span-2"><dt>{t('执行计划', 'Schedule')}</dt><dd>{scheduleText(selected.schedule, language)}</dd></div>
+        <div className="span-2"><dt>{t('配置文件', 'Configuration file')}</dt><dd className="mono">{selected.file || t('来源未提供文件路径', 'Source did not provide a file path')}</dd></div>
+        <div className="span-2"><dt>{t('可执行程序', 'Executable')}</dt><dd className="mono">{selected.executable || t('来源未提供', 'Not provided by source')}</dd></div>
+        {selected.pid && <div><dt>{t('当前 PID', 'Current PID')}</dt><dd className="mono">{selected.pid}</dd></div>}
+        {selected.nextRun && <div><dt>{t('下次计划', 'Next run')}</dt><dd>{new Date(selected.nextRun).toLocaleString(language)}</dd></div>}
+      </dl>}
     </section>}
     {data && <Sources sources={data.sources} compact />}
     <p className="footnote">{t('定时任务数包括已识别的周期与日历调度配置（含停用项）。登录启动项与常驻服务单独列出；这里仅查看，不会执行或修改任务。', 'Scheduled task counts include recognized interval and calendar schedules, including disabled entries. Login items and persistent services are listed separately. This view does not run or modify tasks.')}</p>

@@ -55,6 +55,8 @@ export interface ScheduledJob {
   kind: 'calendar' | 'interval' | 'startup' | 'service'
   schedule: string
   state: 'running' | 'waiting' | 'disabled' | 'unloaded' | 'unknown'
+  stateReason?: 'hermes-read-failed' | 'hermes-dispatching' | 'hermes-unconfirmed' | 'hermes-state-unsupported'
+  lastRun?: { at?: string; result: 'succeeded' | 'failed' | 'delivery-failed' | 'blocked' | 'unknown' }
   pid?: number
   lastExitCode?: number
   file?: string
