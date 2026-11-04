@@ -4,6 +4,7 @@ import { useI18n } from './i18n'
 import { useSettings } from './settings'
 import { NativeSelect } from './components'
 import SettingsSaveError from './SettingsSaveError'
+import ThemePicker from './ThemePicker'
 import './settings.css'
 
 function Choices<T extends string>({ name, label, value, options, disabled, onChange }: {
@@ -18,18 +19,18 @@ function Choices<T extends string>({ name, label, value, options, disabled, onCh
   </fieldset>
 }
 
-function SettingRow({ name, label, children }: { name: keyof AppSettings; label: string; children: ReactNode }) {
+function SettingRow({ name, label, children, errorKeys }: { name: keyof AppSettings; label: string; children: ReactNode; errorKeys?: readonly (keyof AppSettings)[] }) {
   const { error } = useSettings()
   return <section id={`setting-${name}`} className="setting-row" aria-labelledby={`setting-${name}-label`}>
     <h2 id={`setting-${name}-label`}>{label}</h2>
     <div className="setting-control">{children}</div>
-    {error && Object.hasOwn(error.patch, name) && <SettingsSaveError settingLabel={label} />}
+    {error && (errorKeys ? errorKeys.some(key => Object.hasOwn(error.patch, key)) : Object.hasOwn(error.patch, name)) && <SettingsSaveError settingLabel={label} />}
   </section>
 }
 
 export default function SettingsView() {
   const { t } = useI18n()
-  const { snapshot: { settings, platform }, saving, error, update } = useSettings()
+  const { snapshot: { settings, platform, resolvedTheme }, saving, error, update } = useSettings()
   const change = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => { if (!saving) void update({ [key]: value }) }
   return <div className="settings-layout">
     <div className="settings-list" aria-busy={saving}>
@@ -37,6 +38,9 @@ export default function SettingsView() {
         <Choices name="appearance" label={t('外观', 'Appearance')} value={settings.appearance} disabled={saving} onChange={value => change('appearance', value)} options={[
           { value: 'system', label: t('跟随系统', 'System') }, { value: 'light', label: t('浅色', 'Light') }, { value: 'dark', label: t('深色', 'Dark') }
         ]} />
+      </SettingRow>
+      <SettingRow name={resolvedTheme === 'dark' ? 'darkTheme' : 'lightTheme'} errorKeys={['lightTheme', 'darkTheme']} label={t('主题', 'Theme')}>
+        <ThemePicker />
       </SettingRow>
       <SettingRow name="language" label={t('语言', 'Language')}>
         <Choices name="language" label={t('语言', 'Language')} value={settings.language} disabled={saving} onChange={value => change('language', value)} options={[
