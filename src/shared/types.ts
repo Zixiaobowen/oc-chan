@@ -70,6 +70,25 @@ export interface ScheduleSnapshot {
   sources: SourceStatus[]
 }
 
+export interface ScheduleExecution {
+  id: string
+  claimedAt: string
+  startedAt?: string
+  finishedAt?: string
+  status: 'claimed' | 'running' | 'succeeded' | 'failed' | 'unknown'
+  delivery?: 'delivered' | 'failed' | 'skipped' | 'unknown'
+}
+
+export interface ScheduleHistory {
+  jobId: string
+  source: 'hermes' | 'unavailable'
+  entries: ScheduleExecution[]
+  offset: number
+  limit: number
+  hasMore: boolean
+  collectedAt: string
+}
+
 export interface ProcessInfo {
   pid: number
   name: string
@@ -131,5 +150,7 @@ export interface MonitorApi {
   snapshot(): Promise<MonitorSnapshot>
   refresh(section?: MonitorSection): Promise<void>
   focusAgentInTern(agentId: string): Promise<{ error: string | null }>
+  scheduleHistory(jobId: string, offset?: number): Promise<ScheduleHistory>
+  cancelScheduleHistory(): void
   subscribe(listener: (update: MonitorUpdate) => void): () => void
 }

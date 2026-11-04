@@ -6,6 +6,8 @@ const api: MonitorApi = {
   snapshot: () => ipcRenderer.invoke('monitor:snapshot'),
   refresh: (section) => ipcRenderer.invoke('monitor:refresh', section),
   focusAgentInTern: (agentId) => ipcRenderer.invoke('monitor:focus-agent-in-tern', agentId),
+  scheduleHistory: (jobId, offset) => ipcRenderer.invoke('monitor:schedule-history', jobId, offset),
+  cancelScheduleHistory: () => ipcRenderer.send('monitor:cancel-schedule-history'),
   subscribe: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, update: MonitorUpdate) => listener(update)
     ipcRenderer.on('monitor:changed', handler)
