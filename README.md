@@ -101,6 +101,10 @@ macOS 存在带未公开 `StartCalendarInterval.Second` 字段的系统任务：
 
 状态筛选与列表徽标保持一致：运行中、等待触发、已停用、未加载、状态未知。“未知”不等于停用，最近非零退出码也不自动改写当前运行状态；查看最近退出码可打开任务详情。类型、范围、状态和搜索共同过滤结果，不会执行、停用或修改任何任务。
 
+Hermes 当前状态结合 `jobs.json`、`executions.db` 与进程证据：已启用且排程中、没有在途执行或未清理心跳的任务显示“等待触发”；执行记录为 running、心跳在 300 秒内且 PID 的启动时间吻合时显示“运行中”。有效运行证据优先于暂停配置。任务已领取但尚未开始、心跳过期、PID 复用、数据库不可读或未知调度状态都保留“状态未知”，详情说明原因；不会因上一次执行失败就改写当前调度状态。详情独立展示最近执行成功、失败、投递失败或结果未确认，以及结果记录时间；没有历史时显示暂无执行记录。
+
+Hermes 执行数据库通过 Electron 自带 SQLite 在独立、只读的短时子进程中查询，不依赖外部 Node、Python 或系统 SQLite，也不触发任务或修改调度数据。任务元数据单文件上限 1 MiB；每轮最多 256 个任务、4096 条相关执行记录、4 MiB 子进程输出，SQLite 堆预算 8 MiB，单个命令最多 3 秒。超限会明确报告采集不完整并保留未知状态，不截断后假称完整。采集与 launchd 查询并行，沿用每 30 秒刷新及同类请求合并。
+
 范围菜单按“配置来源”和“运行范围”分组，搜索使用当前界面显示的名称、来源与执行计划；英文界面的显示词同样可搜索。结果数量提供辅助技术状态播报，采样时间独立显示，不把暂停的快照描述成仍在更新。点击任务查看详情，Esc 或关闭按钮返回原任务；若原任务已被筛掉或移出快照，焦点返回搜索框。详情会说明任务已不在当前筛选结果中。首次桌面数据连接失败时，任务区显示数据不可用与数量未知，避免一直停留在读取提示。
 
 首次快照读取失败时，其他单个采样分区更新不会提前清掉整体错误；收到 Agent、调度、系统三个分区，或完整快照 / 手动重试成功后才恢复。定时任务页点击重试会将焦点移到搜索框，错误提示消失后仍可继续键盘操作。
@@ -145,6 +149,7 @@ Agent 活跃状态、任务范围／状态和两项字体设置的下拉框使�
 ```sh
 npm run typecheck
 node --import tsx --test src/main/collectors/agents.test.ts src/main/collectors/schedules.test.ts src/main/collectors/system.test.ts
+node --import tsx --test src/main/collectors/hermes-runtime.test.ts
 node --import tsx --test src/renderer/src/agent-topology.test.ts
 node --import tsx --test src/main/live-agents.test.ts src/main/monitor.test.ts
 node --import tsx --test src/main/tern-navigation.test.ts
