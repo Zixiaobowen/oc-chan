@@ -69,8 +69,8 @@ jobs:
         run: |
           test -f "$APP_DIRECTORY/Contents/Resources/app.asar"
           test -x "$APP_DIRECTORY/Contents/Resources/tern-navigation/present-window"
-          lipo -verify_arch "$MACHO_ARCH" "$APP_DIRECTORY/Contents/MacOS/OC Chan"
-          lipo -verify_arch "$MACHO_ARCH" "$APP_DIRECTORY/Contents/Resources/tern-navigation/present-window"
+          lipo "$APP_DIRECTORY/Contents/MacOS/OC Chan" -verify_arch "$MACHO_ARCH"
+          lipo "$APP_DIRECTORY/Contents/Resources/tern-navigation/present-window" -verify_arch "$MACHO_ARCH"
 
       - name: Generate and verify checksums
         working-directory: release
