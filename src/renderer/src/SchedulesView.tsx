@@ -1,9 +1,11 @@
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { CalendarClock, Search, X } from 'lucide-react'
 import type { ScheduledJob, ScheduleSnapshot } from '../../shared/types'
-import { Badge, Empty, NativeSelect, Sources, time, useDetails } from './components'
+import { Badge, Empty, NativeSelect, Sources, time } from './components'
 import { useI18n } from './i18n'
 import type { ResolvedLanguage } from '../../shared/settings'
+import ScheduleHistory from './ScheduleHistory'
+import './schedule-details.css'
 
 const scheduleLabels: Record<string, string> = {
   '常驻 / 条件保活（非定时任务）': 'Persistent / conditional keep-alive (not scheduled)',
@@ -64,12 +66,15 @@ const runResults: Record<NonNullable<ScheduledJob['lastRun']>['result'], [string
   blocked: ['配置阻止执行', 'Blocked by configuration'], unknown: ['结果未确认', 'Result unconfirmed']
 }
 
-export function ScheduleTable({ jobs, onSelect, selectedId }: { jobs: ScheduledJob[]; onSelect: (job: ScheduledJob) => void; selectedId?: string | null }) {
+export function ScheduleTable({ jobs, onSelect, selectedId }: { jobs: ScheduledJob[]; onSelect: (job: ScheduledJob, trigger: HTMLButtonElement) => void; selectedId?: string | null }) {
   const { language, t } = useI18n()
   return <div className="table-scroll"><table className="data-table schedule-table">
     <thead><tr><th scope="col">{t('任务', 'Task')}</th><th scope="col">{t('执行计划', 'Schedule')}</th><th scope="col">{t('范围', 'Scope')}</th><th scope="col">{t('状态', 'Status')}</th></tr></thead>
-    <tbody>{jobs.map(job => <tr key={job.id} data-selected={selectedId === job.id}>
-      <td><button className="entity-button" aria-expanded={selectedId === undefined ? undefined : selectedId === job.id} aria-controls={selectedId === job.id ? 'schedule-task-details' : undefined} onClick={() => onSelect(job)}><span className="schedule-avatar"><CalendarClock size={17} aria-hidden="true" /></span><span className="entity-text"><strong title={job.name}>{job.name}</strong><small title={jobSource(job.source, language)}>{jobSource(job.source, language)}</small></span></button></td>
+    <tbody>{jobs.map(job => <tr key={job.id} data-selected={selectedId === job.id} onClick={event => {
+      const trigger = event.currentTarget.querySelector('button')
+      if (trigger) onSelect(job, trigger)
+    }}>
+      <td><button className="entity-button" aria-expanded={selectedId === undefined ? undefined : selectedId === job.id} aria-controls={selectedId === job.id ? 'schedule-task-details' : undefined} onClick={event => { event.stopPropagation(); onSelect(job, event.currentTarget) }}><span className="schedule-avatar"><CalendarClock size={17} aria-hidden="true" /></span><span className="entity-text"><strong title={job.name}>{job.name}</strong><small title={jobSource(job.source, language)}>{jobSource(job.source, language)}</small></span></button></td>
       <td className="schedule-value">{scheduleText(job.schedule, language)}</td>
       <td><span className="muted">{job.scope === 'user' ? t('用户', 'User') : t('系统', 'System')}</span></td>
       <td><Badge state={job.state} /></td>
@@ -83,8 +88,16 @@ export default function SchedulesView({ data, error }: { data: ScheduleSnapshot 
   const [kind, setKind] = useState('scheduled')
   const [scope, setScope] = useState<'all' | 'personal' | ScheduledJob['scope']>('all')
   const [status, setStatus] = useState<'all' | ScheduledJob['state']>('all')
-  const { selectedId, detailRef, select, close } = useDetails()
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
+  const [documentHidden, setDocumentHidden] = useState(document.hidden)
   const searchRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLElement>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const closeRef = useRef<HTMLButtonElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const drawerRef = useRef<HTMLElement>(null)
+  const retainedJob = useRef<ScheduledJob | undefined>(undefined)
   const filtering = kind !== 'scheduled' || scope !== 'all' || status !== 'all' || Boolean(query.trim())
   const filtered = useMemo(() => {
     const search = query.trim().toLowerCase()
@@ -98,10 +111,69 @@ export default function SchedulesView({ data, error }: { data: ScheduleSnapshot 
   }, [data, query, kind, scope, status, language])
   const selected = data?.jobs.find(job => job.id === selectedId)
   const selectedVisible = selectedId !== null && filtered.some(job => job.id === selectedId)
-  function closeDetails() {
-    close()
-    if (!selectedVisible) searchRef.current?.focus()
+  if (selected) retainedJob.current = selected
+  const displayed = open ? selected : retainedJob.current
+  const closeDetails = useCallback(() => {
+    window.monitor?.cancelScheduleHistory()
+    setOpen(false)
+    const trigger = triggerRef.current
+    if (selectedVisible && trigger?.isConnected && listRef.current?.contains(trigger)) trigger.focus({ preventScroll: true })
+    else searchRef.current?.focus({ preventScroll: true })
+  }, [selectedVisible])
+  function selectJob(job: ScheduledJob, trigger: HTMLButtonElement) {
+    triggerRef.current = trigger
+    if (open && selectedId === job.id) {
+      closeRef.current?.focus({ preventScroll: true })
+      return
+    }
+    window.monitor?.cancelScheduleHistory()
+    setSelectedId(job.id)
+    setOpen(true)
   }
+  useLayoutEffect(() => {
+    if (!open) return
+    if (scrollRef.current) scrollRef.current.scrollTop = 0
+    closeRef.current?.focus({ preventScroll: true })
+  }, [open, selectedId])
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      event.preventDefault()
+      closeDetails()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open, closeDetails])
+  useEffect(() => {
+    if (!open) return
+    const onFocusIn = (event: FocusEvent) => {
+      const target = event.target
+      const drawer = drawerRef.current
+      if (!(target instanceof HTMLElement) || !drawer || drawer.contains(target)) return
+      const bounds = target.getBoundingClientRect()
+      const panel = drawer.getBoundingClientRect()
+      const x = bounds.left + bounds.width / 2
+      const y = bounds.top + bounds.height / 2
+      if (x >= panel.left && x < panel.right && y >= panel.top && y < panel.bottom) {
+        window.monitor?.cancelScheduleHistory()
+        setOpen(false)
+      }
+    }
+    document.addEventListener('focusin', onFocusIn)
+    return () => document.removeEventListener('focusin', onFocusIn)
+  }, [open])
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.hidden) window.monitor?.cancelScheduleHistory()
+      setDocumentHidden(document.hidden)
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.monitor?.cancelScheduleHistory()
+    }
+  }, [])
   function clearFilters() {
     setKind('scheduled')
     setScope('all')
@@ -141,7 +213,7 @@ export default function SchedulesView({ data, error }: { data: ScheduleSnapshot 
       </div>
     </div>
     {scope === 'personal' && <p id="schedule-personal-help" className="footnote">{t('按任务元数据、个人命名及主目录脚本识别个人配置，排除苹果任务、应用更新器和调度器自身。无法确认归属的任务可在“所有范围”查看。', 'Personal configuration is identified from task metadata, personal naming and scripts in your home directory. Apple tasks, app updaters and schedulers themselves are excluded. Tasks with uncertain ownership remain under All scopes.')}</p>}
-    <section className="panel schedule-panel" aria-label={t('任务列表', 'Task list')}>
+    <section ref={listRef} className="panel schedule-panel" aria-label={t('任务列表', 'Task list')}>
       <div className="list-caption schedule-caption">
         <div className="schedule-result-summary">
           <span role="status" aria-live="polite" aria-atomic="true">{data ? t(`${filtered.length} 项${kind === 'scheduled' ? '定时任务' : kind === 'services' ? '服务 / 启动项' : '任务'}`, `${filtered.length} ${kind === 'scheduled' ? 'scheduled tasks' : kind === 'services' ? 'services / startup items' : 'tasks'}`) : error ? t('采集失败 · 数量未知', 'Collection failed · Count unknown') : t('正在读取 · 数量待确认', 'Loading · Count pending')}</span>
@@ -149,25 +221,37 @@ export default function SchedulesView({ data, error }: { data: ScheduleSnapshot 
         </div>
         {data && <span>{t('采样于', 'Sampled at')} {time(data.collectedAt, language)}</span>}
       </div>
-      {!data ? <Empty title={error ? t('尚未取得调度数据', 'Schedule data unavailable') : t('正在读取调度配置', 'Reading schedule configuration')}>{error ? t('请查看上方错误信息并重试。', 'Review the error above and retry.') : t('首次查询需要读取系统与用户任务。', 'The first query reads system and user tasks.')}</Empty> : filtered.length ? <ScheduleTable jobs={filtered} selectedId={selectedId} onSelect={job => select(job.id)} /> : <Empty title={t('没有匹配的任务', 'No matching tasks')}>{t('调整任务类型、范围、状态或搜索词。', 'Adjust the task type, scope, status or search.')}</Empty>}
+      {!data ? <Empty title={error ? t('尚未取得调度数据', 'Schedule data unavailable') : t('正在读取调度配置', 'Reading schedule configuration')}>{error ? t('请查看上方错误信息并重试。', 'Review the error above and retry.') : t('首次查询需要读取系统与用户任务。', 'The first query reads system and user tasks.')}</Empty> : filtered.length ? <ScheduleTable jobs={filtered} selectedId={open ? selectedId : null} onSelect={selectJob} /> : <Empty title={t('没有匹配的任务', 'No matching tasks')}>{t('调整任务类型、范围、状态或搜索词。', 'Adjust the task type, scope, status or search.')}</Empty>}
     </section>
-    {selectedId && <section id="schedule-task-details" ref={detailRef} tabIndex={-1} aria-label={t('任务详情', 'Task details')} className="detail-panel schedule-detail" onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); closeDetails() } }}>
-      <div className="section-heading"><h2>{selected?.name ?? t('任务已不在当前列表', 'Task no longer in the current list')}</h2><button className="icon-button" aria-label={t('关闭任务详情', 'Close task details')} onClick={closeDetails}><X size={18} /></button></div>
-      {selected && !selectedVisible && <p className="footnote">{t('该任务不在当前筛选结果中，详情保留当前快照。', 'This task is outside the current filters. Its details remain available from the current snapshot.')}</p>}
-      {selected && <dl className="detail-grid">
-        <div><dt>{t('当前状态', 'Current status')}</dt><dd><Badge state={selected.state} /></dd></div>
-        {selected.id.startsWith('hermes-job:') ? <>
-          <div><dt>{t('最近执行结果', 'Last run result')}</dt><dd>{selected.lastRun ? t(...runResults[selected.lastRun.result]) : t('暂无执行记录', 'No run recorded')}</dd></div>
-          {selected.lastRun?.at && <div><dt>{t('结果记录时间', 'Result recorded at')}</dt><dd>{new Date(selected.lastRun.at).toLocaleString(language)}</dd></div>}
-        </> : <div><dt>{t('最近退出码', 'Last exit code')}</dt><dd>{selected.lastExitCode ?? t('来源未提供', 'Not provided by source')}</dd></div>}
-        {selected.stateReason && <div className="span-2"><dt>{t('状态说明', 'Status details')}</dt><dd>{t(...stateReasons[selected.stateReason])}</dd></div>}
-        <div className="span-2"><dt>{t('执行计划', 'Schedule')}</dt><dd>{scheduleText(selected.schedule, language)}</dd></div>
-        <div className="span-2"><dt>{t('配置文件', 'Configuration file')}</dt><dd className="mono">{selected.file || t('来源未提供文件路径', 'Source did not provide a file path')}</dd></div>
-        <div className="span-2"><dt>{t('可执行程序', 'Executable')}</dt><dd className="mono">{selected.executable || t('来源未提供', 'Not provided by source')}</dd></div>
-        {selected.pid && <div><dt>{t('当前 PID', 'Current PID')}</dt><dd className="mono">{selected.pid}</dd></div>}
-        {selected.nextRun && <div><dt>{t('下次计划', 'Next run')}</dt><dd>{new Date(selected.nextRun).toLocaleString(language)}</dd></div>}
-      </dl>}
-    </section>}
+    <aside ref={drawerRef} id="schedule-task-details" className="schedule-drawer" data-open={open} data-motion-paused={documentHidden} inert={!open} aria-hidden={!open} aria-labelledby="schedule-drawer-title" role="dialog" aria-modal="false">
+      <header className="schedule-drawer-header">
+        <h2 id="schedule-drawer-title">{t('任务详情', 'Task details')}</h2>
+        <button ref={closeRef} className="icon-button" aria-label={t('关闭任务详情', 'Close task details')} title={t('关闭任务详情 (Esc)', 'Close task details (Esc)')} onClick={closeDetails}><X size={18} aria-hidden="true" /></button>
+      </header>
+      <div ref={scrollRef} className="schedule-drawer-scroll">
+        <h3 className="schedule-drawer-name">{displayed?.name ?? t('任务已不在当前列表', 'Task no longer in the current list')}</h3>
+        {displayed && <p className="schedule-drawer-source">{jobSource(displayed.source, language)}</p>}
+        {displayed && !selectedVisible && <p className="footnote">{t('该任务不在当前筛选结果中，详情保留当前快照。', 'This task is outside the current filters. Its details remain available from the current snapshot.')}</p>}
+        {!displayed && <p className="footnote">{t('最新采集已不包含该任务。关闭详情后可搜索其他任务。', 'The latest collection no longer includes this task. Close the details to search for another task.')}</p>}
+        {displayed && <>
+          <dl className="schedule-drawer-metadata">
+            <div><dt>{t('当前状态', 'Current status')}</dt><dd><Badge state={displayed.state} /></dd></div>
+            {displayed.id.startsWith('hermes-job:') ? <>
+              <div><dt>{t('最近执行结果', 'Last run result')}</dt><dd>{displayed.lastRun ? t(...runResults[displayed.lastRun.result]) : t('暂无执行记录', 'No run recorded')}</dd></div>
+              {displayed.lastRun?.at && <div><dt>{t('结果记录时间', 'Result recorded at')}</dt><dd>{new Date(displayed.lastRun.at).toLocaleString(language)}</dd></div>}
+            </> : <div><dt>{t('最近退出码', 'Last exit code')}</dt><dd>{displayed.lastExitCode ?? t('来源未提供', 'Not provided by source')}</dd></div>}
+            {displayed.stateReason && <div><dt>{t('状态说明', 'Status details')}</dt><dd>{t(...stateReasons[displayed.stateReason])}</dd></div>}
+            <div><dt>{t('执行计划', 'Schedule')}</dt><dd>{scheduleText(displayed.schedule, language)}</dd></div>
+            <div><dt>{t('运行范围', 'Execution scope')}</dt><dd>{displayed.scope === 'user' ? t('当前用户', 'Current user') : t('系统', 'System')}</dd></div>
+            <div><dt>{t('配置文件', 'Configuration file')}</dt><dd className="mono">{displayed.file || t('来源未提供文件路径', 'Source did not provide a file path')}</dd></div>
+            <div><dt>{t('可执行程序', 'Executable')}</dt><dd className="mono">{displayed.executable || t('来源未提供', 'Not provided by source')}</dd></div>
+            {displayed.pid && <div><dt>{t('当前 PID', 'Current PID')}</dt><dd className="mono">{displayed.pid}</dd></div>}
+            {displayed.nextRun && <div><dt>{t('下次计划', 'Next run')}</dt><dd>{new Date(displayed.nextRun).toLocaleString(language)}</dd></div>}
+          </dl>
+          <ScheduleHistory key={displayed.id} jobId={displayed.id} active={open && Boolean(selected) && !documentHidden} />
+        </>}
+      </div>
+    </aside>
     {data && <Sources sources={data.sources} compact />}
     <p className="footnote">{t('定时任务数包括已识别的周期与日历调度配置（含停用项）。登录启动项与常驻服务单独列出；这里仅查看，不会执行或修改任务。', 'Scheduled task counts include recognized interval and calendar schedules, including disabled entries. Login items and persistent services are listed separately. This view does not run or modify tasks.')}</p>
   </>
