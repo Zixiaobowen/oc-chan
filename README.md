@@ -30,6 +30,35 @@ npm run package
 
 Apple Silicon 的产物在 `release/mac-arm64/OC Chan.app`，本机安装位置为 `/Applications/OC Chan.app`。已在打包应用及安装后的原生窗口验收；未配置 Developer ID 签名或 Apple 公证，安装包尚未通过 GitHub Release 分发。
 
+构建可下载的 DMG 安装镜像与 ZIP 应用压缩包：
+
+```sh
+npm run dist
+```
+
+文件名为 `release/OC-Chan-<版本>-mac-<arm64|x64>.dmg` 和对应的 `.zip`。原生导航程序按构建机器架构编译，需在对应架构的 Mac 上构建；electron-builder 按依赖中锁定的版本获取 Electron，无需预先准备本地 Electron 分发目录。
+
+## GitHub Actions 构建与下载
+
+[Build macOS 工作流](https://github.com/Zixiaobowen/oc-chan/actions/workflows/build.yml) 在推送 `master`、创建或更新目标为 `master` 的 PR、推送 `v*` 标签时自动运行，也可在 Actions 页面选择 **Run workflow** 手动构建指定分支或标签。
+
+工作流使用 Node.js 24 和 `npm ci` 安装锁定依赖，在 `macos-15`（Apple Silicon）及 `macos-15-intel`（Intel）上分别运行类型检查、Swift 编译、前后端构建与 DMG / ZIP 打包。上传前校验应用与原生导航程序的架构、可执行权限以及文件的 SHA-256；同一分支或 PR 的新构建会取消未结束的旧构建。
+
+打开成功的运行记录，在 **Artifacts** 中选择对应架构：
+
+- `oc-chan-macos-arm64-<运行编号>`：Apple Silicon。
+- `oc-chan-macos-x64-<运行编号>`：Intel。
+
+每份产物包含 `.dmg`、`.zip` 和 `SHA256SUMS.txt`，保留 30 天。下载 Actions 产物并解压外层 ZIP 后，在产物目录运行 `shasum -a 256 -c SHA256SUMS.txt` 校验。随后打开 DMG，将应用拖入 Applications；也可以解压应用 ZIP。应用 ZIP 保留 `.app` 内的可执行权限和符号链接。
+
+也可通过已登录的 GitHub CLI 下载指定运行的全部产物：
+
+```sh
+gh run download <运行ID> --repo Zixiaobowen/oc-chan --dir downloads
+```
+
+当前仓库为私有仓库，下载需有仓库访问权限；macOS 构建消耗账号的 Actions 额度。工作流只输出 Actions 产物，不创建 GitHub Release；未配置 Developer ID 签名和 Apple 公证，首次打开可能受到 macOS Gatekeeper 限制。构建只需 GitHub 自动提供的只读 `GITHUB_TOKEN`，无需额外 Secrets。
+
 ## 功能与统计口径
 
 - **Agent 与子代理**：识别 OMP、Codex、Claude Code、OpenCode CLI 的存活进程，排除运行时内部 worker 和后台服务；合并包装进程，展示 PID、工作目录和可读取的模型元数据。OMP 同进程子代理通过当前打开的会话、ownership 描述符与父会话的专用 artifacts 目录关联；普通 fork 仍是主会话，独立子进程保留进程祖先关系与资源指标，同进程子代理不重复分摊资源。Agent 页面以可交互拓扑画布展示父子关系，概览仍提供简短列表。
