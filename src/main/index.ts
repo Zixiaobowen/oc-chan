@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, screen, Tray } 
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Monitor } from './monitor'
+import { ScheduleHistoryReader } from './schedule-history'
 import { focusAgentInTern } from './tern-navigation'
 import { createTrayIcon, DesktopSettings, resolvedLanguage } from './desktop-settings'
 import { describeError, readSettings, SettingsRollbackError, SettingsStore, settingsUpdateFailure } from './settings'
@@ -10,6 +11,7 @@ import type { MonitorSection, MonitorUpdate } from '../shared/types'
 
 app.setName('OC Chan')
 const monitor = new Monitor()
+const scheduleHistory = new ScheduleHistoryReader()
 const desktop = new DesktopSettings()
 let window: BrowserWindow | null = null
 let trayWindow: BrowserWindow | null = null
@@ -41,7 +43,7 @@ function fail(error: unknown): void {
   app.quit()
 }
 
-function trustedSender(event: Electron.IpcMainInvokeEvent): void {
+function trustedSender(event: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent): void {
   const owner = [window, trayWindow].find((candidate) => candidate && !candidate.isDestroyed() && candidate.webContents === event.sender)
   if (quitting || !owner || event.senderFrame !== event.sender.mainFrame || !event.senderFrame?.url) {
     throw new Error('不允许的窗口来源 / Untrusted window')
@@ -89,6 +91,9 @@ function createWindow(): void {
   target.once('ready-to-show', () => { if (!quitting) { target.show(); target.focus() } })
   target.on('close', (event) => { if (!quitting) { event.preventDefault(); target.hide() } })
   target.on('closed', () => { if (window === target) window = null })
+  target.on('closed', () => scheduleHistory.cancel())
+  target.webContents.on('render-process-gone', () => scheduleHistory.cancel())
+  target.webContents.on('did-start-navigation', () => scheduleHistory.cancel())
   void target.loadURL(rendererUrl()).catch(fail)
 }
 
@@ -232,6 +237,22 @@ else {
         return { error: error instanceof Error ? error.message : String(error) }
       }
     })
+    ipcMain.handle('monitor:schedule-history', (event, jobId: unknown, offset: unknown = 0) => {
+      trustedSender(event)
+      if (typeof jobId !== 'string' || jobId.length > 512 || !Number.isSafeInteger(offset) || (offset as number) < 0) {
+        throw new Error('执行历史请求无效 / Invalid execution history request')
+      }
+      const job = monitor.state.schedules.data?.jobs.find(candidate => candidate.id === jobId)
+      if (!job) throw new Error('任务已不在当前快照中，请刷新任务列表 / Task is no longer available; refresh the task list')
+      return scheduleHistory.read(job, offset as number)
+    })
+    ipcMain.on('monitor:cancel-schedule-history', (event) => {
+      try { trustedSender(event) } catch (error) {
+        console.error('Rejected execution history cancellation', error)
+        return
+      }
+      scheduleHistory.cancel()
+    })
     monitor.on('change', (update: MonitorUpdate) => {
       for (const target of [window, trayWindow]) {
         if (target && !target.isDestroyed()) target.webContents.send('monitor:changed', update)
@@ -250,6 +271,7 @@ else {
     void (async () => {
       const failures: unknown[] = []
       try { await settings?.idle() } catch (error) { failures.push(error) }
+      try { scheduleHistory.cancel() } catch (error) { failures.push(error) }
       try { monitor.stop() } catch (error) { failures.push(error) }
       try { desktop.dispose() } catch (error) { failures.push(error) }
       try { tray?.destroy(); tray = null } catch (error) { failures.push(error) }
