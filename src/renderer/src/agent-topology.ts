@@ -92,8 +92,8 @@ export function projectAgentTopology(
       id = byId.get(id)!.parentId
     }
   }
-  // Activity filters retain ancestors without bringing back unmatched descendants.
-  if (activity === 'all') {
+  // Active matches keep their descendants as context without changing match counts.
+  if (activity !== 'inactive') {
     const expandedDescendants = new Set(matches)
     const descendantQueue = [...matches]
     for (let index = 0; index < descendantQueue.length; index += 1) {

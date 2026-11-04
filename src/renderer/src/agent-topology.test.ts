@@ -235,7 +235,35 @@ test('activity filters use work or recent calls and never classify unknown liven
   assert.equal(projectAgentTopology(agents, 'all', 'all', '', noCollapse).matchCount, 7)
 })
 
-test('activity combines with role and search while preserving only the required parent chain', () => {
+test('active main agents retain idle and unknown descendants as inspectable context', () => {
+  const agents = [
+    agent('active-main', { state: 'working' }),
+    agent('idle-child', { kind: 'subagent', parentId: 'active-main', state: 'idle' }),
+    agent('unknown-child', { kind: 'subagent', parentId: 'active-main' }),
+    agent('unknown-grandchild', { kind: 'subagent', parentId: 'unknown-child' }),
+    agent('unrelated-main', { state: 'idle' }),
+    agent('unrelated-child', { kind: 'subagent', parentId: 'unrelated-main' }),
+  ]
+  for (const kind of ['all', 'main'] as const) {
+    const graph = projectAgentTopology(agents, kind, 'active', '', new Set(['active-main']))
+    assert.deepEqual(graph.nodes.map(node => [node.agent.id, node.contextOnly, node.agent.state]), [
+      ['active-main', false, 'working'],
+      ['idle-child', true, 'idle'],
+      ['unknown-child', true, 'unknown'],
+      ['unknown-grandchild', true, 'unknown'],
+    ])
+    assert.equal(graph.matchCount, 1)
+    assert.equal(graph.contextCount, 3)
+    assert.equal(graph.hiddenCount, 0)
+    assert.ok(graph.nodes.every(node => !node.collapsed))
+    assert.deepEqual(graph.edges.map(edge => [edge.source, edge.target]), [
+      ['active-main', 'idle-child'], ['active-main', 'unknown-child'], ['unknown-child', 'unknown-grandchild'],
+    ])
+    assertNoOverlap(layoutAgentTopology(graph))
+  }
+})
+
+test('activity combines with role and search while retaining matched subtrees without unrelated siblings', () => {
   const agents = [
     agent('root', { state: 'idle' }),
     agent('branch', { kind: 'subagent', parentId: 'root' }),
@@ -245,12 +273,12 @@ test('activity combines with role and search while preserving only the required 
     agent('other-main', { state: 'working', summary: 'Build assets' }),
   ]
   const active = projectAgentTopology(agents, 'subagent', 'active', ' BUILD ', new Set(['root', 'branch']))
-  assert.deepEqual(active.nodes.map(node => [node.agent.id, node.contextOnly]), [['branch', true], ['builder', false], ['root', true]])
+  assert.deepEqual(active.nodes.map(node => [node.agent.id, node.contextOnly]), [['branch', true], ['builder', false], ['idle-child', true], ['root', true]])
   assert.equal(active.matchCount, 1)
-  assert.equal(active.contextCount, 2)
+  assert.equal(active.contextCount, 3)
   assert.equal(active.hiddenCount, 0)
   assert.ok(active.nodes.every(node => !node.collapsed))
-  assert.deepEqual(active.edges.map(edge => [edge.source, edge.target]), [['root', 'branch'], ['branch', 'builder']])
+  assert.deepEqual(active.edges.map(edge => [edge.source, edge.target]), [['root', 'branch'], ['branch', 'builder'], ['builder', 'idle-child']])
   const inactive = projectAgentTopology(agents, 'all', 'inactive', '', noCollapse)
   assert.deepEqual(inactive.nodes.filter(node => !node.contextOnly).map(node => node.agent.id), ['idle-child', 'root'])
   assert.ok(!inactive.nodes.some(node => ['busy-sibling', 'other-main'].includes(node.agent.id)))
