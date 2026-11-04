@@ -1,0 +1,6 @@
+schema = 1
+id = "oc-chan-navigation"
+name = "OC Chan Window Navigation"
+version = "1.0.0"
+description = "Expose each Tern window key in its native window title."
+window = "window.luau"

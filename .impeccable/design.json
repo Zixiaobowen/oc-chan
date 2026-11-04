@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-02T04:07:17.797Z",
+  "title": "Design System: OC Chan",
+  "extensions": {
+    "shadows": [],
+    "motion": [{"name":"control","value":"120ms ease-out","purpose":"控件背景状态切换"},{"name":"meter","value":"500ms ease-out","purpose":"资源使用量变化；减少动态效果时关闭"}],
+    "breakpoints": [{"name":"compact","value":"1120px"},{"name":"narrow-desktop","value":"960px"},{"name":"collapsed-navigation","value":"760px"}]
+  },
+  "components": [
+    {"name":"主按钮","kind":"button","refersTo":"button-primary","description":"刷新快照","html":"<button class=\"ds-primary\">刷新</button>","css":".ds-primary{background:var(--accent);color:var(--surface);border:0;border-radius:6px;padding:7px 12px;font:11px -apple-system,sans-serif}.ds-primary:hover{background:#205b41}.ds-primary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}"},
+    {"name":"次按钮","kind":"button","description":"暂停和恢复显示","html":"<button class=\"ds-secondary\">暂停显示</button>","css":".ds-secondary{background:var(--surface);color:var(--ink);border:1px solid var(--border-strong);border-radius:6px;padding:7px 12px;font:11px -apple-system,sans-serif}.ds-secondary:hover{background:#edf2ee}.ds-secondary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}"},
+    {"name":"搜索框","kind":"input","description":"筛选当前列表","html":"<input class=\"ds-search\" aria-label=\"搜索 Agent\" placeholder=\"搜索名称、项目或 PID\">","css":".ds-search{background:var(--surface);color:var(--ink);border:1px solid var(--border-strong);border-radius:6px;padding:8px 10px;font:11px -apple-system,sans-serif;caret-color:var(--accent)}.ds-search::placeholder{color:var(--muted)}.ds-search:focus-visible{outline:2px solid var(--accent);outline-offset:2px}"},
+    {"name":"导航","kind":"nav","description":"当前工作区","html":"<button class=\"ds-nav\" aria-current=\"page\">Agent 与子代理</button>","css":".ds-nav{background:var(--selection);color:var(--accent);border:0;border-radius:7px;padding:11px 12px;font:600 13px -apple-system,sans-serif}.ds-nav:hover{background:#d3e3d8}.ds-nav:focus-visible{outline:2px solid var(--accent);outline-offset:3px}"},
+    {"name":"运行状态","kind":"chip","description":"文字与颜色共同传达状态","html":"<span class=\"ds-badge\">运行中</span>","css":".ds-badge{display:inline-flex;align-items:center;gap:5px;background:#eaf4ed;color:var(--accent);padding:3px 6px;border-radius:4px;font:10px -apple-system,sans-serif}.ds-badge::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor}"},
+    {"name":"列表容器","kind":"card","description":"单层数据面板","html":"<section class=\"ds-panel\"><strong>Agent 实例</strong></section>","css":".ds-panel{background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:12px;padding:20px;font:14px -apple-system,sans-serif}"}
+  ],
+  "narrative": {"overview":"采用桌面工具的标准侧边导航和列表布局。绿色侧栏区分导航与工作区；统计与详情直接对应，未知数据保留明确标识。此文记录本次实现选择，不将其表述为用户指定的品牌偏好。","keyCharacteristics":["真实数据","明确状态","可筛选列表"],"rules":[],"dos":["保持统计口径与可查看列表一致。"],"donts":["不将驻留子代理、历史会话或缺失状态伪装成活动数量。","不添加装饰图表、虚构活动数据或远程字体请求。"]}
+}
