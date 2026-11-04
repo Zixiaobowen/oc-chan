@@ -20,7 +20,7 @@ export default function App() {
   const displayTime = (value?: string) => time(value, language)
   const pages = [
     { id: 'overview', label: t('本机概览', 'Overview'), icon: LayoutDashboard, description: t('Agent、调度任务与系统资源的当前状态。', 'The current state of agents, scheduled tasks and system resources.') },
-    { id: 'agents', label: t('Agent 与子代理', 'Agents'), icon: Bot, description: t('在画布中查看 Agent 父子关系，定位项目与运行状态。', 'Explore agent relationships, projects and runtime status on the canvas.') },
+    { id: 'agents', label: t('协作拓扑', 'Agent topology'), icon: Bot, description: t('在画布中查看 Agent 父子关系，定位项目与运行状态。', 'Explore agent relationships, projects and runtime status on the canvas.') },
     { id: 'schedules', label: t('定时任务', 'Scheduled tasks'), icon: CalendarClock, description: t('本机调度清单，让周期任务与常驻服务各归其位。', 'Local schedules, with recurring tasks and persistent services separated.') },
     { id: 'system', label: t('系统监控', 'System monitor'), icon: Activity, description: t('持续采样 CPU、内存、磁盘与网络。', 'Continuous CPU, memory, disk and network sampling.') },
     { id: 'sources', label: t('数据来源', 'Data sources'), icon: Database, description: t('每个数字从哪里来，哪些范围尚不可见。', 'Where each number comes from and what remains outside visibility.') },
@@ -112,7 +112,7 @@ export default function App() {
   const scheduled = schedules?.jobs.filter(job => ['calendar', 'interval'].includes(job.kind))
   const userScheduled = scheduled?.filter(job => job.scope === 'user')
   const sourceGroups = [
-    { title: t('Agent 与子代理', 'Agents'), sources: agents?.sources ?? [], state: snapshot.agents },
+    { title: t('协作拓扑', 'Agent topology'), sources: agents?.sources ?? [], state: snapshot.agents },
     { title: t('定时任务', 'Scheduled tasks'), sources: schedules?.sources ?? [], state: snapshot.schedules },
     { title: t('系统监控', 'System monitor'), sources: system?.sources ?? [], state: snapshot.system }
   ]

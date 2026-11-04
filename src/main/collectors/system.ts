@@ -19,16 +19,28 @@ function cpuTimes() {
 
 export function parseMemory(vmOutput: string, swapOutput: string, total: number) {
   const pageSize = Number(vmOutput.match(/page size of (\d+) bytes/)?.[1])
-  if (!pageSize) throw new Error('vm_stat 未返回页大小')
+  if (!Number.isSafeInteger(pageSize) || pageSize <= 0) throw new Error('vm_stat 未返回有效页大小')
+  if (!Number.isSafeInteger(total) || total <= 0) throw new Error('物理内存总量无效')
   const counters = new Map(Array.from(vmOutput.matchAll(/^([^:\n]+):\s+(\d+)\./gm), match => [match[1], Number(match[2])]))
   const required = ['Anonymous pages', 'Pages purgeable', 'Pages wired down', 'Pages occupied by compressor']
-  for (const name of required) if (!counters.has(name)) throw new Error(`vm_stat 缺少 ${name}`)
-  const active = (counters.get('Anonymous pages')! - counters.get('Pages purgeable')! + counters.get('Pages wired down')! + counters.get('Pages occupied by compressor')!) * pageSize
+  for (const name of required) {
+    if (!counters.has(name)) throw new Error(`vm_stat 缺少 ${name}`)
+    if (!Number.isSafeInteger(counters.get(name))) throw new Error(`vm_stat 的 ${name} 计数无效`)
+  }
+  const app = (counters.get('Anonymous pages')! - counters.get('Pages purgeable')!) * pageSize
+  const wired = counters.get('Pages wired down')! * pageSize
+  const compressed = counters.get('Pages occupied by compressor')! * pageSize
+  for (const [name, bytes] of [['app', app], ['wired', wired], ['compressed', compressed]] as const) {
+    if (!Number.isSafeInteger(bytes) || bytes < 0 || bytes > total) throw new Error(`vm_stat 的 ${name} 内存分项超出物理内存范围`)
+  }
+  const active = app + wired + compressed
   const swap = swapOutput.match(/used\s*=\s*([\d.]+)([KMG])/)
   if (!swap) throw new Error('sysctl 未返回交换空间使用量')
-  if (active < 0 || active > total) throw new Error('vm_stat 返回的内存使用量超出物理内存范围')
+  if (!Number.isSafeInteger(active) || active > total) throw new Error('vm_stat 返回的内存使用量超出物理内存范围')
   const multiplier = { K: 1024, M: 1024 ** 2, G: 1024 ** 3 }[swap[2]]!
-  return { total, active, available: total - active, swapused: Number(swap[1]) * multiplier }
+  const swapused = Number(swap[1]) * multiplier
+  if (!Number.isFinite(swapused) || swapused < 0) throw new Error('sysctl 返回的交换空间使用量无效')
+  return { total, active, app, wired, compressed, available: total - active, swapused }
 }
 
 async function readMemory() {
@@ -39,17 +51,41 @@ async function readMemory() {
   return parseMemory(vm.stdout, swap.stdout, os.totalmem())
 }
 
-async function topProcesses(): Promise<ProcessInfo[]> {
+export function parseProcesses(output: string): { cpu: ProcessInfo[]; memory: ProcessInfo[] } {
+  const cpu: ProcessInfo[] = []
+  const memory: ProcessInfo[] = []
+  // Keep both rankings bounded while considering every process from the same sample.
+  const insert = (ranking: ProcessInfo[], process: ProcessInfo, compare: (a: ProcessInfo, b: ProcessInfo) => number) => {
+    const index = ranking.findIndex(existing => compare(process, existing) < 0)
+    if (index < 0) {
+      if (ranking.length < 10) ranking.push(process)
+    } else {
+      ranking.splice(index, 0, process)
+      if (ranking.length > 10) ranking.pop()
+    }
+  }
+  const byCpu = (a: ProcessInfo, b: ProcessInfo) => b.cpuPercent - a.cpuPercent || b.memoryBytes - a.memoryBytes
+  const byMemory = (a: ProcessInfo, b: ProcessInfo) => b.memoryBytes - a.memoryBytes
+  for (const [line] of output.matchAll(/[^\n]+/g)) {
+    const match = line.trim().match(/^(\d+)\s+([\d.]+)\s+(\d+)\s+(.+)$/)
+    if (!match) continue
+    const fullName = match[4]
+    const process = { pid: Number(match[1]), cpuPercent: Number(match[2]), memoryBytes: Number(match[3]) * 1024,
+      name: fullName.slice(fullName.lastIndexOf('/') + 1) }
+    if (!Number.isSafeInteger(process.pid) || !Number.isFinite(process.cpuPercent) || !Number.isSafeInteger(process.memoryBytes)) {
+      throw new Error('ps 返回的进程指标无效')
+    }
+    insert(cpu, process, byCpu)
+    insert(memory, process, byMemory)
+  }
+  return { cpu, memory }
+}
+
+async function topProcesses() {
   const { stdout } = await exec('/bin/ps', ['-axo', 'pid=,pcpu=,rss=,comm='], {
     timeout: 4000, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, LC_ALL: 'C' }
   })
-  return stdout.split('\n').flatMap((line) => {
-    const match = line.trim().match(/^(\d+)\s+([\d.]+)\s+(\d+)\s+(.+)$/)
-    if (!match) return []
-    const fullName = match[4]
-    return [{ pid: Number(match[1]), cpuPercent: Number(match[2]), memoryBytes: Number(match[3]) * 1024,
-      name: fullName.slice(fullName.lastIndexOf('/') + 1) }]
-  }).sort((a, b) => b.cpuPercent - a.cpuPercent || b.memoryBytes - a.memoryBytes).slice(0, 10)
+  return parseProcesses(stdout)
 }
 
 export async function collectSystem(): Promise<SystemSnapshot> {
@@ -89,9 +125,12 @@ export async function collectSystem(): Promise<SystemSnapshot> {
     collectedAt: new Date(now).toISOString(), hostname: os.hostname(), platform: os.platform(), osVersion: os.release(),
     cpuModel: os.cpus()[0]?.model ?? '未知处理器', cpuCores: os.cpus().length, uptimeSeconds: os.uptime(), cpuPercent,
     memoryTotal: mem.total, memoryUsed: mem.active, memoryAvailable: mem.available, swapUsed: mem.swapused,
+    memoryApp: mem.app, memoryWired: mem.wired, memoryCompressed: mem.compressed,
     diskTotal: fs ? fs.blocks * fs.bsize : null, diskUsed: fs ? (fs.blocks - fs.bfree) * fs.bsize : null,
     diskAvailable: fs ? fs.bavail * fs.bsize : null,
     rxBytesPerSecond: rx, txBytesPerSecond: tx,
-    processes: processes.status === 'fulfilled' ? processes.value : [], history: [...history], sources
+    networkInterface: network.status === 'fulfilled' ? network.value.iface : null,
+    processes: processes.status === 'fulfilled' ? processes.value.cpu : [],
+    memoryProcesses: processes.status === 'fulfilled' ? processes.value.memory : [], history: [...history], sources
   }
 }
