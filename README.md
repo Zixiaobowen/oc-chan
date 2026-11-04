@@ -28,7 +28,7 @@ npm start
 npm run package
 ```
 
-Apple Silicon 的产物在 `release/mac-arm64/OC Chan.app`，本机安装位置为 `/Applications/OC Chan.app`。已在打包应用及安装后的原生窗口验收；未配置 Developer ID 签名或 Apple 公证，安装包尚未通过 GitHub Release 分发。
+Apple Silicon 的产物在 `release/mac-arm64/OC Chan.app`，本机安装位置为 `/Applications/OC Chan.app`。已在打包应用及安装后的原生窗口验收；未配置 Developer ID 签名或 Apple 公证。GitHub Release 发布方式见下文。
 
 构建可下载的 DMG 安装镜像与 ZIP 应用压缩包：
 
@@ -38,11 +38,11 @@ npm run dist
 
 文件名为 `release/OC-Chan-<版本>-mac-<arm64|x64>.dmg` 和对应的 `.zip`。原生导航程序按构建机器架构编译，需在对应架构的 Mac 上构建；electron-builder 按依赖中锁定的版本获取 Electron，无需预先准备本地 Electron 分发目录。
 
-## GitHub Actions 构建与下载
+## GitHub Actions 构建、下载与发布
 
 [Build macOS 工作流](https://github.com/Zixiaobowen/oc-chan/actions/workflows/build.yml) 在推送 `master`、创建或更新目标为 `master` 的 PR、推送 `v*` 标签时自动运行，也可在 Actions 页面选择 **Run workflow** 手动构建指定分支或标签。
 
-工作流使用 Node.js 24 和 `npm ci` 安装锁定依赖，在 `macos-15`（Apple Silicon）及 `macos-15-intel`（Intel）上分别运行类型检查、Swift 编译、前后端构建与 DMG / ZIP 打包。上传前校验应用与原生导航程序的架构、可执行权限以及文件的 SHA-256；同一分支或 PR 的新构建会取消未结束的旧构建。
+工作流使用 Node.js 24 和 `npm ci` 安装锁定依赖，在 `macos-15`（Apple Silicon）及 `macos-15-intel`（Intel）上分别运行类型检查、Swift 编译、前后端构建与 DMG / ZIP 打包。上传前校验应用与原生导航程序的架构、可执行权限以及文件的 SHA-256；同一分支或 PR 的新构建会取消未结束的旧构建，标签构建不会自动取消正在进行的同标签发布。
 
 打开成功的运行记录，在 **Artifacts** 中选择对应架构：
 
@@ -57,7 +57,24 @@ npm run dist
 gh run download <运行ID> --repo Zixiaobowen/oc-chan --dir downloads
 ```
 
-当前仓库为私有仓库，下载需有仓库访问权限；macOS 构建消耗账号的 Actions 额度。工作流只输出 Actions 产物，不创建 GitHub Release；未配置 Developer ID 签名和 Apple 公证，首次打开可能受到 macOS Gatekeeper 限制。构建只需 GitHub 自动提供的只读 `GITHUB_TOKEN`，无需额外 Secrets。
+当前仓库为私有仓库，下载需有仓库访问权限；macOS 构建消耗账号的 Actions 额度。未配置 Developer ID 签名和 Apple 公证，首次打开可能受到 macOS Gatekeeper 限制。构建作业只有 `contents: read`，仅发布作业使用 `contents: write`；均使用 GitHub 自动提供的 `GITHUB_TOKEN`，无需额外 Secrets。
+
+### 发布 GitHub Release
+
+推送 `v*` 标签会在两种架构都构建成功后创建 [GitHub Release](https://github.com/Zixiaobowen/oc-chan/releases)，自动生成发布说明，上传两种架构的 DMG、ZIP 及合并后的 `SHA256SUMS.txt`。标签必须严格等于 `v` 加 `package.json` 的版本，例如版本 `0.1.0` 对应 `v0.1.0`；不匹配会在构建前失败。
+
+首次发布当前 `0.1.0`，先确保发布工作流及待发布代码已经合入并推送 `master`，再在对应提交上执行：
+
+```sh
+git tag -a v0.1.0 -m "OC Chan v0.1.0"
+git push origin v0.1.0
+```
+
+后续在干净的工作区中用 `npm version patch`、`npm version minor` 或明确版本更新 `package.json` 和锁文件，该命令同时创建版本提交和标签；随后推送提交及对应标签。预发布版本如 `0.2.0-beta.1` 使用标签 `v0.2.0-beta.1`，Release 自动标记为预发布。
+
+发布作业只读取当前运行的两份架构产物，合并后重新验证 SHA-256。任一架构缺包、校验失败或构建失败都不会发布。GitHub CLI 上传附件后才公开 Release；同名 Release 已存在时失败，不覆盖已有附件。上传中断留下草稿时，应先检查草稿与失败日志，不能直接重推同名标签来覆盖。
+
+普通分支推送、PR 和手动运行只生成 Actions Artifacts；即使手动选择标签，也不会发布。正常版本发布由标签推送触发，失败后可重跑该次标签工作流。`npm run dist` 继续只负责打包，发布统一由独立作业完成。Release 附件不受 Actions Artifacts 的 30 天保留期限制。
 
 ## 功能与统计口径
 
