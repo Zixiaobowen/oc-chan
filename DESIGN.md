@@ -2,14 +2,14 @@
 name: OC Chan
 description: 本机 Agent、调度任务与系统状态的桌面观察工具
 colors:
-  ground: "#f8faf9"
+  ground: "#f8faff"
   surface: "#ffffff"
-  sidebar: "#eef3ef"
-  ink: "#263b2f"
-  muted: "#58695e"
-  accent: "#2e7051"
-  selection: "#dceadf"
-  border: "#dfe7e1"
+  sidebar: "#f0f5ff"
+  ink: "#1e293b"
+  muted: "#536579"
+  accent: "#2563eb"
+  selection: "#eaf1ff"
+  border: "#dce5f2"
   warning: "#866517"
   error: "#aa4339"
 typography:
@@ -45,15 +45,19 @@ components:
 
 ## Overview
 
-采用桌面工具的标准侧边导航和列表布局。绿色侧栏区分导航与工作区；统计与详情直接对应，未知数据保留明确标识。此文记录本次实现选择，不将其表述为用户指定的品牌偏好。
+采用桌面工具的标准侧边导航和列表布局。按用户要求，默认品牌配色采用蓝白：浅蓝侧栏区分导航与白色工作区，蓝色强调选择和主要操作；统计与详情直接对应，未知数据保留明确标识。
 
 用户明确要求响应式布局与 SOTA 级 motion；执行 [全局工程规则](./AGENTS.md) 中的布局、动效和验收约束。下文记录现有设计，不作为这些新要求已达标的证明。
 
 ## Colors
 
-默认主题以绿色表达选择与已连接状态，蓝灰表达等待状态，琥珀色表达未知和覆盖限制，红色表达采集失败；其它主题沿用同一语义。状态同时显示文字，不能只靠颜色辨认。
+默认主题以蓝色表达选择与已连接状态，蓝灰表达等待状态，琥珀色表达未知和覆盖限制，红色表达采集失败；其它主题沿用同一语义。状态同时显示文字，不能只靠颜色辨认。
 
-支持浅色、深色与跟随系统；每种明暗模式独立保存配色主题。`src/shared/themes.ts` 是六套主题的语义颜色来源，渲染端写入 CSS 变量，主进程读取相同的窗口背景色。`data-theme` 标记明暗，`data-palette` 标记当前显示的配色；`tokens.css` 保留字体初始值与原生控件的 `color-scheme`。图表、拓扑画布、主窗口和托盘消费同一套颜色。OC Chan 保持原配色，其余为 GitHub、Nord、Catppuccin、Solarized、Gruvbox 的界面适配。
+支持浅色、深色与跟随系统；每种明暗模式独立保存配色主题。`src/shared/themes.ts` 是六套主题的语义颜色来源，渲染端写入 CSS 变量，主进程读取相同的窗口背景色。`data-theme` 标记明暗，`data-palette` 标记当前显示的配色；`tokens.css` 保留字体初始值与原生控件的 `color-scheme`。图表、拓扑画布、主窗口和托盘消费同一套颜色。OC Chan 使用蓝白浅色主题与对应的深蓝主题，其余为 GitHub、Nord、Catppuccin、Solarized、Gruvbox 的界面适配。
+
+## Brand identity
+
+Logo 将 O / C 连接成猫头鹰的观察双眼，右侧独立方点呼应 Agent 节点。标准色为 `#2563eb`，应用图标使用蓝底白色标志；透明单色版本适用于浅色背景与反白展示。矢量原稿、透明 PNG、macOS ICNS 和离线预览位于 `resources/brand/`，`preview.html` 内嵌全部下载资源。此目录是设计交付，现有导航图形和 `resources/icon.icns` 尚未替换。
 
 ## Typography
 
