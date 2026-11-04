@@ -19,12 +19,12 @@ function Choices<T extends string>({ name, label, value, options, disabled, onCh
   </fieldset>
 }
 
-function SettingRow({ name, label, children }: { name: keyof AppSettings; label: string; children: ReactNode }) {
+function SettingRow({ name, label, children, errorKeys }: { name: keyof AppSettings; label: string; children: ReactNode; errorKeys?: readonly (keyof AppSettings)[] }) {
   const { error } = useSettings()
   return <section id={`setting-${name}`} className="setting-row" aria-labelledby={`setting-${name}-label`}>
     <h2 id={`setting-${name}-label`}>{label}</h2>
     <div className="setting-control">{children}</div>
-    {error && Object.hasOwn(error.patch, name) && <SettingsSaveError settingLabel={label} />}
+    {error && (errorKeys ? errorKeys.some(key => Object.hasOwn(error.patch, key)) : Object.hasOwn(error.patch, name)) && <SettingsSaveError settingLabel={label} />}
   </section>
 }
 
@@ -39,7 +39,7 @@ export default function SettingsView() {
           { value: 'system', label: t('跟随系统', 'System') }, { value: 'light', label: t('浅色', 'Light') }, { value: 'dark', label: t('深色', 'Dark') }
         ]} />
       </SettingRow>
-      <SettingRow name={resolvedTheme === 'dark' ? 'darkTheme' : 'lightTheme'} label={t('主题', 'Theme')}>
+      <SettingRow name={resolvedTheme === 'dark' ? 'darkTheme' : 'lightTheme'} errorKeys={['lightTheme', 'darkTheme']} label={t('主题', 'Theme')}>
         <ThemePicker />
       </SettingRow>
       <SettingRow name="language" label={t('语言', 'Language')}>

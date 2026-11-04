@@ -96,3 +96,9 @@
 - 仅提交本任务的系统采集、内存分项与独立排行、网络趋势、托盘多项展示及相关文档。`src/main/index.ts` 只包含托盘尺寸改动，`src/shared/types.ts` 只包含系统指标字段，README／DESIGN 按内容拆分。侧栏、任务历史、无头开发与本机安装 hook 等并行改动保留在工作区。
 - `pre-push` 当前会执行本机覆盖安装。本次授权范围为 GitHub 提交，使用单次 Git 配置跳过安装 hook，不修改持久配置，不覆盖 `/Applications/OC Chan.app`。提交身份使用 `bowen.sun <bowen.sun@zstack.io>`。
 - 本节记录提交范围与验证上下文；实际提交 SHA、远程接收与 Actions 状态以本轮 Git／GitHub 返回和最终交付为准。
+
+## 默认分支合并阶段
+
+- 功能提交 `d163aa17814fdbe62c451b18e1d2f124169578dc` 已推送并从远程 `refs/heads/main` 读回。独立提交快照 `npm run build` 通过，系统／Monitor 9 项测试和设置／拓扑 24 项测试均通过。
+- 核对工作流后确认 CI 仅监听默认分支 master，因此继续创建 PR #2，使用固定提交的 `feat/system-tray-metrics` 分支合入 master。完整范围为 main 上已有的拓扑、主题和本次监控三个提交，共 30 个文件；Git 原生差异与 GitHub 文件列表完全一致。
+- 首个 PR 构建 `41815365370` 的 macOS arm64 与 x64 均通过，DMG／ZIP、应用架构、校验和与产物上传完成。拓扑独立复核未发现阻断；主题复核发现跨明暗模式的保存错误隐藏，已在 `SettingsView.tsx` 修复并完成双向实际回归，详见主题交接。修复后的提交须重新通过 PR 构建后才执行合并，不把旧 head 的通过记录当作最终通过。

@@ -80,3 +80,10 @@
 ## 恢复提示
 
 继续 `/Users/zvf003/ZStack/oc-chan` 的主题切换任务。用户要求参考Tern settings，已实现6套浅深主题、hover整窗预览、click/键盘保存、Esc/离开/隐藏取消、浅深各自持久化、托盘同步和保存失败回滚重试。最终 npm run build 与10项设置测试通过，真实原生独立profile验证重启恢复、12种配色、窄窗/全屏/200%及断点。证据位于 `.impeccable/review/themes-2026-11-04/`。用户已追加授权 commit 和 push，Git交付按文首范围执行，以远程回执为准。没有安装；工作区还有并行的托盘/任务历史/侧栏/安装脚本改动，保留它们。按用户新要求继续，不重复全仓测试。
+
+## PR #2 合并复核补修
+
+- 复核发现：跟随系统时，主题保存错误按当前明暗模式的字段名匹配；保存失败后切换模式，会隐藏具体错误、诊断及重试入口。已在真实无头 Electron 中使用独立 profile 的权限失败复现，切换模式后页面仅剩笼统“保存失败”。
+- `SettingsView.tsx` 的主题行现在共同接收 `lightTheme` 与 `darkTheme` 的保存错误；其它设置行仍只匹配自身字段。重试继续使用保存失败时记录的原 patch，不按当前模式改写目标。
+- 实际 smoke：浅色 Nord 保存失败后切到深色，错误和重试保留，恢复目录权限后重试只把 lightTheme 保存为 nord，darkTheme 保持 oc-chan；深色 GitHub 失败后切到浅色同样保留错误，重试后 darkTheme 为 github，lightTheme 保持 nord。临时目录权限均恢复，真实 IPC 和持久化链路未替换；仅外部系统明暗信号通过 Electron nativeTheme 模拟。
+- `npm run typecheck` 通过；浏览器 errors 为空。回归证据为 `.impeccable/review/stats-tray-2026-11-04/theme-mode-retry-regression.json` 与 `theme-mode-retry-visible.png`。没有现成的渲染端组件测试环境，本次使用实际 Electron 场景记录，不新增仅断言实现文本的测试。
