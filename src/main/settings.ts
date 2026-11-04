@@ -2,9 +2,12 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, open, readFile, rename, unlink } from 'node:fs/promises'
 import path from 'node:path'
 import { DEFAULT_SETTINGS, type AppSettings, type SettingsFailureReason, type SettingsUpdateFailure } from '../shared/settings'
+import { THEME_IDS } from '../shared/themes'
 
 const choices = {
   appearance: ['system', 'light', 'dark'],
+  lightTheme: THEME_IDS,
+  darkTheme: THEME_IDS,
   language: ['system', 'zh-CN', 'en'],
   textSize: ['small', 'default', 'large'],
   uiFont: ['system', 'pingfang', 'helvetica'],
@@ -47,7 +50,7 @@ export function settingsUpdateFailure(error: unknown, filename: string): Setting
   return { reason: settingsFailureReason(error), details: describeError(error), filePath: path.resolve(filename) }
 }
 
-export function validateSettings(value: unknown, partial = false): Partial<AppSettings> {
+export function validateSettings(value: unknown): Partial<AppSettings> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error('设置必须是对象 / Settings must be an object')
   }
@@ -59,9 +62,6 @@ export function validateSettings(value: unknown, partial = false): Partial<AppSe
     } else if (!(choices[key as keyof typeof choices] as readonly unknown[]).includes(entry)) {
       throw new Error(`设置 ${key} 的值无效 / Invalid setting value`)
     }
-  }
-  if (!partial && entries.length !== Object.keys(DEFAULT_SETTINGS).length) {
-    throw new Error('设置文件缺少必需字段 / Settings file is missing required fields')
   }
   return { ...value } as Partial<AppSettings>
 }
@@ -75,7 +75,7 @@ export async function readSettings(filename: string): Promise<AppSettings> {
     throw new Error(`无法读取设置 / Cannot read settings: ${filename}`, { cause: error })
   }
   try {
-    return validateSettings(JSON.parse(content)) as AppSettings
+    return { ...DEFAULT_SETTINGS, ...validateSettings(JSON.parse(content)) }
   } catch (error) {
     throw new Error(`设置文件损坏或无效 / Invalid settings file: ${filename}`, { cause: error })
   }
@@ -147,7 +147,7 @@ export class SettingsStore {
   update(input: unknown): Promise<AppSettings> {
     let patch: Partial<AppSettings>
     try {
-      patch = validateSettings(input, true)
+      patch = validateSettings(input)
     } catch (error) {
       return Promise.reject(error)
     }

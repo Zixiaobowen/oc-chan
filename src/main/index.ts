@@ -5,8 +5,9 @@ import { Monitor } from './monitor'
 import { focusAgentInTern } from './tern-navigation'
 import { createTrayIcon, DesktopSettings, resolvedLanguage } from './desktop-settings'
 import { describeError, readSettings, SettingsRollbackError, SettingsStore, settingsUpdateFailure } from './settings'
-import type { AppSettings, SettingsUpdateResult } from '../shared/settings'
+import type { AppSettings, SettingsSnapshot, SettingsUpdateResult } from '../shared/settings'
 import type { MonitorSection, MonitorUpdate } from '../shared/types'
+import { THEMES } from '../shared/themes'
 
 app.setName('OC Chan')
 const monitor = new Monitor()
@@ -73,10 +74,14 @@ function showMainWindow(): void {
   window?.focus()
 }
 
+function windowBackground({ settings: value, resolvedTheme }: SettingsSnapshot): string {
+  return THEMES[value[resolvedTheme === 'dark' ? 'darkTheme' : 'lightTheme']][resolvedTheme].ground
+}
+
 function createWindow(): void {
   const target = new BrowserWindow({
     width: 1280, height: 860, minWidth: 880, minHeight: 640,
-    title: 'OC Chan', backgroundColor: desktop.snapshot(settings!.value).resolvedTheme === 'dark' ? '#171e1a' : '#f8faf9',
+    title: 'OC Chan', backgroundColor: windowBackground(desktop.snapshot(settings!.value)),
     titleBarStyle: 'hiddenInset', show: false,
     trafficLightPosition: { x: 20, y: 19 },
     webPreferences: {
@@ -111,7 +116,7 @@ function createTrayWindow(): void {
     width: 360, height: 430, show: false, frame: false,
     resizable: false, maximizable: false, minimizable: false,
     fullscreenable: false, skipTaskbar: true, alwaysOnTop: true,
-    title: 'OC Chan', backgroundColor: desktop.snapshot(settings!.value).resolvedTheme === 'dark' ? '#171e1a' : '#f8faf9',
+    title: 'OC Chan', backgroundColor: windowBackground(desktop.snapshot(settings!.value)),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'), contextIsolation: true,
       nodeIntegration: false, sandbox: true
@@ -157,7 +162,7 @@ function broadcastSettings(): void {
   const snapshot = desktop.snapshot(settings.value)
   for (const target of [window, trayWindow]) {
     if (target && !target.isDestroyed()) {
-      target.setBackgroundColor(snapshot.resolvedTheme === 'dark' ? '#171e1a' : '#f8faf9')
+      target.setBackgroundColor(windowBackground(snapshot))
       target.webContents.send('settings:changed', snapshot)
     }
   }

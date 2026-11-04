@@ -1,3 +1,5 @@
+import type { ThemeId } from './themes'
+
 export type Appearance = 'system' | 'light' | 'dark'
 export type Language = 'system' | 'zh-CN' | 'en'
 export type ResolvedLanguage = Exclude<Language, 'system'>
@@ -7,6 +9,8 @@ export type CodeFont = 'system' | 'menlo' | 'monaco'
 
 export interface AppSettings {
   appearance: Appearance
+  lightTheme: ThemeId
+  darkTheme: ThemeId
   language: Language
   textSize: TextSize
   uiFont: UiFont
@@ -17,7 +21,8 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: Readonly<AppSettings> = {
-  appearance: 'system', language: 'system', textSize: 'default',
+  appearance: 'system', lightTheme: 'oc-chan', darkTheme: 'oc-chan',
+  language: 'system', textSize: 'default',
   uiFont: 'system', codeFont: 'system', trayClick: 'tray',
   showDock: true, preventSleep: false
 }
