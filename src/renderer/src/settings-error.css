@@ -1,0 +1,84 @@
+.settings-save-error {
+  min-width: 0;
+  max-width: 100%;
+  margin-block-start: 24px;
+  padding: 16px;
+  border: 1px solid var(--error-border);
+  border-radius: 8px;
+  background: var(--error-surface);
+  color: var(--ink);
+  font-family: var(--ui-font);
+  font-size: max(12px, calc(13px * var(--font-scale)));
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+.settings-save-error h3 {
+  color: var(--error);
+  font-size: max(12px, calc(15px * var(--font-scale)));
+  font-weight: 650;
+  line-height: 1.5;
+}
+.settings-save-error p { margin-block-start: 8px; }
+.settings-save-error-path strong, .settings-save-error-path code { display: block; }
+.settings-save-error-path code {
+  margin-block-start: 4px;
+  font-size: inherit;
+  white-space: pre-wrap;
+  user-select: text;
+}
+.settings-save-error ol { margin: 16px 0; padding-inline-start: 24px; }
+.settings-save-error li + li { margin-block-start: 8px; }
+.settings-save-error-retry {
+  max-width: 100%;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.settings-save-error-retry:hover { background: var(--hover); }
+.settings-save-error-retry[aria-disabled='true'] { cursor: wait; }
+.settings-save-error-details {
+  min-width: 0;
+  margin-block-start: 20px;
+  padding-block-start: 12px;
+  border-block-start: 1px solid var(--error-border);
+}
+.settings-save-error-details summary {
+  min-height: 44px;
+  padding-block: 8px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.settings-save-error-details label { display: block; margin-block-start: 8px; font-weight: 600; }
+.settings-save-error-details textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin-block-start: 10px;
+  padding: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--code-font);
+  font-size: inherit;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  resize: vertical;
+  user-select: text;
+  caret-color: var(--accent);
+  -webkit-app-region: no-drag;
+}
+.settings-save-error-retry:focus-visible,
+.settings-save-error-details summary:focus-visible,
+.settings-save-error-details textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
