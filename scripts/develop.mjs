@@ -1,15 +1,20 @@
 import { spawn, execFileSync } from 'node:child_process'
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
+import { inspectPackage } from './check-package.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const options = new Set(process.argv.slice(2))
 for (const option of options) {
-  if (!['--window', '--inspect'].includes(option)) throw new Error(`未知开发参数：${option}；支持 --window、--inspect`)
+  if (!['--window', '--inspect'].includes(option) && !option.startsWith('--packaged-app=')) throw new Error(`未知开发参数：${option}；支持 --window、--inspect、--packaged-app=<应用路径>`)
 }
 const windowed = options.has('--window')
+const packagedOptions = [...options].filter(option => option.startsWith('--packaged-app='))
+if (packagedOptions.length > 1 || packagedOptions.some(option => option === '--packaged-app=')) throw new Error('只能指定一个非空的应用路径')
+const packagedApp = packagedOptions.length ? path.resolve(packagedOptions[0].slice('--packaged-app='.length)) : undefined
+if (packagedApp && windowed) throw new Error('安装包回测仅支持隔离无头模式')
 let child
 let requestedSignal
 let forceTimer
@@ -87,14 +92,25 @@ async function main() {
     delete env.ELECTRON_RUN_AS_NODE
     console.log(`[oc-chan] ${windowed ? '原生窗口' : '无头'}开发实例：${instance}`)
     await run(['node_modules/electron/install.js'], env)
-    if (windowed) await run(['scripts/build-native.mjs'], env)
-    else await run(['scripts/build-glass.mjs'], env)
-    await run([
-      'node_modules/electron-vite/bin/electron-vite.js', 'dev',
-      '--outDir', path.join(instance, 'out'), '--entry', path.join(instance, 'out/main/index.js'),
-      '--watch', '--', '--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1',
-      ...(options.has('--inspect') ? ['--inspect=0'] : [])
-    ], env)
+    const debugArguments = ['--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1', ...(options.has('--inspect') ? ['--inspect=0'] : [])]
+    if (packagedApp) {
+      await inspectPackage(packagedApp)
+      const resources = path.join(packagedApp, 'Contents/Resources')
+      await symlink(resources, path.join(instance, 'resources'), 'dir')
+      const entry = path.join(instance, 'packaged-entry.cjs')
+      await writeFile(entry, `const { app } = require('electron')\ntry {\n  if (app.isPackaged || process.env.OC_CHAN_HEADLESS !== '1') throw new Error('Artifact regression requires the isolated development runtime')\n  require(${JSON.stringify(path.join(resources, 'app.asar/out/main/index.js'))})\n} catch (error) { console.error(error); app.exit(1) }\n`, { flag: 'wx', mode: 0o600 })
+      delete env.ELECTRON_RENDERER_URL
+      console.log(`[oc-chan] 回测已打包的主进程、preload、页面与依赖：${packagedApp}`)
+      await run(['node_modules/electron/cli.js', entry, ...debugArguments], env)
+    } else {
+      if (windowed) await run(['scripts/build-native.mjs'], env)
+      else await run(['scripts/build-glass.mjs'], env)
+      await run([
+        'node_modules/electron-vite/bin/electron-vite.js', 'dev',
+        '--outDir', path.join(instance, 'out'), '--entry', path.join(instance, 'out/main/index.js'),
+        '--watch', '--', ...debugArguments
+      ], env)
+    }
   } finally {
     if (child?.pid && signalGroup(child.pid, 0)) {
       throw new Error(`开发进程仍存活，保留实例目录供排查：${instance}`)
