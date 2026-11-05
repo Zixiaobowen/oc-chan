@@ -304,3 +304,42 @@ test('activity changes update matches and clearing the filter restores collapsed
   assert.equal(restored.nodes[0].collapsed, true)
   assert.equal(restored.hiddenCount, 1)
 })
+
+test('project branches stay adjacent despite interleaved IDs and different branch sizes', () => {
+  const graph = projectAgentTopology([
+    agent('a-unknown'),
+    agent('b-nebula', { cwd: '/Projects/Nebula' }),
+    agent('c-atlas', { cwd: '/Projects/Atlas/' }),
+    agent('d-nebula-child', { cwd: '/Projects/Nebula', parentId: 'b-nebula', kind: 'subagent' }),
+    agent('e-nebula-child', { cwd: '/Projects/Nebula', parentId: 'b-nebula', kind: 'subagent' }),
+    agent('z-atlas', { cwd: '/Projects/Atlas' }),
+    agent('a-atlas-child', { cwd: '/Projects/Elsewhere', parentId: 'z-atlas', kind: 'subagent' }),
+  ], 'all', 'all', '', noCollapse)
+  const positions = layoutAgentTopology(graph)
+  const roots = ['c-atlas', 'z-atlas', 'b-nebula', 'a-unknown']
+  assert.deepEqual([...roots].sort((a, b) => positions.get(a)!.x - positions.get(b)!.x), roots)
+  const atlasRight = Math.max(...['c-atlas', 'z-atlas', 'a-atlas-child'].map(id => positions.get(id)!.x + AGENT_NODE_WIDTH))
+  const nebulaLeft = Math.min(...['b-nebula', 'd-nebula-child', 'e-nebula-child'].map(id => positions.get(id)!.x))
+  const withinProjectGap = positions.get('z-atlas')!.x - positions.get('c-atlas')!.x - AGENT_NODE_WIDTH
+  assert.ok(nebulaLeft - atlasRight > withinProjectGap, 'Project groups have more separation than sibling branches')
+  for (const edge of graph.edges) assert.ok(positions.get(edge.target)!.y > positions.get(edge.source)!.y + AGENT_NODE_HEIGHT)
+  assertNoOverlap(positions)
+  const reordered = { ...graph, nodes: [...graph.nodes].reverse(), edges: [...graph.edges].reverse() }
+  assert.deepEqual(layoutAgentTopology(reordered), positions)
+})
+
+test('project changes invalidate layout while normalized directory aliases keep the same order', () => {
+  const agents = [agent('first', { cwd: '/Projects/Beta' }), agent('second', { cwd: '/Projects/Alpha' }), agent('root-directory', { cwd: '/' })]
+  const before = projectAgentTopology(agents, 'all', 'all', '', noCollapse)
+  const normalized = projectAgentTopology(agents.map(item => item.id === 'first' ? { ...item, cwd: '/Projects/Beta///' } : item), 'all', 'all', '', noCollapse)
+  assert.equal(normalized.layoutKey, before.layoutKey)
+  assert.deepEqual(layoutAgentTopology(normalized), layoutAgentTopology(before))
+  const moved = projectAgentTopology(agents.map(item => item.id === 'first' ? { ...item, cwd: '/Projects/Aardvark' } : item), 'all', 'all', '', noCollapse)
+  assert.notEqual(moved.layoutKey, before.layoutKey)
+  const beforePositions = layoutAgentTopology(before)
+  assert.ok(beforePositions.get('root-directory')!.x < beforePositions.get('second')!.x)
+  assert.ok(beforePositions.get('second')!.x < beforePositions.get('first')!.x)
+  const positions = layoutAgentTopology(moved)
+  assert.ok(positions.get('root-directory')!.x < positions.get('first')!.x)
+  assert.ok(positions.get('first')!.x < positions.get('second')!.x)
+})
