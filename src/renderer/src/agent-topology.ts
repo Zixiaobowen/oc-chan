@@ -29,6 +29,52 @@ export interface TopologyGraph {
 
 const compareIds = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0
 
+export function agentProjectDirectory(cwd: string | undefined): string {
+  return cwd ? cwd.replace(/\/+$/, '') || '/' : ''
+}
+
+interface TopologyBranch {
+  ids: string[]
+  edges: TopologyGraph['edges']
+  rootId: string
+  project: string
+}
+
+/** Keep real relationship branches intact; group their roots by project. */
+export function orderedTopologyBranches(graph: TopologyGraph): TopologyBranch[] {
+  const agents = new Map(graph.nodes.map(node => [node.agent.id, node.agent]))
+  const ids = [...agents.keys()].sort(compareIds)
+  const neighbors = new Map(ids.map(id => [id, [] as string[]]))
+  const parented = new Set<string>()
+  for (const edge of graph.edges) {
+    neighbors.get(edge.source)!.push(edge.target)
+    neighbors.get(edge.target)!.push(edge.source)
+    parented.add(edge.target)
+  }
+  const branches: TopologyBranch[] = []
+  const branchById = new Map<string, TopologyBranch>()
+  for (const id of ids) {
+    if (branchById.has(id)) continue
+    const branch: TopologyBranch = { ids: [id], edges: [], rootId: id, project: '' }
+    branchById.set(id, branch)
+    for (let index = 0; index < branch.ids.length; index++) {
+      for (const neighbor of neighbors.get(branch.ids[index])!) {
+        if (branchById.has(neighbor)) continue
+        branchById.set(neighbor, branch)
+        branch.ids.push(neighbor)
+      }
+    }
+    branch.ids.sort(compareIds)
+    branch.rootId = branch.ids.find(member => !parented.has(member)) ?? branch.ids[0]
+    branch.project = agentProjectDirectory(agents.get(branch.rootId)!.cwd)
+    branches.push(branch)
+  }
+  for (const edge of graph.edges) branchById.get(edge.source)!.edges.push(edge)
+  for (const branch of branches) branch.edges.sort((left, right) => compareIds(left.source, right.source) || compareIds(left.target, right.target))
+  return branches.sort((left, right) => Number(!left.project) - Number(!right.project)
+    || compareIds(left.project, right.project) || compareIds(left.rootId, right.rootId))
+}
+
 export function projectAgentTopology(
   agents: AgentInfo[],
   kind: AgentKindFilter,
@@ -152,46 +198,20 @@ export function projectAgentTopology(
     contextCount: nodes.filter(node => node.contextOnly).length,
     hiddenCount: hidden.size,
     issueCount: nodes.filter(node => node.issue !== undefined).length,
-    layoutKey: JSON.stringify([nodes.map(node => node.agent.id), edges.map(edge => [edge.source, edge.target])]),
+    layoutKey: JSON.stringify([nodes.map(node => [node.agent.id, agentProjectDirectory(node.agent.cwd)]), edges.map(edge => [edge.source, edge.target])]),
   }
-}
-
-interface LayoutComponent {
-  ids: string[]
-  edges: TopologyGraph['edges']
-  positions: Map<string, { x: number; y: number }>
-  width: number
 }
 
 export function layoutAgentTopology(graph: TopologyGraph): Map<string, { x: number; y: number }> {
-  const ids = graph.nodes.map(node => node.agent.id).sort(compareIds)
-  const neighbors = new Map(ids.map(id => [id, [] as string[]]))
-  for (const edge of graph.edges) {
-    neighbors.get(edge.source)!.push(edge.target)
-    neighbors.get(edge.target)!.push(edge.source)
-  }
-  const components: LayoutComponent[] = []
-  const componentById = new Map<string, LayoutComponent>()
-  for (const id of ids) {
-    if (componentById.has(id)) continue
-    const component: LayoutComponent = { ids: [id], edges: [], positions: new Map(), width: 0 }
-    componentById.set(id, component)
-    for (let index = 0; index < component.ids.length; index += 1) {
-      for (const neighbor of neighbors.get(component.ids[index])!) {
-        if (componentById.has(neighbor)) continue
-        componentById.set(neighbor, component)
-        component.ids.push(neighbor)
-      }
-    }
-    component.ids.sort(compareIds)
-    components.push(component)
-  }
-  for (const edge of graph.edges) componentById.get(edge.source)!.edges.push(edge)
-  for (const component of components) {
-    component.edges.sort((left, right) => compareIds(left.source, right.source) || compareIds(left.target, right.target))
+  const branches = orderedTopologyBranches(graph)
+  const positions = new Map<string, { x: number; y: number }>()
+  let xOffset = 0
+  for (let index = 0; index < branches.length; index++) {
+    const component = branches[index]
+    if (index > 0) xOffset += component.project === branches[index - 1].project ? 48 : 112
     if (component.ids.length === 1 && component.edges.length === 0) {
-      component.positions.set(component.ids[0], { x: 0, y: 0 })
-      component.width = AGENT_NODE_WIDTH
+      positions.set(component.ids[0], { x: xOffset, y: 0 })
+      xOffset += AGENT_NODE_WIDTH
       continue
     }
     const dagre = new Graph<GraphLabel, NodeLabel, EdgeLabel>()
@@ -210,27 +230,18 @@ export function layoutAgentTopology(graph: TopologyGraph): Map<string, { x: numb
       }
       const x = node.x - AGENT_NODE_WIDTH / 2
       const y = node.y - AGENT_NODE_HEIGHT / 2
-      component.positions.set(id, { x, y })
+      positions.set(id, { x, y })
       minX = Math.min(minX, x)
       minY = Math.min(minY, y)
       maxX = Math.max(maxX, x + AGENT_NODE_WIDTH)
     }
-    for (const position of component.positions.values()) {
-      position.x -= minX
+    for (const id of component.ids) {
+      const position = positions.get(id)!
+      position.x += xOffset - minX
       position.y -= minY
     }
-    component.width = maxX - minX
+    xOffset += maxX - minX
   }
 
-  // Place relationship components first, keeping every root on the same row.
-  components.sort((left, right) => Number(right.edges.length > 0) - Number(left.edges.length > 0)
-    || right.ids.length - left.ids.length || compareIds(left.ids[0], right.ids[0]))
-  const gap = 48
-  const positions = new Map<string, { x: number; y: number }>()
-  let x = 0
-  for (const component of components) {
-    for (const [id, position] of component.positions) positions.set(id, { x: x + position.x, y: position.y })
-    x += component.width + gap
-  }
   return positions
 }

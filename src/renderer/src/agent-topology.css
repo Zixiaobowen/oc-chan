@@ -36,28 +36,20 @@
   width: 100%;
   height: 100%;
   padding: 10px 12px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid color-mix(in srgb, var(--topology-project-color, var(--border-strong)) 60%, var(--border-strong));
   border-radius: 12px;
-  background: var(--surface);
+  background: color-mix(in srgb, var(--topology-project-color, var(--surface)) 14%, var(--surface));
   color: var(--ink);
-}
-
-.app-shell[data-agent-evidence='current'] .topology-node.is-active {
-  border-color: var(--accent);
-  background: var(--success-surface);
 }
 
 .topology-node.is-context {
   border-style: dashed;
-  border-color: var(--edge);
-  background: var(--surface-detail);
 }
 
-.topology-node:hover { border-color: var(--edge); }
+.topology-node:hover { outline: 1px solid var(--muted); outline-offset: 2px; }
 .topology-node.is-selected {
-  border-color: var(--accent);
-  outline: 1px solid var(--accent);
-  background: var(--selection);
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
 }
 
 .topology-node-heading {
@@ -67,7 +59,7 @@
   min-width: 0;
 }
 
-.topology-node-heading > svg { flex-shrink: 0; color: var(--accent); }
+.topology-node-heading > svg { flex-shrink: 0; color: var(--ink); }
 .topology-node-heading strong {
   display: -webkit-box;
   min-width: 0;
@@ -97,7 +89,7 @@
   min-width: 0;
 }
 
-.topology-node-badges .badge { flex-shrink: 0; padding: 2px 5px; line-height: 15px; }
+.topology-node-badges .badge { flex-shrink: 0; padding: 2px 5px; line-height: 15px; color: var(--ink); background: var(--surface-muted); }
 .topology-node-badges .topology-runtime {
   flex-shrink: 1;
   display: block;
@@ -106,7 +98,17 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.topology-node-badges .topology-kind { color: var(--ink); background: var(--hover); }
+.topology-node .badge-idle .status-dot {
+  box-sizing: border-box;
+  width: 7px;
+  height: 7px;
+  flex-basis: 7px;
+  border: 1.5px solid currentColor;
+  background: transparent;
+}
+.topology-node .badge-running .status-dot { border-radius: 0; }
+.topology-node .badge-unknown .status-dot { border-radius: 0; transform: rotate(45deg); }
+.topology-node .agent-activity { color: var(--ink); }
 
 .topology-node-metrics {
   display: grid;
@@ -188,13 +190,11 @@
   opacity: 0.78;
   pointer-events: none;
   animation: agent-edge-travel 1.3s linear infinite paused;
-  transition: stroke 180ms ease-out, stroke-width 180ms ease-out, opacity 180ms ease-out;
+  transition: stroke-width 180ms ease-out;
 }
 .app-shell[data-display-live='true'] .topology-flow[data-motion-visible='true'] { animation-play-state: running; }
 .app-shell[data-agent-evidence='current'] .topology-edge.is-active .topology-flow {
-  stroke: var(--accent);
-  stroke-width: 4.5;
-  opacity: 1;
+  stroke-width: 5.5;
 }
 
 .topology-canvas .topology-controls {
@@ -329,7 +329,7 @@
   border-top: 3px dotted var(--edge);
   vertical-align: middle;
 }
-.topology-legend-stream.is-active { border-color: var(--accent); border-top-width: 4px; margin-left: 5px; }
+.topology-legend-stream.is-active { border-top-width: 5px; margin-left: 5px; }
 
 .badge-working .status-dot { animation: agent-working-turn 1.8s linear infinite paused; }
 .agent-activity-mark::after { animation: agent-call-travel 1.2s ease-in-out infinite alternate paused; }

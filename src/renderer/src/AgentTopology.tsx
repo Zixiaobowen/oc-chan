@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { AlertCircle, Bot, ChevronDown, ChevronRight, CornerDownRight, Maximize, Minus, Plus, RotateCcw, X } from 'lucide-react'
 import {
   Background,
@@ -24,7 +24,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { AgentActivity, Badge, bytes } from './components'
-import { AGENT_NODE_HEIGHT, AGENT_NODE_WIDTH, layoutAgentTopology, type TopologyGraph, type TopologyNode } from './agent-topology'
+import { AGENT_NODE_HEIGHT, AGENT_NODE_WIDTH, agentProjectDirectory, layoutAgentTopology, orderedTopologyBranches, type TopologyGraph, type TopologyNode } from './agent-topology'
 import AgentContextMenu, { type AgentMenuAnchor } from './AgentContextMenu'
 import { useI18n } from './i18n'
 import { useSettings } from './settings'
@@ -76,17 +76,28 @@ function topologyAriaLabels(t: Translate): Partial<AriaLabelConfig> {
   }
 }
 
+function projectColor(cwd: string | undefined): CSSProperties | undefined {
+  const directory = agentProjectDirectory(cwd)
+  if (!directory) return undefined
+  let hash = 2166136261
+  for (let index = 0; index < directory.length; index++) {
+    hash = Math.imul(hash ^ directory.charCodeAt(index), 16777619)
+  }
+  return { '--topology-project-color': `hsl(${(hash >>> 0) % 360} 55% 54%)` } as CSSProperties
+}
+
 const AgentNode = memo(function AgentNode({ data, selected }: NodeProps<AgentFlowNode>) {
   const { t } = useI18n()
   const { agent, contextOnly, childCount, descendantCount, collapsed, issue, collapseDisabled, onToggleCollapse } = data
   const project = agent.cwd || t('工作目录不可见', 'Working directory unavailable')
+  const projectStyle = useMemo(() => projectColor(agent.cwd), [agent.cwd])
   const heading = agent.summary || agent.name
   const cpu = agent.cpuPercent !== undefined && Number.isFinite(agent.cpuPercent) ? `${agent.cpuPercent.toFixed(1)}%` : '—'
   const memory = bytes(agent.memoryBytes)
   const note = [contextOnly ? t('关联上下文', 'Related context') : '', topologyIssue(issue, t)].filter(Boolean).join(' · ')
   const collapseLabel = collapsed ? t(`展开 ${descendantCount} 个后代节点`, `Expand ${descendantCount} descendants`) : t(`收起 ${descendantCount} 个后代节点`, `Collapse ${descendantCount} descendants`)
 
-  return <div className={`topology-node${selected ? ' is-selected' : ''}${contextOnly ? ' is-context' : ''}${agent.state === 'working' || agent.activity ? ' is-active' : ''}`}>
+  return <div style={projectStyle} className={`topology-node${selected ? ' is-selected' : ''}${contextOnly ? ' is-context' : ''}`}>
     <Handle type="target" position={Position.Top} isConnectable={false} />
     <div className="topology-node-heading">
       {agent.kind === 'main' ? <Bot size={16} aria-hidden="true" /> : <CornerDownRight size={16} aria-hidden="true" />}
@@ -152,27 +163,14 @@ const RelationshipEdge = memo(function RelationshipEdge({ id, sourceX, sourceY, 
 const edgeTypes = { relationship: RelationshipEdge }
 
 function initialFocusNodes(graph: TopologyGraph): { id: string }[] {
-  if (!graph.edges.length) return graph.nodes.slice(0, 6).map(node => ({ id: node.agent.id }))
-  const neighbors = new Map<string, string[]>()
-  for (const edge of graph.edges) {
-    const source = neighbors.get(edge.source) ?? []
-    const target = neighbors.get(edge.target) ?? []
-    source.push(edge.target)
-    target.push(edge.source)
-    neighbors.set(edge.source, source)
-    neighbors.set(edge.target, target)
+  const branches = orderedTopologyBranches(graph)
+  const firstProject = branches[0]?.project
+  const nodes: { id: string }[] = []
+  for (const branch of branches) {
+    if (branch.project !== firstProject) break
+    for (const id of branch.ids) nodes.push({ id })
   }
-  const visited = new Set<string>()
-  const pending = [graph.edges[0].source]
-  while (pending.length) {
-    const id = pending.pop()!
-    if (visited.has(id)) continue
-    visited.add(id)
-    for (const neighbor of neighbors.get(id) ?? []) {
-      if (!visited.has(neighbor)) pending.push(neighbor)
-    }
-  }
-  return Array.from(visited, id => ({ id }))
+  return nodes
 }
 
 function CanvasControls({ onRelayout }: { onRelayout: () => void }) {
@@ -432,7 +430,7 @@ function TopologyCanvas({ graph, selectedId, onSelect, onToggleCollapse, filterK
       attributionPosition="top-right"
     >
       <Background gap={24} size={1} color="var(--border-strong)" />
-      {graph.nodes.length > 0 && <Panel position="top-left" className="topology-pan-hint">{t('拖动空白平移，查看其他分支', 'Drag empty space to pan and see other branches')}</Panel>}
+      {graph.nodes.length > 0 && <Panel position="top-left" className="topology-pan-hint">{t('按项目目录排序 · 同项目主 Agent 并列 · 未知项目在最后', 'Sorted by project path · Same-project roots side by side · Unknown projects last')}</Panel>}
       {graph.nodes.length > 0 && <CanvasControls onRelayout={relayout} />}
       {navigationError && <Panel position="top-right" className="topology-navigation-error" role="alert">
         <AlertCircle size={16} aria-hidden="true" />
