@@ -5,6 +5,7 @@ import { useSettings } from './settings'
 import { NativeSelect } from './components'
 import SettingsSaveError from './SettingsSaveError'
 import ThemePicker from './ThemePicker'
+import LiquidGlassSetting from './LiquidGlassSetting'
 import './settings.css'
 
 function Choices<T extends string>({ name, label, value, options, disabled, onChange }: {
@@ -38,6 +39,9 @@ export default function SettingsView() {
         <Choices name="appearance" label={t('外观', 'Appearance')} value={settings.appearance} disabled={saving} onChange={value => change('appearance', value)} options={[
           { value: 'system', label: t('跟随系统', 'System') }, { value: 'light', label: t('浅色', 'Light') }, { value: 'dark', label: t('深色', 'Dark') }
         ]} />
+      </SettingRow>
+      <SettingRow name="glassIntensity" label={t('液态玻璃', 'Liquid Glass')}>
+        <LiquidGlassSetting />
       </SettingRow>
       <SettingRow name={resolvedTheme === 'dark' ? 'darkTheme' : 'lightTheme'} errorKeys={['lightTheme', 'darkTheme']} label={t('主题', 'Theme')}>
         <ThemePicker />

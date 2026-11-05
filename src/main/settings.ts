@@ -59,6 +59,10 @@ export function validateSettings(value: unknown): Partial<AppSettings> {
     if (!Object.hasOwn(DEFAULT_SETTINGS, key)) throw new Error(`未知设置 / Unknown setting: ${key}`)
     if (key === 'showDock' || key === 'preventSleep') {
       if (typeof entry !== 'boolean') throw new Error(`设置 ${key} 必须是布尔值 / Must be a boolean`)
+    } else if (key === 'glassIntensity') {
+      if (typeof entry !== 'number' || !Number.isInteger(entry) || entry < 0 || entry > 100) {
+        throw new Error('玻璃强度必须是 0–100 的整数 / Glass intensity must be an integer from 0 to 100')
+      }
     } else if (!(choices[key as keyof typeof choices] as readonly unknown[]).includes(entry)) {
       throw new Error(`设置 ${key} 的值无效 / Invalid setting value`)
     }
