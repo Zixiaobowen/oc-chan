@@ -6,6 +6,17 @@ import './settings-error.css'
 
 type RecoveryCopy = { reason: string; steps: string[] }
 
+export function SettingsDiagnosticDetails({ details }: { details: string }) {
+  const { t } = useI18n()
+  const id = useId()
+  return <details className="settings-save-error-details">
+    <summary>{t('查看原始诊断', 'View original diagnostics')}</summary>
+    <label htmlFor={`${id}-diagnostics`}>{t('完整诊断（只读）', 'Complete diagnostics (read-only)')}</label>
+    <p id={`${id}-copy-help`}>{t('在文本框中选择文字后按 ⌘C 复制；按 ⌘A 可全选。', 'Select text in the field and press ⌘C to copy; press ⌘A to select all.')}</p>
+    <textarea id={`${id}-diagnostics`} readOnly value={details} rows={6} wrap="soft" spellCheck={false} aria-describedby={`${id}-copy-help`} />
+  </details>
+}
+
 export default function SettingsSaveError({ settingLabel }: { settingLabel: string }) {
   const { error, saving, retry } = useSettings()
   const { t } = useI18n()
@@ -78,11 +89,6 @@ export default function SettingsSaveError({ settingLabel }: { settingLabel: stri
     <button type="button" className="settings-save-error-retry" aria-disabled={saving} onClick={() => { if (!saving) void retry() }}>
       {saving ? t('正在重试…', 'Retrying…') : t('重试这项修改', 'Retry this change')}
     </button>
-    <details className="settings-save-error-details">
-      <summary>{t('查看原始诊断', 'View original diagnostics')}</summary>
-      <label htmlFor={`${id}-diagnostics`}>{t('完整诊断（只读）', 'Complete diagnostics (read-only)')}</label>
-      <p id={`${id}-copy-help`}>{t('在文本框中选择文字后按 ⌘C 复制；按 ⌘A 可全选。', 'Select text in the field and press ⌘C to copy; press ⌘A to select all.')}</p>
-      <textarea id={`${id}-diagnostics`} readOnly value={failure.details} rows={6} wrap="soft" spellCheck={false} aria-describedby={`${id}-copy-help`} />
-    </details>
+    <SettingsDiagnosticDetails details={failure.details} />
   </section>
 }

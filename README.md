@@ -2,25 +2,22 @@
 
 本机运行观察桌面应用，使用 Electron、React、TypeScript，当前支持 macOS。
 
-源码仓库：[Zixiaobowen/oc-chan](https://github.com/Zixiaobowen/oc-chan)（私有），主分支为 `master`。
+源码仓库：[Zixiaobowen/oc-chan](https://github.com/Zixiaobowen/oc-chan)（私有）。
 
 开发、重构和评审统一遵循仓库级 [全局工程规则](./AGENTS.md)：插件式架构、保持体积精简、高性能、OOM 防护、响应式布局与 SOTA 级 motion。
 
 ## 运行
 
-需要 Node.js 22.12+、npm 和 Xcode Command Line Tools（构建原生窗口导航程序）。打包后的应用不需要本机安装 Swift 编译器。
+需要 Node.js 22.12+、npm 和包含 macOS 26+ SDK 的 Xcode Command Line Tools（构建原生窗口导航与液态玻璃模块）。打包后的应用不需要本机安装编译器。
 
 ```sh
 npm install
 npm run dev
 ```
 
-构建并打开桌面窗口：
+`npm run dev` 默认运行隔离的无头 Electron，按锁定版本准备 Electron 二进制；配置、构建输出和端口均独立，退出时清理本实例。窗口不可见、不可聚焦，不创建 Dock 或托盘，不会借用正式应用的数据。自动化验收使用此入口，需要调试端口时运行 `npm run dev -- --inspect`。
 
-```sh
-npm run build
-npm start
-```
+只有明确要求原生窗口交互时才使用 `npm run dev:window`；不要用 `npm start` 或裸 Electron 命令进行无人值守验收。
 
 打包本机架构的 macOS 应用：
 
@@ -28,7 +25,7 @@ npm start
 npm run package
 ```
 
-Apple Silicon 的产物在 `release/mac-arm64/OC Chan.app`，本机安装位置为 `/Applications/OC Chan.app`。已在打包应用及安装后的原生窗口验收；未配置 Developer ID 签名或 Apple 公证，安装包尚未通过 GitHub Release 分发。
+Apple Silicon 的产物在 `release/mac-arm64/OC Chan.app`，本机安装位置为 `/Applications/OC Chan.app`。未配置 Developer ID 签名或 Apple 公证，安装包不自动通过 GitHub Release 分发。
 
 构建可下载的 DMG 安装镜像与 ZIP 应用压缩包：
 
@@ -36,13 +33,17 @@ Apple Silicon 的产物在 `release/mac-arm64/OC Chan.app`，本机安装位置�
 npm run dist
 ```
 
-文件名为 `release/OC-Chan-<版本>-mac-<arm64|x64>.dmg` 和对应的 `.zip`。原生导航程序按构建机器架构编译，需在对应架构的 Mac 上构建；electron-builder 按依赖中锁定的版本获取 Electron，无需预先准备本地 Electron 分发目录。
+文件名为 `release/OC-Chan-<版本>-mac-<arm64|x64>.dmg` 和对应的 `.zip`。`afterPack` 按目标架构与应用最低系统版本编译导航程序及原生玻璃模块，然后交由打包器签名；electron-builder 使用依赖中锁定的 Electron 版本。
+
+`npm run hooks:install` 启用仓库内的 `pre-push`。推送本项目 GitHub 分支时，hook 从待推送提交的独立源码快照构建，验证应用及两个原生资源的架构、完整签名后，退出并整包替换本机应用、启动新版；失败中止推送。个人设置和数据保留。手动运行 `npm run install:local` 会构建当前目录，包含未提交修改。
+
+arm64 导航程序的上限为 160 KiB（163840 字节），由 `scripts/build-native.mjs` 在编译完成后读取 `docs/package-baseline.json` 并检查。该上限来自对 134480 字节产物的用户批准调整，余量 29360 字节。本分支只接入这项原生资源预算检查；基线中的其他历史测量不代表本分支全包验收结果。
 
 ## GitHub Actions 构建与下载
 
-[Build macOS 工作流](https://github.com/Zixiaobowen/oc-chan/actions/workflows/build.yml) 在推送 `master`、创建或更新目标为 `master` 的 PR、推送 `v*` 标签时自动运行，也可在 Actions 页面选择 **Run workflow** 手动构建指定分支或标签。
+[Build macOS 工作流](https://github.com/Zixiaobowen/oc-chan/actions/workflows/build.yml) 在推送 `main` / `master`、创建或更新目标为这两个分支的 PR、推送 `v*` 标签时自动运行，也可在 Actions 页面选择 **Run workflow** 手动构建指定分支或标签。
 
-工作流使用 Node.js 24 和 `npm ci` 安装锁定依赖，在 `macos-15`（Apple Silicon）及 `macos-15-intel`（Intel）上分别运行类型检查、Swift 编译、前后端构建与 DMG / ZIP 打包。上传前校验应用与原生导航程序的架构、可执行权限以及文件的 SHA-256；同一分支或 PR 的新构建会取消未结束的旧构建。
+工作流使用 Node.js 24 和 `npm ci` 安装锁定依赖，在 `macos-26`（Apple Silicon）及 `macos-26-intel`（Intel）上分别运行设置与安装事务测试、类型检查、Swift / Objective-C++ 编译、前后端构建与 DMG / ZIP 打包。上传前校验应用、导航程序及玻璃模块的架构和可执行权限，以及产物的 SHA-256；同一分支或 PR 的新构建会取消未结束的旧构建。
 
 打开成功的运行记录，在 **Artifacts** 中选择对应架构：
 
@@ -113,9 +114,10 @@ Hermes 执行数据库通过 Electron 自带 SQLite 在独立、只读的短时�
 
 ## 设置
 
-左下角“设置”打开同页平铺的九项设置。外观、语言、文字大小和托盘行为直接使用行内单选框，主题使用带配色缩略图的单选卡片，两种字体使用下拉框，程序坞与防休眠使用开关。保存后的设置即时生效，主窗口与托盘小面板保持同步：
+左下角“设置”打开同页平铺的十项设置。外观、语言、文字大小和托盘行为直接使用行内单选框，液态玻璃使用强度滑杆，主题使用带配色缩略图的单选卡片，两种字体使用下拉框，程序坞与防休眠使用开关。保存后的设置即时生效，主窗口与托盘小面板保持同步：
 
 - 外观：跟随系统、浅色、深色。
+- 液态玻璃：使用 AppKit 公共 `NSGlassEffectView`，要求 macOS 26+；0–100 整数强度，默认 65，0 关闭。强度调节原生中性色遮罩与实色遮罩的通透程度，Apple 没有公开折射率或模糊半径参数。仅侧栏、顶栏和托盘外层露出材质，数据区保持实色。拖动预览不写盘，松开保存；键盘停顿 250ms 后保存。Esc、失焦、隐藏或离开设置页取消未保存预览。预览失败显示诊断及重试，恢复实色；保存失败恢复已保存值。系统开启“减少透明度”或“增加对比度”时停用玻璃，保留强度。
 - 主题：OC Chan、GitHub、Nord、Catppuccin、Solarized、Gruvbox。参考 Tern 的配色缩略卡片，悬停或键盘聚焦可预览整个主窗口，点击或用方向键／空格选择后自动保存。离开选择区、按 Esc、窗口隐藏或离开设置页会取消未保存的预览；浅色与深色各自记住主题，跟随系统时自动使用对应配色。默认均为 OC Chan。
 - 语言：跟随系统、简体中文、English；任务名、会话标题和原始诊断保留原文。
 - 文字大小：12 / 13 / 15 px，按同一比例调整界面的文字层级；侧栏辅助说明与计数不小于 12 px。
@@ -126,7 +128,7 @@ Hermes 执行数据库通过 Electron 自带 SQLite 在独立、只读的短时�
 - 显示程序坞：控制 macOS Dock 图标；关闭主窗口后仍在菜单栏运行，可重新打开。
 - 防止休眠：运行期间阻止空闲休眠，关闭设置或退出应用时释放。不会阻止屏幕熄灭、合盖或手动休眠。
 
-常规窗口按“设置名称 + 控件”排列；设置内容宽度不超过 560px 时，每项改为名称在上、控件在下，九项仍在同一页纵向滚动。主题卡片随设置容器宽度从三列调整为两列或一列。放大后主导航收进菜单，设置控件不会被替换或隐藏，焦点保持在原控件。
+常规窗口按“设置名称 + 控件”排列；设置内容宽度不超过 560px 时，每项改为名称在上、控件在下，十项仍在同一页纵向滚动。主题卡片随设置容器宽度从三列调整为两列或一列。放大后主导航收进菜单，设置控件不会被替换或隐藏，焦点保持在原控件。
 
 Agent 活跃状态、任务范围／状态和两项字体设置的下拉框使用统一箭头留白；中英文、深浅色及最小窗口 200% 缩放下保持箭头居中与文字避让，仍使用原生选择菜单。
 
@@ -141,6 +143,7 @@ Agent 活跃状态、任务范围／状态和两项字体设置的下拉框使�
 - `src/main/monitor.ts`：独立发现与采样、错误管理、分区更新和去重。
 - `src/main/tern-navigation.ts`、`tern-present.swift`、`resources/tern-navigation/plugin/`：会话校验、原生窗口显示和 Tern 窗口标识；`scripts/build-native.mjs` 负责编译，打包时携带可执行文件与插件。
 - `src/main/settings.ts`、`desktop-settings.ts`、`src/shared/settings.ts`：偏好校验、持久化、原生主题 / Dock / 防休眠效果与共享契约。
+- `src/main/liquid-glass.ts`、`src/native/liquid-glass.mm`：原生能力、辅助功能约束和每窗单一玻璃视图，0 时释放视图；`node-api-headers` 仅在构建期使用。
 - `src/preload/`、`src/shared/types.ts`：有限 IPC 接口与监控契约。
 - `src/renderer/src/`：概览、Agent、调度、系统、来源、设置及托盘视图。
 
@@ -156,7 +159,10 @@ node --import tsx --test src/renderer/src/agent-topology.test.ts
 node --import tsx --test src/main/live-agents.test.ts src/main/monitor.test.ts
 node --import tsx --test src/main/tern-navigation.test.ts
 node --import tsx --test src/main/settings.test.ts
+node --test scripts/install-local.test.mjs
 npm run smoke
 ```
 
 `smoke` 读取当前机器，验证进程存活、标识唯一、采集结果并输出统计和来源限制，不执行任何定时任务。桌面交互仍需启动实际应用验收；测试通过不能代替 `.app` 验收。
+
+液态玻璃已在真实隔离无头 Electron 验证预览、取消、保存、写盘失败回退、重试焦点、非法 IPC 参数、重载及 200% 放大。无头验收不证明桌面背景下的原生材质观感、真实托盘、全屏/分屏、可见动画帧率或长时内存稳定性。

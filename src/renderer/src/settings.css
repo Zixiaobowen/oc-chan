@@ -25,6 +25,14 @@
 .setting-switch[aria-checked='true'] { background: var(--accent); border-color: var(--accent); }
 .setting-switch[aria-checked='true'] span { transform: translateX(14px); background: var(--on-accent); }
 .setting-save-status { color: var(--muted); font-size: max(12px, calc(12px * var(--font-scale))); line-height: 1.6; margin-top: 16px; }
+.glass-setting-range { display: flex; align-items: center; gap: 16px; width: min(100%, 360px); min-height: 32px; }
+.glass-setting-range input { flex: 1; min-width: 0; min-height: 24px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.glass-setting-range input[aria-disabled='true'] { opacity: .6; cursor: default; }
+.glass-setting-value { display: flex; align-items: baseline; justify-content: flex-end; flex-wrap: wrap; gap: 6px; min-width: 7ch; font-variant-numeric: tabular-nums; }
+.glass-setting-value span { color: var(--muted); font-size: max(12px, calc(12px * var(--font-scale))); }
+.glass-setting-scale { display: flex; justify-content: space-between; width: min(calc(100% - 7ch - 16px), calc(360px - 7ch - 16px)); color: var(--muted); font-size: max(12px, calc(12px * var(--font-scale))); }
+.glass-preview-error { margin-top: 8px; color: var(--error); overflow-wrap: anywhere; }
+.glass-preview-error > .text-button { color: var(--accent); min-height: 32px; text-decoration: underline; text-underline-offset: 3px; }
 .theme-current { margin-bottom: 4px; }
 .theme-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; border: 0; padding: 0; margin: 0 0 6px; min-width: 0; }
 .theme-option { display: grid; gap: 6px; min-width: 0; padding: 6px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }

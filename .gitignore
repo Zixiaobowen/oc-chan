@@ -4,3 +4,5 @@ release/
 .DS_Store
 .impeccable/review/
 resources/tern-navigation/present-window
+resources/liquid-glass/
+.dev-instances/

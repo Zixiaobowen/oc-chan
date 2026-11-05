@@ -7,15 +7,20 @@
   "author": "bowen.sun",
   "license": "UNLICENSED",
   "scripts": {
-    "dev": "npm run build:native && electron-vite dev",
+    "dev": "node scripts/develop.mjs",
+    "dev:window": "node scripts/develop.mjs --window",
     "typecheck": "tsc --noEmit",
     "build:native": "node scripts/build-native.mjs",
-    "build": "npm run typecheck && npm run build:native && electron-vite build",
+    "build:app": "npm run typecheck && electron-vite build",
+    "build": "npm run build:app && npm run build:native",
     "start": "electron out/main/index.js",
     "test": "tsx --test src/main/*.test.ts src/main/collectors/*.test.ts src/renderer/src/agent-topology.test.ts",
     "smoke": "tsx scripts/smoke.ts",
-    "package": "npm run build && electron-builder --mac dir --publish never",
-    "dist": "npm run build && electron-builder --mac dmg zip --publish never"
+    "package": "npm run build:app && electron-builder --mac dir --publish never",
+    "dist": "npm run build:app && electron-builder --mac dmg zip --publish never",
+    "hooks:install": "git config --local core.hooksPath .githooks",
+    "install:local": "node scripts/install-local.mjs",
+    "test:install": "node --test scripts/install-local.test.mjs"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.1.3",
@@ -33,6 +38,7 @@
     "electron": "^45.2.1",
     "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0",
+    "node-api-headers": "1.9.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
     "vite": "^8.3.5"
@@ -40,6 +46,7 @@
   "build": {
     "appId": "local.oc-chan.desktop",
     "productName": "OC Chan",
+    "publish": null,
     "directories": {
       "output": "release"
     },
@@ -48,8 +55,9 @@
       "package.json"
     ],
     "extraResources": [
-      { "from": "resources/tern-navigation", "to": "tern-navigation" }
+      { "from": "resources/tern-navigation", "to": "tern-navigation", "filter": ["plugin/plugin.toml", "plugin/window.luau"] }
     ],
+    "afterPack": "scripts/build-native.mjs",
     "mac": {
       "artifactName": "OC-Chan-${version}-mac-${arch}.${ext}",
       "category": "public.app-category.developer-tools",

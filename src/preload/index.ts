@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('monitor', api)
 const desktopSettings: SettingsApi = {
   snapshot: () => ipcRenderer.invoke('settings:snapshot'),
   update: (patch) => ipcRenderer.invoke('settings:update', patch),
+  previewGlass: (intensity) => ipcRenderer.invoke('settings:preview-glass', intensity),
   showMainWindow: () => ipcRenderer.invoke('settings:show-main-window'),
   subscribe: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, snapshot: SettingsSnapshot) => listener(snapshot)

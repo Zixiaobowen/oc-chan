@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { AppSettings, SettingsSnapshot, SettingsUpdateFailure } from '../../shared/settings'
 import { THEMES, type ThemeId } from '../../shared/themes'
 import { LanguageProvider } from './i18n'
@@ -25,6 +25,10 @@ interface SettingsContextValue {
   update: (patch: Partial<AppSettings>) => Promise<void>
   retry: () => Promise<void>
   previewTheme: (theme: ThemeId | null) => void
+  glassPreview: number | null
+  glassPreviewError: { details: string; intensity: number | null } | null
+  previewGlass: (intensity: number | null) => void
+  retryGlassPreview: () => void
 }
 const SettingsContext = createContext<SettingsContextValue | null>(null)
 
@@ -41,6 +45,13 @@ export default function SettingsProvider({ children }: { children: ReactNode }) 
   const [saving, setSaving] = useState(false)
   const [themePreview, previewTheme] = useState<ThemeId | null>(null)
   const [attempt, setAttempt] = useState(0)
+  const [glassPreview, setGlassPreview] = useState<number | null>(null)
+  const [glassPreviewError, setGlassPreviewError] = useState<{ details: string; intensity: number | null } | null>(null)
+  const glassRequest = useRef<{ intensity: number | null; revision: number } | undefined>(undefined)
+  const glassWorker = useRef<Promise<void> | null>(null)
+  const glassRevision = useRef(0)
+  const glassFailure = useRef(false)
+  const glassActive = useRef(false)
   const pending = useRef(false)
   const originalControl = useRef<HTMLElement | null>(null)
   const retryFocus = useRef<{ trigger: Element | null; moved: boolean } | null>(null)
@@ -49,6 +60,85 @@ export default function SettingsProvider({ children }: { children: ReactNode }) 
   const savedTheme = snapshot ? snapshot.settings[appearance === 'dark' ? 'darkTheme' : 'lightTheme'] : 'oc-chan'
   const displayedTheme = saving ? savedTheme : themePreview ?? savedTheme
   const colors = THEMES[displayedTheme][appearance]
+  const flushGlass = useCallback(function flush(): Promise<void> {
+    if (glassWorker.current) return glassWorker.current
+    const run = async () => {
+      while (glassRequest.current !== undefined) {
+        const request = glassRequest.current
+        glassRequest.current = undefined
+        try {
+          if (!window.desktopSettings) throw new Error('Desktop settings are unavailable')
+          await window.desktopSettings.previewGlass(request.intensity)
+          if (request.revision === glassRevision.current) {
+            if (request.intensity !== null) glassFailure.current = false
+            if (document.activeElement?.matches('.glass-preview-error button')) {
+              document.getElementById('glass-intensity')?.focus({ preventScroll: true })
+            }
+            setGlassPreviewError(previous => request.intensity !== null || previous?.intensity === null ? null : previous)
+          }
+        } catch (cause) {
+          glassFailure.current = true
+          const details = cause instanceof Error ? cause.stack ?? cause.message : String(cause)
+          setGlassPreviewError({ details, intensity: request.intensity })
+          if (request.revision === glassRevision.current) {
+            setGlassPreview(null)
+            if (request.intensity !== null) {
+              glassActive.current = false
+              glassRequest.current = { intensity: null, revision: ++glassRevision.current }
+            }
+          }
+        }
+      }
+    }
+    const worker = run().finally(() => {
+      glassWorker.current = null
+      if (glassRequest.current !== undefined) return flush()
+    })
+    glassWorker.current = worker
+    return worker
+  }, [])
+  const previewGlass = useCallback((intensity: number | null) => {
+    if (intensity !== null && pending.current) return
+    if (intensity === null && !glassActive.current) return
+    glassActive.current = intensity !== null
+    setGlassPreview(intensity)
+    glassRequest.current = { intensity, revision: ++glassRevision.current }
+    void flushGlass()
+  }, [flushGlass])
+  const retryGlassPreview = () => {
+    if (!glassPreviewError || pending.current) return
+    const intensity = glassPreviewError.intensity
+    if (intensity === null) glassFailure.current = false
+    // A failed cancellation must be sent even when no local preview remains.
+    glassActive.current = true
+    previewGlass(intensity)
+  }
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    const capability = snapshot?.liquidGlass
+    const intensity = glassPreview ?? snapshot?.settings.glassIntensity ?? 0
+    const state = glassPreviewError ? 'error' : !capability?.available ? 'unavailable'
+      : capability.reducedTransparency || capability.increasedContrast ? 'accessibility'
+        : intensity === 0 ? 'off' : 'active'
+    root.dataset.liquidGlass = state
+    root.style.setProperty('--glass-intensity', String(intensity / 100))
+    root.style.setProperty('--glass-solid-percent', `${100 - intensity * 0.72}%`)
+  }, [glassPreview, glassPreviewError, snapshot?.settings.glassIntensity, snapshot?.liquidGlass.available, snapshot?.liquidGlass.reducedTransparency, snapshot?.liquidGlass.increasedContrast])
+  useEffect(() => {
+    const cancel = () => previewGlass(null)
+    const onVisibility = () => { if (document.hidden) cancel() }
+    window.addEventListener('blur', cancel)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('blur', cancel)
+      document.removeEventListener('visibilitychange', onVisibility)
+      cancel()
+    }
+  }, [previewGlass])
+  useEffect(() => {
+    const capability = snapshot?.liquidGlass
+    if (capability && (!capability.available || capability.reducedTransparency || capability.increasedContrast)) previewGlass(null)
+  }, [snapshot?.liquidGlass.available, snapshot?.liquidGlass.reducedTransparency, snapshot?.liquidGlass.increasedContrast, previewGlass])
   useLayoutEffect(() => {
     const root = document.documentElement
     root.dataset.theme = appearance
@@ -116,6 +206,7 @@ export default function SettingsProvider({ children }: { children: ReactNode }) 
     if (pending.current) return
     pending.current = true
     previewTheme(null)
+    if (patch.glassIntensity === undefined) previewGlass(null)
     if (retrying) retryFocus.current = { trigger: document.activeElement, moved: false }
     else {
       originalControl.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -124,6 +215,10 @@ export default function SettingsProvider({ children }: { children: ReactNode }) 
     setSaving(true)
     try {
       if (!window.desktopSettings) throw new Error('Desktop settings are unavailable')
+      if (patch.glassIntensity !== undefined) {
+        await flushGlass()
+        if (glassFailure.current) return
+      }
       const result = await window.desktopSettings.update(patch)
       if (result.ok) {
         if (retrying && retryFocus.current && !retryFocus.current.moved && document.activeElement === retryFocus.current.trigger) {
@@ -136,6 +231,12 @@ export default function SettingsProvider({ children }: { children: ReactNode }) 
       const details = cause instanceof Error ? cause.stack ?? cause.message : String(cause)
       setError({ failure: { reason: 'connection', details }, patch })
     } finally {
+      if (patch.glassIntensity !== undefined) {
+        setGlassPreview(null)
+        glassActive.current = false
+        glassRequest.current = { intensity: null, revision: ++glassRevision.current }
+        await flushGlass()
+      }
       retryFocus.current = null
       pending.current = false
       setSaving(false)
@@ -147,7 +248,7 @@ export default function SettingsProvider({ children }: { children: ReactNode }) 
     <h1>OC Chan</h1>
     {loadError ? <><p role="alert">{loadError}</p><button className="button secondary" onClick={() => setAttempt(value => value + 1)}>重试 / Retry</button></> : <p role="status">正在读取设置 / Loading settings…</p>}
   </main>
-  return <SettingsContext.Provider value={{ snapshot, saving, error, update, retry, previewTheme }}>
+  return <SettingsContext.Provider value={{ snapshot, saving, error, update, retry, previewTheme, glassPreview, glassPreviewError, previewGlass, retryGlassPreview }}>
     <LanguageProvider language={snapshot.resolvedLanguage}>{children}</LanguageProvider>
   </SettingsContext.Provider>
 }

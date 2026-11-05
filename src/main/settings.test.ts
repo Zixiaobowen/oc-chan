@@ -21,6 +21,13 @@ test('settings validate supplied keys, exact enums and booleans without coercion
       assert.deepEqual(validateSettings({ [key]: value }), { [key]: value })
     }
   }
+  assert.equal(DEFAULT_SETTINGS.glassIntensity, 65)
+  for (const glassIntensity of [0, 1, 65, 99, 100]) {
+    assert.deepEqual(validateSettings({ glassIntensity }), { glassIntensity })
+  }
+  for (const glassIntensity of [-1, 101, 0.5, NaN, Infinity, -Infinity, '65', null, undefined, true]) {
+    assert.throws(() => validateSettings({ glassIntensity }), /Glass intensity must be an integer/)
+  }
   assert.deepEqual(validateSettings({}), {})
   assert.deepEqual(validateSettings({ appearance: 'dark' }), { appearance: 'dark' })
   assert.deepEqual(validateSettings({ ...DEFAULT_SETTINGS }), DEFAULT_SETTINGS)
@@ -33,14 +40,15 @@ test('validated stored overrides merge with defaults; malformed, invalid and unr
   const filename = path.join(directory, 'settings.json')
   assert.deepEqual(await readSettings(filename), DEFAULT_SETTINGS)
   for (const overrides of [{}, { appearance: 'dark' }, { lightTheme: 'github' }, { darkTheme: 'nord' },
-    { language: 'en', lightTheme: 'solarized', darkTheme: 'gruvbox' }]) {
+    { language: 'en', lightTheme: 'solarized', darkTheme: 'gruvbox' }, { glassIntensity: 0 }, { glassIntensity: 100 }]) {
     const content = JSON.stringify(overrides)
     await writeFile(filename, content)
     assert.deepEqual(await readSettings(filename), { ...DEFAULT_SETTINGS, ...overrides })
     assert.equal(await readFile(filename, 'utf8'), content)
   }
   for (const content of ['{bad', 'null', '[]', '{"unknown":true}', '{"lightTheme":"unknown"}',
-    '{"darkTheme":null}', JSON.stringify({ ...DEFAULT_SETTINGS, showDock: 'false' })]) {
+    '{"darkTheme":null}', '{"glassIntensity":-1}', '{"glassIntensity":101}', '{"glassIntensity":65.5}',
+    '{"glassIntensity":"65"}', JSON.stringify({ ...DEFAULT_SETTINGS, showDock: 'false' })]) {
     await writeFile(filename, content)
     await assert.rejects(readSettings(filename), /Invalid settings file/)
     assert.equal(await readFile(filename, 'utf8'), content)
@@ -62,8 +70,8 @@ test('concurrent patches serialize native effects and independently preserve bot
     applied.push({ ...settings })
     active -= 1
   })
-  const first = store.update({ appearance: 'dark', lightTheme: 'github', textSize: 'large', uiFont: 'pingfang' })
-  const second = store.update({ darkTheme: 'catppuccin', language: 'en', codeFont: 'menlo', trayClick: 'main', showDock: false, preventSleep: true })
+  const first = store.update({ appearance: 'dark', lightTheme: 'github', textSize: 'large', uiFont: 'pingfang', glassIntensity: 0 })
+  const second = store.update({ darkTheme: 'catppuccin', language: 'en', codeFont: 'menlo', trayClick: 'main', showDock: false, preventSleep: true, glassIntensity: 100 })
   await Promise.all([first, second])
   assert.equal(maximum, 1)
   assert.equal(applied.length, 2)
@@ -72,9 +80,11 @@ test('concurrent patches serialize native effects and independently preserve bot
   assert.equal(applied[0].darkTheme, 'oc-chan')
   assert.equal(applied[1].lightTheme, 'github')
   assert.equal(applied[1].darkTheme, 'catppuccin')
+  assert.equal(applied[0].glassIntensity, 0)
+  assert.equal(applied[1].glassIntensity, 100)
   const expected: AppSettings = {
     appearance: 'dark', textSize: 'large', uiFont: 'pingfang', language: 'en',
-    lightTheme: 'github', darkTheme: 'catppuccin',
+    lightTheme: 'github', darkTheme: 'catppuccin', glassIntensity: 100,
     codeFont: 'menlo', trayClick: 'main', showDock: false, preventSleep: true
   }
   assert.deepEqual(store.value, expected)
@@ -93,14 +103,15 @@ test('a native failure restores prior effects and durable settings, and later up
   let native = { ...DEFAULT_SETTINGS }
   const store = new SettingsStore(filename, { ...DEFAULT_SETTINGS }, async (settings) => {
     native = { ...settings }
-    if (!settings.showDock) throw new Error('Dock unavailable')
+    if (settings.glassIntensity === 100) throw new Error('Native glass unavailable')
   })
-  await assert.rejects(store.update({ showDock: false, appearance: 'dark' }), /Dock unavailable/)
+  await assert.rejects(store.update({ glassIntensity: 100, appearance: 'dark' }), /Native glass unavailable/)
   assert.deepEqual(native, DEFAULT_SETTINGS)
   assert.deepEqual(store.value, DEFAULT_SETTINGS)
   assert.deepEqual(await readSettings(filename), DEFAULT_SETTINGS)
-  await store.update({ language: 'en' })
+  await store.update({ language: 'en', glassIntensity: 0 })
   assert.equal((await readSettings(filename)).language, 'en')
+  assert.equal((await readSettings(filename)).glassIntensity, 0)
 })
 
 test('a settings.json directory is classified, rolls back effects and permits retrying the same patch after removal', async (t) => {
@@ -110,7 +121,7 @@ test('a settings.json directory is classified, rolls back effects and permits re
   await mkdir(filename)
   let native = { ...DEFAULT_SETTINGS }
   const store = new SettingsStore(filename, { ...DEFAULT_SETTINGS }, async (settings) => { native = { ...settings } })
-  const patch = { preventSleep: true, showDock: false }
+  const patch = { preventSleep: true, showDock: false, glassIntensity: 0 }
   await assert.rejects(store.update(patch), (error: unknown) => {
     const failure = settingsUpdateFailure(error, filename)
     assert.equal(failure.reason, 'path-conflict')
@@ -186,7 +197,7 @@ test('storage exhaustion preserves the previous file and native effects, then th
     if (full) throw Object.assign(new Error('write quota exhausted'), { code: 'EDQUOT' })
     await writeSettings(target, settings)
   })
-  const patch: Partial<AppSettings> = { preventSleep: true, showDock: false, lightTheme: 'solarized', darkTheme: 'gruvbox' }
+  const patch: Partial<AppSettings> = { preventSleep: true, showDock: false, lightTheme: 'solarized', darkTheme: 'gruvbox', glassIntensity: 100 }
   await assert.rejects(store.update(patch), (error: unknown) => {
     assert.equal(settingsUpdateFailure(error, filename).reason, 'storage-full')
     return true
@@ -208,7 +219,7 @@ test('a rollback failure rejects queued changes and never exposes an allegedly c
     applyCount += 1
     if (applyCount === 2) throw new Error('Rollback failed')
   }, async () => { throw new Error('Disk full') })
-  const first = store.update({ preventSleep: true })
+  const first = store.update({ glassIntensity: 0 })
   const second = store.update({ appearance: 'dark' })
   const results = await Promise.allSettled([first, second])
   assert.equal(results[0].status, 'rejected')
@@ -228,6 +239,8 @@ test('invalid patches never enter the transaction or poison subsequent valid cha
   await assert.rejects(store.update({ preventSleep: 'true' }))
   await assert.rejects(store.update({ lightTheme: 'unknown' }))
   await assert.rejects(store.update({ darkTheme: 'NORD' }))
+  await assert.rejects(store.update({ glassIntensity: 101 }))
+  await assert.rejects(store.update({ glassIntensity: 65.5 }))
   await store.update({})
   assert.equal(applied, 0)
   assert.equal(saved, 0)

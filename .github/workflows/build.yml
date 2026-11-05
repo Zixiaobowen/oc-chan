@@ -2,10 +2,10 @@ name: Build macOS
 
 on:
   push:
-    branches: [master]
+    branches: [main, master]
     tags: ['v*']
   pull_request:
-    branches: [master]
+    branches: [main, master]
   workflow_dispatch:
 
 permissions:
@@ -24,11 +24,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-15
+          - runner: macos-26
             arch: arm64
             macho-arch: arm64
             app-directory: mac-arm64
-          - runner: macos-15-intel
+          - runner: macos-26-intel
             arch: x64
             macho-arch: x86_64
             app-directory: mac
@@ -58,9 +58,14 @@ jobs:
         run: |
           node -e 'if (process.platform !== "darwin" || process.arch !== process.env.TARGET_ARCH) throw new Error(`Expected macOS ${process.env.TARGET_ARCH}, got ${process.platform} ${process.arch}`)'
           xcrun --find swiftc
+          xcrun --find clang++
+          xcrun --sdk macosx --show-sdk-version
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
+
+      - name: Verify settings and installation transactions
+        run: node --import tsx --test src/main/settings.test.ts scripts/install-local.test.mjs
 
       - name: Build DMG and ZIP
         run: npm run dist -- "--$TARGET_ARCH"
@@ -71,6 +76,8 @@ jobs:
           test -x "$APP_DIRECTORY/Contents/Resources/tern-navigation/present-window"
           lipo "$APP_DIRECTORY/Contents/MacOS/OC Chan" -verify_arch "$MACHO_ARCH"
           lipo "$APP_DIRECTORY/Contents/Resources/tern-navigation/present-window" -verify_arch "$MACHO_ARCH"
+          test -x "$APP_DIRECTORY/Contents/Resources/liquid-glass/liquid-glass.node"
+          lipo "$APP_DIRECTORY/Contents/Resources/liquid-glass/liquid-glass.node" -verify_arch "$MACHO_ARCH"
 
       - name: Generate and verify checksums
         working-directory: release
