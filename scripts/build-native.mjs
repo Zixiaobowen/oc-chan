@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildGlass } from './build-glass.mjs'
+import { inspectPackage } from './check-package.mjs'
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url))
 const source = path.join(projectRoot, 'src/main/tern-present.swift')
@@ -34,6 +35,8 @@ export default async function afterPack(context) {
   if (context.electronPlatformName !== 'darwin') throw new Error('Only macOS packaging is supported')
   const { Arch } = await import('electron-builder')
   const contents = path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`, 'Contents')
+  const report = await inspectPackage(path.dirname(contents))
+  console.log(`[oc-chan] Package content verified: ${report.asarBytes}/${report.asarLimitBytes} ASAR bytes; runtime: ${report.runtimeDependencies.map(item => item.name).join(', ')}`)
   const minimumVersion = execFileSync('/usr/libexec/PlistBuddy', ['-c', 'Print:LSMinimumSystemVersion', path.join(contents, 'Info.plist')], {
     encoding: 'utf8', timeout: 5000, maxBuffer: 64 * 1024
   }).trim()

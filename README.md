@@ -17,6 +17,8 @@ npm run dev
 
 `npm run dev` 默认运行隔离的无头 Electron，按锁定版本准备 Electron 二进制；配置、构建输出和端口均独立，退出时清理本实例。窗口不可见、不可聚焦，不创建 Dock 或托盘，不会借用正式应用的数据。自动化验收使用此入口，需要调试端口时运行 `npm run dev -- --inspect`。
 
+回测构建完成的应用内容可运行 `npm run dev -- --packaged-app="release/mac-arm64/OC Chan.app"`（Intel 路径为 `release/mac/OC Chan.app`）。启动器先检查包内容，再用相同版本的无头 Electron 加载该包内的主进程、preload、页面、依赖和原生资源；配置仍写入独立实例目录。此模式不触发正式应用的托盘、Dock 或原生窗口流程，不能代替安装后的验收。
+
 只有明确要求原生窗口交互时才使用 `npm run dev:window`；不要用 `npm start` 或裸 Electron 命令进行无人值守验收。
 
 打包本机架构的 macOS 应用：
@@ -33,17 +35,19 @@ Apple Silicon 的产物在 `release/mac-arm64/OC Chan.app`，本机安装位置�
 npm run dist
 ```
 
-文件名为 `release/OC-Chan-<版本>-mac-<arm64|x64>.dmg` 和对应的 `.zip`。`afterPack` 按目标架构与应用最低系统版本编译导航程序及原生玻璃模块，然后交由打包器签名；electron-builder 使用依赖中锁定的 Electron 版本。
+文件名为 `release/OC-Chan-<版本>-mac-<arm64|x64>.dmg` 和对应的 `.zip`。`afterPack` 先验证包内依赖、归档体积和许可证，再按目标架构与应用最低系统版本编译导航程序及原生玻璃模块，然后交由打包器签名；electron-builder 使用依赖中锁定的 Electron 版本。
 
 `npm run hooks:install` 启用仓库内的 `pre-push`。推送本项目 GitHub 分支时，hook 从待推送提交的独立源码快照构建，验证应用及两个原生资源的架构、完整签名后，退出并整包替换本机应用、启动新版；失败中止推送。个人设置和数据保留。手动运行 `npm run install:local` 会构建当前目录，包含未提交修改。
 
-arm64 导航程序的上限为 160 KiB（163840 字节），由 `scripts/build-native.mjs` 在编译完成后读取 `docs/package-baseline.json` 并检查。该上限来自对 134480 字节产物的用户批准调整，余量 29360 字节。本分支只接入这项原生资源预算检查；基线中的其他历史测量不代表本分支全包验收结果。
+React、React DOM、Lucide、React Flow 和 Dagre 已编译进页面，统一列为开发依赖，避免发布包再次携带整套源码。运行时仅保留主进程采集需要的 `systeminformation`；前端实际打入的直接和传递依赖由构建插件输出版本清单 `bundled-dependencies.json` 与许可证正文 `THIRD_PARTY_NOTICES.txt`。
+
+`scripts/check-package.mjs` 将 `app.asar` 限制为 3 MiB（3145728 字节），禁止多余的运行时依赖、源码映射、测试及开发文件，并检查采集器入口和许可证与锁文件一致。可独立运行 `npm run check:package -- --app "release/mac-arm64/OC Chan.app"`。arm64 导航程序另有 160 KiB（163840 字节）上限，由 `scripts/build-native.mjs` 按 `docs/package-baseline.json` 检查；基线中的其他历史测量不代表当前分支全包验收结果。
 
 ## GitHub Actions 构建与下载
 
 [Build macOS 工作流](https://github.com/Zixiaobowen/oc-chan/actions/workflows/build.yml) 在推送 `main` / `master`、创建或更新目标为这两个分支的 PR、推送 `v*` 标签时自动运行，也可在 Actions 页面选择 **Run workflow** 手动构建指定分支或标签。
 
-工作流使用 Node.js 24 和 `npm ci` 安装锁定依赖，在 `macos-26`（Apple Silicon）及 `macos-26-intel`（Intel）上分别运行设置与安装事务测试、类型检查、Swift / Objective-C++ 编译、前后端构建与 DMG / ZIP 打包。上传前校验应用、导航程序及玻璃模块的架构和可执行权限，以及产物的 SHA-256；同一分支或 PR 的新构建会取消未结束的旧构建。
+工作流使用 Node.js 24 和 `npm ci` 安装锁定依赖，在 `macos-26`（Apple Silicon）及 `macos-26-intel`（Intel）上分别运行包内容、采集、拓扑、设置与安装事务的定向测试、类型检查、Swift / Objective-C++ 编译、前后端构建与 DMG / ZIP 打包。上传前校验应用、导航程序及玻璃模块的架构和可执行权限，以及产物的 SHA-256；同一分支或 PR 的新构建会取消未结束的旧构建。
 
 打开成功的运行记录，在 **Artifacts** 中选择对应架构：
 
@@ -160,6 +164,7 @@ node --import tsx --test src/main/live-agents.test.ts src/main/monitor.test.ts
 node --import tsx --test src/main/tern-navigation.test.ts
 node --import tsx --test src/main/settings.test.ts
 node --test scripts/install-local.test.mjs
+node --test scripts/check-package.test.mjs
 npm run smoke
 ```
 

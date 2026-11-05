@@ -64,8 +64,8 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Verify settings and installation transactions
-        run: node --import tsx --test src/main/settings.test.ts scripts/install-local.test.mjs
+      - name: Verify package and affected application contracts
+        run: node --import tsx --test scripts/check-package.test.mjs src/main/settings.test.ts scripts/install-local.test.mjs src/main/collectors/system.test.ts src/renderer/src/agent-topology.test.ts
 
       - name: Build DMG and ZIP
         run: npm run dist -- "--$TARGET_ARCH"
