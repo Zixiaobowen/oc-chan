@@ -2,10 +2,10 @@ name: Build macOS
 
 on:
   push:
-    branches: [master]
+    branches: [main, master]
     tags: ['v*']
   pull_request:
-    branches: [master]
+    branches: [main, master]
   workflow_dispatch:
 
 permissions:
@@ -17,35 +17,23 @@ concurrency:
 
 jobs:
   build:
-    name: macOS ${{ matrix.arch }}
-    runs-on: ${{ matrix.runner }}
+    name: macOS arm64
+    runs-on: macos-26
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-15
-            arch: arm64
-            macho-arch: arm64
-            app-directory: mac-arm64
-          - runner: macos-15-intel
-            arch: x64
-            macho-arch: x86_64
-            app-directory: mac
     defaults:
       run:
         shell: bash
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      TARGET_ARCH: ${{ matrix.arch }}
-      MACHO_ARCH: ${{ matrix.macho-arch }}
-      APP_DIRECTORY: release/${{ matrix.app-directory }}/OC Chan.app
+      TARGET_ARCH: arm64
+      APP_DIRECTORY: release/mac-arm64/OC Chan.app
 
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -58,19 +46,45 @@ jobs:
         run: |
           node -e 'if (process.platform !== "darwin" || process.arch !== process.env.TARGET_ARCH) throw new Error(`Expected macOS ${process.env.TARGET_ARCH}, got ${process.platform} ${process.arch}`)'
           xcrun --find swiftc
+          xcrun --find clang++
+          xcrun --sdk macosx --show-sdk-version
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Build DMG and ZIP
-        run: npm run dist -- "--$TARGET_ARCH"
+      - name: Run affected behavior tests
+        id: behavior_tests
+        env:
+          OC_CHAN_CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: npm run test:ci
 
-      - name: Verify packaged application
-        run: |
-          test -f "$APP_DIRECTORY/Contents/Resources/app.asar"
-          test -x "$APP_DIRECTORY/Contents/Resources/tern-navigation/present-window"
-          lipo "$APP_DIRECTORY/Contents/MacOS/OC Chan" -verify_arch "$MACHO_ARCH"
-          lipo "$APP_DIRECTORY/Contents/Resources/tern-navigation/present-window" -verify_arch "$MACHO_ARCH"
+      - name: Install locked Electron runtime
+        if: steps.behavior_tests.outputs.renderer_smoke == 'true'
+        run: npm exec -- install-electron
+
+      - name: Run isolated Electron renderer smoke
+        id: renderer_smoke
+        if: steps.behavior_tests.outputs.renderer_smoke == 'true'
+        timeout-minutes: 8
+        run: npm run smoke:renderer -- --out "$RUNNER_TEMP/oc-chan-renderer-smoke"
+
+      - name: Upload renderer smoke evidence
+        if: ${{ !cancelled() && (steps.renderer_smoke.outcome == 'success' || steps.renderer_smoke.outcome == 'failure') }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: oc-chan-renderer-smoke-${{ github.run_number }}
+          path: ${{ runner.temp }}/oc-chan-renderer-smoke
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Build DMG and ZIP
+        run: npm run dist
+
+      - name: Review dependency licenses and advisories
+        run: npm run audit:dependencies -- --output "release/dependency-review-$TARGET_ARCH.json"
+
+      - name: Verify package contents and frozen size budgets
+        run: npm run check:package -- --app "$APP_DIRECTORY" --arch "$TARGET_ARCH" --artifacts-dir release --output "release/package-manifest-$TARGET_ARCH.json"
 
       - name: Generate and verify checksums
         working-directory: release
@@ -81,11 +95,13 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: oc-chan-macos-${{ matrix.arch }}-${{ github.run_number }}
+          name: oc-chan-macos-arm64-${{ github.run_number }}
           path: |
             release/*.dmg
             release/*.zip
             release/SHA256SUMS.txt
+            release/package-manifest-arm64.json
+            release/dependency-review-arm64.json
           if-no-files-found: error
           retention-days: 30
           compression-level: 0

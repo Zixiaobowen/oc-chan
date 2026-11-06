@@ -1,0 +1,32 @@
+.notification-settings .setting-control { gap: 8px; }
+.notification-settings .notification-group { min-width: 0; border: 0; border-top: 1px solid var(--border); margin: 12px 0 0; padding: 12px 0 0; }
+.notification-settings .notification-group legend { max-width: 100%; padding: 0 8px 0 0; font-weight: 600; overflow-wrap: anywhere; }
+.notification-settings .notification-group h3, .task-notification-subscription h3 { margin: 0 0 8px; font-size: inherit; font-weight: 600; }
+.notification-settings .notification-options { display: grid; gap: 4px; margin-block: 4px; }
+.notification-settings .notification-check { display: flex; align-items: flex-start; gap: 8px; min-height: 32px; padding-block: 5px; line-height: 1.6; cursor: pointer; overflow-wrap: anywhere; }
+.notification-settings .notification-check input { flex: 0 0 16px; width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--accent); }
+.notification-settings .notification-check > span { min-width: 0; }
+.notification-settings .notification-check small { display: block; color: var(--muted); font-size: max(12px, calc(12px * var(--font-scale))); }
+.notification-settings .notification-check:has(input[aria-disabled='true']) { color: var(--muted); cursor: default; }
+.notification-settings .notification-check:hover:has(input:not([aria-disabled='true'])) { color: var(--accent); }
+.notification-settings .notification-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.notification-settings .notification-times { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-block: 8px; }
+.notification-settings .notification-times label { display: grid; gap: 4px; min-width: 0; max-width: 100%; }
+.notification-settings .notification-times input { box-sizing: border-box; width: 11em; max-width: 100%; min-height: 32px; padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: 6px; color: var(--ink); background: var(--surface); font: inherit; font-variant-numeric: tabular-nums; }
+.notification-settings .notification-times input[aria-invalid='true'] { border-color: var(--error); }
+.notification-settings .notification-task-list ul { list-style: none; padding: 0; margin: 8px 0; }
+.notification-settings .notification-task-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding-block: 8px; border-bottom: 1px solid var(--border); }
+.notification-settings .notification-task-list code { font-family: var(--code-font); font-size: inherit; overflow-wrap: anywhere; }
+.notification-settings .button, .task-notification-subscription .button { min-height: 32px; max-width: 100%; white-space: normal; text-align: start; overflow-wrap: anywhere; }
+.notification-settings .notification-detail, .notification-settings .notification-error, .task-notification-subscription p { line-height: 1.6; overflow-wrap: anywhere; }
+.notification-settings .notification-detail { color: var(--muted); font-size: max(12px, calc(12px * var(--font-scale))); }
+.notification-settings .notification-error { color: var(--error); font-size: max(12px, calc(12px * var(--font-scale))); }
+.notification-settings .notification-error:empty { display: none; }
+.notification-settings .notification-status, .task-notification-subscription .notification-status { color: var(--muted); line-height: 1.6; overflow-wrap: anywhere; }
+.notification-settings .notification-status[data-phase='error'], .notification-settings .notification-status[data-phase='denied'], .task-notification-subscription .notification-status[data-phase='error'], .task-notification-subscription .notification-status[data-phase='denied'] { color: var(--error); }
+.notification-settings :is(input, button):focus-visible, .notification-settings .notification-task-list:focus-visible, .task-notification-subscription button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.task-notification-subscription { min-width: 0; display: grid; justify-items: start; gap: 8px; margin-block: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+.task-notification-subscription h3 { margin: 0; }
+.task-notification-subscription p { margin: 0; color: var(--muted); font-size: max(12px, calc(12px * var(--font-scale))); }
+.task-notification-subscription .notification-hint { color: var(--warning); }
+.task-notification-subscription .settings-save-error { min-width: 0; max-width: 100%; }

@@ -1,19 +1,19 @@
-import { useState } from 'react'
 import { Cpu, HardDrive, MemoryStick, Network } from 'lucide-react'
 import type { SystemSnapshot } from '../../shared/types'
 import { bytes, Chart, duration, Empty, Meter, NativeSelect, Sources, time } from './components'
 import { MemoryBreakdown, NetworkTraffic, ProcessRanking } from './SystemMetrics'
 import { useI18n } from './i18n'
 
-export default function SystemView({ data }: { data: SystemSnapshot | null }) {
+export default function SystemView({ data, enabled, processOrder, onProcessOrderChange }: {
+  data: SystemSnapshot | null; enabled: boolean; processOrder: 'cpu' | 'memory'; onProcessOrderChange: (order: 'cpu' | 'memory') => void
+}) {
   const { language, t } = useI18n()
-  const [processOrder, setProcessOrder] = useState<'cpu' | 'memory'>('cpu')
-  if (!data) return <div className="panel"><Empty title={t('正在采样系统状态', 'Sampling system status')}>{t('CPU、内存、磁盘和默认网络接口。', 'CPU, memory, disk and the default network interface.')}</Empty></div>
+  if (!data) return <div className="panel"><Empty title={enabled ? t('正在采样系统状态', 'Sampling system status') : t('系统采集已停用', 'System collection disabled')}>{enabled ? t('CPU、内存、磁盘和默认网络接口。', 'CPU, memory, disk and the default network interface.') : t('尚无快照。可在数据来源中开启系统采集。', 'No snapshot yet. Enable system collection in Data sources.')}</Empty></div>
   return <div className="system-view">
     <div className="machine-strip"><div><Cpu size={17} /><strong>{data.cpuModel}</strong><span>{t(`${data.cpuCores} 核心`, `${data.cpuCores} cores`)}</span></div><span>{t('已运行', 'Uptime')} {duration(data.uptimeSeconds, language)} · {time(data.collectedAt, language)}</span></div>
     <div className="system-grid">
       <section className="panel chart-panel">
-        <div className="section-heading"><h2><Cpu size={18} />{t('CPU 使用率', 'CPU usage')}</h2><strong className="chart-value">{data.cpuPercent.toFixed(1)}<small>%</small></strong></div>
+        <div className="section-heading"><h2><Cpu size={18} />{t('CPU 使用率', 'CPU usage')}</h2><strong className="chart-value">{data.cpuPercent === null ? '—' : <>{data.cpuPercent.toFixed(1)}<small>%</small></>}</strong></div>
         <Chart samples={data.history} field="cpuPercent" label={t('CPU 使用率', 'CPU usage')} />
         <p className="chart-note">{t('全机使用率 · 所有逻辑核心合计 100%', 'Total usage · All logical cores combined at 100%')}</p>
       </section>
@@ -35,12 +35,12 @@ export default function SystemView({ data }: { data: SystemSnapshot | null }) {
     <section className="panel">
       <div className="section-heading padded system-process-heading">
         <h2>{t('占用较高的进程', 'Top processes')}</h2>
-        <label className="system-process-order"><span>{t('排序', 'Sort by')}</span><NativeSelect value={processOrder} onChange={event => setProcessOrder(event.target.value as 'cpu' | 'memory')}>
+        <label className="system-process-order"><span>{t('排序', 'Sort by')}</span><NativeSelect value={processOrder} onChange={event => onProcessOrderChange(event.target.value as 'cpu' | 'memory')}>
           <option value="cpu">{t('CPU · 单核 100%', 'CPU · 100% per core')}</option><option value="memory">{t('内存 · 常驻大小', 'Memory · Resident size')}</option>
         </NativeSelect></label>
       </div>
       <ProcessRanking processes={processOrder === 'cpu' ? data.processes : data.memoryProcesses} by={processOrder} />
     </section>
-    <Sources sources={data.sources} compact />
+    <Sources sources={data.sources} compact enabled={enabled} />
   </div>
 }
