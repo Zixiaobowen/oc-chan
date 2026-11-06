@@ -162,9 +162,34 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     const point = { x: geometry.x, y: geometry.y }
     await renderer.call('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point }, RPC_MS)
     await ui.frames()
-    await renderer.call('Input.dispatchMouseEvent', { type: 'mouseWheel', ...point, deltaX: 0, deltaY: 240 }, RPC_MS)
-    await ui.dom('real wheel scroll moves event workspace', `${$('.main-content')}?.scrollTop > ${geometry.scroll}`)
-    await ui.frames()
+    await ui.evaluate(`(() => {
+      globalThis.__ocWheelProbe = { count: 0, last: null };
+      globalThis.__ocWheelListener = event => {
+        __ocWheelProbe.count++;
+        const entry = { trusted: event.isTrusted, target: event.target.tagName, deltaY: event.deltaY, prevented: false };
+        __ocWheelProbe.last = entry;
+        queueMicrotask(() => { entry.prevented = event.defaultPrevented; });
+      };
+      document.addEventListener('wheel', __ocWheelListener, { capture: true, passive: true });
+    })()`)
+    try {
+      await renderer.call('Input.dispatchMouseEvent', { type: 'mouseWheel', ...point, deltaX: 0, deltaY: 240 }, RPC_MS)
+      await ui.dom('real wheel scroll moves event workspace', `${$('.main-content')}?.scrollTop > ${geometry.scroll}`)
+      await ui.frames()
+    } catch (error) {
+      const state = `(() => { const c = ${$('.main-content')}; return { scroll: c.scrollTop, max: c.scrollHeight - c.clientHeight, hidden: document.hidden, focus: document.activeElement?.id, wheel: __ocWheelProbe }; })()`
+      const singleWheel = await ui.evaluate(state)
+      let gestureError
+      try {
+        await renderer.call('Input.synthesizeScrollGesture', { ...point, yDistance: -240, gestureSourceType: 'mouse', speed: 800 }, RPC_MS)
+        await ui.frames()
+      } catch (failure) { gestureError = String(failure) }
+      const gesture = await ui.evaluate(state)
+      await ui.evaluate(`${$('.main-content')}.scrollTop = ${geometry.scroll}`)
+      throw new Error(`Wheel delivery diagnosis: ${JSON.stringify({ geometry, singleWheel, gesture, gestureError })}`, { cause: error })
+    } finally {
+      await ui.evaluate(`document.removeEventListener('wheel', __ocWheelListener, true); delete globalThis.__ocWheelListener; delete globalThis.__ocWheelProbe`)
+    }
     const position = `(() => {
       const content = ${$('.main-content')}, bounds = content.getBoundingClientRect();
       const anchor = Array.from(document.querySelectorAll(${JSON.stringify(ROWS)})).find(element => {
