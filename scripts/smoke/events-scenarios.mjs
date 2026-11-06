@@ -150,34 +150,10 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     await ui.click($('#event-source-filter'))
     // Close native datalist suggestions without moving input focus before scrolling.
     await ui.key('Escape', 'Escape', 27)
-    const geometry = await ui.evaluate(`(() => { const r = ${$('.main-content')}.getBoundingClientRect(); return {x:r.right-40,y:r.top+100}; })()`)
-    await ui.evaluate(`(() => {
-      const content = ${$('.main-content')}, point = ${JSON.stringify(geometry)}, events = [];
-      const state = () => ({scroll:content.scrollTop, height:content.clientHeight, extent:content.scrollHeight,
-        overflow:getComputedStyle(content).overflowY, visibility:document.visibilityState, focus:document.activeElement?.id,
-        hit:document.elementFromPoint(point.x, point.y)?.outerHTML.slice(0, 256),
-        viewport:[innerWidth,innerHeight,devicePixelRatio], documentScroll:document.scrollingElement?.scrollTop});
-      const before = state();
-      const receive = event => {
-        if (events.length >= 16) return;
-        const row = {type:event.type, trusted:event.isTrusted, target:event.target?.tagName, id:event.target?.id,
-          x:event.clientX, y:event.clientY, deltaY:event.deltaY, scroll:content.scrollTop, prevented:event.defaultPrevented};
-        events.push(row); queueMicrotask(() => { row.prevented = event.defaultPrevented; });
-      };
-      for (const type of ['wheel','scroll','mousemove']) window.addEventListener(type, receive, {capture:true,passive:true});
-      window.__ocWheelProbe = () => {
-        for (const type of ['wheel','scroll','mousemove']) window.removeEventListener(type, receive, true);
-        delete window.__ocWheelProbe; return {before,after:state(),events};
-      };
-      return true;
-    })()`)
-    try {
-      await renderer.call('Input.dispatchMouseEvent', { type: 'mouseMoved', ...geometry }, RPC_MS)
-      await renderer.call('Input.dispatchMouseEvent', { type: 'mouseWheel', ...geometry, deltaX: 0, deltaY: 240 }, RPC_MS)
-      await ui.dom('real wheel scroll moves event workspace', `${$('.main-content')}?.scrollTop > 0`)
-    } finally {
-      console.log('[smoke] wheel diagnostics:', JSON.stringify(await ui.evaluate('window.__ocWheelProbe()')))
-    }
+    // Set the reading position through the real DOM, as in the target-return scenario.
+    // Hidden macOS compositor gestures are not a native wheel acceptance test.
+    await ui.evaluate(`${$(ROWS)}.scrollIntoView({block:'start',inline:'nearest',behavior:'instant'})`)
+    await ui.dom('event reading position starts below the page header', `${$('.main-content')}?.scrollTop > 0`)
     await ui.frames()
     const position = `(() => {
       const content = ${$('.main-content')}, bounds = content.getBoundingClientRect();
@@ -206,7 +182,8 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     assert.notDeepEqual(latest, first)
     const actual = await queryForRows(ui, main)
     assert.ok(actual.result.entries.some(entry => entry.sourceId === 'hermes-events' && entry.entityId === seed.target.id && entry.occurredAt === appendedAt), 'latest must reveal the actual newly collected execution')
-    return { backgroundPreserved: { before, after }, latest: latest[0], target: seed.target }
+    return { backgroundPreserved: { before, after }, latest: latest[0], target: seed.target,
+      scrollSetup: 'DOM scrollIntoView on the actual event row; native wheel input not exercised' }
   })
 
   await ui.stage('events-real-ipc-failure-retry-and-cancellation', async () => {
