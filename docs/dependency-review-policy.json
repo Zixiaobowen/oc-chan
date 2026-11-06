@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "lockSha256": "ab92f1d9b5097b48a63b0cb6cf3e49f3d74c1eb36cefa8d0bec45f376a8b5570",
+  "allowedLicenses": [
+    "(MIT OR CC0-1.0)",
+    "(WTFPL OR MIT)",
+    "0BSD",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BlueOak-1.0.0",
+    "CC-BY-4.0",
+    "ISC",
+    "MIT",
+    "MPL-2.0",
+    "Python-2.0",
+    "WTFPL",
+    "WTFPL OR ISC"
+  ],
+  "advisories": [
+    {
+      "id": "GHSA-g3hv-75wg-m249",
+      "scope": "build-only",
+      "reason": "2026-11-05核对npm audit与GitHub原公告：所有minimatch节点均为开发依赖；应用运行依赖不含它。GitHub标注>=7,<11.0.1且需攻击者控制pattern和optimizationLevel>=2；npm标注范围更广(<11)，报告保留该差异。构建glob来自仓库配置，CI有30分钟作业上限；新增/修改构建pattern需要评审。打包后还需确认该模块不在实际renderer清单或外部运行依赖中。未自动采用npm建议的electron-builder跨大版本降级。",
+      "reviewedAt": "2026-11-05"
+    }
+  ],
+  "dependencyChangeReason": "R-01已移除systeminformation，应用无外部npm运行时依赖。2026-11-05为Apple原生Liquid Glass增加精确版本node-api-headers@1.9.0构建依赖（MIT、无传递依赖、npm解包84106字节）；只编译公开Node-API桥接，不把头文件或模块目录加入安装包。D-02复用已经锁定安装的unzipper@0.12.5（MIT）核对本地ZIP，将其声明为精确直接开发依赖；与R-04冻结锁逐项比较，仅根packages[\"\"].devDependencies增加这一项，所有传递包版本/内容未变，无新增依赖节点。ZIP校验不进入应用运行包，5项渲染依赖仍由Vite打包。原S-05体积基线继续保留，不放宽预算。"
+}

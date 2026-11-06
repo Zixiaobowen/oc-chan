@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import type { AppSettings, SettingsSnapshot, SettingsUpdateFailure } from '../../shared/settings'
+import type { SettingsPatch, SettingsSnapshot, SettingsUpdateFailure } from '../../shared/settings'
 import { THEMES, type ThemeId } from '../../shared/themes'
+import { summarizeDiagnostic } from '../../shared/diagnostics'
 import { LanguageProvider } from './i18n'
 
 export const UI_FONTS = {
@@ -16,13 +17,13 @@ export const CODE_FONTS = {
 const FONT_SCALES = { small: 12 / 13, default: 1, large: 15 / 13 }
 type SettingsSaveFailure = {
   failure: SettingsUpdateFailure | { reason: 'connection'; details: string }
-  patch: Partial<AppSettings>
+  patch: SettingsPatch
 }
 interface SettingsContextValue {
   snapshot: SettingsSnapshot
   saving: boolean
   error: SettingsSaveFailure | null
-  update: (patch: Partial<AppSettings>) => Promise<void>
+  update: (patch: SettingsPatch) => Promise<void>
   retry: () => Promise<void>
   previewTheme: (theme: ThemeId | null) => void
   glassPreview: number | null
@@ -53,6 +54,7 @@ export default function SettingsProvider({ children }: { children: ReactNode }) 
   const glassFailure = useRef(false)
   const glassActive = useRef(false)
   const pending = useRef(false)
+  const queued = useRef<SettingsPatch | null>(null)
   const originalControl = useRef<HTMLElement | null>(null)
   const retryFocus = useRef<{ trigger: Element | null; moved: boolean } | null>(null)
   const restoreFocus = useRef<HTMLElement | null>(null)
@@ -78,8 +80,7 @@ export default function SettingsProvider({ children }: { children: ReactNode }) 
           }
         } catch (cause) {
           glassFailure.current = true
-          const details = cause instanceof Error ? cause.stack ?? cause.message : String(cause)
-          setGlassPreviewError({ details, intensity: request.intensity })
+          setGlassPreviewError({ details: summarizeDiagnostic(cause, 'settings-apply', 'settings').details, intensity: request.intensity })
           if (request.revision === glassRevision.current) {
             setGlassPreview(null)
             if (request.intensity !== null) {
@@ -190,7 +191,7 @@ export default function SettingsProvider({ children }: { children: ReactNode }) 
     setLoadError(null)
     void api.snapshot().then(value => {
       if (active && !received) setSnapshot(value)
-    }).catch(cause => { if (active) setLoadError(String(cause)) })
+    }).catch(cause => { if (active) setLoadError(summarizeDiagnostic(cause, 'settings-read', 'settings').details) })
     return () => { active = false; unsubscribe() }
   }, [attempt])
   useLayoutEffect(() => {
@@ -201,8 +202,8 @@ export default function SettingsProvider({ children }: { children: ReactNode }) 
     root.style.setProperty('--ui-font', UI_FONTS[snapshot.settings.uiFont])
     root.style.setProperty('--code-font', CODE_FONTS[snapshot.settings.codeFont])
     document.title = snapshot.resolvedLanguage === 'zh-CN' ? 'OC Chan · 本机运行监控' : 'OC Chan · Local activity monitor'
-  }, [snapshot])
-  async function save(patch: Partial<AppSettings>, retrying: boolean) {
+  }, [snapshot?.resolvedLanguage, snapshot?.settings.textSize, snapshot?.settings.uiFont, snapshot?.settings.codeFont])
+  async function save(patch: SettingsPatch, retrying: boolean) {
     if (pending.current) return
     pending.current = true
     previewTheme(null)
@@ -228,7 +229,7 @@ export default function SettingsProvider({ children }: { children: ReactNode }) 
         setError(null)
       } else setError({ failure: result.error, patch })
     } catch (cause) {
-      const details = cause instanceof Error ? cause.stack ?? cause.message : String(cause)
+      const { details } = summarizeDiagnostic(cause, 'settings-connection', 'settings')
       setError({ failure: { reason: 'connection', details }, patch })
     } finally {
       if (patch.glassIntensity !== undefined) {
@@ -240,9 +241,19 @@ export default function SettingsProvider({ children }: { children: ReactNode }) 
       retryFocus.current = null
       pending.current = false
       setSaving(false)
+      const next = queued.current
+      queued.current = null
+      if (next) void save(next, false)
     }
   }
-  async function update(patch: Partial<AppSettings>) { await save({ ...patch }, false) }
+  async function update(patch: SettingsPatch) {
+    if (pending.current) {
+      queued.current = { ...queued.current, ...patch,
+        ...((queued.current?.plugins || patch.plugins) && { plugins: { ...queued.current?.plugins, ...patch.plugins } }) }
+      return
+    }
+    await save({ ...patch, ...(patch.plugins && { plugins: { ...patch.plugins } }) }, false)
+  }
   async function retry() { if (error) await save(error.patch, true) }
   if (!snapshot) return <main className="settings-loading" aria-busy={!loadError}>
     <h1>OC Chan</h1>

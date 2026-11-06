@@ -14,6 +14,11 @@
 .tray-customize input { margin: 0; width: 15px; height: 15px; flex-shrink: 0; accent-color: var(--accent); }
 .tray-content .tray-counts { margin-bottom: 8px; padding-bottom: 12px; }
 .tray-content .tray-counts dd { font-size: calc(20px * var(--font-scale)); }
+.tray-object-list { border-bottom: 1px solid var(--border); padding: 4px 0 12px; }
+.tray-object-list > summary { cursor: pointer; padding: 6px 0; color: var(--muted); }
+.tray-object-list > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tray-object-list > button { display: flex; width: 100%; justify-content: space-between; padding: 7px 0; white-space: normal; overflow-wrap: anywhere; text-align: start; }
+.tray-object-list > button svg { flex-shrink: 0; }
 .tray-metric { border-bottom: 1px solid var(--border); }
 .tray-metric > summary { display: flex; align-items: center; gap: 10px; padding: 10px 0; cursor: pointer; }
 .tray-metric-icon { flex-shrink: 0; color: var(--muted); }
