@@ -6,7 +6,7 @@
 - 分支：`feat/topology-3d-20261106`，从当时本地 `master` 的 `33068beb782384dda1cd675c3fcfa4f57e6e1746` 派生。
 - 开始时主工作树有其它任务的未提交改动，因此先使用独立工作树；后续主工作树成为干净的main，已快进合入本功能，没有覆盖其它任务改动。
 - 用户要求：从 master 切工作树，调研实施协作拓扑 3D；随后明确为办公室楼，每层一个工程、每个 Agent 一个员工，选中层使其他楼层淡化。最新要求是“楼像楼、人像人”，参考《城市：天际线》的微缩造型。
-功能提交 `aca2512`、整合提交 `4e305698722a13ee92b57c1fb40e6e01017676cd` 已完成。用户后续授权的评审、合并main、推送GitHub和本机安装已执行；随后云端smoke发现二维恢复视口后的导航回归，本轮继续修复。较早阶段“未提交／未安装”仅描述当时状态，以末尾回执为准。
+功能、评审修复、main整合、GitHub推送和本机安装均已完成；最终产品源码为d764bb1，验收入口修复为50af919，云端run42196761927全部通过。两者差异仅验收脚本；已安装应用与最终产品源码一致。较早阶段“未提交／未安装”及失败记录仅描述当时状态，以末尾回执为准。
 
 ## 最终实现
 
@@ -133,12 +133,28 @@
 - 完整smoke `/Users/zvf003/tmp/oc-chan-office-complete-smoke-1106e/result.json` 在整组交互180秒上限中断；此前3D、二维焦点、事件、通知保存与中文版响应式场景均通过。英文版响应式刚开始5.4秒即因外层关闭协议而中断，没有证明该输入框自身失效；两个受测实例中本轮只启动首个，进程/profile和夹具均已清理。
 - 预算依据：旧main的 `/tmp/oc-chan-main-merge-smoke-20261106/result.json` 已耗时176.658秒，本轮新增3D交互约17.4秒。将整组交互上限改为300秒，总上限仍420秒；单步超时、资源和证据预算不变。`/Users/zvf003/tmp/oc-chan-office-complete-smoke-1106f/result.json` 完整通过：交互197.292秒、总205.567秒、8个外层阶段、36张截图，errors=[]；包含通知中英文／200%文字、设置实际保存与独立重启。两个实例的进程和profile、合成工作目录均已清理。未再运行已通过且未失效的单元测试。
 
+## 修复版本交付回执
+
+- 产品修复提交 `d764bb1ecb2661ef22284c250ee6c50fbbcb1804` 已从功能分支快进合入main并推送；GitHub远端main的SHA回读一致。实际GitHub身份已用gh核对，提交身份仍为bowen.sun <bowen.sun@zstack.io>。
+- pre-push从该提交独立git archive构建，类型检查、Vite、arm64目录包、原生模块与ad-hoc签名、来源及内容预检通过。已替换 `/Applications/OC Chan.app`，个人数据保留；新应用0.1.0、PID98455、status=ready，renderer=true、ipc=true，agents/schedules/system/events全部ready，Hermes历史25条。ASAR实测1,893,120字节，低于3MiB冻结上限。
+- GitHub run42192558656受影响测试、3D和2D导航场景通过，后续事件页在 `real wheel scroll moves event workspace` 失败。完整截图和诊断已下载到 `/Users/zvf003/tmp/oc-chan-office-ci-42192558656/oc-chan-renderer-smoke-26`；该次DMG/ZIP构建尚未执行。
+- 原事件smoke点击带datalist的来源输入框后直接在另一坐标发送wheel，未关闭候选、移入滚动区域或等待命中区域提交。云端截图确认有50条已加载记录且停在页顶；本机旧序列成功，未声称已复现或证实云端底层丢弃原因。验收序列现补上Escape、命中区域检查、mouseMoved和两帧等待，仍要求真实wheel滚动增加、输入焦点不变、后台更新保持可见行及其位置；不通过直接设置scrollTop代替滚轮。
+- 独立真实Electron诊断 `/Users/zvf003/tmp/oc-chan-wheel-q2umCd/wheel-evidence.json`：5000条合成事件，修正输入顺序5次均滚动240px、焦点保持event-source-filter、收到trusted wheel且defaultPrevented=false。诊断实例正常退出0，进程和profile已消失，全局资源／计时器归零，合成fixture已清理。产品源码未变化；本机安装仍为d764bb1，不因验收脚本修改重复替换应用。
+- 修正输入顺序后的完整smoke `/Users/zvf003/tmp/oc-chan-office-complete-smoke-1106g/result.json` 通过：总214.287秒、36截图、errors=[]；首轮和重启实例的进程/profile以及合成工作目录均已清理。滚动240px后追加真实fixture执行事件，同一smoke-f05-04949行的top保持103.796875px，焦点保持event-source-filter；浏览器滚动锚定使scrollTop从240变269.5，阅读位置保持不动。
+- 验收脚本提交9d6cf53已快进合入main并推送；只对此次命令关闭会重新安装应用的pre-push hook，没有修改持久hooks配置。其云端run42194682785仍在同一滚轮断言失败，排除了只补输入顺序即可修复的假设。
+- 功能分支诊断提交3593069、run42195507949取得直接证据：CSS坐标(1240,457.5)对应trusted wheel、deltaY=240、defaultPrevented=false，页面可滚动11800px且document.hidden=false，但scrollTop仍0；同坐标的浏览器原生滚动手势返回 `Position out of bounds`。问题落在CSS模拟尺寸与实际输入区域不一致，不能归因为产品吞掉滚轮事件。诊断只用于取证，后续已全部移除。
+- 修复提交50af919：smoke在CSS模拟前显式设置唯一无头、不可聚焦Electron窗口的内容尺寸1280×860并回读确认；启动证据记录原生before/after尺寸。窗口仍隐藏，尺寸范围受限，不修改正式应用窗口规则。本地 `/Users/zvf003/tmp/oc-chan-office-viewport-smoke-1106h/result.json` 通过启动、拓扑与独立重启，两轮原生尺寸均为1280×860，进程/profile/夹具已清理；三个受改脚本的node --check通过。
+- 50af919的两次workflow_dispatch分别返回HTTP500、502；首次只读确认未建立新运行。随后通过main正常推送触发云端复验，产品源码和本机安装继续保持d764bb1对应内容。
+- 最终GitHub [run42196761927](https://github.com/zixiaobowen/oc-chan/actions/runs/42196761927) 在50af91985e3af479938656da9be25a545f603c41通过，macOS arm64 job耗时3分26秒：受影响行为测试、完整renderer smoke、DMG/ZIP构建、依赖许可证与公告、包体内容及冻结预算、SHA256生成／验证、产物上传全部success。
+- 云端产物已由GitHub API回读：`oc-chan-renderer-smoke-29`（id13493740255，4,655,830字节）与 `oc-chan-macos-arm64-29`（id13492691429，236,421,340字节），均未过期。这里只核对云端构建及上传结果，没有把该云端包再次安装到本机，也没有创建Release或公证。
+- 下载的成功云端证据 `/Users/zvf003/tmp/oc-chan-office-ci-42196761927/oc-chan-renderer-smoke-29` 确认原生内容区原为1024×674，首轮和重启均调整至1280×860；这与此前CSS内坐标超出真实输入范围的诊断吻合。完整结果complete=true、errors=[]、36截图，两个实例及工作目录清理成功。真实wheel滚动240px，后台新记录后焦点不变、同一行top只变化0.5px，满足原有≤1px阅读位置断言。
+
+
 ## 下一步与恢复
 
-1. 本轮完整renderer smoke已通过，后续从本节对应提交开始完成交付；失败证据保留，不重跑已适用的无关单元测试。
-2. 提交显式定位修复、共享smoke场景和预算说明，主工作树main只快进合入已验收提交；当前main为4e305698722a13ee92b57c1fb40e6e01017676cd。
-3. 推送修复main，由现有pre-push hook从待推送提交构建、签名并更新 `/Applications/OC Chan.app`；核对安装就绪回执与GitHub远端SHA。
-4. 等待该SHA的GitHub检查、安装包构建和预算门禁；将真实结果追加交接。仅文档回执后续提交不重复安装同一产品源码。
-5. 保留工作树、分支与外部证据；原office-integration开发实例已清理，smoke实例由runner逐轮核对清理。未创建正式Release。
+1. 后续反馈以已安装产品d764bb1和云端通过的50af919为基线，只针对新增差异验证，不重跑已有适用证据。
+2. 如用户另行要求可见窗口验收，使用获准的dev:window检查原生缩放／全屏／快速交互／减少动态效果并录屏；当前仍只声明真实无头Electron交互和已安装就绪。
+3. 如继续长期资源验收，沿现有性能入口另行安排代表性长时负载；当前短时压力不能证明过夜稳定或所有硬件无OOM。
+4. 保留功能分支、独立工作树与全部原始证据。最终仅文档回执提交使用单次跳过安装hook与 `[skip ci]`，不重复安装或构建同一产品源码，不改持久配置。
 
-恢复提示：继续 `/Users/zvf003/tmp/oc-chan-topology-3d-20261106` 的云端smoke增量修复收尾。3D功能已随4e305698合入main、推送并安装；最新2D显式定位修复已通过定向真实Electron验收，完整smoke因旧180秒总场景预算过短中断，现按实测扩为300秒并复验。用户已授权评审、提交、合并、推送与更新本地；分别记录源码、安装、远端和云端结果，不重复仍适用的检查。原始目标是每工程一层、每Agent一员工、选层淡化，楼和人可辨识。
+恢复提示：本任务已完成。3D办公楼（每工程一层、每Agent一员工、选层淡化、可辨识楼体／人物）及二维导航修复已合入main、推送并安装。产品源码d764bb1；验收脚本50af919；GitHub run42196761927全部通过且DMG/ZIP已上传。前述失败已保留并关闭，临时诊断已移除，诊断／smoke实例和fixture已清理。可见原生窗口、物理帧率与长期内存未验范围如上，不重复安装或开启可见窗口。
