@@ -22,12 +22,13 @@ export const suites = {
   diagnostics: ['src/shared/diagnostics.test.ts', 'src/main/diagnostic-report.test.ts', 'src/main/diagnostics.test.ts'],
   ipc: ['src/main/ipc-boundary.test.ts', 'src/main/monitor-subscriptions.test.ts', 'src/main/tray-window.test.ts'],
   install: ['scripts/install-local.test.mjs', 'src/main/installation-check.test.ts'],
+  updates: ['src/main/app-updates.test.ts', 'scripts/prepare-release.test.mjs'],
   packaging: ['scripts/check-package.test.mjs', 'scripts/dependency-review.test.mjs'],
   delivery: ['scripts/local-delivery.test.mjs', 'scripts/delivery-source.test.mjs', 'scripts/delivery-zip.test.mjs'],
   performance: ['scripts/performance/core.test.mjs', 'scripts/performance/measurement.test.mjs', 'scripts/performance/fixtures.test.mjs', 'scripts/performance/soak-scenario.test.mjs', 'scripts/performance/sampler.test.mjs'],
   ci: ['scripts/ci-tests.test.mjs']
 }
-const product = ['agents', 'schedules', 'history', 'events', 'notifications', 'system', 'monitor', 'plugins', 'resources', 'topology', 'views', 'navigation', 'tern', 'settings', 'diagnostics', 'ipc']
+const product = ['agents', 'schedules', 'history', 'events', 'notifications', 'system', 'monitor', 'plugins', 'resources', 'topology', 'views', 'navigation', 'tern', 'settings', 'diagnostics', 'ipc', 'updates']
 const all = Object.keys(suites)
 const rules = [
   [/^(package(?:-lock)?\.json|tsconfig\.json|electron\.vite\.config\.ts)$/, all, '依赖或构建契约变更'],
@@ -44,6 +45,7 @@ const rules = [
   [/^src\/main\/events\/(?:notifications|notification-journal|notification-contracts|native-notifications)\.ts$|^src\/shared\/notifications\.ts$/, ['notifications', 'events', 'settings', 'ipc'], '本地通知、去重限流与偏好边界'],
   [/^src\/main\/events\/|^src\/shared\/events\.ts$/, ['events', 'plugins', 'monitor', 'ipc'], '本地事件采集、持久游标与有界查询'],
   [/^src\/main\/collectors\/(?:system|network)\.ts$/, ['system', 'monitor'], '系统采集及直接调用方'],
+  [/^src\/main\/plugins\/(?:app-updates|native-update|update-controller|update-source)\.ts$|^src\/shared\/(?:updates|plugins)\.ts$|^src\/renderer\/src\/(?:UpdateSettings|updates)\.tsx$|^scripts\/(?:dist|release-config|prepare-release|publish-release)\.mjs$/, ['updates', 'monitor', 'ipc', 'packaging'], '应用更新、原生交接与发布元数据'],
   [/^src\/main\/plugins\//, ['plugins', 'monitor', 'agents', 'schedules', 'history', 'events', 'notifications', 'system', 'settings'], '采集插件契约与生命周期'],
   [/^src\/main\/monitor\.ts$/, ['monitor', 'plugins', 'agents', 'schedules', 'history', 'events', 'system'], '采集调度与历史入口'],
   [/^src\/main\/shutdown\.ts$/, ['monitor', 'history', 'notifications', 'tern', 'diagnostics'], '应用退出排空与诊断'],
@@ -72,7 +74,7 @@ const rules = [
   [/^scripts\/(?:check-package|dependency-review)\.mjs$|^scripts\/bundled-licenses\.ts$|^docs\/(?:package-baseline|dependency-review-policy)\.json$/, ['packaging', 'install'], '发布包内容、体积、许可证和公告门禁'],
   [/^scripts\/(?:local-delivery|delivery-source|delivery-zip)\.mjs$/, ['delivery', 'packaging', 'install'], '本地交付来源、归档内容与完整性'],
   [/\.md$|^docs\/|^\.impeccable\/|^\.gitignore$|^LICENSE(?:\..*)?$/, [], '文档/开发说明'],
-  [/^src\/renderer\/.*\.(?:css|html|d\.ts)$|^resources\/icon\.icns$/, [], '界面资源须另行真实渲染验收']
+  [/^src\/renderer\/.*\.(?:css|html|d\.ts)$|^resources\/(?:icon\.icns$|brand\/)/, [], '界面资源须另行真实渲染验收']
 ]
 
 export function selectTests(files, fullReason, removedFiles = []) {

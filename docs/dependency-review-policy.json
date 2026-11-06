@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "lockSha256": "2388ec6c2635c63ae84ca874c17a23a7745e86d8c9edeb1509f16ade42e920ff",
+  "lockSha256": "380f1b6652e34863559445712afa35cde2bdd080f9186ff21128bf2beda33c0d",
   "allowedLicenses": [
     "(MIT OR CC0-1.0)",
     "(WTFPL OR MIT)",
@@ -25,5 +25,5 @@
       "reviewedAt": "2026-11-05"
     }
   ],
-  "dependencyChangeReason": "R-01已移除systeminformation，应用无外部npm运行时依赖。2026-11-05为Apple原生Liquid Glass增加node-api-headers@1.9.0构建依赖；D-02复用unzipper@0.12.5校验本地ZIP。2026-11-06为真实WebGL办公楼增加精确three@0.187.0与@types/three@0.187.0，两者MIT；新增8个锁节点全部为dev，现有锁节点与版本未改变。@types/three的6个传递开发依赖为rapier3d-compat（Apache-2.0）、tween.js、stats.js类型、webxr类型、fflate、meshoptimizer（其余MIT）。只有实际使用的Three.js模块由Vite按需打入独立scene chunk，物理引擎、压缩器、类型和node_modules不进入安装包；不加载外部模型或纹理。生产renderer启用压缩，保持现有3MiB ASAR预算及其他冻结预算不变；最终体积和实际打包依赖以本次产物检查回执为准。"
+  "dependencyChangeReason": "R-01已移除systeminformation，应用无外部npm运行时依赖。2026-11-05为Apple原生Liquid Glass增加node-api-headers@1.9.0构建依赖；D-02复用unzipper@0.12.5校验本地ZIP。2026-11-06为WebGL办公楼增加three@0.187.0与@types/three@0.187.0，两者MIT，按实际使用模块打入scene chunk。2026-11-06合入应用更新，js-yaml@4.3.2（MIT）与semver@7.8.6（ISC）由已有构建链传递依赖提升为直接dev依赖，新增MIT的类型包；主进程实际使用代码打入bundle，node_modules仍不进入安装包。主进程与renderer分别输出实际打包清单及完整许可证，审计合并两份清单，不能把进入主进程的依赖标记为仅构建使用。现有3MiB ASAR和其它冻结预算不变；最终体积及依赖范围以产物检查回执为准。"
 }

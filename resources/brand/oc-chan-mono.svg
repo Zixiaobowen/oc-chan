@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 256" width="320" height="256" fill="none" color="#000000" role="img" aria-labelledby="title desc">
+  <title id="title">OC Chan · 单色标志</title>
+  <desc id="desc">透明背景、单色实线的 OC 观察伙伴标志，适用于模板图标与单色印刷。</desc>
+  <circle cx="90" cy="110" r="64" fill="none" stroke="currentColor" stroke-width="32"/>
+  <path d="M279.43 78 A64 64 0 1 0 279.43 142" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round"/>
+  <g fill="currentColor"><circle cx="90" cy="110" r="16"/><circle cx="224" cy="110" r="16"/><path d="M139 184 H175 C181 184 184 190 180 195 L163 218 C160 222 154 222 151 218 L134 195 C130 190 133 184 139 184Z"/><rect x="287" y="100" width="20" height="20" rx="5"/></g>
+</svg>

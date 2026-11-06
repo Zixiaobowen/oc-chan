@@ -9,6 +9,7 @@ import SourcePanels from './SourcePanels'
 import SettingsView from './SettingsView'
 import SidebarResizeHandle from './SidebarResizeHandle'
 import { GeometrySaveErrors } from './SettingsSaveError'
+import { UpdateNotice } from './UpdateSettings'
 import { useI18n } from './i18n'
 import { bytes, CollectionStatus, CollectorError, duration, Empty, Meter, SectionHeader, time } from './components'
 import { agentTarget, navigationPage, parseNavigationTarget, scheduleTarget, type AppPage, type NavigationIntent, type NavigationTarget } from '../../shared/navigation'
@@ -84,6 +85,7 @@ export default function App() {
   const [hiddenAt, setHiddenAt] = useState<number | null>(() => document.hidden ? Date.now() : null)
   const visible = hiddenAt === null
   const frozenAt = pausedAt ?? hiddenAt
+  const focusUpdates = useRef(false)
   useEffect(() => {
     const media = window.matchMedia('(max-width: 760px)')
     const change = () => {
@@ -169,6 +171,13 @@ export default function App() {
     return () => document.removeEventListener('visibilitychange', updateVisibility)
   }, [])
   useLayoutEffect(() => {
+    if (page === 'settings' && focusUpdates.current) {
+      focusUpdates.current = false
+      const heading = content.current?.querySelector<HTMLElement>('#app-updates-title')
+      heading?.focus({ preventScroll: true })
+      heading?.scrollIntoView({ block: 'start' })
+      return
+    }
     if (intent || (page === 'sources' && sourceTarget && focusedSource.current !== sourceTarget)) return
     const element = content.current
     if (!element) return
@@ -261,6 +270,7 @@ export default function App() {
         : [{ id: `collection:${group.id}`, label: t(`${group.title}采集`, `${group.title} collection`),
           state: !plugins[group.id] ? 'disabled' : group.state.error ? 'error' : group.state.lastSuccessAt ? 'ok' : 'unsupported',
           detail: t('整个采集分区持续失败或恢复时通知。', 'Notify when this collection section remains unavailable or recovers.') }, ...group.sources])} /> : <>
+      <UpdateNotice onOpen={() => { focusUpdates.current = true; navigate('settings') }} />
       {paused && <div className="pause-note"><Pause size={14} />{t('当前显示已冻结；已开启的来源继续采集。点击“继续”查看最新状态。', 'The display is frozen; enabled sources keep collecting. Resume to see the latest state.')}</div>}
       {(section || page === 'overview') && sourceGroups.filter(group => !section || group.id === section).map(group => <CollectionStatus key={group.id} enabled={plugins[group.id]} collectedAt={group.state.data?.collectedAt} label={group.title} />)}
       <CollectorError error={bridgeError} onRetry={() => void refresh()} />

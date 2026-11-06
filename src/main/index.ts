@@ -30,6 +30,8 @@ import type { StartupRecoverySnapshot } from '../shared/startup-recovery'
 import { Diagnostics } from './diagnostics'
 import { buildDiagnosticReport } from './diagnostic-report'
 import { applyWindowMaterial } from './liquid-glass'
+import { AppUpdatesPlugin } from './plugins/app-updates'
+import type { AppPlugin } from '../shared/plugins'
 
 app.setName('OC Chan')
 const developmentInstance = app.isPackaged ? undefined : process.env.OC_CHAN_DEV_INSTANCE
@@ -138,6 +140,7 @@ function cancelWindowDiagnostics(target: BrowserWindow): void {
   void diagnostics.cancel().catch(error => console.error(summarizeDiagnostic(error, 'diagnostic-cleanup').details))
 }
 let exitCode = 0
+const plugins: AppPlugin[] = []
 const rendererFile = path.join(__dirname, '../renderer/index.html')
 const devUrl = process.env.ELECTRON_RENDERER_URL
 const ternResources = app.isPackaged
@@ -398,6 +401,26 @@ async function applyPlugins(value: PluginSettings): Promise<void> {
   }
 }
 
+async function releaseResources(): Promise<void> {
+  installationController?.abort(new Error('Application is quitting'))
+  subscriptions.dispose()
+  cancelEventQuery()
+  if (diagnosticDialogOwner) cancelWindowDiagnostics(diagnosticDialogOwner)
+  await drainShutdown({
+    monitor: async () => { await Promise.all([monitor.stop(), installationWork, ...plugins.map(plugin => plugin.stop())]) },
+    navigation: () => ternNavigation.close(),
+    diagnostics: () => diagnostics.close(),
+    settings: async () => {
+      try { await closeRecovery?.(); closeRecovery = undefined; await geometry?.dispose() }
+      finally { await settings?.idle() }
+    },
+    desktop: () => desktop.dispose(),
+    tray: async () => { try { await trayPanel.dispose() } finally { tray?.destroy(); tray = null } },
+    theme: () => { nativeTheme.removeListener('updated', broadcastSettings) }
+  })
+  console.info('[oc-chan] Shutdown drained')
+}
+
 function activateApplication(): void {
   if (headless || quitting || !app.isReady()) return
   if (recoveryWindow && !recoveryWindow.isDestroyed()) {
@@ -556,6 +579,28 @@ else {
     monitor.on('change', (update: MonitorUpdate) => subscriptions.publish('monitor:changed', update))
     monitor.on('sources', (heartbeat: SourceHeartbeat) => subscriptions.publish('monitor:sources', heartbeat))
     nativeTheme.on('updated', broadcastSettings)
+    const updates = new AppUpdatesPlugin({
+      headless,
+      authorize: event => assertIpcSource(event, window, rendererUrl(), quitting),
+      changed: snapshot => {
+        if (window && !window.isDestroyed() && !quitting) window.webContents.send('updates:changed', snapshot)
+      },
+      beforeInstall: async () => {
+        if (quitting) throw new Error('应用正在退出 / Application is quitting')
+        quitting = true
+        try {
+          await releaseResources()
+          // Squirrel must own the final quit; app.exit() bypasses replacement/relaunch.
+          quitReady = true
+        } catch (error) {
+          quitting = false
+          fail(error, 'shutdown')
+          throw error
+        }
+      }
+    })
+    plugins.push(updates)
+    void updates.start().catch(fail)
     if (!loginStartup) createWindow()
     if (!headless) {
       tray = new Tray(createTrayIcon())
@@ -591,24 +636,9 @@ else {
     event.preventDefault()
     if (quitting) return
     quitting = true
-    installationController?.abort(new Error('Application is quitting'))
-    subscriptions.dispose()
-    if (diagnosticDialogOwner) cancelWindowDiagnostics(diagnosticDialogOwner)
     void (async () => {
       try {
-        await drainShutdown({
-          monitor: async () => { await Promise.all([monitor.stop(), installationWork]) },
-          navigation: () => ternNavigation.close(),
-          diagnostics: () => diagnostics.close(),
-          settings: async () => {
-            try { await closeRecovery?.(); closeRecovery = undefined; await geometry?.dispose() }
-            finally { await settings?.idle() }
-          },
-          desktop: () => desktop.dispose(),
-          tray: async () => { try { await trayPanel.dispose() } finally { tray?.destroy(); tray = null } },
-          theme: () => { nativeTheme.removeListener('updated', broadcastSettings) }
-        })
-        console.info('[oc-chan] Shutdown drained')
+        await releaseResources()
       } catch (error) {
         console.error(summarizeDiagnostic(error, 'shutdown').details)
         console.error('[oc-chan] Shutdown remaining', JSON.stringify({ monitor: monitor.diagnostics(), diagnostics: diagnostics.diagnostics(), resources: collectionResources.snapshot().global.current }))
