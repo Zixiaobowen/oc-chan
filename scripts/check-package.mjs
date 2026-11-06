@@ -19,8 +19,7 @@ const GLASS = 'Contents/Resources/liquid-glass/liquid-glass.node'
 const NOTIFICATION_PERMISSION = 'Contents/Resources/notification-permission/notification-permission.node'
 const PLUGIN = 'Contents/Resources/tern-navigation/plugin/'
 const ARCHIVE = 'Contents/Resources/app.asar'
-const BUNDLED = 'out/renderer/bundled-dependencies.json'
-const NOTICES = 'out/renderer/THIRD_PARTY_NOTICES.txt'
+const BUNDLE_SCOPES = ['main', 'renderer']
 const RENDERER_PACKAGES = ['@dagrejs/dagre', '@xyflow/react', 'lucide-react', 'react', 'react-dom']
 const policy = {
   necessary: ['Electron macOS runtime and localization', 'compiled main/preload/renderer and referenced assets', 'bundled renderer dependency inventory and license notices', 'single-architecture native Liquid Glass and notification permission modules, executable navigation helper and exact source plugin copies'],
@@ -83,7 +82,7 @@ const hashBuffer = bytes => createHash('sha256').update(bytes).digest('hex')
 const EMPTY_HASH = hashBuffer(Buffer.alloc(0))
 
 function appFileAllowed(value, product) {
-  if (['Contents/Info.plist', 'Contents/PkgInfo', `Contents/MacOS/${product}`, ARCHIVE, HELPER, GLASS, NOTIFICATION_PERMISSION, `${PLUGIN}plugin.toml`, `${PLUGIN}window.luau`, 'Contents/Resources/icon.icns', 'Contents/Resources/LICENSE.electron.txt', 'Contents/Resources/LICENSES.chromium.html', 'Contents/_CodeSignature/CodeResources'].includes(value)) return true
+  if (['Contents/Info.plist', 'Contents/PkgInfo', `Contents/MacOS/${product}`, ARCHIVE, HELPER, GLASS, NOTIFICATION_PERMISSION, `${PLUGIN}plugin.toml`, `${PLUGIN}window.luau`, 'Contents/Resources/app-update.yml', 'Contents/Resources/icon.icns', 'Contents/Resources/LICENSE.electron.txt', 'Contents/Resources/LICENSES.chromium.html', 'Contents/_CodeSignature/CodeResources'].includes(value)) return true
   if (/^Contents\/Resources\/[a-zA-Z0-9_]+\.lproj\/InfoPlist\.strings$/.test(value)) return true
   const prefix = 'Contents/Frameworks/'
   if (!value.startsWith(prefix)) return false
@@ -195,7 +194,7 @@ function checkRoot(manifest, lock) {
   for (const name of RENDERER_PACKAGES) requireThat(typeof manifest.devDependencies?.[name] === 'string', `Bundled renderer dependency must be dev-only: ${name}`)
 }
 function asarFileAllowed(value) {
-  return value === 'package.json' || value === 'out/main/index.js' || value === 'out/preload/index.js' || value === 'out/renderer/index.html' || value === BUNDLED || value === NOTICES || /^out\/(?:main|preload)\/chunks\/[a-zA-Z0-9_-]+\.js$/.test(value) || /^out\/renderer\/assets\/[a-zA-Z0-9_.-]+\.(?:js|css|svg|png|jpg|jpeg|webp|ico|woff2?|ttf)$/.test(value)
+  return value === 'package.json' || value === 'out/main/index.js' || value === 'out/preload/index.js' || value === 'out/renderer/index.html' || /^out\/(?:main|renderer)\/(?:bundled-dependencies\.json|THIRD_PARTY_NOTICES\.txt)$/.test(value) || /^out\/(?:main|preload)\/chunks\/[a-zA-Z0-9_-]+\.js$/.test(value) || /^out\/renderer\/assets\/[a-zA-Z0-9_.-]+\.(?:js|css|svg|png|jpg|jpeg|webp|ico|woff2?|ttf)$/.test(value)
 }
 async function archiveHeader(filename) {
   const info = await lstat(filename)
@@ -251,25 +250,29 @@ async function inspectArchive(filename, manifest, lock) {
       requireThat(item && item.bytes <= MAX_METADATA, `Missing or oversized ASAR metadata: ${name}`)
       return asar.extractFile(filename, name)
     }
-    for (const name of ['package.json', 'out/main/index.js', 'out/preload/index.js', 'out/renderer/index.html', BUNDLED, NOTICES]) {
+    for (const name of ['package.json', 'out/main/index.js', 'out/preload/index.js', 'out/renderer/index.html', ...BUNDLE_SCOPES.flatMap(scope => [`out/${scope}/bundled-dependencies.json`, `out/${scope}/THIRD_PARTY_NOTICES.txt`])]) {
       requireThat(files.has(name) && files.get(name).bytes > 0, `Missing required ASAR entry: ${name}`)
     }
     const packed = parseJson(metadata('package.json'), 'packed package.json')
     requireThat(packed.name === manifest.name && packed.version === manifest.version && packed.main === 'out/main/index.js' && sameMap(packed.dependencies, manifest.dependencies), 'Packed manifest disagrees with source runtime contract')
     requireThat(!Object.keys(packed.devDependencies ?? {}).length && !Object.keys(packed.optionalDependencies ?? {}).length, 'Packed manifest retains development/optional dependencies')
-    const inventory = parseJson(metadata(BUNDLED), BUNDLED)
-    requireThat(inventory.schema === 1 && Array.isArray(inventory.packages) && inventory.packages.length > 0 && inventory.packages.length <= 1000, 'Invalid bundled dependency inventory')
-    const notices = metadata(NOTICES).toString('utf8')
-    let previous
-    for (const item of inventory.packages) {
-      requireThat(object(item) && typeof item.name === 'string' && typeof item.version === 'string' && typeof item.license === 'string' && item.license.length > 0 && integer(item.renderedBytes), 'Invalid bundled dependency record')
-      requireThat(!previous || previous.name.localeCompare(item.name) < 0 || (previous.name === item.name && previous.version.localeCompare(item.version) < 0), 'Duplicate or unsorted bundled dependency record')
-      previous = item
-      const matches = Object.entries(lock.packages).filter(([key, entry]) => (key === `node_modules/${item.name}` || key.endsWith(`/node_modules/${item.name}`)) && entry.version === item.version && entry.license === item.license)
-      requireThat(matches.length > 0, `Bundled dependency disagrees with lock: ${item.name}@${item.version}`)
-      requireThat(notices.includes(item.name) && notices.includes(item.version), `Missing bundled license notice: ${item.name}@${item.version}`)
+    const bundledDependencies = []
+    for (const scope of BUNDLE_SCOPES) {
+      const inventory = parseJson(metadata(`out/${scope}/bundled-dependencies.json`), `${scope} bundled dependencies`)
+      requireThat(inventory.schema === 1 && Array.isArray(inventory.packages) && inventory.packages.length > 0 && inventory.packages.length <= 1000, 'Invalid bundled dependency inventory')
+      const notices = metadata(`out/${scope}/THIRD_PARTY_NOTICES.txt`).toString('utf8')
+      let previous
+      for (const item of inventory.packages) {
+        requireThat(object(item) && typeof item.name === 'string' && typeof item.version === 'string' && typeof item.license === 'string' && item.license.length > 0 && integer(item.renderedBytes), 'Invalid bundled dependency record')
+        requireThat(!previous || previous.name.localeCompare(item.name) < 0 || (previous.name === item.name && previous.version.localeCompare(item.version) < 0), 'Duplicate or unsorted bundled dependency record')
+        previous = item
+        const matches = Object.entries(lock.packages).filter(([key, entry]) => (key === `node_modules/${item.name}` || key.endsWith(`/node_modules/${item.name}`)) && entry.version === item.version && entry.license === item.license)
+        requireThat(matches.length > 0, `Bundled dependency disagrees with lock: ${item.name}@${item.version}`)
+        requireThat(notices.includes(item.name) && notices.includes(item.version), `Missing bundled license notice: ${item.name}@${item.version}`)
+      }
+      if (scope === 'renderer') for (const name of RENDERER_PACKAGES) requireThat(inventory.packages.some(item => item.name === name), `Missing bundled renderer dependency: ${name}`)
+      bundledDependencies.push(...inventory.packages)
     }
-    for (const name of RENDERER_PACKAGES) requireThat(inventory.packages.some(item => item.name === name), `Missing bundled renderer dependency: ${name}`)
     function referenced(ref, from) {
       const value = ref.split(/[?#]/)[0]
       requireThat(value && !/^(?:[a-z]+:|\/\/)/i.test(value), `Nonlocal renderer asset reference: ${ref}`)
@@ -297,7 +300,7 @@ async function inspectArchive(filename, manifest, lock) {
     }
     const entries = []
     for (const [name, item] of files) entries.push({ path: `asar:${name}`, bytes: item.bytes, sha256: await hashFile(filename, item.bytes, item.start), kind: 'asar' })
-    return { bytes, entries, dependencies: [], bundledDependencies: inventory.packages }
+    return { bytes, entries, dependencies: [], bundledDependencies }
   } finally { asar.uncache(filename) }
 }
 async function pluginSources(app, root) {

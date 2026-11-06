@@ -187,6 +187,7 @@ test('failed local preconditions produce an unverified report without changing e
   put(root, 'package.json', manifest)
   const lockFile = put(root, 'package-lock.json', lock)
   put(root, 'out/renderer/bundled-dependencies.json', bundled)
+  put(root, 'out/main/bundled-dependencies.json', bundled)
   put(root, 'docs/dependency-review-policy.json', { ...policy, lockSha256: '0'.repeat(64) })
   const before = readFileSync(lockFile)
   const report = reviewDependencies({ root })

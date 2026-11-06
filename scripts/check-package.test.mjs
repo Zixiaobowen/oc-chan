@@ -13,6 +13,7 @@ const notificationPermission = 'Contents/Resources/notification-permission/notif
 const plugin = 'Contents/Resources/tern-navigation/plugin/'
 const archive = 'Contents/Resources/app.asar'
 const rendererPackages = ['@dagrejs/dagre', '@xyflow/react', 'lucide-react', 'react', 'react-dom']
+const mainPackages = ['js-yaml', 'semver']
 
 async function put(root, name, content, mode) {
   const filename = path.join(root, name)
@@ -36,14 +37,14 @@ async function fixture(t, arch = 'arm64') {
   const staging = path.join(root, 'asar-source')
   const manifest = {
     name: 'oc-chan', version: '0.1.0', main: 'out/main/index.js',
-    devDependencies: Object.fromEntries(rendererPackages.map(name => [name, '^1.0.0'])),
+    devDependencies: Object.fromEntries([...rendererPackages, ...mainPackages].map(name => [name, '^1.0.0'])),
     build: { productName: 'OC Chan' }
   }
   const lock = {
     name: manifest.name, version: manifest.version, lockfileVersion: 3,
     packages: {
       '': { name: manifest.name, version: manifest.version, dependencies: manifest.dependencies, devDependencies: manifest.devDependencies },
-      ...Object.fromEntries(rendererPackages.map(name => [`node_modules/${name}`, { version: '1.0.0', license: 'MIT', dev: true }]))
+      ...Object.fromEntries([...rendererPackages, ...mainPackages].map(name => [`node_modules/${name}`, { version: '1.0.0', license: 'MIT', dev: true }]))
     }
   }
   await put(root, 'package.json', JSON.stringify(manifest))
@@ -69,6 +70,8 @@ async function fixture(t, arch = 'arm64') {
   await put(staging, 'out/renderer/assets/index.css', 'body { color: black }\n')
   await put(staging, 'out/renderer/bundled-dependencies.json', JSON.stringify({ schema: 1, packages: rendererPackages.map(name => ({ name, version: '1.0.0', license: 'MIT', renderedBytes: 10 })) }))
   await put(staging, 'out/renderer/THIRD_PARTY_NOTICES.txt', rendererPackages.map(name => `${name}@1.0.0\nMIT License\nCopyright fixture\n`).join('\n'))
+  await put(staging, 'out/main/bundled-dependencies.json', JSON.stringify({ schema: 1, packages: mainPackages.map(name => ({ name, version: '1.0.0', license: 'MIT', renderedBytes: 10 })) }))
+  await put(staging, 'out/main/THIRD_PARTY_NOTICES.txt', mainPackages.map(name => `${name}@1.0.0\nMIT License\nCopyright fixture\n`).join('\n'))
   const repack = async () => {
     asar.uncache(path.join(app, archive))
     await asar.createPackage(staging, path.join(app, archive))

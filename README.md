@@ -1,8 +1,10 @@
 # OC Chan
 
-本机运行观察桌面应用，使用 Electron、React、TypeScript。本期支持 macOS 的 M 系列 arm64，本地自用；Intel/x64 不在支持或验收范围。
+本机运行观察桌面应用，使用 Electron、React、TypeScript。本阶段的开发、CI与签名发布面向macOS的M系列arm64，沿用主分支冻结预算；Intel不在本期支持与验收范围。
 
 源码仓库：[Zixiaobowen/oc-chan](https://github.com/Zixiaobowen/oc-chan)（私有）。
+
+默认品牌采用蓝白OC配色，O／C连成观察双眼；菜单栏使用OC单色Template Image（22 × 18点，1×／2×），适配系统背景。品牌资源位于 `resources/brand/`。
 
 开发、重构和评审统一遵循仓库级 [全局工程规则](./AGENTS.md)：插件式架构、保持体积精简、高性能、OOM 防护、响应式布局与 SOTA 级 motion。
 
@@ -73,7 +75,7 @@ npm run build:app
 npm run package
 ```
 
-产物在 `release/mac-arm64/OC Chan.app`，本机安装位置为 `/Applications/OC Chan.app`。旧版本有打包与安装后原生窗口记录，当前工作区的新功能需另行验收。未配置 Developer ID 签名或 Apple 公证；正式签名公证及 GitHub Release 分发本期延期。
+产物在 `release/mac-arm64/OC Chan.app`，本机安装位置为 `/Applications/OC Chan.app`。本地打包执行 ad-hoc 签名，不具备 Developer ID 身份或 Apple 公证；应用内安装更新要求 Developer ID 签名版本，发布门槛见下文。旧版本的安装记录不代表当前合并版本已验收；更新功能原有验证与未覆盖项见 `docs/codex-handoffs/2026-11-05-app-updates.md`。
 
 构建可下载的 DMG 安装镜像与 ZIP 应用压缩包：
 
@@ -81,11 +83,11 @@ npm run package
 npm run dist
 ```
 
-文件名为 `release/OC-Chan-<版本>-mac-arm64.dmg` 和对应的 `.zip`。`build:app` 完成类型检查和 Vite 构建；打包器在隔离的 `.app` 内按目标架构及应用最低 macOS 版本编译 Swift 导航程序、N-API液态玻璃与通知权限模块，执行本地ad-hoc签名和严格校验，再生成DMG/ZIP。这样目录包和两份归档包含相同的完整应用，不依赖安装时重签修补。ad-hoc不验证开发者身份，也不是公证。`build:native` 仍供显式原生开发使用。Electron来自锁定依赖，发布配置禁用自动更新元数据生成。
+文件名为 `release/OC-Chan-<版本>-mac-arm64.dmg` 和对应的 `.zip`。`build:app` 完成类型检查和 Vite 构建；打包器在隔离的 `.app` 内按目标架构及应用最低 macOS 版本编译 Swift 导航程序、N-API液态玻璃与通知权限模块，校验完整应用后生成DMG/ZIP。目录包和两份归档包含相同的完整应用，不依赖安装时重签修补。本地构建采用ad-hoc签名，不验证开发者身份，也不是公证；正式标签发布另须Developer ID签名和公证。`build:native` 仍供显式原生开发使用。Electron来自锁定依赖；`dist`只构建产物，发布由标签流水线负责。
 
 ## 本地交付与手动升级
 
-本期只提供本地arm64开发材料，正式签名、公证与Release下载入口延期。使用Node.js 24及当前Mac的磁盘映像工具，从工作区构建一份可核对来源的交付；`--out`的父目录须存在，目标目录必须全新，已有材料不会被覆盖：
+本地交付提供arm64开发材料，与正式签名更新发布分开。当前维护者尚无Apple开发者账号，正式签名、公证、Release下载与真实升级仍未验收。使用Node.js 24及当前Mac的磁盘映像工具，从工作区构建一份可核对来源的交付；`--out`的父目录须存在，目标目录必须全新，已有材料不会被覆盖：
 
 ```sh
 npm run delivery:local -- --out release/local-20261105-1
@@ -114,17 +116,17 @@ npm run install:local -- --delivery release/local-20261105-1
 
 本地工具不创建tag、推送、发布、检查更新或上传应用数据；应用离线行为沿用已有本地采集。后续正式发布需要独立版本与发布授权，不能用本地材料完成状态代替正式下载回执。
 
-## GitHub Actions 构建与下载
+## GitHub Actions 构建、下载与发布
 
 [Build macOS 工作流](https://github.com/Zixiaobowen/oc-chan/actions/workflows/build.yml) 在推送 `main` 或 `master`、创建或更新目标为这两个分支的 PR、推送 `v*` 标签时自动运行，也可在 Actions 页面选择 **Run workflow** 手动构建指定分支或标签。开发分支通过目标为 `main`／`master` 的 PR 进入检查；此配置不修改远端默认分支和保护规则。
 
-工作流使用 Node.js 24 和 `npm ci` 安装锁定依赖，在 `macos-26`（Apple Silicon）执行适用行为测试，并使用提供 `NSGlassEffectView` 的 macOS SDK；涉及应用、界面资源、隔离启动／夹具、依赖或工作流的改动，另运行真实无头 Electron smoke。通过后执行类型检查、Vite 构建、包内 Swift 与 Objective-C++ 编译和 arm64 DMG/ZIP 打包，检查依赖许可证与安全公告、包内容与冻结体积预算，最后生成并验证 SHA-256。任一门禁失败都阻止上传安装产物，没有 `continue-on-error`；smoke 的失败证据仍上传，保留14天。同一分支或 PR 的新构建会取消旧构建；Actions 固定提交 SHA，只授予 contents:read，checkout 不保留凭据。
+工作流使用 Node.js 24 和 `npm ci` 安装锁定依赖，在 `macos-26`（Apple Silicon）执行适用行为测试，使用提供 `NSGlassEffectView` 的 macOS SDK。涉及应用、界面资源、隔离启动／夹具、依赖或工作流的改动，另运行真实无头 Electron smoke。通过后执行类型检查、Vite构建、包内原生模块编译和arm64 DMG/ZIP打包，保留依赖许可证与安全公告、包内容及冻结体积门禁，最后生成并验证SHA-256。任一门禁失败都阻止上传安装产物，没有 `continue-on-error`；smoke失败证据仍上传并保留14天。同一分支或PR的新构建会取消旧构建，标签发布不自动取消。Actions固定提交SHA，源码仓库权限为contents:read，checkout不保留凭据；公开分发另用专用令牌。
 
 `scripts/ci-tests.mjs` 以 PR 的 base SHA 或 push 的 before SHA 与当前 checkout 比较（保留完整Git历史），输出测试清单与选取原因。Agent、任务、系统采集包含对应模块和直接调用方；拓扑、查看状态、任务历史、设置、Tern导航分别映射已有行为测试；安装脚本或Git hook改动必跑临时目录中的安装事务测试。直接改动测试只选该文件。普通文档不跑产品测试；公共IPC/快照入口、依赖或跨模块入口扩大到对应套件。删除且已无原模块映射的代码检查跨模块调用方；新增测试、未知代码路径、缺失映射或无效基准明确失败，新增功能须同步此映射。标签、手动构建及无前序提交的新分支检查全部确定性测试。
 
 本地可用 Node.js 24 执行 `npm run test:ci -- --plan src/renderer/src/AgentTopology.tsx` 查看单元测试选择与 `rendererSmoke` 标志，去掉 `--plan` 执行这些单元测试。测试进程并发上限为2；真实 Electron smoke 由独立步骤运行，不混进 Node 单元测试进程。纯文档、仅单元测试或安装脚本变更不额外跑 renderer smoke；标签、手动及无前序提交的新分支执行。真实个人环境 `npm run smoke` 不放进 CI。云端步骤尚需后续获推送授权后的实际回执，构建成功不能替代原生窗口、安装应用或真实个人数据源验收。
 
-打开成功运行记录，在 **Artifacts** 下载 `oc-chan-macos-arm64-<运行编号>`。包含 `.dmg`、`.zip`、`SHA256SUMS.txt`、`package-manifest-arm64.json` 和 `dependency-review-arm64.json`，保留30天。解压外层ZIP后执行 `shasum -a 256 -c SHA256SUMS.txt`。DMG可拖入Applications，应用ZIP保留可执行权限与符号链接；实际替换安装按对应授权执行。
+打开成功运行记录，在 **Artifacts** 下载 `oc-chan-macos-arm64-<运行编号>`。每份包含arm64 `.dmg`、`.zip`、更新频道的 `*-mac.yml`、`SHA256SUMS.txt`、`package-manifest-arm64.json` 和 `dependency-review-arm64.json`，保留30天。解压外层ZIP后执行 `shasum -a 256 -c SHA256SUMS.txt`。DMG可拖入Applications，应用ZIP保留可执行权限与符号链接；实际替换安装按对应授权执行。
 
 也可通过已登录的 GitHub CLI 下载指定运行的全部产物：
 
@@ -132,11 +134,44 @@ npm run install:local -- --delivery release/local-20261105-1
 gh run download <运行ID> --repo Zixiaobowen/oc-chan --dir downloads
 ```
 
-当前仓库为私有仓库，下载需有仓库访问权限；macOS 构建消耗账号的 Actions 额度。工作流只输出 Actions 产物，不创建 GitHub Release；未配置 Developer ID 签名和 Apple 公证，首次打开可能受到 macOS Gatekeeper 限制。构建只需 GitHub 自动提供的只读 `GITHUB_TOKEN`，无需额外 Secrets。
+源码仓库和 Actions 产物保持私有。面向客户端的安装包使用独立公开仓库 `Zixiaobowen/oc-chan-releases`，不在客户端内置 GitHub 凭据；发布说明不包含私有源码提交信息。普通分支、PR 和手动构建仅作本地ad-hoc签名，不发布；缺少Developer ID签名或公证凭据的标签构建会明确失败，不发布不能原地更新的安装包。
+
+### 发布签名更新
+
+先创建并初始化公开分发仓库 `Zixiaobowen/oc-chan-releases` 的默认分支。在私有源码仓库的 Actions Secrets 中配置以下项目；不要把证书、密码或令牌提交进仓库：
+
+| Secret | 用途 |
+| --- | --- |
+| `CSC_LINK` | Developer ID Application 的 `.p12` 证书，包含私钥；electron-builder 支持 Base64 内容 |
+| `CSC_KEY_PASSWORD` | `.p12` 导出密码 |
+| `APPLE_ID` | 用于公证的 Apple 开发者账号 |
+| `APPLE_APP_SPECIFIC_PASSWORD` | Apple 应用专用密码 |
+| `APPLE_TEAM_ID` | 10 位 Apple Team ID |
+| `UPDATE_RELEASE_TOKEN` | 仅授予公开分发仓库 Contents 写权限的发布令牌 |
+
+正式发布须单独获得版本发布授权；合并与推送分支不授权创建标签或发布版本。标签必须严格等于 `v` 加 `package.json` 的版本。获得发布授权并确认源码和锁文件已提交到要发布的提交后，再推送相应版本标签。版本号必须递增，已发布版本不覆盖。
+
+```sh
+# 示例；使用实际尚未发布的版本。
+git tag -a v0.1.0 -m "OC Chan v0.1.0"
+git push origin v0.1.0
+```
+
+标签流水线在arm64原生架构上强制Developer ID签名、公证，并用 `codesign`、`stapler`、`spctl` 验证应用、Swift helper与两个N-API模块。发布作业逐一核对版本、架构、文件大小、SHA-512和SHA-256；稳定版生成含DMG与ZIP的 `latest-mac.yml`。先创建草稿并上传DMG、ZIP、一个频道元数据和 `SHA256SUMS.txt` 共四个附件，验证完整后才公开。已有同名Release或中断留下的草稿会阻止覆盖，应先检查失败原因。此流程尚无真实签名发布回执。
+
+稳定版更新源只消费 `latest-mac.yml`。预发布版本（如 `0.2.0-beta.1`）生成 `beta-mac.yml` 并标记为预发布，不会推送给稳定版客户端。`npm run dist` 始终使用 `publish: never`；真正发布仅由匹配版本的标签推送触发。跨仓库发布使用专用 Token，不使用私有源码仓库的 `GITHUB_TOKEN`。
+
+### 应用内更新
+
+签名的 macOS 安装版启动 30 秒后检查新版，之后每 6 小时检查，也可在设置页手动检查。手动检查会重置下次自动检查时间，避免启动定时器覆盖刚显示的结果或错误。发现新版时显示提示，由用户点击下载；下载完成后点击“重启并安装”，原生 Squirrel.Mac 验证应用签名并替换、重新启动应用。普通退出不会安装，并会清理临时下载包。已有未包含更新功能的旧版，需要先手动安装一个签名的新版本，之后才能验证原地升级。
+
+更新插件只接受固定公开源，跟随 HTTPS 的 GitHub 发布域名跳转；无远程上报和内置访问令牌。元数据限 64 KiB，ZIP 限 512 MiB，下载流式写盘并验证精确大小与 SHA-512，空间不足时在下载前拒绝。一次只执行一个检查、下载或安装，检查限时 30 秒、下载 15 分钟、原生交接 120 秒；取消和退出会终止请求、清理临时文件及监听器。常规进度每 250ms 节流，完成时立即推送最终状态。错误保留在更新设置中，不能通过重启或忽略校验伪装成功。
+
+开发模式、非macOS及未具备Developer ID签名的安装包（包括本地ad-hoc包）显示明确禁用原因。当前维护者尚无Apple开发者账号，真实签名、公证、公开版本发布与“重启后版本号变化”尚未验收；本地下载测试不能代替这些步骤。官方依据：[Electron autoUpdater](https://www.electronjs.org/docs/latest/api/auto-updater)、[electron-builder 更新元数据](https://www.electron.build/v26/features/auto-update/)，核对日期2026-11-05。
 
 ## 包内容、体积与依赖审查
 
-主进程采集使用 Node/Electron 内置能力与 macOS 命令，无外部 npm 运行依赖；已移除内部包含同步 shell 采集的 `systeminformation`。React、React Flow、Dagre、Lucide 等由 Vite 打进渲染 bundle，作为构建依赖，不重复复制整个模块目录。打包时从实际保留的模块生成 `bundled-dependencies.json` 及完整 `THIRD_PARTY_NOTICES.txt`，保留 Electron/Chromium 许可文件。ASAR 不允许外部 node_modules；历史体积基线保留原依赖记录供对照。
+主进程采集使用Node/Electron内置能力与macOS命令；已移除内部包含同步shell采集的 `systeminformation`。依赖统一记录在 `devDependencies`：更新解析使用的 `js-yaml`／`semver` 打入主进程bundle，React、React Flow、Dagre、Lucide、Three.js等打入渲染bundle，不复制外置运行时 `node_modules`。构建依赖分类不代表其代码不在应用内执行。主进程与renderer分别从实际保留的模块生成 `bundled-dependencies.json` 及完整 `THIRD_PARTY_NOTICES.txt`，依赖审计合并两份清单，保留Electron/Chromium许可文件；历史体积基线保留原依赖记录供对照。
 
 原生液态玻璃使用 AppKit 公共 `NSGlassEffectView`，通过小型 N-API 模块连接 Electron；唯一新增 npm 包为精确锁定的构建期头文件 `node-api-headers@1.9.0`（MIT），不带入运行依赖或 ASAR。每个窗口最多一个玻璃视图，关闭效果即释放，窗口销毁时随窗口释放。构建要求 macOS 26+ SDK，运行时检测系统能力，不使用私有材质 API 或 CSS 模糊模拟原生效果。
 
@@ -334,13 +369,14 @@ Hermes 数据库始终只读；按数据库身份与 rowid 增量读取，轮转
 - 界面字体：系统默认、PingFang SC、Helvetica Neue。
 - 代码字体：系统等宽、Menlo、Monaco，用于路径、PID 与代码等宽内容。
 - 点击托盘图标：打开菜单栏下的小面板，或恢复并聚焦主窗口。右键菜单始终提供打开主界面和退出。
+- 菜单栏标志：使用 `resources/brand/oc-chan-mono.svg` 对应的 OC 单色品牌图形，22 × 18 点，提供 1× / 2× 位图表示；作为 macOS Template Image 适配系统菜单栏背景。
 - 托盘面板：默认同时显示 Agent 与任务、CPU、内存、磁盘和网络的摘要；展开“显示内容”，可用复选框自由组合。每项指标可独立展开详情，多个详情可以同时打开；CPU／内存显示短时趋势及各自前五进程，内存有分项，磁盘显示数据卷容量，网络显示上下行趋势和实际接口名。组合保存在当前应用 profile 的本地存储中，关闭再打开、重载和重启后沿用；存储失败或无效组合会明确提示。折叠时不创建图表和进程榜；内容独立滚动，底部“打开主界面”固定可达。隐藏时停止面板数据订阅，重新显示时获取最新快照；后台采样继续。
 - 托盘窗口按需创建：手动启动只创建主窗口，登录启动只保留菜单栏图标；首次请求面板才加载托盘页面。连续请求共享一次加载。页面加载与绘制就绪后再展示，超过10秒或加载失败会释放窗口并报告错误，下次点击可重试。正常隐藏保留已创建面板，退出时取消在途加载并释放资源。无头性能验收仅在开发配置中显式创建隐藏托盘，不增加正式IPC入口。
 - 登录后启动：仅安装在“应用程序”文件夹中的 macOS 应用可修改自身的系统登录项。首次运行不自动注册；开关读取 macOS 实际状态，系统设置中的禁用不会被本地偏好覆盖。等待批准时保持未开启并提供取消请求；在系统设置中批准后可重新检查。登录启动不创建主窗口、不显示 Dock、不自动防休眠，仍可通过菜单栏打开界面。开发/无头实例禁止注册。
 - 显示程序坞：控制 macOS Dock 图标；关闭主窗口后仍在菜单栏运行，可重新打开。
 - 防止休眠：运行期间阻止空闲休眠，关闭设置或退出应用时释放。不会阻止屏幕熄灭、合盖或手动休眠。
 
-常规窗口按“设置名称 + 控件”排列；设置内容宽度不超过 560px 时，每项改为名称在上、控件在下，全部设置仍在同一页纵向滚动。主题卡片随设置容器宽度从三列调整为两列或一列。放大后主导航收进菜单，设置控件不会被替换或隐藏，焦点保持在原控件。
+常规窗口按“设置名称 + 控件”排列；设置内容宽度不超过 560px 时，每项改为名称在上、控件在下，应用更新和偏好仍在同一页纵向滚动。主题卡片随设置容器宽度从三列调整为两列或一列。放大后主导航收进菜单，设置控件不会被替换或隐藏，焦点保持在原控件。
 
 Agent 活跃状态、任务范围／状态和两项字体设置的下拉框使用统一箭头留白；中英文、深浅色及最小窗口 200% 缩放下保持箭头居中与文字避让，仍使用原生选择菜单。
 
@@ -384,6 +420,7 @@ Agent 活跃状态、任务范围／状态和两项字体设置的下拉框使�
 - `src/main/settings.ts`、`desktop-settings.ts`、`src/shared/settings.ts`：偏好校验、持久化、原生主题 / Dock / 防休眠效果与共享契约。
 - `src/main/liquid-glass.ts`、`src/native/liquid-glass.mm`：原生能力、辅助功能约束和每窗单一玻璃视图，0 时释放视图；`node-api-headers` 仅在构建期使用。
 - `src/main/ipc-boundary.ts`、`src/preload/`、`src/shared/types.ts`：统一窗口与输入校验、有限 IPC bridge、监控与分页契约。
+- `src/shared/plugins.ts`、`src/main/app-updates.ts`、`src/shared/updates.ts`：更新插件生命周期、受限更新源、流式下载、原生安装交接与共享状态契约。
 - `src/renderer/src/`：概览、Agent、调度、系统、来源、设置及托盘视图。
 
 窗口开启 contextIsolation、sandbox，关闭 nodeIntegration；禁止页面导航和新窗口。全部应用 IPC 复用 `assertIpcSource`：验证当前所属窗口及主帧、精确 renderer URL（仅忽略同文档 hash），并在读取原生窗口属性前拒绝已销毁窗口；退出中、其他 webContents、子帧、错误 query/view 或异源页面一律拒绝。正常窗口通过 `createIpcGuard` 追加通道权限与输入校验；恢复窗口只有独立的三项无参数操作。无远程网页、远程字体、云端上报或任意命令执行接口。采集器只输出白名单元数据，不返回完整进程参数、任务命令、环境变量、凭据或聊天正文。
@@ -415,6 +452,7 @@ Agent 活跃状态、任务范围／状态和两项字体设置的下拉框使�
 - `monitor:schedule-history`：仅主窗口，任务ID最多256字符，Hermes前缀后的ID最多128；offset默认0，范围0–100000且必须为25的倍数。任务必须存在于当前快照，之后才读对应只读历史；共享上限同时用于IPC、读取器、Hermes provider和页面。
 - `monitor:cancel-schedule-history`（send）：仅主窗口、无参数，只取消该主窗口的历史读取；托盘/未知窗口不能取消可信在途请求。
 - `monitor:events`：仅主窗口，查询可省略或为普通对象；只接受来源ID、四种事件类型、规范UTC时间范围和非负安全整数游标。固定每页50条，拒绝自定义页大小、路径及未知字段；查询在事件插件停用时拒绝。
+- `updates:snapshot`、`updates:check`、`updates:download`、`updates:cancel`、`updates:install`、`updates:release-notes`：仅主窗口、无参数，复用 `assertIpcSource` 并拒绝多余参数；分别读取状态、检查、下载、取消、显式重启安装和打开受限发布说明。`updates:changed`向主窗口推送更新状态，preload订阅独立解绑。无头模式拒绝打开外部发布说明。
 - `diagnostics:generate`、`diagnostics:cancel`：仅主窗口，无参数；生成唯一有界预览，或取消并等待释放。`diagnostics:copy`、`diagnostics:save`仅接受当前预览的36字符UUID，不接受JSON、路径或任意选项；过期/替换的预览ID拒绝操作，保存位置仅由主进程系统对话框取得。
 - `monitor:changed`、`settings:changed`向主窗口/托盘推送；`monitor:sources`仅向主窗口发送分区与来源的采样时间，`monitor:navigation`仅向主窗口发送导航通知。每个preload订阅返回独立解绑函数，解绑不再接收后续通知。
 
@@ -433,6 +471,8 @@ node --import tsx --test src/main/tern-navigation.test.ts
 node --import tsx --test src/main/ipc-boundary.test.ts src/main/settings.test.ts
 node --import tsx --test scripts/install-local.test.mjs src/main/installation-check.test.ts
 node --test scripts/check-package.test.mjs
+node --import tsx --test src/main/app-updates.test.ts
+npm run test:release
 npm run smoke
 ```
 

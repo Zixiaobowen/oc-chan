@@ -7,7 +7,7 @@ const developmentInstance = process.env.OC_CHAN_DEV_INSTANCE
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin(), rendererLicensePlugin()],
     build: { rollupOptions: { output: { chunkFileNames: 'chunks/[name]-[hash].js' } } }
   },
   preload: { plugins: [externalizeDepsPlugin()] },

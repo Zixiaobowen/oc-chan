@@ -195,14 +195,20 @@ export function reviewDependencies({ root = rootDirectory, policy: policyPath = 
     const lockBytes = readBounded(path.join(root, 'package-lock.json'))
     const policyBytes = readBounded(policyPath)
     const bundleBytes = readBounded(bundledManifest)
-    report.source = { packageHash: digest(packageBytes), lockHash: digest(lockBytes), policyHash: digest(policyBytes), bundledManifestHash: digest(bundleBytes) }
+    const mainBundleBytes = readBounded(path.join(root, 'out/main/bundled-dependencies.json'))
+    report.source = { packageHash: digest(packageBytes), lockHash: digest(lockBytes), policyHash: digest(policyBytes), bundledManifestHash: digest(bundleBytes), mainBundledManifestHash: digest(mainBundleBytes) }
     const manifest = JSON.parse(packageBytes.toString('utf8'))
     const lock = JSON.parse(lockBytes.toString('utf8'))
     assertManifestLock(manifest, lock)
     const policy = JSON.parse(policyBytes.toString('utf8'))
     validatePolicy(policy, report.source.lockHash)
     report.dependencyChangeReason = policy.dependencyChangeReason
-    report.licenses = licenseInventory(lock, JSON.parse(bundleBytes.toString('utf8')))
+    const rendererInventory = licenseInventory(lock, JSON.parse(bundleBytes.toString('utf8')))
+    const mainInventory = new Map(licenseInventory(lock, JSON.parse(mainBundleBytes.toString('utf8'))).map(entry => [entry.path, entry]))
+    report.licenses = rendererInventory.map(entry => {
+      const main = mainInventory.get(entry.path)
+      return main.bundled ? { ...entry, classification: main.classification, bundled: true, renderedBytes: (entry.renderedBytes ?? 0) + main.renderedBytes } : entry
+    })
     const allowed = new Set(policy.allowedLicenses)
     const licenseErrors = report.licenses.filter(entry => !allowed.has(entry.license)).map(entry => `Unreviewed license ${entry.license}: ${entry.path}@${entry.version}`)
     const result = queryAudit(root)

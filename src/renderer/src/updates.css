@@ -1,0 +1,27 @@
+.update-settings { min-width: 0; }
+.update-settings > h2:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.update-control { gap: 12px; overflow-wrap: anywhere; }
+.update-versions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 20px; margin: 0; }
+.update-versions > div { min-width: 0; }
+.update-versions > div:last-child { grid-column: 1 / -1; }
+.update-versions dt { color: var(--muted); line-height: 1.6; }
+.update-versions dd { margin: 2px 0 0; line-height: 1.6; font-variant-numeric: tabular-nums; }
+.update-status, .update-error { margin: 0; line-height: 1.6; }
+.update-error { color: var(--warning); white-space: pre-wrap; overflow-wrap: anywhere; }
+.update-actions { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.update-actions .button, .update-notice .button { max-width: 100%; min-height: 36px; height: auto; font-size: inherit; line-height: 1.5; white-space: normal; overflow-wrap: anywhere; transition: none; }
+.update-actions .button:disabled { opacity: .55; cursor: not-allowed; }
+.update-download { display: grid; gap: 6px; min-width: 0; }
+.update-download progress { appearance: none; display: block; width: 100%; height: 8px; border: 0; border-radius: 4px; overflow: hidden; background: var(--border); }
+.update-download progress::-webkit-progress-bar { background: var(--border); }
+.update-download progress::-webkit-progress-value { background: var(--accent); }
+.update-download p { margin: 0; color: var(--muted); font-variant-numeric: tabular-nums; line-height: 1.6; }
+.update-notice { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; padding: 12px 16px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); overflow-wrap: anywhere; }
+.update-notice p { flex: 1 1 18em; min-width: 0; margin: 0; line-height: 1.6; }
+@container (max-width: 560px) {
+  .update-settings { grid-template-columns: minmax(0, 1fr); }
+  .update-versions { grid-template-columns: minmax(0, 1fr); }
+}
+@container (max-width: 320px) {
+  .update-actions { flex-direction: column; align-items: stretch; }
+}
