@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict'
-import test from 'node:test'
+import test, { type TestContext } from 'node:test'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { applyTernSnapshot, collectTernWindows, enrichSessionActivity, identifyRuntime, ownedSessionAgents, parseOpenFiles, parseSessionHeader, processAgents } from './agents'
+import { applyTernSnapshot, collectTernWindows, enrichCollab, enrichSessionActivity, identifyRuntime, ownedSessionAgents, parseOpenFiles, parseSessionHeader, processAgents, socketSnapshot } from './agents'
 import type { ProcessRow, SessionMetadata } from './agents'
-import { appendFile, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
+import { appendFile, chmod, mkdir, mkdtemp, open, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { consumeActivityRecord, createActivityState, recentActivity, SessionActivityReader } from './agent-activity'
 import { setImmediate as nextTurn } from 'node:timers/promises'
+import { once } from 'node:events'
+import { createServer, type Socket } from 'node:net'
+import { collectionResources } from '../resource-budget'
+import { COLLECTION_LIMITS, DirectoryScan } from '../collection-limits'
 
 const mainId = '01a19a5a-de13-74a4-8e90-08353b52847a'
 const childId = '01a19a5e-efc1-74ea-868d-54bc946d1c5a'
@@ -441,4 +445,291 @@ test('observed composite toolCallId format matches completion without leaking id
   assert.equal(JSON.stringify(recentActivity(state, activityNow)).includes(id), false)
   consumeActivityRecord(state, { type: 'message', timestamp: new Date(activityNow).toISOString(), message: { role: 'toolResult', toolCallId: id } }, activityNow)
   assert.equal(recentActivity(state, activityNow), undefined)
+})
+
+test('queued activity reads cancel before opening and retain removes pending session work', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'oc-r01-file-'))
+  const path = join(directory, 'session.jsonl')
+  await writeFile(path, `${JSON.stringify(toolStart())}\n`)
+  // ES2022 does not expose Promise.withResolvers in the project's TypeScript lib.
+  let release!: () => void
+  let entered!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  const ready = new Promise<void>(resolve => { entered = resolve })
+  let opened = 0
+  const holding = Promise.all(Array.from({ length: 8 }, () => collectionResources.run({ source: 'agent-test-files', kind: 'file', bytes: 0 }, async () => {
+    const file = await open(path, 'r')
+    try {
+      if (++opened === 8) entered()
+      await gate
+    } finally { await file.close() }
+  })))
+  t.after(async () => { release(); await holding; await rm(directory, { recursive: true, force: true }) })
+  await ready
+  const reader = new SessionActivityReader()
+  const controller = new AbortController()
+  const cancelled = assert.rejects(reader.read(path, activityNow, controller.signal), { name: 'AbortError', code: 'ABORT_ERR' })
+  controller.abort()
+  await cancelled
+  const removed = assert.rejects(reader.read(path, activityNow), { name: 'AbortError', code: 'ABORT_ERR' })
+  reader.retain(new Set())
+  await removed
+  release()
+  await holding
+  assert.equal((await reader.read(path, activityNow)).activity?.kind, 'tool')
+})
+
+test('socket responses accept the UTF8 byte boundary and decode split characters, but reject bytes beyond it', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'oc-r01-sock-'))
+  const endpoint = join(directory, 'host.sock')
+  const sockets = new Set<Socket>()
+  const limit = 64 * 1024
+  const empty = `${JSON.stringify({ v: 1, ok: true, snapshot: { pid: 42, sessionName: '' } })}\n`
+  const available = limit - Buffer.byteLength(empty)
+  const name = '界'.repeat(Math.floor(available / 3)) + 'a'.repeat(available % 3)
+  let oversized = false
+  const server = createServer(socket => {
+    sockets.add(socket)
+    socket.on('close', () => sockets.delete(socket))
+    socket.once('data', () => {
+      const reply = Buffer.from(`${JSON.stringify({ v: 1, ok: true, snapshot: { pid: 42, sessionName: name + (oversized ? '界' : '') } })}\n`)
+      const split = reply.indexOf(Buffer.from('界')) + 1
+      socket.write(reply.subarray(0, split))
+      setImmediate(() => socket.end(reply.subarray(split)))
+    })
+  })
+  t.after(async () => {
+    for (const socket of sockets) socket.destroy()
+    const closed = once(server, 'close')
+    server.close()
+    await closed
+    await rm(directory, { recursive: true, force: true })
+  })
+  server.listen(endpoint)
+  await once(server, 'listening')
+  const snapshot = await socketSnapshot({ pid: 42, endpoint, token: 'test' })
+  assert.equal(snapshot.sessionName, name)
+  oversized = true
+  await assert.rejects(socketSnapshot({ pid: 42, endpoint, token: 'test' }), /socket response too large/)
+})
+
+test('socket admission cancels a queued connection and aborts the eight admitted connections', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'oc-r01-sock-'))
+  const endpoint = join(directory, 'host.sock')
+  const sockets = new Set<Socket>()
+  let entered!: () => void
+  const ready = new Promise<void>(resolve => { entered = resolve })
+  let connections = 0
+  const server = createServer(socket => {
+    sockets.add(socket)
+    socket.on('close', () => sockets.delete(socket))
+    socket.resume()
+    if (++connections === 8) entered()
+  })
+  const activeController = new AbortController()
+  t.after(async () => {
+    activeController.abort()
+    for (const socket of sockets) socket.destroy()
+    const closed = once(server, 'close')
+    server.close()
+    await closed
+    await rm(directory, { recursive: true, force: true })
+  })
+  server.listen(endpoint)
+  await once(server, 'listening')
+  const host = { pid: 42, endpoint, token: 'test' }
+  const active = Array.from({ length: 8 }, () => assert.rejects(socketSnapshot(host, activeController.signal), { name: 'AbortError', code: 'ABORT_ERR' }))
+  await ready
+  const queuedController = new AbortController()
+  const queued = assert.rejects(socketSnapshot(host, queuedController.signal), { name: 'AbortError', code: 'ABORT_ERR' })
+  queuedController.abort()
+  await queued
+  assert.equal(connections, 8)
+  activeController.abort()
+  await Promise.all(active)
+})
+
+async function collabFixture(t: TestContext, onRequest?: (socket: Socket) => void) {
+  const directory = await mkdtemp(join(tmpdir(), 'oc-r02-host-'))
+  const registry = join(directory, 'registry')
+  await mkdir(registry, { mode: 0o700 })
+  const endpoint = join(directory, 'host.sock')
+  const sockets = new Set<Socket>()
+  let connections = 0
+  const server = createServer(socket => {
+    connections++
+    sockets.add(socket)
+    socket.on('close', () => sockets.delete(socket))
+    socket.once('data', () => {
+      if (onRequest) onRequest(socket)
+      else socket.end(`${JSON.stringify({ v: 1, ok: true, snapshot: { pid: process.pid, busy: false } })}\n`)
+    })
+  })
+  t.after(async () => {
+    for (const socket of sockets) socket.destroy()
+    const closed = once(server, 'close')
+    server.close()
+    await closed
+    await rm(directory, { recursive: true, force: true })
+  })
+  server.listen(endpoint)
+  await once(server, 'listening')
+  const record = JSON.stringify({ version: 1, pid: process.pid, endpoint, token: 'test' })
+  const agents = processAgents([row(process.pid, 1, '/opt/bin/omp')], () => true)
+  return { directory, registry, endpoint, record, agents, connections: () => connections }
+}
+
+function assertAgentResourcesReleased(): void {
+  const usage = collectionResources.snapshot().global.current
+  assert.equal(usage.files, 0)
+  assert.equal(usage.fileBytes, 0)
+  assert.equal(usage.sockets, 0)
+  assert.equal(usage.socketBytes, 0)
+  assert.equal(usage.queued, 0)
+}
+
+test('collab counts filtered entries at 4096, rejects 4097 before sockets and releases cancelled directory scans', async t => {
+  const fixture = await collabFixture(t)
+  await writeFile(join(fixture.registry, 'host.json'), fixture.record, { mode: 0o600 })
+  for (let start = 0; start < 4095; start += 64) {
+    await Promise.all(Array.from({ length: Math.min(64, 4095 - start) }, (_, index) => writeFile(join(fixture.registry, `ignored-${start + index}.txt`), '')))
+  }
+  const accepted = await enrichCollab(fixture.agents, undefined, fixture.registry)
+  assert.equal(accepted.state, 'ok')
+  assert.equal(fixture.connections(), 1)
+  assertAgentResourcesReleased()
+  const controller = new AbortController()
+  const scan = new DirectoryScan()
+  await assert.rejects(scan.read(fixture.registry, 'agent-collab', controller.signal, () => {
+    if (scan.scanned === 32) controller.abort()
+    return false
+  }), { name: 'AbortError', code: 'ABORT_ERR' })
+  assert.equal(scan.scanned, 32)
+  assertAgentResourcesReleased()
+  await writeFile(join(fixture.registry, 'one-more.txt'), '')
+  const refused = await enrichCollab(fixture.agents, undefined, fixture.registry)
+  assert.equal(refused.state, 'partial')
+  assert.match(refused.detail, /OC_COLLECTION_LIMIT/)
+  assert.match(refused.detail, /4096.*非 JSON/)
+  assert.equal(fixture.connections(), 1)
+  assertAgentResourcesReleased()
+})
+
+test('collab contacts at most 32 hosts and makes incomplete coverage explicit', async t => {
+  const fixture = await collabFixture(t)
+  for (let index = 0; index < 33; index++) await writeFile(join(fixture.registry, `host-${index}.json`), fixture.record, { mode: 0o600 })
+  const result = await enrichCollab(fixture.agents, undefined, fixture.registry)
+  assert.equal(result.state, 'partial')
+  assert.match(result.detail, /最多 32 个 host/)
+  assert.equal(fixture.connections(), 32)
+  assertAgentResourcesReleased()
+})
+
+test('collab refuses oversized records and fields before connecting, with exact byte boundary accepted', async t => {
+  const fixture = await collabFixture(t)
+  const path = join(fixture.registry, 'host.json')
+  const exact = fixture.record + ' '.repeat(COLLECTION_LIMITS.fieldBytes - Buffer.byteLength(fixture.record))
+  await writeFile(path, exact, { mode: 0o600 })
+  assert.equal((await enrichCollab(fixture.agents, undefined, fixture.registry)).state, 'ok')
+  assert.equal(fixture.connections(), 1)
+  await appendFile(path, ' ')
+  const result = await enrichCollab(fixture.agents, undefined, fixture.registry)
+  assert.equal(result.state, 'partial')
+  assert.match(result.detail, /OC_COLLECTION_LIMIT/)
+  assert.equal(fixture.connections(), 1)
+  await assert.rejects(socketSnapshot({ pid: process.pid, endpoint: fixture.endpoint, token: '界'.repeat(1366) }), { code: 'OC_COLLECTION_LIMIT' })
+  await assert.rejects(socketSnapshot({ pid: process.pid, endpoint: '/'.repeat(4097), token: 'test' }), { code: 'OC_COLLECTION_LIMIT' })
+  assert.equal(fixture.connections(), 1)
+  assertAgentResourcesReleased()
+})
+
+test('collab preserves private registry, record permissions, symlink and host identity checks', async t => {
+  const fixture = await collabFixture(t)
+  const path = join(fixture.registry, 'host.json')
+  await writeFile(path, fixture.record, { mode: 0o600 })
+  await chmod(fixture.registry, 0o755)
+  assert.equal((await enrichCollab(fixture.agents, undefined, fixture.registry)).state, 'error')
+  await chmod(fixture.registry, 0o700)
+  await chmod(path, 0o644)
+  assert.equal((await enrichCollab(fixture.agents, undefined, fixture.registry)).state, 'partial')
+  await rename(path, join(fixture.directory, 'original.json'))
+  await symlink(join(fixture.directory, 'original.json'), path)
+  assert.equal((await enrichCollab(fixture.agents, undefined, fixture.registry)).state, 'partial')
+  const linked = join(fixture.directory, 'linked')
+  await symlink(fixture.registry, linked)
+  assert.equal((await enrichCollab(fixture.agents, undefined, linked)).state, 'error')
+  await rm(path)
+  await writeFile(path, fixture.record, { mode: 0o600 })
+  assert.equal((await enrichCollab([], undefined, fixture.registry)).state, 'empty')
+  assert.equal(fixture.connections(), 0)
+  assertAgentResourcesReleased()
+})
+
+test('collab cancellation waits for every socket and queued read to release', async t => {
+  const controller = new AbortController()
+  let requests = 0
+  const fixture = await collabFixture(t, () => { if (++requests === 8) controller.abort() })
+  t.after(() => controller.abort())
+  for (let index = 0; index < 32; index++) await writeFile(join(fixture.registry, `host-${index}.json`), fixture.record, { mode: 0o600 })
+  await assert.rejects(enrichCollab(fixture.agents, controller.signal, fixture.registry), { name: 'AbortError', code: 'ABORT_ERR' })
+  assertAgentResourcesReleased()
+  assert.equal(fixture.connections(), 8)
+})
+
+test('ownership bounds aggregate descriptors across processes and checks UTF8 fields before retaining paths', () => {
+  const lease = join(homedir(), '.omp', 'run', 'session-owners', `${mainId}.lock`)
+  const half = `f1\nn${lease}\n`.repeat(2048)
+  const exact = `p40\n${half}p41\n${half}`
+  const parsed = parseOpenFiles(exact)
+  assert.equal(parsed[0].leases.length + parsed[1].leases.length, 4096)
+  assert.throws(() => parseOpenFiles(`${exact}f2\nn${mainFile}\n`), { code: 'OC_COLLECTION_LIMIT' })
+  assert.throws(() => parseOpenFiles('p40\n'.repeat(4097)), { code: 'OC_COLLECTION_LIMIT' })
+  assert.equal(parseOpenFiles(`p40\nfcwd\nn/${'a'.repeat(4095)}\n`)[0].cwd?.length, 4096)
+  assert.throws(() => parseOpenFiles(`p40\nfcwd\nn/${'a'.repeat(4096)}\n`), { code: 'OC_COLLECTION_LIMIT' })
+  assert.throws(() => parseOpenFiles(`p40\nfcwd\nn/${'界'.repeat(1366)}\n`), { code: 'OC_COLLECTION_LIMIT' })
+  assert.throws(() => parseSessionHeader(JSON.stringify({ type: 'session', id: mainId, cwd: '界'.repeat(1366) }), mainFile), { code: 'OC_COLLECTION_LIMIT' })
+})
+
+test('Tern rejects oversized host arrays before window inspection or pane association', async () => {
+  let inspections = 0
+  await assert.rejects(collectTernWindows([], [], { clients: Array(4097).fill({ kind: 'window', window: '1' }) }, async () => {
+    inspections++
+    return { panes: [] }
+  }), { code: 'OC_COLLECTION_LIMIT' })
+  assert.equal(inspections, 0)
+  assert.throws(() => applyTernSnapshot([], [], { panes: Array(4097).fill({}) }, ''), { code: 'OC_COLLECTION_LIMIT' })
+})
+
+test('oversized collaboration metadata leaves the process unchanged and reports incomplete source', async t => {
+  const fixture = await collabFixture(t, socket => {
+    socket.end(`${JSON.stringify({ v: 1, ok: true, snapshot: { pid: process.pid, sessionName: 'new name', cwd: '界'.repeat(1366), busy: false } })}\n`)
+  })
+  await writeFile(join(fixture.registry, 'host.json'), fixture.record, { mode: 0o600 })
+  const before = { ...fixture.agents[0] }
+  const status = await enrichCollab(fixture.agents, undefined, fixture.registry)
+  assert.equal(status.state, 'partial')
+  assert.match(status.detail, /OC_COLLECTION_LIMIT/)
+  assert.deepEqual(fixture.agents[0], before)
+  assertAgentResourcesReleased()
+})
+
+test('activity coverage remains 128 owned sessions and explicitly reports the uncovered session', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'oc-r02-coverage-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const metadata: SessionMetadata[] = []
+  const agents = []
+  for (let index = 0; index < 129; index++) {
+    const sessionId = `00000000-0000-0000-0000-${String(index).padStart(12, '0')}`
+    const file = join(directory, `${sessionId}.jsonl`)
+    await writeFile(file, `${JSON.stringify(toolStart())}\n`)
+    metadata.push({ sessionId, file })
+    agents.push({ ...processAgents([row(process.pid, 1, '/opt/bin/omp')], () => true)[0], id: `omp:${sessionId}`, sessionId })
+  }
+  const status = await enrichSessionActivity(agents, metadata, new SessionActivityReader(), activityNow)
+  assert.equal(status.state, 'partial')
+  assert.match(status.detail, /读取 128 个/)
+  assert.match(status.detail, /1 个进程缺少/)
+  assert.equal(agents.filter(agent => agent.activity).length, 128)
+  assert.equal(agents[128].activity, undefined)
+  assertAgentResourcesReleased()
 })

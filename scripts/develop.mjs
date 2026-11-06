@@ -1,20 +1,19 @@
 import { spawn, execFileSync } from 'node:child_process'
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, rm, writeFile, open } from 'node:fs/promises'
+import { constants } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
-import { inspectPackage } from './check-package.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const options = new Set(process.argv.slice(2))
 for (const option of options) {
-  if (!['--window', '--inspect'].includes(option) && !option.startsWith('--packaged-app=')) throw new Error(`未知开发参数：${option}；支持 --window、--inspect、--packaged-app=<应用路径>`)
+  if (!['--window', '--inspect'].includes(option)) throw new Error(`未知开发参数：${option}；支持 --window、--inspect`)
 }
 const windowed = options.has('--window')
-const packagedOptions = [...options].filter(option => option.startsWith('--packaged-app='))
-if (packagedOptions.length > 1 || packagedOptions.some(option => option === '--packaged-app=')) throw new Error('只能指定一个非空的应用路径')
-const packagedApp = packagedOptions.length ? path.resolve(packagedOptions[0].slice('--packaged-app='.length)) : undefined
-if (packagedApp && windowed) throw new Error('安装包回测仅支持隔离无头模式')
+const smokeConfig = process.env.OC_CHAN_SMOKE_CONFIG
+if (windowed && (process.env.OC_CHAN_PERFORMANCE_CONFIG || smokeConfig)) throw new Error('验收仅允许独立无头实例')
+if (smokeConfig && smokeConfig !== process.env.OC_CHAN_PERFORMANCE_CONFIG) throw new Error('Smoke 配置必须与性能 fixture 配置一致')
 let child
 let requestedSignal
 let forceTimer
@@ -59,6 +58,7 @@ for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => s
 async function run(args, env) {
   if (requestedSignal) return
   child = spawn(process.execPath, args, { cwd: root, env, stdio: 'inherit', detached: true })
+  if (smokeConfig) console.log(`[oc-chan] 验收子进程组：${child.pid}`)
   const result = await new Promise((resolve, reject) => {
     child.once('error', reject)
     child.once('exit', (code, signal) => resolve({ code, signal }))
@@ -81,6 +81,23 @@ async function run(args, env) {
   }
 }
 
+async function readBoundedFile(filename, limit) {
+  const file = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW)
+  try {
+    const info = await file.stat()
+    if (!info.isFile() || info.size > limit) throw new Error('验收配置文件超出预算或不是普通文件')
+    const bytes = Buffer.alloc(info.size + 1)
+    let offset = 0
+    while (offset < bytes.length) {
+      const { bytesRead } = await file.read(bytes, offset, bytes.length - offset, offset)
+      if (!bytesRead) break
+      offset += bytesRead
+    }
+    if (offset !== info.size) throw new Error('验收配置文件读取期间发生变化')
+    return bytes.subarray(0, offset)
+  } finally { await file.close() }
+}
+
 async function main() {
   if (process.platform !== 'darwin') throw new Error('当前开发入口仅支持 macOS')
   const instances = path.join(root, '.dev-instances')
@@ -88,29 +105,37 @@ async function main() {
   const instance = await mkdtemp(path.join(instances, 'instance-'))
   try {
     for (const name of ['user-data', 'session-data']) await mkdir(path.join(instance, name))
+    const pluginDirectory = path.join(instance, 'resources/tern-navigation/plugin')
+    await mkdir(pluginDirectory, { recursive: true })
+    for (const name of ['plugin.toml', 'window.luau']) {
+      await copyFile(path.join(root, 'resources/tern-navigation/plugin', name), path.join(pluginDirectory, name), constants.COPYFILE_EXCL)
+    }
+    if (process.env.OC_CHAN_PERFORMANCE_CONFIG) {
+      const smoke = smokeConfig ? JSON.parse((await readBoundedFile(smokeConfig, 128 * 1024)).toString('utf8')).smoke : undefined
+      if (smokeConfig && (!smoke || typeof smoke.exitReport !== 'string' || !path.isAbsolute(smoke.exitReport)))
+        throw new Error('无效 Smoke 配置')
+      const seed = smoke?.settingsSeed
+      if (seed !== undefined && (typeof seed !== 'string' || !path.isAbsolute(seed))) throw new Error('无效 Smoke 设置种子')
+      const initial = seed ? await readBoundedFile(seed, 64 * 1024) : Buffer.from(JSON.stringify({
+        appearance: 'light', language: 'zh-CN', textSize: 'default', uiFont: 'system', codeFont: 'system', showDock: false, preventSleep: false
+      }))
+      const settings = JSON.parse(initial.toString('utf8'))
+      if (settings.showDock !== false || settings.preventSleep !== false) throw new Error('无头验收设置必须关闭 Dock 与阻止睡眠')
+      await writeFile(path.join(instance, 'user-data/settings.json'), initial, { flag: 'wx', mode: 0o600 })
+    }
     const env = { ...process.env, OC_CHAN_DEV_INSTANCE: instance, OC_CHAN_HEADLESS: windowed ? '0' : '1' }
     delete env.ELECTRON_RUN_AS_NODE
     console.log(`[oc-chan] ${windowed ? '原生窗口' : '无头'}开发实例：${instance}`)
-    await run(['node_modules/electron/install.js'], env)
-    const debugArguments = ['--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1', ...(options.has('--inspect') ? ['--inspect=0'] : [])]
-    if (packagedApp) {
-      await inspectPackage(packagedApp)
-      const resources = path.join(packagedApp, 'Contents/Resources')
-      await symlink(resources, path.join(instance, 'resources'), 'dir')
-      const entry = path.join(instance, 'packaged-entry.cjs')
-      await writeFile(entry, `const { app } = require('electron')\ntry {\n  if (app.isPackaged || process.env.OC_CHAN_HEADLESS !== '1') throw new Error('Artifact regression requires the isolated development runtime')\n  require(${JSON.stringify(path.join(resources, 'app.asar/out/main/index.js'))})\n} catch (error) { console.error(error); app.exit(1) }\n`, { flag: 'wx', mode: 0o600 })
-      delete env.ELECTRON_RENDERER_URL
-      console.log(`[oc-chan] 回测已打包的主进程、preload、页面与依赖：${packagedApp}`)
-      await run(['node_modules/electron/cli.js', entry, ...debugArguments], env)
-    } else {
-      if (windowed) await run(['scripts/build-native.mjs'], env)
-      else await run(['scripts/build-glass.mjs'], env)
-      await run([
-        'node_modules/electron-vite/bin/electron-vite.js', 'dev',
-        '--outDir', path.join(instance, 'out'), '--entry', path.join(instance, 'out/main/index.js'),
-        '--watch', '--', ...debugArguments
-      ], env)
-    }
+    if (windowed) await run(['scripts/build-native.mjs'], env)
+    else await run(['scripts/build-glass.mjs'], env)
+    await run([
+      'node_modules/electron-vite/bin/electron-vite.js', 'dev',
+      ...(smokeConfig ? ['--config', 'scripts/smoke/vite.config.mjs'] : process.env.OC_CHAN_PERFORMANCE_CONFIG ? ['--config', 'scripts/performance/vite.config.mjs'] : []),
+      '--outDir', path.join(instance, 'out'), '--entry', path.join(instance, 'out/main/index.js'),
+      '--watch', '--', '--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1',
+      ...(process.env.OC_CHAN_INSTALL_CHECK ? [`--oc-chan-install-check=${process.env.OC_CHAN_INSTALL_CHECK}`] : []),
+      ...(options.has('--inspect') ? ['--inspect=0'] : [])
+    ], env)
   } finally {
     if (child?.pid && signalGroup(child.pid, 0)) {
       throw new Error(`开发进程仍存活，保留实例目录供排查：${instance}`)

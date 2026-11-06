@@ -1,6 +1,8 @@
 import { app, nativeImage, nativeTheme, powerSaveBlocker } from 'electron'
-import type { AppSettings, ResolvedLanguage, SettingsSnapshot } from '../shared/settings'
+import type { AppSettings, ResolvedLanguage, SettingsSnapshot, SettingsUpdateFailure } from '../shared/settings'
+import { LoginItems } from './login-items'
 import { liquidGlassState } from './liquid-glass'
+import type { NotificationState } from '../shared/notifications'
 
 export function resolvedLanguage(settings: AppSettings): ResolvedLanguage {
   return settings.language === 'system' ? app.getLocale().toLowerCase().startsWith('zh') ? 'zh-CN' : 'en' : settings.language
@@ -19,15 +21,28 @@ export function createTrayIcon() {
 export class DesktopSettings {
   private blocker: number | undefined
 
-  constructor(private readonly headless = false) {}
+  readonly loginItems: LoginItems
 
-  snapshot(settings: AppSettings): SettingsSnapshot {
+  constructor(private readonly headless: boolean, private readonly notificationState: () => NotificationState) {
+    this.loginItems = new LoginItems({
+      platform: process.platform, packaged: app.isPackaged, headless,
+      inApplicationsFolder: () => app.isInApplicationsFolder(),
+      read: () => app.getLoginItemSettings({ type: 'mainAppService' }),
+      write: openAtLogin => app.setLoginItemSettings({ type: 'mainAppService', openAtLogin })
+    })
+  }
+
+  snapshot(settings: AppSettings, geometryError: SettingsUpdateFailure | null = null): SettingsSnapshot {
     return {
       settings,
       resolvedTheme: nativeTheme.shouldUseDarkColors ? 'dark' : 'light',
       resolvedLanguage: resolvedLanguage(settings),
       platform: process.platform,
-      liquidGlass: liquidGlassState()
+      liquidGlass: liquidGlassState(),
+      geometryError,
+      loginItem: this.loginItems.snapshot(),
+      notifications: settings.notifications.enabled && !settings.plugins.events
+        ? { ...this.notificationState(), phase: 'events-disabled' } : this.notificationState()
     }
   }
 

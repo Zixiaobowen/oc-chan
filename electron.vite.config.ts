@@ -6,7 +6,10 @@ import { rendererLicensePlugin } from './scripts/bundled-licenses'
 const developmentInstance = process.env.OC_CHAN_DEV_INSTANCE
 
 export default defineConfig({
-  main: { plugins: [externalizeDepsPlugin()] },
+  main: {
+    plugins: [externalizeDepsPlugin()],
+    build: { rollupOptions: { output: { chunkFileNames: 'chunks/[name]-[hash].js' } } }
+  },
   preload: { plugins: [externalizeDepsPlugin()] },
   renderer: {
     plugins: [react(), rendererLicensePlugin()],

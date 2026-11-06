@@ -1,14 +1,17 @@
 import { execFileSync } from 'node:child_process'
-import { accessSync, constants, lstatSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { lstatSync, mkdirSync, mkdtempSync, renameSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { setTimeout } from 'node:timers/promises'
 import { inspect } from 'node:util'
+import { createInstallationCheck, INSTALL_CHECK_ARGUMENT, verifyInstallationResult } from '../src/main/installation-check.mts'
+import { acquireInstallLock, checkInstallTarget, installationJson, stageInstallBundle, verifyDeliveryForInstall, verifyInstallBundle } from './install-validation.mjs'
+import { captureDeliverySource } from './delivery-source.mjs'
+import { artifactDigest } from './local-delivery.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const destination = '/Applications/OC Chan.app'
-const appId = 'local.oc-chan.desktop'
 const lock = '/Applications/.oc-chan-install.lock'
 const githubRemote = /^(?:https:\/\/github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)Zixiaobowen\/oc-chan(?:\.git)?\/?$/i
 
@@ -42,15 +45,8 @@ function exists(file) {
   }
 }
 
-function checkBundle(bundle) {
-  if (!lstatSync(bundle).isDirectory()) throw new Error(`应用路径必须是实际目录，不能是符号链接：${bundle}`)
-  const plist = path.join(bundle, 'Contents/Info.plist')
-  if (run('/usr/bin/plutil', ['-extract', 'CFBundleIdentifier', 'raw', plist], { capture: true }) !== appId) {
-    throw new Error(`应用标识不匹配，拒绝替换：${bundle}`)
-  }
-}
 
-async function application(action) {
+async function application(action, check) {
   // Each query uses a fresh NSWorkspace; its running-app list requires a native event loop to refresh.
   const query = (quit = false) => JSON.parse(run('/usr/bin/osascript', ['-l', 'JavaScript', '-e', `
     ObjC.import('AppKit');
@@ -71,7 +67,7 @@ async function application(action) {
       throw error
     }
   }
-  const deadline = Date.now() + 15_000
+  const deadline = Date.now() + (action === 'quit' ? 15_000 : 45_000)
   if (action === 'quit') {
     const apps = query(true)
     while (apps.some(app => alive(app.pid))) {
@@ -81,22 +77,32 @@ async function application(action) {
     return
   }
   while (Date.now() < deadline) {
-    const app = query().find(candidate => candidate.ready)
-    if (app) {
+    const result = await verifyInstallationResult(check)
+    if (result) {
+      if (!query().some(candidate => candidate.pid === result.pid && candidate.ready)) throw new Error('就绪回执与实际运行应用不匹配')
       await setTimeout(2_000)
-      if (!query().some(candidate => candidate.pid === app.pid)) throw new Error('新版 OC Chan 启动后退出')
-      return JSON.stringify({ pid: app.pid })
+      if (!query().some(candidate => candidate.pid === result.pid && candidate.ready)) throw new Error('新版 OC Chan 启动后退出')
+      return result
     }
     await setTimeout(200)
   }
-  throw new Error('新版 OC Chan 在 15 秒内未启动')
+  throw new Error('新版 OC Chan 在 45 秒内未完成界面、IPC与采集就绪验证')
 }
 
 export async function replaceBundle(staged, target, { stop, start }) {
   const previous = path.join(path.dirname(staged), 'previous.app')
+  const sourceInfo = lstatSync(staged)
+  if (!sourceInfo.isDirectory() || sourceInfo.isSymbolicLink() || sourceInfo.dev !== lstatSync(path.dirname(target)).dev)
+    throw new Error('安装暂存包必须是同一磁盘上的真实目录')
+  if (exists(previous)) throw new Error(`还原位置已存在，拒绝覆盖：${previous}`)
+  const previousInfo = exists(target) ? lstatSync(target) : null
+  if (previousInfo && (!previousInfo.isDirectory() || previousInfo.isSymbolicLink())) throw new Error('安装目标不能是符号链接或普通文件')
   let movedPrevious = false
   let installed = false
   await stop()
+  const current = exists(target) ? lstatSync(target) : null
+  if (Boolean(current) !== Boolean(previousInfo) || current && (current.ino !== previousInfo.ino || current.dev !== previousInfo.dev))
+    throw new Error('退出等待期间安装目标发生变化，保留现场')
   if (exists(target)) {
     renameSync(target, previous)
     movedPrevious = true
@@ -122,7 +128,7 @@ export async function replaceBundle(staged, target, { stop, start }) {
 
 async function main() {
   const args = process.argv.slice(2)
-  let commit = null
+  let commit = null, deliveryDirectory = null
   if (args[0] === '--pre-push' && args.length === 3) {
     if (!githubRemote.test(args[2])) {
       console.log('[oc-chan] 跳过本机安装：目标不是本项目的 GitHub 仓库')
@@ -134,77 +140,73 @@ async function main() {
       if (Buffer.byteLength(input) > 64 * 1024) throw new Error('推送引用列表超过 64 KiB，拒绝自动安装')
     }
     commit = pushedCommit(args[2], input)
-    if (!commit) {
-      console.log('[oc-chan] 没有分支提交需要安装（空推送、删除分支或仅标签）')
-      return
-    }
+    if (!commit) { console.log('[oc-chan] 没有分支提交需要安装（空推送、删除分支或仅标签）'); return }
+  } else if (['--delivery', '--check-delivery'].includes(args[0]) && args.length === 2) {
+    deliveryDirectory = path.resolve(args[1])
   } else if (args.length) {
-    throw new Error('用法：node scripts/install-local.mjs [--pre-push <remote-name> <remote-url>]')
+    throw new Error('用法：node scripts/install-local.mjs [--pre-push <remote-name> <remote-url> | --delivery <目录> | --check-delivery <目录>]')
   }
-  if (process.platform !== 'darwin' || !['arm64', 'x64'].includes(process.arch)) {
-    throw new Error('本机安装仅支持 macOS arm64 / x64')
+  if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('本期本机安装仅支持 macOS arm64')
+  if (args[0] === '--check-delivery') {
+    const verified = await verifyDeliveryForInstall(deliveryDirectory, root)
+    console.log(JSON.stringify({ verified: true, architecture: 'arm64', version: verified.version, application: verified.bundle, source: verified.source, signature: verified.signature, installed: false }))
+    return
   }
-  accessSync('/Applications', constants.W_OK)
-  if (exists(destination)) checkBundle(destination)
-  try { mkdirSync(lock) } catch (error) {
-    if (error.code === 'EEXIST') throw new Error(`已有安装任务或未清理的安装锁：${lock}；确认任务结束后再处理`)
-    throw error
-  }
-  let snapshot
-  let staging
+  checkInstallTarget(destination)
+  const writeOwner = acquireInstallLock(lock, { pid: process.pid, root, commit, deliveryDirectory })
+  let snapshot, staging, check, failure
   let preserveStaging = false
   try {
-    writeFileSync(path.join(lock, 'owner.json'), JSON.stringify({ pid: process.pid, root, commit }))
-    let buildRoot = root
-    if (commit) {
-      const resolved = run('git', ['rev-parse', '--verify', `${commit}^{commit}`], { capture: true })
-      if (resolved !== commit) throw new Error('待推送引用不是提交')
-      snapshot = mkdtempSync(path.join(tmpdir(), 'oc-chan-build-'))
-      buildRoot = path.join(snapshot, 'source')
-      mkdirSync(buildRoot)
-      const archive = path.join(snapshot, 'source.tar')
-      run('git', ['archive', '--format=tar', `--output=${archive}`, commit])
-      run('/usr/bin/tar', ['-xf', archive, '-C', buildRoot])
-      console.log(`[oc-chan] 构建待推送提交 ${commit}（独立源码快照）`)
-      run('npm', ['ci', '--no-audit', '--no-fund'], { cwd: buildRoot, timeout: 600_000 })
-    } else {
-      console.log('[oc-chan] 手动安装：构建当前工作目录，包含未提交改动')
+    writeOwner()
+    let buildRoot = root, prepared, sourceEvidence
+    if (deliveryDirectory) prepared = await verifyDeliveryForInstall(deliveryDirectory, root)
+    else {
+      if (commit) {
+        const resolved = run('git', ['rev-parse', '--verify', `${commit}^{commit}`], { capture: true })
+        if (resolved !== commit) throw new Error('待推送引用不是提交')
+        snapshot = mkdtempSync(path.join(tmpdir(), 'oc-chan-build-'))
+        buildRoot = path.join(snapshot, 'source')
+        mkdirSync(buildRoot)
+        const archive = path.join(snapshot, 'source.tar')
+        run('git', ['archive', '--format=tar', `--output=${archive}`, commit])
+        sourceEvidence = { kind: 'git-archive', commit, archive: await artifactDigest(archive) }
+        run('/usr/bin/tar', ['-xf', archive, '-C', buildRoot])
+        console.log(`[oc-chan] 构建待推送提交 ${commit}（独立源码快照）`)
+        run('npm', ['ci', '--no-audit', '--no-fund'], { cwd: buildRoot, timeout: 600_000 })
+      } else {
+        sourceEvidence = await captureDeliverySource(root)
+        console.log('[oc-chan] 手动安装：构建当前工作目录，包含未提交改动')
+      }
+      const { version } = await installationJson(path.join(buildRoot, 'package.json'), 64 * 1024)
+      run('npm', ['run', 'package'], { cwd: buildRoot, timeout: 900_000 })
+      const bundle = path.join(buildRoot, 'release/mac-arm64/OC Chan.app')
+      const { inventory, signature } = await verifyInstallBundle(bundle, { root: buildRoot, version })
+      if (!commit && JSON.stringify(await captureDeliverySource(root)) !== JSON.stringify(sourceEvidence)) throw new Error('构建期间源码发生变化，拒绝安装')
+      prepared = { bundle, inventory, signature, version, source: sourceEvidence }
     }
-    run('npm', ['run', 'package'], { cwd: buildRoot, timeout: 900_000 })
-    const source = path.join(buildRoot, 'release', process.arch === 'arm64' ? 'mac-arm64' : 'mac', 'OC Chan.app')
-    checkBundle(source)
-    accessSync(path.join(source, 'Contents/Resources/app.asar'), constants.R_OK)
-    const machoArch = process.arch === 'arm64' ? 'arm64' : 'x86_64'
-    for (const executable of ['MacOS/OC Chan', 'Resources/tern-navigation/present-window', 'Resources/liquid-glass/liquid-glass.node']) {
-      const file = path.join(source, 'Contents', executable)
-      accessSync(file, constants.X_OK)
-      run('/usr/bin/lipo', [file, '-verify_arch', machoArch])
-    }
-    staging = mkdtempSync('/Applications/.oc-chan-install-')
-    const staged = path.join(staging, 'OC Chan.app')
-    run('/usr/bin/ditto', [source, staged])
-    // Local ad-hoc signing makes the complete copied bundle verifiable; it is not notarization.
-    run('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', staged])
-    run('/usr/bin/codesign', ['--verify', '--deep', '--strict', staged])
-    console.log('[oc-chan] 新包校验通过，退出旧应用并替换安装')
+    const staged = await stageInstallBundle(prepared.bundle, destination, { ...prepared, root: buildRoot })
+    staging = staged.directory
+    check = await createInstallationCheck(staged.executable, prepared.version)
+    console.log('[oc-chan] 来源、内容、架构、签名、磁盘和权限预检通过，退出旧应用并替换安装')
     try {
-      await replaceBundle(staged, destination, {
+      await replaceBundle(staged.staged, destination, {
         stop: () => application('quit'),
         start: async () => {
-          run('/usr/bin/open', ['-a', destination])
-          console.log(`[oc-chan] 新版已启动 ${await application('check')}`)
+          run('/usr/bin/open', ['-a', destination, '--args', `${INSTALL_CHECK_ARGUMENT}${check.filename}`])
+          console.log(`[oc-chan] 新版实际就绪 ${JSON.stringify(await application('check', check))}`)
         }
       })
     } catch (error) {
       preserveStaging = true
-      throw new Error(`${error.message}；安装现场保留在 ${staging}`, { cause: error })
+      throw new Error(`${error.message}；安装现场保留在 ${staging}，启动证据在 ${check.directory}`, { cause: error })
     }
     console.log(`[oc-chan] 已替换 ${destination}，旧应用包已删除；个人设置和数据保留`)
-  } finally {
-    if (snapshot) rmSync(snapshot, { recursive: true, force: true })
-    if (staging && !preserveStaging) rmSync(staging, { recursive: true, force: true })
-    rmSync(lock, { recursive: true })
+  } catch (error) { failure = error }
+  for (const owned of [snapshot, !preserveStaging && staging, !preserveStaging && check?.directory, lock].filter(Boolean)) {
+    try { rmSync(owned, { recursive: true }) }
+    catch (error) { failure = failure ? new AggregateError([failure, error], `安装与清理失败；保留 ${owned}`) : error }
   }
+  if (failure) throw failure
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

@@ -1,13 +1,16 @@
-import { execFile } from 'node:child_process'
-import { open, readdir, lstat } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { open, lstat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { createConnection } from 'node:net'
-import { promisify } from 'node:util'
 import type { AgentInfo, AgentSnapshot, SourceStatus } from '../../shared/types'
 import { SessionActivityReader } from './agent-activity'
+import { collectionResources, isResourceAbort, isResourceCleanupFailure, ResourceCleanupError, resourceAbortError, settleResourceWork, throwIfAborted } from '../resource-budget'
+import { runBudgetedCommand } from '../resource-io'
+import { StringDecoder } from 'node:string_decoder'
+import { COLLECTION_LIMITS, CollectionLimitError, DirectoryScan } from '../collection-limits'
+import { codexRolloutThreadId, collectCodexSessions } from './codex-sessions'
 
-const exec = promisify(execFile)
 const home = homedir()
 const ompRoot = join(home, '.omp')
 const sessionRoot = join(ompRoot, 'agent', 'sessions')
@@ -23,7 +26,7 @@ export interface ProcessRow {
   cpuPercent: number
   memoryBytes: number
 }
-interface RuntimeMatch { runtime: string; wrapper: boolean }
+interface RuntimeMatch { runtime: string; wrapper: boolean; host?: boolean }
 export interface SessionMetadata {
   sessionId: string
   file: string
@@ -33,9 +36,19 @@ export interface SessionMetadata {
   startedAt?: string
   model?: string
 }
-export interface OpenFiles { pid: number; cwd?: string; sessions: string[]; leases: string[] }
+export interface OpenFiles { pid: number; cwd?: string; sessions: string[]; leases: string[]; codexSessions?: string[] }
+
+function checkField(value: unknown): void {
+  if (typeof value !== 'string') return
+  const bytes = Buffer.byteLength(value)
+  if (bytes > COLLECTION_LIMITS.fieldBytes) throw new CollectionLimitError('agent field bytes', COLLECTION_LIMITS.fieldBytes, bytes)
+}
+function checkCount(scope: string, count: number): void {
+  if (count > COLLECTION_LIMITS.directoryEntries) throw new CollectionLimitError(scope, COLLECTION_LIMITS.directoryEntries, count)
+}
 
 function text(value: unknown, max = 512): string | undefined {
+  checkField(value)
   return typeof value === 'string' && value.length > 0 && value.length <= max && !/[\x00-\x1f\x7f]/.test(value) ? value : undefined
 }
 function object(value: unknown): Record<string, unknown> | undefined {
@@ -120,7 +133,7 @@ function cliCommand(runtime: string, argumentsText: string): string | undefined 
 }
 
 // Match the executable (or a known interpreter entry point), never prompt/shell substrings.
-export function identifyRuntime(row: ProcessRow): RuntimeMatch | undefined {
+export function identifyRuntime(row: ProcessRow, includeCodexHosts = false): RuntimeMatch | undefined {
   const executable = row.executable
   const name = basename(executable)
   let runtime: string | undefined
@@ -145,6 +158,7 @@ export function identifyRuntime(row: ProcessRow): RuntimeMatch | undefined {
   if (wrapper) remainder = remainder.replace(/^\S+\s*/, '')
   const command = cliCommand(runtime, remainder)
   if (command === '__help') return undefined
+  if (runtime === 'Codex' && command === 'app-server' && includeCodexHosts) return { runtime, wrapper, host: true }
   if (runtime === 'OMP' && command && (/^__omp_worker_/.test(command) || /^(?:agents|anonymize|auth|auth-broker|auth-gateway|bench|browser-relay|clip|collab|completions|compress|config|dry-balance|find|gallery|gc|git|grep|grievances|images|install|login|models|play|plugin|predict|ps|read|render|say|search|session|setup|share|shell|skill|stats|stream|tiny-models|token|toks|ttsr|update|usage|worktree|daemon|help)$/.test(command))) return undefined
   if (runtime === 'Codex' && command && /^(?:agents|app-server|exec-server|mcp-server|mcp|plugin|remote-control|app|login|logout|completion|update|doctor|sandbox|debug|apply|a|queue|archive|delete|migrate-rollouts|migrate-nfs-db|unarchive|cloud|features|help)$/.test(command)) return undefined
   if (runtime === 'Claude Code' && command && /^(?:mcp|daemon|gateway|remote-control|auth|doctor|update|install|plugin|plugins|setup-token|self-hosted-runner|agents|logs|stop|kill|rm|purge|auto-mode)$/.test(command)) return undefined
@@ -152,9 +166,9 @@ export function identifyRuntime(row: ProcessRow): RuntimeMatch | undefined {
   return { runtime, wrapper }
 }
 
-export function processAgents(rows: ProcessRow[], isAlive: (pid: number) => boolean): AgentInfo[] {
+export function processAgents(rows: ProcessRow[], isAlive: (pid: number) => boolean, includeCodexHosts = false): AgentInfo[] {
   const matches = new Map(rows.flatMap(row => {
-    const match = identifyRuntime(row)
+    const match = identifyRuntime(row, includeCodexHosts)
     return match && isAlive(row.pid) ? [[row.pid, { row, ...match }] as const] : []
   }))
   const aliases = new Map<number, number>()
@@ -185,19 +199,37 @@ export function parseOpenFiles(output: string): OpenFiles[] {
   const result: OpenFiles[] = []
   let row: OpenFiles | undefined
   let descriptor = ''
-  for (const line of output.split('\n')) {
+  let access = ''
+  let ownership = 0
+  for (let offset = 0; offset < output.length;) {
+    const newline = output.indexOf('\n', offset)
+    const end = newline < 0 ? output.length : newline
+    // Reject before slicing a potentially huge field or allocating a line array.
+    if (end - offset > COLLECTION_LIMITS.fieldBytes + 1) throw new CollectionLimitError('agent field bytes', COLLECTION_LIMITS.fieldBytes, end - offset - 1)
+    const line = output.slice(offset, end)
+    offset = end + 1
+    const value = line.slice(1)
+    checkField(value)
     if (line.startsWith('p')) {
-      const pid = Number(line.slice(1))
+      const pid = Number(value)
       row = Number.isSafeInteger(pid) && pid > 0 ? { pid, sessions: [], leases: [] } : undefined
-      if (row) result.push(row)
-    } else if (line.startsWith('f')) descriptor = line.slice(1)
+      descriptor = ''
+      access = ''
+      if (row) { checkCount('ownership processes', result.length + 1); result.push(row) }
+    } else if (line.startsWith('f')) { descriptor = value; access = '' }
+    else if (line.startsWith('a')) access = value
     else if (line.startsWith('n') && row) {
-      const path = line.slice(1)
-      if (descriptor === 'cwd') row.cwd = text(path, 4096)
-      else if (path.startsWith(`${ownersRoot}/`) && path.endsWith('.lock')) {
-        const id = basename(path, '.lock')
-        if (uuid.test(id)) row.leases.push(id)
-      } else if (path.startsWith(`${sessionRoot}/`) && path.endsWith('.jsonl') && !basename(path).startsWith('.')) row.sessions.push(path)
+      if (descriptor === 'cwd') row.cwd = text(value, 4096)
+      else if (value.startsWith(`${ownersRoot}/`) && value.endsWith('.lock')) {
+        const id = basename(value, '.lock')
+        if (uuid.test(id)) { checkCount('ownership descriptors', ++ownership); row.leases.push(id) }
+      } else if (value.startsWith(`${sessionRoot}/`) && value.endsWith('.jsonl') && !basename(value).startsWith('.')) {
+        checkCount('ownership descriptors', ++ownership)
+        row.sessions.push(value)
+      } else if (/^\d+$/.test(descriptor) && (access === 'u' || access === 'w') && codexRolloutThreadId(value)) {
+        checkCount('ownership descriptors', ++ownership)
+        ;(row.codexSessions ??= []).push(value)
+      }
     }
   }
   return result
@@ -214,6 +246,7 @@ export function parseSessionHeader(prefix: string, file: string): SessionMetadat
     if (!line.startsWith('{"type":"session",')) continue
     const header = object(JSON.parse(line))
     if (!header || typeof header.id !== 'string' || !uuid.test(header.id)) return undefined
+    checkField(header.timestamp)
     let model: string | undefined
     const next = lines[index + 1]
     if (next?.startsWith('{"type":"model_change",')) model = text(object(JSON.parse(next))?.model)
@@ -231,7 +264,12 @@ export function ownedSessionAgents(processes: AgentInfo[], files: OpenFiles[], m
   const byFile = new Map(metadata.map(item => [resolve(item.file), item]))
   const result: AgentInfo[] = []
   const primarySessionByPid = new Map<number, string>()
-  const ownedIds = new Set(files.flatMap(descriptors => metadata.filter(item => descriptors.sessions.includes(item.file) && descriptors.leases.includes(item.sessionId)).map(item => item.sessionId)))
+  const ownedIds = new Set<string>()
+  for (const descriptors of files) {
+    for (const item of metadata) {
+      if (descriptors.sessions.includes(item.file) && descriptors.leases.includes(item.sessionId)) ownedIds.add(item.sessionId)
+    }
+  }
   for (const processInfo of processes) {
     const descriptors = files.find(item => item.pid === processInfo.pid)
     const owned = descriptors ? metadata.filter(item => descriptors.sessions.includes(item.file) && descriptors.leases.includes(item.sessionId)) : []
@@ -270,26 +308,46 @@ export function ownedSessionAgents(processes: AgentInfo[], files: OpenFiles[], m
   return result
 }
 
-async function boundedRead(path: string, limit = maxMetadata): Promise<string> {
-  const file = await open(path, 'r')
-  try {
-    const buffer = Buffer.allocUnsafe(limit)
-    const { bytesRead } = await file.read(buffer, 0, limit, 0)
-    return buffer.toString('utf8', 0, bytesRead)
-  } finally { await file.close() }
+async function readMetadata<T>(path: string, limit: number, parse: (prefix: string) => T, signal?: AbortSignal, privateRecord = false): Promise<T> {
+  return collectionResources.run({ source: 'agent-metadata', kind: 'file', bytes: limit, signal }, async () => {
+    const file = await open(path, constants.O_RDONLY | constants.O_NONBLOCK | (privateRecord ? constants.O_NOFOLLOW : 0))
+    let closing: Promise<void> | undefined
+    const close = (): Promise<void> => closing ??= file.close().catch(error => { throw new ResourceCleanupError('file', error) })
+    const abort = (): void => { void close().catch(() => { /* Awaited in finally. */ }) }
+    signal?.addEventListener('abort', abort, { once: true })
+    try {
+      throwIfAborted(signal)
+      const stat = await file.stat()
+      if (!stat.isFile()) throw Object.assign(new Error('NOT_REGULAR_FILE'), { code: 'NOT_REGULAR_FILE' })
+      if (privateRecord) {
+        if (stat.uid !== process.getuid?.() || (stat.mode & 0o077) !== 0) throw new Error('unsafe host record permissions')
+        if (stat.size > limit) throw new CollectionLimitError('host record bytes', limit, stat.size)
+      }
+      throwIfAborted(signal)
+      const buffer = Buffer.allocUnsafe(limit)
+      const { bytesRead } = await file.read(buffer, 0, limit, 0)
+      throwIfAborted(signal)
+      if (privateRecord && (await file.stat()).size > limit) throw new CollectionLimitError('host record bytes', limit, limit + 1)
+      return parse(buffer.toString('utf8', 0, bytesRead))
+    } finally {
+      signal?.removeEventListener('abort', abort)
+      await close()
+      throwIfAborted(signal)
+    }
+  })
 }
 
-async function readProcesses(): Promise<ProcessRow[]> {
-  const { stdout } = await exec('/bin/ps', ['-axo', 'pid=,ppid=,pcpu=,rss=,comm='], { timeout: 1500, maxBuffer: 4 * 1024 * 1024 })
+async function readProcesses(signal?: AbortSignal): Promise<ProcessRow[]> {
+  const { stdout } = await runBudgetedCommand('agent-processes', '/bin/ps', ['-axo', 'pid=,ppid=,pcpu=,rss=,comm='], { timeout: 1500, maxBuffer: 4 * 1024 * 1024 }, signal)
   const rows: ProcessRow[] = []
   for (const line of stdout.split('\n')) {
     const match = /^\s*(\d+)\s+(\d+)\s+([\d.]+)\s+(\d+)\s+(.+)$/.exec(line)
     if (match) rows.push({ pid: Number(match[1]), ppid: Number(match[2]), cpuPercent: Number(match[3]), memoryBytes: Number(match[4]) * 1024, executable: match[5], args: '' })
   }
   if (!rows.length) throw new Error('无法解析 macOS 进程表')
-  const candidates = rows.filter(row => identifyRuntime(row) || /^(node|bun)(?:-\d+)?$/.test(basename(row.executable)))
+  const candidates = rows.filter(row => identifyRuntime(row, true) || /^(node|bun)(?:-\d+)?$/.test(basename(row.executable)))
   if (candidates.length) {
-    const { stdout: args } = await exec('/bin/ps', ['-ww', '-p', candidates.map(row => row.pid).join(','), '-o', 'pid=,args='], { timeout: 1500, maxBuffer: 2 * 1024 * 1024 })
+    const { stdout: args } = await runBudgetedCommand('agent-processes', '/bin/ps', ['-ww', '-p', candidates.map(row => row.pid).join(','), '-o', 'pid=,args='], { timeout: 1500, maxBuffer: 2 * 1024 * 1024 }, signal)
     const byPid = new Map(candidates.map(row => [row.pid, row]))
     for (const line of args.split('\n')) {
       const match = /^\s*(\d+)\s+(.+)$/.exec(line)
@@ -301,26 +359,54 @@ async function readProcesses(): Promise<ProcessRow[]> {
 }
 
 interface CollabHost { pid: number; endpoint: string; token: string }
-function socketSnapshot(host: CollabHost): Promise<Record<string, unknown>> {
-  return new Promise<Record<string, unknown>>((accept, reject) => {
+export async function socketSnapshot(host: CollabHost, signal?: AbortSignal): Promise<Record<string, unknown>> {
+  checkField(host.endpoint)
+  checkField(host.token)
+  const limit = COLLECTION_LIMITS.projectionBytes
+  return collectionResources.run({ source: 'agent-collab', kind: 'socket', bytes: limit, signal }, () => new Promise<Record<string, unknown>>((accept, reject) => {
     const socket = createConnection(host.endpoint)
+    const decoder = new StringDecoder('utf8')
     let data = ''
+    let bytes = 0
     let done = false
+    let failure: Error | undefined
+    let closeFailure: ResourceCleanupError | undefined
+    let result: Record<string, unknown> | undefined
     const finish = (error?: Error, value?: Record<string, unknown>): void => {
       if (done) return
       done = true
+      failure = error
+      result = value
       clearTimeout(timer)
       socket.destroy()
-      if (error) reject(error)
-      else accept(value!)
+    }
+    const abort = (): void => {
+      try { throwIfAborted(signal) } catch (error) { finish(error as Error) }
     }
     const timer = setTimeout(() => finish(new Error('socket timeout')), 500)
-    socket.on('connect', () => socket.write(`${JSON.stringify({ v: 1, token: host.token, op: 'snapshot' })}\n`))
-    socket.on('error', () => finish(new Error('socket unavailable')))
+    socket.on('close', () => {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', abort)
+      if (closeFailure) { reject(closeFailure); return }
+      if (failure && !isResourceAbort(failure)) { reject(failure); return }
+      try { throwIfAborted(signal) } catch (error) { reject(error); return }
+      if (failure) reject(failure)
+      else if (result) accept(result)
+      else reject(new Error('socket closed without response'))
+    })
+    socket.on('connect', () => {
+      if (!done) socket.write(`${JSON.stringify({ v: 1, token: host.token, op: 'snapshot' })}\n`)
+    })
+    socket.on('error', error => {
+      if (done) closeFailure = new ResourceCleanupError('socket', error)
+      else finish(error)
+    })
     socket.on('end', () => finish(new Error('socket closed without response')))
-    socket.on('data', chunk => {
-      data += chunk.toString('utf8')
-      if (Buffer.byteLength(data) > 64 * 1024) { finish(new Error('socket response too large')); return }
+    socket.on('data', (chunk: Buffer) => {
+      if (done) return
+      if (chunk.length > limit - bytes) { finish(new Error('socket response too large')); return }
+      bytes += chunk.length
+      data += decoder.write(chunk)
       const end = data.indexOf('\n')
       if (end < 0) return
       try {
@@ -330,50 +416,75 @@ function socketSnapshot(host: CollabHost): Promise<Record<string, unknown>> {
         finish(undefined, snapshot)
       } catch { finish(new Error('invalid socket response')) }
     })
-  })
+    signal?.addEventListener('abort', abort, { once: true })
+    if (signal?.aborted) abort()
+  }))
 }
 
-async function enrichCollab(agents: AgentInfo[]): Promise<SourceStatus> {
-  const directory = join(ompRoot, 'run', 'collab-hosts')
+export async function enrichCollab(agents: AgentInfo[], signal?: AbortSignal, directory = join(ompRoot, 'run', 'collab-hosts')): Promise<SourceStatus> {
   let names: string[]
   try {
-    const stat = await lstat(directory)
-    if (!stat.isDirectory() || stat.isSymbolicLink() || stat.uid !== process.getuid?.() || (stat.mode & 0o077) !== 0) throw new Error('unsafe registry permissions')
-    names = (await readdir(directory)).filter(name => /^[a-z0-9-]+\.json$/.test(name))
+    await collectionResources.run({ source: 'agent-collab', kind: 'file', bytes: 0, signal }, async () => {
+      const stat = await lstat(directory)
+      throwIfAborted(signal)
+      if (!stat.isDirectory() || stat.isSymbolicLink() || stat.uid !== process.getuid?.() || (stat.mode & 0o077) !== 0) throw new Error('unsafe registry permissions')
+    })
+    names = await new DirectoryScan().read(directory, 'agent-collab', signal, name => /^[a-z0-9-]+\.json$/.test(name))
   } catch (error) {
-    return { id: 'omp-socket', label: 'OMP 本地 socket', state: errorCode(error) === 'ENOENT' ? 'unsupported' : 'error', detail: errorCode(error) === 'ENOENT' ? '未启用 Collab host；当前版本不公开进程内 AgentRegistry 查询 socket。' : `无法读取私有 host registry（${errorCode(error)}）。` }
+    if (isResourceCleanupFailure(error)) throw error
+    throwIfAborted(signal)
+    return { id: 'omp-socket', label: 'OMP 本地 socket', state: errorCode(error) === 'ENOENT' ? 'empty' : errorCode(error) === 'OC_COLLECTION_LIMIT' ? 'partial' : 'error', detail: errorCode(error) === 'ENOENT' ? '未启用 Collab host；当前版本不公开进程内 AgentRegistry 查询 socket。' : `无法读取私有 host registry（${errorCode(error)}）。${errorCode(error) === 'OC_COLLECTION_LIMIT' ? '目录条目超过 4096 个（包含非 JSON）；本轮未连接任何 host。' : ''}` }
   }
   let succeeded = 0
   let failed = 0
-  await Promise.all(names.slice(0, 32).map(async name => {
+  let limited = 0
+  const reads = await Promise.allSettled(names.slice(0, 32).map(async name => {
     try {
-      const record = object(JSON.parse(await boundedRead(join(directory, name), 4096)))
-      if (!record || record.version !== 1 || typeof record.pid !== 'number' || typeof record.endpoint !== 'string' || !record.endpoint.startsWith('/') || typeof record.token !== 'string') throw new Error('invalid host record')
+      const record = await readMetadata(join(directory, name), COLLECTION_LIMITS.fieldBytes, prefix => object(JSON.parse(prefix)), signal, true)
+      if (!record || record.version !== 1 || !Number.isSafeInteger(record.pid) || typeof record.pid !== 'number' || record.pid <= 0 || !text(record.endpoint, 4096)?.startsWith('/') || !text(record.token, 4096)) throw new Error('invalid host record')
       // Only contact sockets already owned by a positively identified live OMP process.
       if (!agents.some(agent => agent.runtime === 'OMP' && agent.pid === record.pid) || !alive(record.pid)) return
-      const snapshot = await socketSnapshot(record as unknown as CollabHost)
+      const snapshot = await socketSnapshot(record as unknown as CollabHost, signal)
       const agent = agents.find(item => item.pid === snapshot.pid && item.kind === 'main' && (!item.sessionId || item.sessionId === snapshot.sessionId))
       if (!agent) return
-      agent.name = text(snapshot.sessionName, 160) ?? agent.name
-      agent.cwd = text(snapshot.cwd, 4096) ?? agent.cwd
+      const sessionName = text(snapshot.sessionName, 160)
+      const cwd = text(snapshot.cwd, 4096)
       const model = object(snapshot.model)
-      if (text(model?.provider) && text(model?.id)) agent.model = `${model!.provider}/${model!.id}`
+      const provider = text(model?.provider)
+      const modelId = text(model?.id)
+      checkField(snapshot.sessionId)
+      agent.name = sessionName ?? agent.name
+      agent.cwd = cwd ?? agent.cwd
+      if (provider && modelId) agent.model = `${provider}/${modelId}`
       if (typeof snapshot.busy === 'boolean') agent.state = snapshot.busy ? 'working' : 'idle'
       agent.source = 'OMP authenticated local socket snapshot'
       succeeded++
-    } catch { failed++ }
+    } catch (error) {
+      if (isResourceCleanupFailure(error) || signal?.aborted) throw error
+      failed++
+      if (errorCode(error) === 'OC_COLLECTION_LIMIT') limited++
+    }
   }))
-  return { id: 'omp-socket', label: 'OMP 本地 socket', state: failed || names.length > 32 ? 'partial' : succeeded ? 'ok' : 'unsupported', detail: `读取 ${succeeded} 个活跃 host；${failed} 个读取失败。socket 仅提供主会话元数据，不公开子代理 roster。${names.length > 32 ? '本轮限制最多 32 个 host。' : ''}` }
+  const failures = reads.flatMap(result => result.status === 'rejected' ? [result.reason] : [])
+  if (failures.length) {
+    if (failures.every(isResourceAbort)) throw resourceAbortError()
+    throw new AggregateError(failures, 'Collab 读取失败 / Collab read failed')
+  }
+  throwIfAborted(signal)
+  return { id: 'omp-socket', label: 'OMP 本地 socket', state: failed || names.length > 32 ? 'partial' : succeeded ? 'ok' : 'empty', detail: `读取 ${succeeded} 个活跃 host；${failed} 个读取失败。socket 仅提供主会话元数据，不公开子代理 roster。${names.length > 32 ? '本轮限制最多 32 个 host。' : ''}${limited ? ` ${limited} 个 host 超过元数据上限（OC_COLLECTION_LIMIT），本轮读取不完整。` : ''}` }
 }
 
 export function applyTernSnapshot(agents: AgentInfo[], metadata: SessionMetadata[], snapshot: unknown, windowKey: string): number {
   const panes = object(snapshot)?.panes
   if (!Array.isArray(panes)) throw new Error('invalid Tern inspect protocol')
+  checkCount('Tern panes', panes.length)
+  checkField(windowKey)
   const byFile = new Map(metadata.map(item => [item.file, item.sessionId]))
   let matched = 0
   for (const value of panes) {
     const pane = object(value)
     if (!pane || pane.exited != null || typeof pane.working !== 'boolean' || typeof pane.omp_session_file !== 'string') continue
+    checkField(pane.omp_session_file)
     const id = byFile.get(pane.omp_session_file)
     if (!id) continue
     const agent = agents.find(item => item.sessionId === id && item.runtime === 'OMP' && item.kind === 'main')
@@ -388,9 +499,10 @@ export function applyTernSnapshot(agents: AgentInfo[], metadata: SessionMetadata
   return matched
 }
 
-export async function collectTernWindows(agents: AgentInfo[], metadata: SessionMetadata[], snapshot: unknown, inspectWindow: (key: string) => Promise<unknown>): Promise<SourceStatus> {
+export async function collectTernWindows(agents: AgentInfo[], metadata: SessionMetadata[], snapshot: unknown, inspectWindow: (key: string) => Promise<unknown>, signal?: AbortSignal): Promise<SourceStatus> {
   const clients = object(snapshot)?.clients
   if (!Array.isArray(clients)) throw new Error('invalid Tern clients protocol')
+  checkCount('Tern clients', clients.length)
   const keys = new Set<string>()
   let invalid = 0
   for (const value of clients) {
@@ -403,11 +515,15 @@ export async function collectTernWindows(agents: AgentInfo[], metadata: SessionM
   const failed: string[] = []
   let matched = 0
   let cursor = 0
-  await Promise.all(Array.from({ length: Math.min(4, windows.length) }, async () => {
+  await settleResourceWork(Array.from({ length: Math.min(4, windows.length) }, async () => {
     while (cursor < windows.length) {
+      throwIfAborted(signal)
       const key = windows[cursor++]
       try { matched += applyTernSnapshot(agents, metadata, await inspectWindow(key), key) }
-      catch { failed.push(key || '首窗') }
+      catch (error) {
+        if (isResourceCleanupFailure(error) || signal?.aborted) throw error
+        failed.push(key || '首窗')
+      }
     }
   }))
   return {
@@ -417,21 +533,22 @@ export async function collectTernWindows(agents: AgentInfo[], metadata: SessionM
   }
 }
 
-async function enrichTern(agents: AgentInfo[], metadata: SessionMetadata[], rows: ProcessRow[]): Promise<SourceStatus> {
+async function enrichTern(agents: AgentInfo[], metadata: SessionMetadata[], rows: ProcessRow[], signal?: AbortSignal): Promise<SourceStatus> {
   const tern = rows.find(row => row.executable.endsWith('/Tern.app/Contents/MacOS/tern'))
-  if (!tern) return { id: 'tern-state', label: 'Tern 主代理状态', state: 'unsupported', detail: '未发现 Tern 宿主进程；保留 CLI 进程活性状态。' }
+  if (!tern) return { id: 'tern-state', label: 'Tern 主代理状态', state: 'empty', detail: '未发现 Tern 宿主进程；保留 CLI 进程活性状态。' }
   try {
-    const { stdout } = await exec(tern.executable, ['inspect', '--json'], { timeout: 1000, maxBuffer: 2 * 1024 * 1024 })
+    const { stdout } = await runBudgetedCommand('agent-tern', tern.executable, ['inspect', '--json'], { timeout: 1000, maxBuffer: 2 * 1024 * 1024 }, signal)
     return await collectTernWindows(agents, metadata, JSON.parse(stdout), async key => {
-      const { stdout: window } = await exec(tern.executable, ['inspect', '--json', '--window', key], { timeout: 1000, maxBuffer: 2 * 1024 * 1024 })
+      const { stdout: window } = await runBudgetedCommand('agent-tern', tern.executable, ['inspect', '--json', '--window', key], { timeout: 1000, maxBuffer: 2 * 1024 * 1024 }, signal)
       return JSON.parse(window)
-    })
+    }, signal)
   } catch (error) {
+    if (isResourceCleanupFailure(error) || signal?.aborted) throw error
     return { id: 'tern-state', label: 'Tern 主代理状态', state: 'error', detail: `Tern inspect 不可用（${errorCode(error)}）；保留 PID 活性，不猜测忙闲。` }
   }
 }
 
-export async function enrichSessionActivity(agents: AgentInfo[], metadata: SessionMetadata[], reader = new SessionActivityReader(), now?: number): Promise<SourceStatus> {
+export async function enrichSessionActivity(agents: AgentInfo[], metadata: SessionMetadata[], reader = new SessionActivityReader(), now?: number, signal?: AbortSignal): Promise<SourceStatus> {
   const bySession = new Map(metadata.map(item => [item.sessionId, item.file]))
   const owned = agents.filter(agent => agent.runtime === 'OMP' && agent.sessionId && bySession.has(agent.sessionId)).slice(0, 128)
   reader.retain(new Set(owned.map(agent => bySession.get(agent.sessionId!)!)))
@@ -440,7 +557,7 @@ export async function enrichSessionActivity(agents: AgentInfo[], metadata: Sessi
   const issues = new Set<string>()
   for (const agent of agents) delete agent.activity
   for (const agent of owned) {
-    const result = await reader.read(bySession.get(agent.sessionId!)!, now)
+    const result = await reader.read(bySession.get(agent.sessionId!)!, now, signal)
     if (result.activity) { agent.activity = result.activity; observed++ }
     if (result.issues.length) incomplete++
     for (const issue of result.issues) issues.add(issue)
@@ -455,35 +572,47 @@ export async function enrichSessionActivity(agents: AgentInfo[], metadata: Sessi
 
 export interface AgentDiscovery { snapshot: AgentSnapshot; sessions: SessionMetadata[] }
 
-export async function discoverAgents(): Promise<AgentDiscovery> {
+export async function discoverAgents(signal?: AbortSignal): Promise<AgentDiscovery> {
   if (process.platform !== 'darwin') throw new Error('Agent 采集器仅支持 macOS')
-  const rows = await readProcesses()
-  let agents = processAgents(rows, alive)
+  const rows = await readProcesses(signal)
+  let agents = processAgents(rows, alive, true)
+  const codexHosts = new Set(rows.filter(row => identifyRuntime(row, true)?.host).map(row => row.pid))
+  let openFiles: OpenFiles[] = []
+  let metadataReads = 0
+  let ownershipError: string | undefined
   const metadata: SessionMetadata[] = []
-  const sources: SourceStatus[] = [{ id: 'processes', label: '本机 CLI 进程', state: 'ok', detail: '按可执行文件和已知 CLI 入口识别 OMP、Codex、Claude Code、OpenCode；检查 PID 活性并合并 wrapper/native。进程存在不代表正在推理。' }]
+  const sources: SourceStatus[] = [{ id: 'processes', label: '本机 CLI 进程', state: agents.length ? 'ok' : 'empty', detail: '按可执行文件和已知 CLI 入口识别 OMP、Codex、Claude Code、OpenCode；检查 PID 活性并合并 wrapper/native。进程存在不代表正在推理。' }]
   if (agents.length) {
     try {
-      const { stdout } = await exec('/usr/sbin/lsof', ['-nP', '-a', '-p', agents.map(agent => agent.pid).join(','), '-F', 'pfn'], { timeout: 1800, maxBuffer: 4 * 1024 * 1024 })
+      const { stdout } = await runBudgetedCommand('agent-ownership', '/usr/sbin/lsof', ['-nP', '-a', '-p', agents.map(agent => agent.pid).join(','), '-F', 'pfan'], { timeout: 1800, maxBuffer: 4 * 1024 * 1024 }, signal)
       const files = parseOpenFiles(stdout)
+      openFiles = files
       const paths = [...new Set(files.flatMap(item => item.sessions))]
       let unreadable = 0
       // Bounded by live descriptors; no readdir or recursive scan of saved sessions.
       for (const path of paths.slice(0, 128)) {
+        metadataReads++
         try {
-          const item = parseSessionHeader(await boundedRead(path), path)
+          const item = await readMetadata(path, maxMetadata, prefix => parseSessionHeader(prefix, path), signal)
           if (item) metadata.push(item)
           else unreadable++
-        } catch { unreadable++ }
+        } catch (error) { if (isResourceCleanupFailure(error) || signal?.aborted) throw error; unreadable++ }
       }
       const ownershipCount = new Set(files.flatMap(item => item.leases)).size
       agents = ownedSessionAgents(agents, files, metadata)
       sources.push({ id: 'omp-ownership', label: 'OMP 主代理与子代理', state: 'partial', detail: `观察到 ${ownershipCount} 个 ownership 描述符；同进程 task 以父会话的专用 artifacts 目录识别，普通 fork 的 parentSession 不代表子代理；独立进程保留已确认祖先关系。OMP keepAlive 会保留已完成子代理，直到 park 才释放 lease，因此这些 task 显示未知，不计作活动；当前版本无独立可查询的实时子代理状态。模型为头部初始模型，可能已切换。${unreadable ? ` ${unreadable} 个头部无法解析。` : ''}${paths.length > 128 ? ' 本轮最多读取 128 个打开文件的头部。' : ''} 每轮有界 ps/lsof，不启动 OMP CLI、不扫描历史目录；仅当前持有 session/lease 的会话读取有界调用元数据。macOS lsof 不报告此 flock 是否持有。自定义 session 目录/隔离 profile 未覆盖。` })
     } catch (error) {
+      if (isResourceCleanupFailure(error) || signal?.aborted) throw error
+      ownershipError = errorCode(error)
       sources.push({ id: 'omp-ownership', label: 'OMP 主代理与子代理', state: 'error', detail: `打开文件/会话 lease 读取失败（${errorCode(error)}）；仅保留已确认进程，不推断子代理。` })
     }
-  } else sources.push({ id: 'omp-ownership', label: 'OMP 主代理与子代理', state: 'ok', detail: '当前未识别到活跃 CLI 进程；没有扫描保存的历史会话。' })
-  sources.push(await enrichTern(agents, metadata, rows))
-  sources.push(await enrichCollab(agents))
+  } else sources.push({ id: 'omp-ownership', label: 'OMP 主代理与子代理', state: 'empty', detail: '当前未识别到活跃 CLI 进程；没有扫描保存的历史会话。' })
+  const codex = await collectCodexSessions(agents, openFiles, codexHosts, signal, 128 - metadataReads)
+  agents = codex.agents
+  sources.push(ownershipError ? { id: 'codex-sessions', label: 'Codex 主代理与子代理', state: 'error',
+    detail: `打开文件读取失败（${ownershipError}）；无法确认 Codex 会话归属。` } : codex.source)
+  sources.push(await enrichTern(agents, metadata, rows, signal))
+  sources.push(await enrichCollab(agents, signal))
   // Processes may have exited while reading metadata; a stale registry must not revive them.
   agents = agents.filter(agent => alive(agent.pid))
   const owned = new Set(agents.flatMap(agent => agent.sessionId ? [agent.sessionId] : []))
@@ -493,8 +622,8 @@ export async function discoverAgents(): Promise<AgentDiscovery> {
   }
 }
 
-export async function collectAgents(): Promise<AgentSnapshot> {
-  const { snapshot, sessions } = await discoverAgents()
-  snapshot.sources.push(await enrichSessionActivity(snapshot.agents, sessions))
+export async function collectAgents(signal?: AbortSignal): Promise<AgentSnapshot> {
+  const { snapshot, sessions } = await discoverAgents(signal)
+  snapshot.sources.push(await enrichSessionActivity(snapshot.agents, sessions, undefined, undefined, signal))
   return snapshot
 }

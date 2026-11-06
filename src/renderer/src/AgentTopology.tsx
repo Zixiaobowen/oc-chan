@@ -10,6 +10,8 @@ import {
   ReactFlow,
   ReactFlowProvider,
   applyNodeChanges,
+  getNodesBounds,
+  getViewportForBounds,
   getSmoothStepPath,
   useNodesInitialized,
   useReactFlow,
@@ -24,25 +26,31 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { AgentActivity, Badge, bytes } from './components'
-import { AGENT_NODE_HEIGHT, AGENT_NODE_WIDTH, agentProjectDirectory, layoutAgentTopology, orderedTopologyBranches, type TopologyGraph, type TopologyNode } from './agent-topology'
+import { agentProjectDirectory, layoutAgentTopology, orderedTopologyBranches, type TopologyGraph, type TopologyNode, type TopologyNodeSize } from './agent-topology'
 import AgentContextMenu, { type AgentMenuAnchor } from './AgentContextMenu'
 import { useI18n } from './i18n'
 import { useSettings } from './settings'
+import { MAX_SAVED_TOPOLOGY_NODES, saveTopologyPosition, type CanvasViewport, type TopologyMemory } from './view-state'
 import './agent-topology.css'
 
 interface AgentTopologyProps {
   graph: TopologyGraph
+  pageIndex: number
   selectedId: string | null
   onSelect: (id: string) => void
   onToggleCollapse: (id: string) => void
   filterKey: string
+  memory: TopologyMemory
+  onNodesReady: () => void
 }
 
 type AgentNodeData = TopologyNode & Record<string, unknown> & {
   collapseDisabled: boolean
   onToggleCollapse: (id: string) => void
+  onRevealParent: (id: string) => void
 }
 type AgentFlowNode = Node<AgentNodeData, 'agent'>
+type AgentDimensionChange = Extract<NodeChange<AgentFlowNode>, { type: 'dimensions' }>
 
 const UNFILTERED = JSON.stringify(['all', 'all', ''])
 const MIN_ZOOM = 0.05
@@ -88,7 +96,7 @@ function projectColor(cwd: string | undefined): CSSProperties | undefined {
 
 const AgentNode = memo(function AgentNode({ data, selected }: NodeProps<AgentFlowNode>) {
   const { t } = useI18n()
-  const { agent, contextOnly, childCount, descendantCount, collapsed, issue, collapseDisabled, onToggleCollapse } = data
+  const { agent, contextOnly, childCount, descendantCount, collapsed, issue, parentOutsidePage, collapseDisabled, onToggleCollapse, onRevealParent } = data
   const project = agent.cwd || t('工作目录不可见', 'Working directory unavailable')
   const projectStyle = useMemo(() => projectColor(agent.cwd), [agent.cwd])
   const heading = agent.summary || agent.name
@@ -135,6 +143,9 @@ const AgentNode = memo(function AgentNode({ data, selected }: NodeProps<AgentFlo
         {collapsed ? t('展开', 'Expand') : t('收起', 'Collapse')} {descendantCount}
       </button>}
     </div>
+    {parentOutsidePage && <button type="button" className="text-button topology-parent-link nodrag nopan" title={agent.parentId}
+      onPointerDown={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}
+      onClick={event => { event.stopPropagation(); onRevealParent(agent.parentId!) }}>{t('父节点在其它页 · 查看', 'Locate parent on another page')}</button>}
     <Handle type="source" position={Position.Bottom} isConnectable={false} />
   </div>
 })
@@ -173,114 +184,237 @@ function initialFocusNodes(graph: TopologyGraph): { id: string }[] {
   return nodes
 }
 
-function CanvasControls({ onRelayout }: { onRelayout: () => void }) {
+function CanvasControls({ onFit, onRelayout, onViewportAction }: { onFit: () => void; onRelayout: () => void; onViewportAction: () => void }) {
   const { t } = useI18n()
-  const { zoomIn, zoomOut, fitView } = useReactFlow()
+  const { zoomIn, zoomOut } = useReactFlow()
   const { zoom } = useViewport()
-  return <Panel position="bottom-left" className="topology-controls nodrag nopan" role="group" aria-label={t('画布控制', 'Canvas controls')}>
+  return <Panel position="bottom-left" className="topology-controls nodrag nopan" role="group" aria-label={t('画布控制', 'Canvas controls')} onClickCapture={onViewportAction}>
     <button type="button" aria-label={t('缩小画布', 'Zoom out')} title={t('缩小画布', 'Zoom out')} disabled={zoom <= MIN_ZOOM} onClick={() => { void zoomOut({ duration: 0 }) }}><Minus size={16} aria-hidden="true" /></button>
     <output className="topology-zoom" aria-label={t('当前缩放比例', 'Current zoom')}>{Math.round(zoom * 100)}%</output>
     <button type="button" aria-label={t('放大画布', 'Zoom in')} title={t('放大画布', 'Zoom in')} disabled={zoom >= MAX_ZOOM} onClick={() => { void zoomIn({ duration: 0 }) }}><Plus size={16} aria-hidden="true" /></button>
     <span className="topology-controls-divider" aria-hidden="true" />
-    <button type="button" title={t('显示当前筛选中的全部节点', 'Show all nodes in the current filter')} onClick={() => { void fitView(fitOptions) }}><Maximize size={15} aria-hidden="true" /><span>{t('适应全部', 'Fit all')}</span></button>
+    <button type="button" title={t('显示当前画布中的全部节点', 'Show all nodes on the current canvas')} onClick={onFit}><Maximize size={15} aria-hidden="true" /><span>{t('适应视图', 'Fit view')}</span></button>
     <button type="button" title={t('清除手动位置，重新排列当前节点', 'Clear manual positions and rearrange current nodes')} onClick={onRelayout}><RotateCcw size={15} aria-hidden="true" /><span>{t('重新布局', 'Reset layout')}</span></button>
   </Panel>
 }
 
-function TopologyCanvas({ graph, selectedId, onSelect, onToggleCollapse, filterKey }: AgentTopologyProps) {
+function TopologyCanvas({ graph, pageIndex, selectedId, onSelect, onToggleCollapse, filterKey, memory, onNodesReady }: AgentTopologyProps) {
   const { t } = useI18n()
-  const { snapshot: { resolvedTheme } } = useSettings()
+  const { snapshot: { resolvedTheme, resolvedLanguage, settings } } = useSettings()
+  const typographyKey = `${resolvedLanguage}:${settings.textSize}:${settings.uiFont}:${settings.codeFont}`
+  const lastTypographyKey = useRef(typographyKey)
   const ariaLabelConfig = useMemo(() => topologyAriaLabels(t), [t])
   const [nodes, setNodes] = useState<AgentFlowNode[]>([])
+  const nodesRef = useRef<AgentFlowNode[]>([])
+  const [memoryLimited, setMemoryLimited] = useState(false)
   const [fitRequest, setFitRequest] = useState(0)
+  const [layoutRequest, setLayoutRequest] = useState(0)
   const [menu, setMenu] = useState<AgentMenuAnchor | null>(null)
   const [navigating, setNavigating] = useState(false)
   const [navigationError, setNavigationError] = useState<{ kind: 'connection' } | { kind: 'external'; message: string } | null>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
-  const positions = useRef(new Map<string, XYPosition>())
-  const manualPositions = useRef(new Map<string, XYPosition>())
+  const mounted = useRef(true)
+  const initialViewport = useRef(memory.viewport ?? undefined)
   const automaticPositions = useRef(new Map<string, XYPosition>())
-  const lastLayoutKey = useRef<string | null>(null)
-  const lastFilterKey = useRef(filterKey)
-  const lastVisibleCollapsed = useRef(new Map<string, boolean>())
-  const hadNodes = useRef(false)
+  const appliedDimensions = useRef(new Map<string, TopologyNodeSize>())
+  const measuredWidth = useRef<number | null>(null)
+  const pendingDimensions = useRef(new Map<string, AgentDimensionChange>())
+  const measurementFrame = useRef<number | null>(null)
+  const layoutKey = useRef<string | null>(null)
+  const hadNodes = useRef(memory.viewport !== null)
+  const lastSelectedId = useRef(selectedId)
+  const revealAllowed = useRef(false)
   const fittedRequest = useRef(0)
   const fitTarget = useRef<{ nodes?: { id: string }[]; minZoom?: number }>({})
   const initialized = useNodesInitialized()
-  const { fitView, getNode, getViewport, setViewport } = useReactFlow<AgentFlowNode>()
+  const { getNode, getViewport, setViewport } = useReactFlow<AgentFlowNode>()
+
+  const scheduleMeasurements = useCallback(() => {
+    if (measurementFrame.current !== null || document.hidden || !pendingDimensions.current.size) return
+    measurementFrame.current = requestAnimationFrame(() => {
+      measurementFrame.current = null
+      if (!mounted.current || document.hidden) return
+      const changes = [...pendingDimensions.current.values()]
+      pendingDimensions.current.clear()
+      let next = applyNodeChanges(changes, nodesRef.current)
+      const width = changes.find(change => change.dimensions?.width)?.dimensions?.width
+      if (width && width !== measuredWidth.current) {
+        measuredWidth.current = width
+        // Typography changes affect offscreen cards too; measure them once.
+        next = next.map(node => node.measured?.width && node.measured.width !== width
+          ? { ...node, measured: undefined } : node)
+      }
+      nodesRef.current = next
+      setNodes(next)
+    })
+  }, [])
 
   useLayoutEffect(() => {
-    const filterChanged = filterKey !== lastFilterKey.current
-    const structureChanged = graph.layoutKey !== lastLayoutKey.current
-    const collapseChanged = graph.nodes.some(node => {
-      const previous = lastVisibleCollapsed.current.get(node.agent.id)
-      return previous !== undefined && previous !== node.collapsed
-    })
-    // A filter change starts a fresh arrangement; ordinary updates retain manual positions.
-    if (filterChanged) {
-      manualPositions.current.clear()
-      positions.current.clear()
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      if (measurementFrame.current !== null) cancelAnimationFrame(measurementFrame.current)
+      measurementFrame.current = null
+      pendingDimensions.current.clear()
     }
-    const preservePositions = !structureChanged || collapseChanged
-    lastVisibleCollapsed.current = new Map(graph.nodes.map(node => [node.agent.id, node.collapsed]))
-    if (structureChanged) automaticPositions.current = layoutAgentTopology(graph)
-    lastLayoutKey.current = graph.layoutKey
-    lastFilterKey.current = filterKey
+  }, [])
 
-    setNodes(current => {
-      const previous = new Map(current.map(node => [node.id, node]))
-      return graph.nodes.map(topologyNode => {
-        const id = topologyNode.agent.id
-        const existing = previous.get(id)
-        const position = manualPositions.current.get(id)
-          ?? (preservePositions ? positions.current.get(id) : undefined)
-          ?? automaticPositions.current.get(id)!
-        positions.current.set(id, position)
-        return {
-          ...existing,
-          id,
-          type: 'agent',
-          position,
-          width: AGENT_NODE_WIDTH,
-          height: AGENT_NODE_HEIGHT,
-          selected: id === selectedId,
-          deletable: false,
-          connectable: false,
-          data: { ...topologyNode, collapseDisabled: filterKey !== UNFILTERED, onToggleCollapse }
-        }
-      })
+  const saveViewport = useCallback((viewport: CanvasViewport) => {
+    if (mounted.current) memory.viewport = { x: viewport.x, y: viewport.y, zoom: viewport.zoom }
+  }, [memory])
+
+  useEffect(() => {
+    function saveWhenHidden() {
+      if (!document.hidden) { scheduleMeasurements(); return }
+      if (measurementFrame.current !== null) cancelAnimationFrame(measurementFrame.current)
+      measurementFrame.current = null
+      saveViewport(getViewport())
+      setMenu(null)
+    }
+    function saveBeforePageHide() { saveViewport(getViewport()) }
+    document.addEventListener('visibilitychange', saveWhenHidden)
+    window.addEventListener('pagehide', saveBeforePageHide)
+    return () => {
+      document.removeEventListener('visibilitychange', saveWhenHidden)
+      window.removeEventListener('pagehide', saveBeforePageHide)
+    }
+  }, [getViewport, saveViewport, scheduleMeasurements])
+
+  useLayoutEffect(() => {
+    const filterChanged = memory.filterKey !== null && filterKey !== memory.filterKey
+    const pageChanged = memory.pageIndex !== null && pageIndex !== memory.pageIndex
+    memory.pageIndex = pageIndex
+    const typographyChanged = typographyKey !== lastTypographyKey.current
+    lastTypographyKey.current = typographyKey
+    // Only explicit filter/reset actions discard manual positions.
+    if (filterChanged) {
+      memory.manualPositions.clear()
+      memory.positions.clear()
+      memory.dimensions.clear()
+      revealAllowed.current = false
+    }
+    if (filterChanged || pageChanged) {
+      layoutKey.current = null
+      pendingDimensions.current.clear()
+    }
+    memory.filterKey = filterKey
+
+    const previous = new Map(nodesRef.current.map(node => [node.id, node]))
+    const next = graph.nodes.map(topologyNode => {
+      const id = topologyNode.agent.id
+      const existing = previous.get(id)
+      const position = memory.manualPositions.get(id)
+        ?? memory.positions.get(id)
+        ?? (!filterChanged ? existing?.position : undefined)
+        ?? { x: 0, y: 0 }
+      return {
+        ...existing,
+        id,
+        type: 'agent' as const,
+        position,
+        measured: typographyChanged ? undefined : existing?.measured,
+        selected: id === selectedId,
+        deletable: false,
+        connectable: false,
+        data: { ...topologyNode, collapseDisabled: filterKey !== UNFILTERED, onToggleCollapse, onRevealParent: onSelect }
+      }
     })
-    if (filterChanged || (!hadNodes.current && graph.nodes.length > 0)) {
-      fitTarget.current = !hadNodes.current && filterKey === UNFILTERED
-        ? { nodes: initialFocusNodes(graph), minZoom: 0.65 }
-        : {}
+    nodesRef.current = next
+    setNodes(next)
+    if (filterChanged || pageChanged || (!hadNodes.current && graph.nodes.length > 0)) {
+      const firstMatch = filterKey === UNFILTERED ? undefined : graph.nodes.find(node => !node.contextOnly)
+      fitTarget.current = (pageChanged || !hadNodes.current) && selectedId && graph.nodes.some(node => node.agent.id === selectedId)
+        ? { nodes: [{ id: selectedId }], minZoom: 0.65 }
+        : firstMatch
+          ? { nodes: [{ id: firstMatch.agent.id }], minZoom: 0.65 }
+          : { nodes: initialFocusNodes(graph), minZoom: 0.65 }
       setFitRequest(request => request + 1)
+    } else if (selectedId && selectedId !== lastSelectedId.current && fitRequest !== fittedRequest.current &&
+      graph.nodes.some(node => node.agent.id === selectedId)) {
+      // Preserve an explicit navigation target while initial measurements finish,
+      // even when the details close before that first viewport is applied.
+      fitTarget.current = { nodes: [{ id: selectedId }], minZoom: 0.65 }
     }
     if (graph.nodes.length > 0) hadNodes.current = true
-  }, [graph, selectedId, filterKey, onToggleCollapse])
+  }, [graph, pageIndex, selectedId, filterKey, onSelect, onToggleCollapse, memory, typographyKey])
+
+  useLayoutEffect(() => {
+    if (nodes.length !== graph.nodes.length || nodes.some((node, index) => node.id !== graph.nodes[index].agent.id)) return
+    let geometryChanged = false
+    for (const node of nodes) {
+      const { width, height } = node.measured ?? {}
+      if (!width || !height) return
+      const previous = appliedDimensions.current.get(node.id) ?? memory.dimensions.get(node.id)
+      if (previous && (previous.width !== width || previous.height !== height)) geometryChanged = true
+    }
+    const structureChanged = layoutKey.current !== graph.layoutKey
+    if (!structureChanged && !geometryChanged) return
+    const reflow = geometryChanged || (structureChanged && layoutKey.current !== null)
+    const sizes = new Map(nodes.map(node => [node.id, { width: node.measured!.width!, height: node.measured!.height! }]))
+    automaticPositions.current = layoutAgentTopology(graph, sizes)
+    appliedDimensions.current = sizes
+    layoutKey.current = graph.layoutKey
+    let limited = false
+    const next = nodes.map(node => {
+      const position = memory.manualPositions.get(node.id)
+        ?? (!reflow ? memory.positions.get(node.id) : undefined)
+        ?? automaticPositions.current.get(node.id)!
+      if (saveTopologyPosition(memory, node.id, position, false)) memory.dimensions.set(node.id, sizes.get(node.id)!)
+      else limited = true
+      return { ...node, position }
+    })
+    nodesRef.current = next
+    setNodes(next)
+    setMemoryLimited(limited)
+  }, [nodes, graph, memory, layoutRequest])
 
   const localizedNodes = useMemo(() => nodes.map(node => {
     const { agent, contextOnly, issue } = node.data
     return {
       ...node,
       ariaLabel: `${agent.summary || agent.name}, ${agent.kind === 'main' ? t('主 Agent', 'Main agent') : t('子代理', 'Subagent')}, PID ${agent.pid}${contextOnly ? t('，关联上下文', ', related context') : ''}${issue ? `, ${topologyIssue(issue, t)}` : ''}`,
-      domAttributes: { 'aria-roledescription': t('Agent 节点', 'Agent node') }
+      domAttributes: { 'aria-roledescription': t('Agent 节点', 'Agent node'), 'aria-current': Boolean(node.selected) }
     }
   }), [nodes, t])
 
-  useEffect(() => {
-    if (!initialized || fitRequest === fittedRequest.current) return
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas?.clientWidth || !canvas.clientHeight || !nodes.length || nodes !== nodesRef.current || !initialized ||
+      layoutKey.current !== graph.layoutKey || fitRequest === fittedRequest.current ||
+      pendingDimensions.current.size || nodes.some(node => !node.measured?.width || !node.measured.height)) return
     fittedRequest.current = fitRequest
-    void fitView({ ...fitOptions, ...fitTarget.current })
-  }, [initialized, fitRequest, fitView])
+    const target = fitTarget.current
+    const ids = target.nodes ? new Set(target.nodes.map(node => node.id)) : null
+    const fitNodes = ids ? nodes.filter(node => ids.has(node.id)) : nodes
+    if (!fitNodes.length) return
+    // Apply the measured fit before selection and focus effects. A queued fitView
+    // can otherwise overtake a later keyboard selection and unmount its node.
+    const viewport = getViewportForBounds(getNodesBounds(fitNodes), canvas.clientWidth, canvas.clientHeight,
+      target.minZoom ?? fitOptions.minZoom, fitOptions.maxZoom, fitOptions.padding)
+    void setViewport(viewport, { duration: fitOptions.duration })
+  }, [initialized, fitRequest, setViewport, nodes, graph.layoutKey])
+
+  useEffect(() => {
+    if (!initialized || nodes !== nodesRef.current || pendingDimensions.current.size) return
+    // React Flow synchronizes its visible DOM from these nodes in a passive effect.
+    // Restore focus after that commit so its keyboard panning sees current positions.
+    const frame = requestAnimationFrame(() => {
+      if (nodes === nodesRef.current && !pendingDimensions.current.size) onNodesReady()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [initialized, nodes, onNodesReady])
 
   useLayoutEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || !selectedId) return
+    if (!canvas || !initialized || nodes !== nodesRef.current || pendingDimensions.current.size ||
+      nodes.some(node => !node.measured?.width || !node.measured.height) || selectedId === lastSelectedId.current) return
+    lastSelectedId.current = selectedId
+    revealAllowed.current = Boolean(selectedId)
+    if (!selectedId) return
 
     function revealSelection() {
       const node = getNode(selectedId!)
-      if (!node || !canvas) return
+      if (!node?.measured?.width || !node.measured.height || !canvas || !mounted.current || !revealAllowed.current) return
       const width = canvas.clientWidth
       const height = canvas.clientHeight
       if (!width || !height) return
@@ -293,27 +427,32 @@ function TopologyCanvas({ graph, selectedId, onSelect, onToggleCollapse, filterK
         const far = extent - 16 - size
         return Math.min(Math.max(16, far), Math.max(Math.min(16, far), start)) - start
       }
-      const dx = displacement(left, AGENT_NODE_WIDTH * viewport.zoom, width)
-      const dy = displacement(top, AGENT_NODE_HEIGHT * viewport.zoom, height)
+      const dx = displacement(left, node.measured.width * viewport.zoom, width)
+      const dy = displacement(top, node.measured.height * viewport.zoom, height)
       if (dx || dy) void setViewport({ ...viewport, x: viewport.x + dx, y: viewport.y + dy }, { duration: 0 })
     }
 
     revealSelection()
-    const observer = new ResizeObserver(revealSelection)
-    observer.observe(canvas)
-    return () => observer.disconnect()
-  }, [selectedId, getNode, getViewport, setViewport])
+  }, [selectedId, initialized, nodes, getNode, getViewport, setViewport])
 
   const onNodesChange = useCallback((changes: NodeChange<AgentFlowNode>[]) => {
-    const localChanges = changes.filter(change => change.type === 'position' || change.type === 'dimensions')
-    for (const change of localChanges) {
-      if (change.type === 'position' && change.position) {
-        positions.current.set(change.id, change.position)
-        manualPositions.current.set(change.id, change.position)
-      }
+    if (!mounted.current) return
+    const positions = changes.filter(change => change.type === 'position')
+    for (const change of positions) {
+      if (change.position && !saveTopologyPosition(memory, change.id, change.position, true)) setMemoryLimited(true)
     }
-    if (localChanges.length) setNodes(current => applyNodeChanges(localChanges, current))
-  }, [])
+    if (positions.length) {
+      const next = applyNodeChanges(positions, nodesRef.current)
+      nodesRef.current = next
+      setNodes(next)
+    }
+    const dimensions = changes.filter(change => change.type === 'dimensions')
+    if (!dimensions.length) return
+    const ids = new Set(nodesRef.current.map(node => node.id))
+    for (const id of pendingDimensions.current.keys()) if (!ids.has(id)) pendingDimensions.current.delete(id)
+    for (const change of dimensions) if (ids.has(change.id)) pendingDimensions.current.set(change.id, change)
+    scheduleMeasurements()
+  }, [memory, scheduleMeasurements])
 
   const edges = useMemo<Edge[]>(() => {
     const agents = new Map(graph.nodes.map(node => [node.agent.id, node.agent]))
@@ -335,20 +474,23 @@ function TopologyCanvas({ graph, selectedId, onSelect, onToggleCollapse, filterK
     })
   }, [graph.edges, graph.nodes, selectedId])
 
-  function relayout() {
-    manualPositions.current.clear()
-    positions.current.clear()
-    automaticPositions.current = layoutAgentTopology(graph)
-    setNodes(current => current.map(node => {
-      const position = automaticPositions.current.get(node.id)!
-      positions.current.set(node.id, position)
-      return { ...node, position }
-    }))
+  function fitAll() {
     fitTarget.current = {}
     setFitRequest(request => request + 1)
   }
 
+  function relayout() {
+    memory.manualPositions.clear()
+    memory.positions.clear()
+    memory.dimensions.clear()
+    revealAllowed.current = false
+    layoutKey.current = null
+    setLayoutRequest(request => request + 1)
+    fitAll()
+  }
+
   function closeMenu(restoreFocus = true) {
+    if (!mounted.current) return
     if (restoreFocus) menu?.trigger?.focus({ preventScroll: true })
     setMenu(null)
   }
@@ -364,11 +506,11 @@ function TopologyCanvas({ graph, selectedId, onSelect, onToggleCollapse, filterK
         return
       }
       const { error } = await window.monitor.focusAgentInTern(agentId)
-      if (error) setNavigationError({ kind: 'external', message: error })
+      if (mounted.current && error) setNavigationError({ kind: 'external', message: error })
     } catch (error) {
-      setNavigationError({ kind: 'external', message: error instanceof Error ? error.message : String(error) })
+      if (mounted.current) setNavigationError({ kind: 'external', message: error instanceof Error ? error.message : String(error) })
     } finally {
-      setNavigating(false)
+      if (mounted.current) setNavigating(false)
     }
   }
 
@@ -392,6 +534,11 @@ function TopologyCanvas({ graph, selectedId, onSelect, onToggleCollapse, filterK
     onSelect(id)
   }
 
+  function chooseViewport() {
+    revealAllowed.current = false
+    fittedRequest.current = fitRequest
+  }
+
   return <div ref={canvasRef} className="topology-canvas" role="region" aria-label={t('协作拓扑画布', 'Agent topology canvas')} onKeyDownCapture={openWithKeyboard}>
     <ReactFlow<AgentFlowNode>
       nodes={localizedNodes}
@@ -400,6 +547,9 @@ function TopologyCanvas({ graph, selectedId, onSelect, onToggleCollapse, filterK
       edgeTypes={edgeTypes}
       onlyRenderVisibleElements
       onNodesChange={onNodesChange}
+      defaultViewport={initialViewport.current}
+      onViewportChange={saveViewport}
+      onMoveStart={event => { if (event) chooseViewport() }}
       onNodeClick={(event, node) => {
         if (event.target instanceof Element) event.target.closest<HTMLElement>('.react-flow__node')?.focus({ preventScroll: true })
         onSelect(node.id)
@@ -411,6 +561,7 @@ function TopologyCanvas({ graph, selectedId, onSelect, onToggleCollapse, filterK
         trigger?.focus({ preventScroll: true })
         setMenu({ agentId: node.id, x: event.clientX, y: event.clientY, trigger })
       }}
+      elementsSelectable={false}
       nodesConnectable={false}
       edgesReconnectable={false}
       edgesFocusable={false}
@@ -430,8 +581,12 @@ function TopologyCanvas({ graph, selectedId, onSelect, onToggleCollapse, filterK
       attributionPosition="top-right"
     >
       <Background gap={24} size={1} color="var(--border-strong)" />
-      {graph.nodes.length > 0 && <Panel position="top-left" className="topology-pan-hint">{t('按项目目录排序 · 同项目主 Agent 并列 · 未知项目在最后', 'Sorted by project path · Same-project roots side by side · Unknown projects last')}</Panel>}
-      {graph.nodes.length > 0 && <CanvasControls onRelayout={relayout} />}
+      {graph.nodes.length > 0 && <Panel position="top-left" className="topology-pan-hint">
+        <div>{t('拖动空白平移，查看其他分支', 'Drag empty space to pan and see other branches')}</div>
+        <div>{t('按项目目录排序 · 同项目主 Agent 并列 · 未知项目置后', 'Sorted by project path · Same-project roots side by side · Unknown projects last')}</div>
+        {memoryLimited && <div role="status">{t(`最多保留 ${MAX_SAVED_TOPOLOGY_NODES} 个节点的位置；标识超过 512 个字符的节点不保留。部分位置在切页后无法恢复。`, `Positions are kept for up to ${MAX_SAVED_TOPOLOGY_NODES} nodes; IDs longer than 512 characters are excluded. Some positions cannot be restored after switching pages.`)}</div>}
+      </Panel>}
+      {graph.nodes.length > 0 && <CanvasControls onFit={fitAll} onRelayout={relayout} onViewportAction={chooseViewport} />}
       {navigationError && <Panel position="top-right" className="topology-navigation-error" role="alert">
         <AlertCircle size={16} aria-hidden="true" />
         <span>{navigationError.kind === 'connection' ? t('桌面连接不可用，请重新打开应用。', 'Desktop connection unavailable. Please reopen the app.') : navigationError.message}</span>
