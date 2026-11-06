@@ -207,6 +207,9 @@ class Instance {
     }, { timeout: 30000, signal: abort.signal })
     this.renderer = await Protocol.connect(page.webSocketDebuggerUrl)
     this.protocols.push(this.renderer)
+    // CSS emulation alone can exceed the runner's display-clamped native input surface.
+    const nativeViewport = await this.main.evaluate('globalThis.__ocSmokeControl.setViewportSize(1280, 860)')
+    record('native-viewport', nativeViewport)
     await this.renderer.call('Emulation.setDeviceMetricsOverride', { width: 1280, height: 860, deviceScaleFactor: 1, mobile: false })
     await until(() => this.renderer.evaluate('Boolean(window.__ocPerfState?.ready && window.monitor && window.desktopSettings)'), { timeout: 60000, signal: abort.signal })
     await this.hidden('startup')

@@ -77,7 +77,7 @@ export function installSmokeControl(monitor) {
   const info = () => ({
     userData: app.getPath('userData'),
     windows: BrowserWindow.getAllWindows().map(window => ({
-      id: window.id, url: window.webContents.getURL(), visible: window.isVisible(), focusable: window.isFocusable()
+      id: window.id, url: window.webContents.getURL(), visible: window.isVisible(), focusable: window.isFocusable(), contentBounds: window.getContentBounds()
     })),
     monitor: monitor.diagnostics(), resources: collectionResources.snapshot(), eventQueries
   })
@@ -97,6 +97,18 @@ export function installSmokeControl(monitor) {
   Object.defineProperty(globalThis, '__ocSmokeControl', { value: Object.freeze({
     info,
     eventDatabase,
+    setViewportSize(width, height) {
+      if (![width, height].every(value => Number.isSafeInteger(value) && value >= 320 && value <= 2048))
+        throw new Error('Smoke viewport dimensions exceed the supported bounds')
+      const windows = BrowserWindow.getAllWindows()
+      if (windows.length !== 1 || windows[0].isVisible() || windows[0].isFocusable())
+        throw new Error('Smoke viewport sizing requires one hidden, non-focusable window')
+      const before = windows[0].getContentBounds()
+      windows[0].setContentSize(width, height)
+      const after = windows[0].getContentBounds()
+      if (after.width !== width || after.height !== height) throw new Error('Native smoke viewport did not accept the requested size')
+      return { before, after }
+    },
     faultEvents(enabled) {
       if (typeof enabled !== 'boolean' || !eventsHandler) throw new Error('Events handler is not ready or invalid fault flag')
       if (enabled !== eventsFaulted) {

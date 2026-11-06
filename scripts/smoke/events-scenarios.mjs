@@ -148,10 +148,6 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     await ui.click(action('next'))
     assert.deepEqual(await page(ui), second)
     await ui.click($('#event-source-filter'))
-    // Dismiss native suggestions while keeping input focus, then move over the
-    // scroller and commit its hit-test region before dispatching the real wheel.
-    await ui.key('Escape', 'Escape', 27)
-    await ui.frames()
     const geometry = await ui.evaluate(`(() => {
       const content = ${$('.main-content')}, r = content.getBoundingClientRect();
       const x = r.right - 40, y = r.top + r.height / 2;
@@ -162,34 +158,9 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     const point = { x: geometry.x, y: geometry.y }
     await renderer.call('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point }, RPC_MS)
     await ui.frames()
-    await ui.evaluate(`(() => {
-      globalThis.__ocWheelProbe = { count: 0, last: null };
-      globalThis.__ocWheelListener = event => {
-        __ocWheelProbe.count++;
-        const entry = { trusted: event.isTrusted, target: event.target.tagName, deltaY: event.deltaY, prevented: false };
-        __ocWheelProbe.last = entry;
-        queueMicrotask(() => { entry.prevented = event.defaultPrevented; });
-      };
-      document.addEventListener('wheel', __ocWheelListener, { capture: true, passive: true });
-    })()`)
-    try {
-      await renderer.call('Input.dispatchMouseEvent', { type: 'mouseWheel', ...point, deltaX: 0, deltaY: 240 }, RPC_MS)
-      await ui.dom('real wheel scroll moves event workspace', `${$('.main-content')}?.scrollTop > ${geometry.scroll}`)
-      await ui.frames()
-    } catch (error) {
-      const state = `(() => { const c = ${$('.main-content')}; return { scroll: c.scrollTop, max: c.scrollHeight - c.clientHeight, hidden: document.hidden, focus: document.activeElement?.id, wheel: __ocWheelProbe }; })()`
-      const singleWheel = await ui.evaluate(state)
-      let gestureError
-      try {
-        await renderer.call('Input.synthesizeScrollGesture', { ...point, yDistance: -240, gestureSourceType: 'mouse', speed: 800 }, RPC_MS)
-        await ui.frames()
-      } catch (failure) { gestureError = String(failure) }
-      const gesture = await ui.evaluate(state)
-      await ui.evaluate(`${$('.main-content')}.scrollTop = ${geometry.scroll}`)
-      throw new Error(`Wheel delivery diagnosis: ${JSON.stringify({ geometry, singleWheel, gesture, gestureError })}`, { cause: error })
-    } finally {
-      await ui.evaluate(`document.removeEventListener('wheel', __ocWheelListener, true); delete globalThis.__ocWheelListener; delete globalThis.__ocWheelProbe`)
-    }
+    await renderer.call('Input.dispatchMouseEvent', { type: 'mouseWheel', ...point, deltaX: 0, deltaY: 240 }, RPC_MS)
+    await ui.dom('real wheel scroll moves event workspace', `${$('.main-content')}?.scrollTop > ${geometry.scroll}`)
+    await ui.frames()
     const position = `(() => {
       const content = ${$('.main-content')}, bounds = content.getBoundingClientRect();
       const anchor = Array.from(document.querySelectorAll(${JSON.stringify(ROWS)})).find(element => {
