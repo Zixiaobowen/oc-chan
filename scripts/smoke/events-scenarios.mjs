@@ -148,7 +148,10 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     await ui.click(action('next'))
     assert.deepEqual(await page(ui), second)
     await ui.click($('#event-source-filter'))
+    // Close native datalist suggestions without moving input focus before scrolling.
+    await ui.key('Escape', 'Escape', 27)
     const geometry = await ui.evaluate(`(() => { const r = ${$('.main-content')}.getBoundingClientRect(); return {x:r.right-40,y:r.top+100}; })()`)
+    await renderer.call('Input.dispatchMouseEvent', { type: 'mouseMoved', ...geometry }, RPC_MS)
     await renderer.call('Input.dispatchMouseEvent', { type: 'mouseWheel', ...geometry, deltaX: 0, deltaY: 240 }, RPC_MS)
     await ui.dom('real wheel scroll moves event workspace', `${$('.main-content')}?.scrollTop > 0`)
     await ui.frames()
