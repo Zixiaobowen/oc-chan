@@ -1,11 +1,9 @@
-import { execFile } from 'node:child_process'
+import { runBudgetedCommand } from '../resource-io'
+import { isResourceAbort, isResourceCleanupFailure } from '../resource-budget'
 import { homedir } from 'node:os'
 import path from 'node:path'
-import type { ScheduledJob, ScheduleHistory } from '../../shared/types'
+import { HISTORY_PAGE_SIZE, MAX_HISTORY_OFFSET, MAX_HERMES_JOB_ID_LENGTH, type ScheduledJob, type ScheduleHistory } from '../../shared/types'
 import type { ScheduleHistoryProvider } from '../schedule-history'
-
-export const HISTORY_PAGE_SIZE = 25
-export const MAX_HISTORY_OFFSET = 100_000
 export const HISTORY_OUTPUT_BYTES = 128 * 1024
 export const HISTORY_TIMEOUT_MS = 3000
 
@@ -37,7 +35,7 @@ function instant(value) {
 }
 try {
   db = new DatabaseSync(process.argv[1], { readOnly: true });
-  db.exec('PRAGMA hard_heap_limit=8388608; PRAGMA cache_size=-2048; PRAGMA temp_store=FILE; PRAGMA busy_timeout=500; PRAGMA query_only=ON; PRAGMA trusted_schema=OFF;');
+  db.exec('PRAGMA busy_timeout=500; PRAGMA hard_heap_limit=8388608; PRAGMA cache_size=-2048; PRAGMA temp_store=FILE; PRAGMA query_only=ON; PRAGMA trusted_schema=OFF;');
   db.function('history_instant', { deterministic: true }, instant);
   const rows = db.prepare(
     'SELECT substr(id,1,129) AS id, substr(job_id,1,129) AS jobId, substr(status,1,33) AS status, ' +
@@ -75,7 +73,7 @@ try {
 function cancelled(): Error {
   const error = new Error('执行历史读取已取消 / History read cancelled')
   error.name = 'AbortError'
-  return error
+  return Object.assign(error, { code: 'ABORT_ERR' })
 }
 
 function sqliteFailure(code: number): Error {
@@ -93,41 +91,40 @@ export class HermesHistoryProvider implements ScheduleHistoryProvider {
     return job.id.startsWith('hermes-job:')
   }
 
-  read(job: ScheduledJob, offset: number, signal: AbortSignal): Promise<ScheduleHistory> {
-    if (signal.aborted) return Promise.reject(cancelled())
+  async read(job: ScheduledJob, offset: number, signal: AbortSignal): Promise<ScheduleHistory> {
+    if (signal.aborted) throw cancelled()
     const id = job.id.slice('hermes-job:'.length)
-    if (!this.supports(job) || !id || id.length > 128 || id.includes('\0'))
-      return Promise.reject(new Error('Hermes 任务标识无效 / Invalid Hermes job identifier'))
-    if (!Number.isSafeInteger(offset) || offset < 0 || offset > MAX_HISTORY_OFFSET)
-      return Promise.reject(new Error('执行历史页码超出范围 / History offset out of range'))
-    return new Promise((resolve, reject) => {
-      const child = execFile(process.execPath, ['--max-old-space-size=32', '--max-semi-space-size=2',
+    if (!this.supports(job) || !id || id.length > MAX_HERMES_JOB_ID_LENGTH || /[\u0000-\u001f\u007f]/.test(id))
+      throw new Error('Hermes 任务标识无效 / Invalid Hermes job identifier')
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > MAX_HISTORY_OFFSET || offset % HISTORY_PAGE_SIZE !== 0)
+      throw new Error('执行历史页码超出范围 / History offset out of range')
+    let stdout: string
+    try {
+      const result = await runBudgetedCommand('hermes-history', process.execPath, ['--max-old-space-size=32', '--max-semi-space-size=2',
         '-e', readerScript, this.databasePath, id, String(offset), String(HISTORY_PAGE_SIZE)], {
-        timeout: HISTORY_TIMEOUT_MS, killSignal: 'SIGKILL', maxBuffer: HISTORY_OUTPUT_BYTES,
-        encoding: 'utf8', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
-      }, (error, stdout) => {
-        signal.removeEventListener('abort', abort)
-        if (signal.aborted) { reject(cancelled()); return }
-        if (error) {
-          reject(new Error(error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
-            ? '执行历史超过输出预算 / History output budget exceeded'
-            : error.killed ? '执行历史读取超时（3 秒） / History read timed out (3 seconds)'
-              : '执行历史读取失败 / History read failed'))
-          return
-        }
-        try {
-          const result = JSON.parse(stdout) as { sqliteError?: number; entries?: ScheduleHistory['entries']; hasMore?: boolean }
-          if (result.sqliteError !== undefined) throw sqliteFailure(result.sqliteError)
-          if (!Array.isArray(result.entries) || result.entries.length > HISTORY_PAGE_SIZE || typeof result.hasMore !== 'boolean')
-            throw new Error('执行历史响应无效 / Invalid history response')
-          resolve({ jobId: job.id, source: 'hermes', entries: result.entries, offset, limit: HISTORY_PAGE_SIZE,
-            hasMore: result.hasMore, collectedAt: new Date().toISOString() })
-        } catch (failure) {
-          reject(failure instanceof SyntaxError ? new Error('执行历史响应无效 / Invalid history response') : failure)
-        }
-      })
-      const abort = (): void => { child.kill('SIGKILL') }
-      signal.addEventListener('abort', abort, { once: true })
-    })
+        timeout: HISTORY_TIMEOUT_MS, maxBuffer: HISTORY_OUTPUT_BYTES,
+        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
+      }, signal)
+      stdout = result.stdout
+    } catch (error) {
+      if (isResourceCleanupFailure(error) || isResourceAbort(error)) throw error
+      const failure = error as NodeJS.ErrnoException & { killed?: boolean }
+      if (failure.code === 'OC_RESOURCE_LIMIT' || failure.code === 'OC_RESOURCE_QUEUE_TIMEOUT') throw error
+      throw new Error(failure.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
+        ? '执行历史超过输出预算 / History output budget exceeded'
+        : failure.killed ? '执行历史读取超时（3 秒） / History read timed out (3 seconds)'
+          : '执行历史读取失败 / History read failed')
+    }
+    if (signal.aborted) throw cancelled()
+    try {
+      const result = JSON.parse(stdout) as { sqliteError?: number; entries?: ScheduleHistory['entries']; hasMore?: boolean }
+      if (result.sqliteError !== undefined) throw sqliteFailure(result.sqliteError)
+      if (!Array.isArray(result.entries) || result.entries.length > HISTORY_PAGE_SIZE || typeof result.hasMore !== 'boolean')
+        throw new Error('执行历史响应无效 / Invalid history response')
+      return { jobId: job.id, source: 'hermes', entries: result.entries, offset, limit: HISTORY_PAGE_SIZE,
+        hasMore: result.hasMore, collectedAt: new Date().toISOString() }
+    } catch (failure) {
+      throw failure instanceof SyntaxError ? new Error('执行历史响应无效 / Invalid history response') : failure
+    }
   }
 }

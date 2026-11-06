@@ -5,9 +5,12 @@ import os from 'node:os'
 import path from 'node:path'
 import test, { type TestContext } from 'node:test'
 import { promisify } from 'node:util'
-import type { ScheduledJob } from '../../shared/types'
+import { setImmediate } from 'node:timers/promises'
+import { HISTORY_PAGE_SIZE, type ScheduledJob } from '../../shared/types'
 import { ScheduleHistoryReader } from '../schedule-history'
-import { HermesHistoryProvider, HISTORY_PAGE_SIZE } from './hermes-history'
+import { HermesHistoryProvider } from './hermes-history'
+import { collectionResources } from '../resource-budget'
+import { createSchedulesPlugin } from '../plugins/schedules'
 
 const exec = promisify(execFile)
 const job: ScheduledJob = { id: 'hermes-job:daily', name: 'Daily', source: 'Hermes', scope: 'user',
@@ -45,7 +48,7 @@ test('SQLite pages use real instants across offsets, sub-milliseconds and stable
     ('micro-a','daily','completed','2026-11-04T09:00:00.000002Z'),
     ('micro-z','daily','completed','2026-11-04T09:00:00.000001Z');`)
   const before = await readFile(file)
-  const reader = new ScheduleHistoryReader({ hermesDatabasePath: file })
+  const reader = new ScheduleHistoryReader({ providers: [new HermesHistoryProvider(file)] })
   const first = await reader.read(job)
   const second = await reader.read(job, first.limit)
   assert.equal(first.limit, HISTORY_PAGE_SIZE)
@@ -70,7 +73,7 @@ test('execution and delivery outcomes remain separate, with absent starts never 
     ('5','daily','future_status','2026-11-04T08:00:00Z',NULL,NULL,'future_delivery',123),
     ('6','daily','claimed','2026-11-04T08:00:00Z',NULL,NULL,NULL,123),
     ('7','daily','running','2026-11-04T08:00:00Z','2026-11-04T08:00:01Z',NULL,NULL,123);`)
-  const reader = new ScheduleHistoryReader({ hermesDatabasePath: file })
+  const reader = new ScheduleHistoryReader({ providers: [new HermesHistoryProvider(file)] })
   const entries = new Map((await reader.read(job)).entries.map(entry => [entry.id, entry]))
   assert.deepEqual(entries.get('1'), { id: '1', status: 'succeeded', delivery: 'delivered',
     claimedAt: '2026-11-04T08:00:00Z', startedAt: '2026-11-04T08:00:01Z', finishedAt: '2026-11-04T08:01:00Z' })
@@ -92,7 +95,7 @@ test('only the bound task is read; long private bodies never appear in output', 
   await sql(file, `INSERT INTO executions(id,job_id,status,claimed_at,error) VALUES
     ('own','daily','completed','2026-11-04T08:00:00Z','private-body-' || hex(zeroblob(1048576))),
     ('foreign','other','broken','invalid','private-other-body');`)
-  const reader = new ScheduleHistoryReader({ hermesDatabasePath: file })
+  const reader = new ScheduleHistoryReader({ providers: [new HermesHistoryProvider(file)] })
   const result = await reader.read(job)
   assert.equal(result.entries.length, 1)
   assert.equal(result.entries[0].id, 'own')
@@ -104,10 +107,10 @@ test('only the bound task is read; long private bodies never appear in output', 
 
 test('missing, damaged and incompatible databases reject; an empty real history succeeds', async t => {
   const file = await database(t)
-  const reader = new ScheduleHistoryReader({ hermesDatabasePath: file })
+  const reader = new ScheduleHistoryReader({ providers: [new HermesHistoryProvider(file)] })
   assert.deepEqual((await reader.read(job)).entries, [])
   const missing = path.join(path.dirname(file), 'missing.db')
-  await assert.rejects(new ScheduleHistoryReader({ hermesDatabasePath: missing }).read(job), /Cannot open history database/)
+  await assert.rejects(new ScheduleHistoryReader({ providers: [new HermesHistoryProvider(missing)] }).read(job), /Cannot open history database/)
   await assert.rejects(stat(missing), { code: 'ENOENT' })
   await sql(file, 'DROP TABLE executions; CREATE TABLE executions (id TEXT);')
   await assert.rejects(reader.read(job), /Invalid history database or metadata/)
@@ -122,7 +125,7 @@ test('missing, damaged and incompatible databases reject; an empty real history 
 
 test('overlong metadata is rejected instead of silently truncating fields', async t => {
   const file = await database(t)
-  const reader = new ScheduleHistoryReader({ hermesDatabasePath: file })
+  const reader = new ScheduleHistoryReader({ providers: [new HermesHistoryProvider(file)] })
   for (const column of ['id', 'status', 'claimed_at', 'started_at', 'finished_at', 'delivery_outcome']) {
     await sql(file, `DELETE FROM executions;
       INSERT INTO executions(id,job_id,status,claimed_at) VALUES ('own','daily','completed','2026-11-04T08:00:00Z');
@@ -137,7 +140,7 @@ test('overlong metadata is rejected instead of silently truncating fields', asyn
 
 test('invalid calendar values, timezone-free timestamps and reversed time sequences are rejected', async t => {
   const file = await database(t)
-  const reader = new ScheduleHistoryReader({ hermesDatabasePath: file })
+  const reader = new ScheduleHistoryReader({ providers: [new HermesHistoryProvider(file)] })
   for (const [claimed, started, finished] of [
     ['2026-02-30T08:00:00Z', null, null],
     ['2026-11-04T08:00:00', null, null],
@@ -155,11 +158,119 @@ test('invalid calendar values, timezone-free timestamps and reversed time sequen
 
 test('provider cancellation kills its child, settles after close, and permits immediate reuse', async t => {
   const file = await database(t)
+  await sql(file, `WITH RECURSIVE n(x) AS (VALUES(0) UNION ALL SELECT x+1 FROM n WHERE x<1999)
+    INSERT INTO executions(id,job_id,status,claimed_at)
+    SELECT printf('cancel-%04d',x),'daily','completed','2026-11-01T00:00:00Z' FROM n;`)
   const provider = new HermesHistoryProvider(file)
   const controller = new AbortController()
   const pending = assert.rejects(provider.read(job, 0, controller.signal), { name: 'AbortError' })
+  await setImmediate()
+  assert.equal(collectionResources.snapshot().sources.find(source => source.source === 'hermes-history')?.current.commands, 1,
+    '取消前真实 SQLite 读取命令已取得资源槽并启动')
   controller.abort()
   await pending
   await assert.rejects(provider.read(job, 0, controller.signal), { name: 'AbortError' })
+  assert.equal(Object.values(collectionResources.snapshot().global.current).every(value => value === 0), true)
+  assert.equal((await provider.read(job, 0, new AbortController().signal)).entries.length, HISTORY_PAGE_SIZE)
+})
+
+test('history cancelled while waiting for shared commands settles before admission and permits reuse', async t => {
+  const file = await database(t)
+  const provider = new HermesHistoryProvider(file)
+  const { promise: held, resolve: release } = Promise.withResolvers<void>()
+  const { promise: ready, resolve: admitted } = Promise.withResolvers<void>()
+  let active = 0
+  const blockers = Array.from({ length: 8 }, () => collectionResources.run({
+    source: 'history-test-blockers', kind: 'command', stdoutBytes: 1, stderrBytes: 1
+  }, () => {
+    if (++active === 8) admitted()
+    return held
+  }))
+  try {
+    await ready
+    const controller = new AbortController()
+    const cancelled = assert.rejects(provider.read(job, 0, controller.signal), { name: 'AbortError', code: 'ABORT_ERR' })
+    controller.abort()
+    await cancelled
+  } finally {
+    release()
+    await Promise.all(blockers)
+  }
   assert.deepEqual((await provider.read(job, 0, new AbortController().signal)).entries, [])
+})
+
+test('reader close drains a queued SQLite request without waiting for unrelated command owners', async t => {
+  const file = await database(t)
+  const reader = new ScheduleHistoryReader({ providers: [new HermesHistoryProvider(file)] })
+  const held = Promise.withResolvers<void>(), ready = Promise.withResolvers<void>()
+  let active = 0
+  const blockers = Array.from({ length: 8 }, () => collectionResources.run({
+    source: 'history-test-blockers', kind: 'command', stdoutBytes: 1, stderrBytes: 1,
+  }, () => {
+    if (++active === 8) ready.resolve()
+    return held.promise
+  }))
+  try {
+    await ready.promise
+    const request = assert.rejects(reader.read(job), { name: 'AbortError' })
+    assert.equal(collectionResources.snapshot().sources.find(source => source.source === 'hermes-history')?.current.queued, 1)
+    const closing = reader.close()
+    assert.equal(reader.close(), closing)
+    await Promise.all([request, closing])
+    assert.deepEqual(reader.diagnostics(), { closed: true, active: false, pending: false, phase: 'closed' })
+    const resources = collectionResources.snapshot()
+    assert.equal(resources.global.current.commands, 8, '关闭只等自身请求，不能阻塞在其它来源')
+    assert.equal(resources.global.current.queued, 0)
+    const history = resources.sources.find(source => source.source === 'hermes-history')!
+    assert.equal(Object.values(history.current).every(value => value === 0), true)
+    await reader.idle()
+    await assert.rejects(reader.read(job), /History reader closed/)
+  } finally {
+    held.resolve()
+    await Promise.all(blockers)
+    await reader.close()
+  }
+  assert.equal(Object.values(collectionResources.snapshot().global.current).every(value => value === 0), true)
+})
+
+test('reader close waits for a real SQLite helper to close and release its command budget', async t => {
+  const file = await database(t)
+  await sql(file, `WITH RECURSIVE n(x) AS (VALUES(0) UNION ALL SELECT x+1 FROM n WHERE x<1999)
+    INSERT INTO executions(id,job_id,status,claimed_at)
+    SELECT printf('drain-%04d',x),'daily','completed','2026-11-01T00:00:00Z' FROM n;`)
+  const reader = new ScheduleHistoryReader({ providers: [new HermesHistoryProvider(file)] })
+  const request = assert.rejects(reader.read(job), { name: 'AbortError' })
+  await setImmediate()
+  assert.equal(collectionResources.snapshot().sources.find(source => source.source === 'hermes-history')?.current.commands, 1)
+  const closing = reader.close()
+  assert.equal(reader.close(), closing)
+  assert.equal(reader.diagnostics().active, true, '请求取消后仍保留真实在途 provider')
+  await Promise.all([request, closing, reader.idle()])
+  assert.deepEqual(reader.diagnostics(), { closed: true, active: false, pending: false, phase: 'closed' })
+  assert.equal(Object.values(collectionResources.snapshot().global.current).every(value => value === 0), true)
+  await assert.rejects(reader.read(job), /History reader closed/)
+  const replacement = new ScheduleHistoryReader({ providers: [new HermesHistoryProvider(file)] })
+  try { assert.equal((await replacement.read(job)).entries.length, HISTORY_PAGE_SIZE) }
+  finally { await replacement.close() }
+})
+
+test('schedule plugin cancellation drains an actual SQLite helper before a replacement reads', async t => {
+  const file = await database(t)
+  await sql(file, `WITH RECURSIVE n(x) AS (VALUES(0) UNION ALL SELECT x+1 FROM n WHERE x<1999)
+    INSERT INTO executions(id,job_id,status,claimed_at)
+    SELECT printf('plugin-%04d',x),'daily','completed','2026-11-01T00:00:00Z' FROM n;`)
+  const definition = createSchedulesPlugin({ createHistory: () => new ScheduleHistoryReader({ providers: [new HermesHistoryProvider(file)] }) })
+  const lifetime = new AbortController()
+  const plugin = definition.create({ signal: lifetime.signal, resources: collectionResources, publish() {} })
+  t.after(() => plugin.stop())
+  const request = assert.rejects(plugin.history!.read(job), { name: 'AbortError' })
+  await setImmediate()
+  assert.equal(collectionResources.snapshot().sources.find(source => source.source === 'hermes-history')?.current.commands, 1)
+  lifetime.abort()
+  await Promise.all([request, plugin.stop()])
+  assert.equal(Object.values(collectionResources.snapshot().global.current).every(value => value === 0), true)
+  await assert.rejects(plugin.history!.read(job), { name: 'AbortError' })
+  const replacement = definition.create({ signal: new AbortController().signal, resources: collectionResources, publish() {} })
+  try { assert.equal((await replacement.history!.read(job)).entries.length, HISTORY_PAGE_SIZE) }
+  finally { await replacement.stop() }
 })

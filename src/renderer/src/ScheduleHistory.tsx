@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
-import type { ScheduleExecution, ScheduleHistory as HistoryPage } from '../../shared/types'
+import { HISTORY_PAGE_SIZE, MAX_HISTORY_OFFSET, type ScheduleExecution, type ScheduleHistory as HistoryPage } from '../../shared/types'
 import { useI18n } from './i18n'
 
 const executionLabels: Record<ScheduleExecution['status'], [string, string]> = {
@@ -17,21 +17,40 @@ const deliveryLabels: Record<NonNullable<ScheduleExecution['delivery']>, [string
   unknown: ['投递结果未知', 'Delivery result unknown']
 }
 
-export default function ScheduleHistory({ jobId, active }: { jobId: string; active: boolean }) {
+export default function ScheduleHistory({ jobId, enabled, active, offset, onOffsetChange, onSettled }: {
+  jobId: string
+  enabled: boolean
+  active: boolean
+  offset: number
+  onOffsetChange: (offset: number) => void
+  onSettled: () => void
+}) {
   const { language, t } = useI18n()
-  const [offset, setOffset] = useState(0)
   const [attempt, setAttempt] = useState(0)
   const [page, setPage] = useState<HistoryPage | null>(null)
-  const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [phase, setPhase] = useState<'loading' | 'ready' | 'error' | 'inactive'>('loading')
   const [error, setError] = useState<string | null>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
   const pageNavigation = useRef(false)
-  const restoreCachedPage = useRef(false)
+  const restoreCachedPage = useRef<{ jobId: string; offset: number } | null>(null)
+  const currentPage = page?.jobId === jobId ? page : null
 
   useLayoutEffect(() => {
-    if (!active) return
-    if (restoreCachedPage.current) {
-      restoreCachedPage.current = false
+    if (!enabled || !active) {
+      restoreCachedPage.current = null
+      window.monitor?.cancelScheduleHistory()
+      setError(null)
+      setPhase('inactive')
+      return
+    }
+    if (!Number.isInteger(offset) || offset < 0 || offset > MAX_HISTORY_OFFSET || offset % HISTORY_PAGE_SIZE !== 0) {
+      setError('执行历史页码无效：偏移量须为 0–100000 内的 25 倍数 / Invalid history page: offset must be a multiple of 25 between 0 and 100000')
+      setPhase('error')
+      return
+    }
+    const cached = restoreCachedPage.current
+    restoreCachedPage.current = null
+    if (cached?.jobId === jobId && cached.offset === offset) {
       setError(null)
       setPhase('ready')
       return
@@ -47,8 +66,8 @@ export default function ScheduleHistory({ jobId, active }: { jobId: string; acti
     setPhase('loading')
     monitor.scheduleHistory(jobId, offset).then(result => {
       if (!current) return
-      if (result.jobId !== jobId) {
-        setError('执行历史与当前任务不匹配 / History does not match the selected task')
+      if (result.jobId !== jobId || result.offset !== offset) {
+        setError('执行历史与当前任务或页码不匹配，请重试 / History does not match the selected task or page. Please retry')
         setPhase('error')
         return
       }
@@ -63,7 +82,11 @@ export default function ScheduleHistory({ jobId, active }: { jobId: string; acti
       current = false
       monitor.cancelScheduleHistory()
     }
-  }, [jobId, active, offset, attempt])
+  }, [jobId, enabled, active, offset, attempt])
+
+  useLayoutEffect(() => {
+    if (phase !== 'loading') onSettled()
+  }, [phase, page, onSettled])
 
   useLayoutEffect(() => {
     if (phase === 'loading' || !pageNavigation.current) return
@@ -76,11 +99,11 @@ export default function ScheduleHistory({ jobId, active }: { jobId: string; acti
   }, [phase, page])
 
   function changePage(nextOffset: number) {
-    if (phase === 'loading') return
-    restoreCachedPage.current = phase === 'error' && page?.offset === nextOffset
+    if (!enabled || !active || phase === 'loading' || !Number.isInteger(nextOffset) || nextOffset < 0 || nextOffset > MAX_HISTORY_OFFSET || nextOffset % HISTORY_PAGE_SIZE !== 0) return
+    restoreCachedPage.current = phase === 'error' && currentPage?.offset === nextOffset ? { jobId, offset: nextOffset } : null
     pageNavigation.current = true
     headingRef.current?.focus({ preventScroll: true })
-    setOffset(nextOffset)
+    onOffsetChange(nextOffset)
   }
 
   function timestamp(value: string | undefined) {
@@ -89,25 +112,26 @@ export default function ScheduleHistory({ jobId, active }: { jobId: string; acti
     return Number.isFinite(milliseconds) ? new Date(milliseconds).toLocaleString(language) : t('时间未知', 'Time unknown')
   }
 
-  return <section className="schedule-history" aria-labelledby="schedule-history-title" aria-busy={phase === 'loading'}>
+  return <section className="schedule-history" aria-labelledby="schedule-history-title" aria-busy={enabled && active && phase === 'loading'}>
     <div className="schedule-history-heading">
       <h3 id="schedule-history-title" ref={headingRef} tabIndex={-1}>{t('执行历史', 'Execution history')}</h3>
-      <button className="text-button" onClick={() => { if (phase !== 'loading') setAttempt(value => value + 1) }} aria-disabled={phase === 'loading'} aria-label={t('刷新执行历史', 'Refresh execution history')}><RefreshCw size={14} aria-hidden="true" />{phase === 'loading' ? t('读取中', 'Loading') : t('刷新', 'Refresh')}</button>
+      <button className="text-button" onClick={() => { if (enabled && active && phase !== 'loading') setAttempt(value => value + 1) }} aria-disabled={!enabled || !active || phase === 'loading'} aria-label={t('刷新执行历史', 'Refresh execution history')}><RefreshCw size={14} aria-hidden="true" />{enabled && active && phase === 'loading' ? t('读取中', 'Loading') : t('刷新', 'Refresh')}</button>
     </div>
     <p className="schedule-history-note">{t('这里展示数据库中的执行记录。“运行记录”不代表进程仍然存活；当前状态见上方。', 'These are database execution records. “Recorded as running” does not confirm a live process; see the current status above.')}</p>
-    <div role="status" aria-live="polite" aria-atomic="true" className={`schedule-history-feedback${phase === 'loading' && page?.offset === offset && page.entries.length ? ' schedule-history-feedback-retained' : ''}`}>
-      {phase === 'loading' && <p>{t('正在读取执行历史…', 'Loading execution history…')}</p>}
-      {phase === 'error' && <div className="schedule-history-error"><p>{t('执行历史读取失败，请重试。', 'Execution history could not be read. Please retry.')}</p>{error && <p>{error}</p>}</div>}
-      {phase === 'ready' && page?.source === 'unavailable' && <p>{t('该来源不提供逐次执行历史。当前状态与最近退出码不等同于执行记录。', 'This source does not provide per-run execution history. Current status and the last exit code are not execution records.')}</p>}
-      {phase === 'ready' && page?.source === 'hermes' && !page.entries.length && <p>{page.offset ? t('这一页已没有执行记录，可返回上一页。', 'This page has no execution records. Return to the previous page.') : t('尚无执行记录。任务配置和下次计划不代表任务已经执行。', 'No execution records yet. A task configuration or next run time does not mean it has run.')}</p>}
+    {!enabled && <p className="collection-status" role="status">{t('任务采集已停用，执行历史读取已取消。保留的记录不是新读取结果；重新开启任务采集后会重新读取。', 'Schedule collection is disabled and history reads are cancelled. Retained records are from a previous read. Enabling schedule collection reads history again.')}</p>}
+    <div role="status" aria-live="polite" aria-atomic="true" className={`schedule-history-feedback${phase === 'loading' && currentPage?.offset === offset && currentPage.entries.length ? ' schedule-history-feedback-retained' : ''}`}>
+      {enabled && active && phase === 'loading' && <p>{t('正在读取执行历史…', 'Loading execution history…')}</p>}
+      {enabled && phase === 'error' && <div className="schedule-history-error"><p>{t('执行历史读取失败，请重试。', 'Execution history could not be read. Please retry.')}</p>{error && <p>{error}</p>}</div>}
+      {phase === 'ready' && currentPage?.source === 'unavailable' && <p>{t('该来源不提供逐次执行历史。当前状态与最近退出码不等同于执行记录。', 'This source does not provide per-run execution history. Current status and the last exit code are not execution records.')}</p>}
+      {phase === 'ready' && currentPage?.source === 'hermes' && !currentPage.entries.length && <p>{currentPage.offset ? t('这一页已没有执行记录，历史记录可能已变化。可返回上一页或首页。', 'This page has no execution records; the history may have changed. Return to the previous or first page.') : t('尚无执行记录。任务配置和下次计划不代表任务已经执行。', 'No execution records yet. A task configuration or next run time does not mean it has run.')}</p>}
     </div>
-    {phase === 'error' && <button className="button secondary schedule-history-retry" onClick={() => {
+    {enabled && active && phase === 'error' && <button className="button secondary schedule-history-retry" onClick={() => {
       headingRef.current?.focus({ preventScroll: true })
       pageNavigation.current = true
       setAttempt(value => value + 1)
     }}>{t('重试读取', 'Retry')}</button>}
-    {page?.offset === offset && page.source === 'hermes' && page.entries.length > 0 && <ol className="schedule-history-list" start={page.offset + 1}>
-      {page.entries.map(entry => {
+    {currentPage?.offset === offset && currentPage.source === 'hermes' && currentPage.entries.length > 0 && <ol className="schedule-history-list" start={currentPage.offset + 1}>
+      {currentPage.entries.map(entry => {
         const elapsed = entry.startedAt && entry.finishedAt ? Date.parse(entry.finishedAt) - Date.parse(entry.startedAt) : null
         return <li key={entry.id}>
           <div className="schedule-execution-heading"><strong data-result={entry.status}>{t(...executionLabels[entry.status])}</strong><span className="schedule-execution-id" title={entry.id}>{entry.id}</span></div>
@@ -121,13 +145,14 @@ export default function ScheduleHistory({ jobId, active }: { jobId: string; acti
         </li>
       })}
     </ol>}
-    {page && <footer className="schedule-history-footer">
-      <p>{t('采集于', 'Collected at')} {timestamp(page.collectedAt)}</p>
-      {page.source === 'hermes' && <>
-        <p>{page.entries.length ? t(`第 ${page.offset + 1}–${page.offset + page.entries.length} 条 · 每页最多 ${page.limit} 条`, `Records ${page.offset + 1}–${page.offset + page.entries.length} · Up to ${page.limit} per page`) : t(`本页 0 条 · 从第 ${page.offset + 1} 条开始 · 每页最多 ${page.limit} 条`, `0 records · Starting at ${page.offset + 1} · Up to ${page.limit} per page`)}{phase !== 'ready' ? t('（上次读取）', ' (previous read)') : ''}</p>
+    {currentPage && <footer className="schedule-history-footer">
+      <p>{t('采集于', 'Collected at')} {timestamp(currentPage.collectedAt)}</p>
+      {currentPage.source === 'hermes' && <>
+        <p>{currentPage.entries.length ? t(`第 ${currentPage.offset + 1}–${currentPage.offset + currentPage.entries.length} 条 · 每页最多 ${currentPage.limit} 条`, `Records ${currentPage.offset + 1}–${currentPage.offset + currentPage.entries.length} · Up to ${currentPage.limit} per page`) : t(`本页 0 条 · 从第 ${currentPage.offset + 1} 条开始 · 每页最多 ${currentPage.limit} 条`, `0 records · Starting at ${currentPage.offset + 1} · Up to ${currentPage.limit} per page`)}{phase !== 'ready' ? t('（上次读取）', ' (previous read)') : ''}</p>
         <nav className="schedule-history-pagination" aria-label={t('执行历史分页', 'Execution history pages')}>
-          <button className="button secondary" disabled={offset === 0 || phase === 'error' && page.offset !== offset - page.limit} aria-disabled={phase === 'loading'} onClick={() => changePage(Math.max(0, offset - page.limit))}><ChevronLeft size={15} aria-hidden="true" />{t('上一页', 'Previous')}</button>
-          <button className="button secondary" disabled={phase === 'error' ? page.offset !== offset + page.limit : !page.hasMore} aria-disabled={phase === 'loading'} onClick={() => changePage(offset + page.limit)}>{t('下一页', 'Next')}<ChevronRight size={15} aria-hidden="true" /></button>
+          <button className="button secondary" disabled={offset === 0 || phase === 'error' && currentPage.offset !== offset - HISTORY_PAGE_SIZE} aria-disabled={!enabled || !active || phase === 'loading'} onClick={() => changePage(Math.max(0, offset - HISTORY_PAGE_SIZE))}><ChevronLeft size={15} aria-hidden="true" />{t('上一页', 'Previous')}</button>
+          {offset > 0 && phase === 'ready' && !currentPage.entries.length && <button className="button secondary" aria-disabled={!enabled || !active} onClick={() => changePage(0)}>{t('返回首页', 'First page')}</button>}
+          <button className="button secondary" disabled={offset >= MAX_HISTORY_OFFSET || (phase === 'error' ? currentPage.offset !== offset + HISTORY_PAGE_SIZE : !currentPage.hasMore)} aria-disabled={!enabled || !active || phase === 'loading'} onClick={() => changePage(offset + HISTORY_PAGE_SIZE)}>{t('下一页', 'Next')}<ChevronRight size={15} aria-hidden="true" /></button>
         </nav>
       </>}
     </footer>}
