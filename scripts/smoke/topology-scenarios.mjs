@@ -4,7 +4,7 @@ const $ = selector => `document.querySelector(${JSON.stringify(selector)})`
 const mode = value => `Array.from(document.querySelectorAll('.topology-mode button')).find(button => button.textContent === ${JSON.stringify(value)})`
 const floor = '.topology-3d-picker select'
 
-export async function exerciseTopology({ ui, renderer, agent }) {
+export async function exerciseTopology({ ui, renderer, record, agent }) {
   await ui.stage('office-navigation-and-focus', async () => {
     await ui.navigate('本机概览', 'Overview')
     await ui.click($('.agent-preview .entity-button'))
@@ -67,5 +67,31 @@ export async function exerciseTopology({ ui, renderer, agent }) {
   // Existing navigation scenarios exercise React Flow keyboard behavior explicitly.
   await ui.click(mode('2D'))
   await ui.dom('2D is ready for the existing navigation scenarios', `!!${$('.react-flow__node')} && !${$('.topology-3d-webgl')}`)
+  await ui.stage('overview-agent-and-escape-focus', async () => {
+    await ui.navigate('本机概览', 'Overview')
+    await ui.click($('.agent-preview .entity-button'))
+    const inspector = `.agent-inspector[data-agent-id=${JSON.stringify(agent.id)}]`
+    await ui.dom('overview opens the exact Agent', `${$(inspector)}?.querySelector('h2')?.textContent === ${JSON.stringify(agent.name)}`)
+    await ui.dom('Agent source remains explicitly synthetic', `${$(inspector)}?.textContent.includes('Performance fixture (synthetic)')`)
+    await ui.key('Escape', 'Escape', 27)
+    await ui.dom('Agent inspector closes on Escape', `!${$('.agent-inspector')}`)
+    const focused = `document.activeElement === ${$(`.react-flow__node[data-id=${JSON.stringify(agent.id)}]`)}`
+    await ui.dom('Agent focus returns after initial node measurement', focused)
+    await ui.frames()
+    record('agent-focus-after-overview-escape', await ui.evaluate(`(() => {
+      const active = document.activeElement;
+      const expected = ${$(`.react-flow__node[data-id=${JSON.stringify(agent.id)}]`)};
+      return { active: { tag: active?.tagName, class: active?.className, label: active?.getAttribute('aria-label'), id: active?.getAttribute('data-id') },
+        expected: expected && { connected: expected.isConnected, tabIndex: expected.tabIndex, visibility: getComputedStyle(expected).visibility }, focused: ${focused} };
+    })()`))
+    assert.equal(await ui.evaluate(focused), true, 'U-07: focus must survive two frames on the original Agent node')
+    await ui.key('Enter', 'Enter', 13)
+    await ui.dom('returned Agent node remains keyboard operable', `!!${$(inspector)}`)
+    await ui.key('Escape', 'Escape', 27)
+    await ui.dom('Agent focus returns after reopening details', focused)
+    await ui.frames()
+    assert.equal(await ui.evaluate(focused), true, 'U-07: repeated open/close must retain node focus')
+    return { agentId: agent.id, input: 'CDP mouse and Enter/Escape', focusCheckedAfterFrames: 2 }
+  })
   return { settings: { appearance: 'dark' } }
 }

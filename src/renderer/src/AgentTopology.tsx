@@ -42,6 +42,8 @@ interface AgentTopologyProps {
   filterKey: string
   memory: TopologyMemory
   onNodesReady: () => void
+  revealId: string | null
+  onRevealed: () => void
 }
 
 type AgentNodeData = TopologyNode & Record<string, unknown> & {
@@ -198,7 +200,7 @@ function CanvasControls({ onFit, onRelayout, onViewportAction }: { onFit: () => 
   </Panel>
 }
 
-function TopologyCanvas({ graph, pageIndex, selectedId, onSelect, onToggleCollapse, filterKey, memory, onNodesReady }: AgentTopologyProps) {
+function TopologyCanvas({ graph, pageIndex, selectedId, onSelect, onToggleCollapse, filterKey, memory, onNodesReady, revealId, onRevealed }: AgentTopologyProps) {
   const { t } = useI18n()
   const { snapshot: { resolvedTheme, resolvedLanguage, settings } } = useSettings()
   const typographyKey = `${resolvedLanguage}:${settings.textSize}:${settings.uiFont}:${settings.codeFont}`
@@ -321,14 +323,17 @@ function TopologyCanvas({ graph, pageIndex, selectedId, onSelect, onToggleCollap
     })
     nodesRef.current = next
     setNodes(next)
-    if (filterChanged || pageChanged || (!hadNodes.current && graph.nodes.length > 0)) {
+    const explicitTarget = revealId && graph.nodes.some(node => node.agent.id === revealId) ? revealId : null
+    if (explicitTarget || filterChanged || pageChanged || (!hadNodes.current && graph.nodes.length > 0)) {
       const firstMatch = filterKey === UNFILTERED ? undefined : graph.nodes.find(node => !node.contextOnly)
-      fitTarget.current = (pageChanged || !hadNodes.current) && selectedId && graph.nodes.some(node => node.agent.id === selectedId)
-        ? { nodes: [{ id: selectedId }], minZoom: 0.65 }
-        : firstMatch
-          ? { nodes: [{ id: firstMatch.agent.id }], minZoom: 0.65 }
-          : { nodes: initialFocusNodes(graph), minZoom: 0.65 }
+      fitTarget.current = explicitTarget ? { nodes: [{ id: explicitTarget }], minZoom: 0.65 }
+        : (pageChanged || !hadNodes.current) && selectedId && graph.nodes.some(node => node.agent.id === selectedId)
+          ? { nodes: [{ id: selectedId }], minZoom: 0.65 }
+          : firstMatch
+            ? { nodes: [{ id: firstMatch.agent.id }], minZoom: 0.65 }
+            : { nodes: initialFocusNodes(graph), minZoom: 0.65 }
       setFitRequest(request => request + 1)
+      if (explicitTarget) onRevealed()
     } else if (selectedId && selectedId !== lastSelectedId.current && fitRequest !== fittedRequest.current &&
       graph.nodes.some(node => node.agent.id === selectedId)) {
       // Preserve an explicit navigation target while initial measurements finish,
@@ -336,7 +341,7 @@ function TopologyCanvas({ graph, pageIndex, selectedId, onSelect, onToggleCollap
       fitTarget.current = { nodes: [{ id: selectedId }], minZoom: 0.65 }
     }
     if (graph.nodes.length > 0) hadNodes.current = true
-  }, [graph, pageIndex, selectedId, filterKey, onSelect, onToggleCollapse, memory, typographyKey])
+  }, [graph, pageIndex, selectedId, filterKey, onSelect, onToggleCollapse, memory, typographyKey, revealId, onRevealed])
 
   useLayoutEffect(() => {
     if (nodes.length !== graph.nodes.length || nodes.some((node, index) => node.id !== graph.nodes[index].agent.id)) return
