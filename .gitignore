@@ -4,3 +4,4 @@ release/
 .DS_Store
 .impeccable/review/
 resources/tern-navigation/present-window
+.dev-instances/

@@ -7,12 +7,13 @@
   "author": "bowen.sun",
   "license": "UNLICENSED",
   "scripts": {
-    "dev": "npm run build:native && electron-vite dev",
+    "dev": "node scripts/develop.mjs",
+    "dev:window": "node scripts/develop.mjs --window",
     "typecheck": "tsc --noEmit",
     "build:native": "node scripts/build-native.mjs",
     "build": "npm run typecheck && npm run build:native && electron-vite build",
     "start": "electron out/main/index.js",
-    "test": "tsx --test src/main/*.test.ts src/main/collectors/*.test.ts src/renderer/src/agent-topology.test.ts",
+    "test": "tsx --test src/main/*.test.ts src/main/collectors/*.test.ts src/renderer/src/agent-topology*.test.ts",
     "smoke": "tsx scripts/smoke.ts",
     "package": "npm run build && electron-builder --mac dir --publish never",
     "dist": "npm run build && electron-builder --mac dmg zip --publish never"
@@ -29,10 +30,12 @@
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/three": "0.187.0",
     "@vitejs/plugin-react": "^6.0.0",
     "electron": "^45.2.1",
     "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0",
+    "three": "0.187.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
     "vite": "^8.3.5"
@@ -48,7 +51,10 @@
       "package.json"
     ],
     "extraResources": [
-      { "from": "resources/tern-navigation", "to": "tern-navigation" }
+      {
+        "from": "resources/tern-navigation",
+        "to": "tern-navigation"
+      }
     ],
     "mac": {
       "artifactName": "OC-Chan-${version}-mac-${arch}.${ext}",
