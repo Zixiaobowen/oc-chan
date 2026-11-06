@@ -5,6 +5,7 @@ import { useSettings } from './settings'
 import { NativeSelect } from './components'
 import SettingsSaveError from './SettingsSaveError'
 import ThemePicker from './ThemePicker'
+import UpdateSettings from './UpdateSettings'
 import './settings.css'
 
 function Choices<T extends string>({ name, label, value, options, disabled, onChange }: {
@@ -34,6 +35,7 @@ export default function SettingsView() {
   const change = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => { if (!saving) void update({ [key]: value }) }
   return <div className="settings-layout">
     <div className="settings-list" aria-busy={saving}>
+      <UpdateSettings />
       <SettingRow name="appearance" label={t('外观', 'Appearance')}>
         <Choices name="appearance" label={t('外观', 'Appearance')} value={settings.appearance} disabled={saving} onChange={value => change('appearance', value)} options={[
           { value: 'system', label: t('跟随系统', 'System') }, { value: 'light', label: t('浅色', 'Light') }, { value: 'dark', label: t('深色', 'Dark') }

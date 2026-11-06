@@ -28,7 +28,7 @@ npm start
 npm run package
 ```
 
-Apple Silicon 的产物在 `release/mac-arm64/OC Chan.app`，本机安装位置为 `/Applications/OC Chan.app`。已在打包应用及安装后的原生窗口验收；未配置 Developer ID 签名或 Apple 公证。GitHub Release 发布方式见下文。
+Apple Silicon 的产物在 `release/mac-arm64/OC Chan.app`。本地打包默认不签名，适合开发验收；应用内安装更新要求 Developer ID 签名版本，发布门槛见下文。本次功能的实际验证与未覆盖项记录在 `docs/codex-handoffs/2026-11-05-app-updates.md`。
 
 构建可下载的 DMG 安装镜像与 ZIP 应用压缩包：
 
@@ -49,7 +49,7 @@ npm run dist
 - `oc-chan-macos-arm64-<运行编号>`：Apple Silicon。
 - `oc-chan-macos-x64-<运行编号>`：Intel。
 
-每份产物包含 `.dmg`、`.zip` 和 `SHA256SUMS.txt`，保留 30 天。下载 Actions 产物并解压外层 ZIP 后，在产物目录运行 `shasum -a 256 -c SHA256SUMS.txt` 校验。随后打开 DMG，将应用拖入 Applications；也可以解压应用 ZIP。应用 ZIP 保留 `.app` 内的可执行权限和符号链接。
+每份产物包含 `.dmg`、`.zip`、对应更新频道的 `*-mac.yml` 和 `SHA256SUMS.txt`，保留 30 天。下载 Actions 产物并解压外层 ZIP 后，在产物目录运行 `shasum -a 256 -c SHA256SUMS.txt` 校验。随后打开 DMG，将应用拖入 Applications；也可以解压应用 ZIP。应用 ZIP 保留 `.app` 内的可执行权限和符号链接。
 
 也可通过已登录的 GitHub CLI 下载指定运行的全部产物：
 
@@ -57,24 +57,40 @@ npm run dist
 gh run download <运行ID> --repo Zixiaobowen/oc-chan --dir downloads
 ```
 
-当前仓库为私有仓库，下载需有仓库访问权限；macOS 构建消耗账号的 Actions 额度。未配置 Developer ID 签名和 Apple 公证，首次打开可能受到 macOS Gatekeeper 限制。构建作业只有 `contents: read`，仅发布作业使用 `contents: write`；均使用 GitHub 自动提供的 `GITHUB_TOKEN`，无需额外 Secrets。
+源码仓库和 Actions 产物保持私有。面向客户端的安装包使用独立公开仓库 `Zixiaobowen/oc-chan-releases`，不在客户端内置 GitHub 凭据；发布说明不包含私有源码提交信息。普通分支、PR 和手动构建不签名、不发布；缺少签名或公证凭据的标签构建会明确失败，不发布不能原地更新的安装包。
 
-### 发布 GitHub Release
+### 发布签名更新
 
-推送 `v*` 标签会在两种架构都构建成功后创建 [GitHub Release](https://github.com/Zixiaobowen/oc-chan/releases)，自动生成发布说明，上传两种架构的 DMG、ZIP 及合并后的 `SHA256SUMS.txt`。标签必须严格等于 `v` 加 `package.json` 的版本，例如版本 `0.1.0` 对应 `v0.1.0`；不匹配会在构建前失败。
+先创建并初始化公开分发仓库 `Zixiaobowen/oc-chan-releases` 的默认分支。在私有源码仓库的 Actions Secrets 中配置以下项目；不要把证书、密码或令牌提交进仓库：
 
-首次发布当前 `0.1.0`，先确保发布工作流及待发布代码已经合入并推送 `master`，再在对应提交上执行：
+| Secret | 用途 |
+| --- | --- |
+| `CSC_LINK` | Developer ID Application 的 `.p12` 证书，包含私钥；electron-builder 支持 Base64 内容 |
+| `CSC_KEY_PASSWORD` | `.p12` 导出密码 |
+| `APPLE_ID` | 用于公证的 Apple 开发者账号 |
+| `APPLE_APP_SPECIFIC_PASSWORD` | Apple 应用专用密码 |
+| `APPLE_TEAM_ID` | 10 位 Apple Team ID |
+| `UPDATE_RELEASE_TOKEN` | 仅授予公开分发仓库 Contents 写权限的发布令牌 |
+
+标签必须严格等于 `v` 加 `package.json` 的版本。确认源码和锁文件已提交到要发布的提交后，推送相应版本标签。版本号必须递增，已发布版本不覆盖。
 
 ```sh
+# 示例；使用实际尚未发布的版本。
 git tag -a v0.1.0 -m "OC Chan v0.1.0"
 git push origin v0.1.0
 ```
 
-后续在干净的工作区中用 `npm version patch`、`npm version minor` 或明确版本更新 `package.json` 和锁文件，该命令同时创建版本提交和标签；随后推送提交及对应标签。预发布版本如 `0.2.0-beta.1` 使用标签 `v0.2.0-beta.1`，Release 自动标记为预发布。
+标签流水线在两种原生架构上强制签名、公证，并用 `codesign`、`stapler`、`spctl` 验证应用与嵌入的 Swift helper。任一架构失败都不会发布。发布作业逐一核对版本、架构、文件大小、SHA-512 和 SHA-256，再将两份元数据合并成一份含四个安装文件的 `latest-mac.yml`。先创建草稿并上传全部六个附件，验证上传完整后才公开。已有同名 Release 或中断留下的草稿会阻止覆盖，应先检查失败原因。
 
-发布作业只读取当前运行的两份架构产物，合并后重新验证 SHA-256。任一架构缺包、校验失败或构建失败都不会发布。GitHub CLI 上传附件后才公开 Release；同名 Release 已存在时失败，不覆盖已有附件。上传中断留下草稿时，应先检查草稿与失败日志，不能直接重推同名标签来覆盖。
+稳定版更新源只消费 `latest-mac.yml`。预发布版本（如 `0.2.0-beta.1`）生成 `beta-mac.yml` 并标记为预发布，不会推送给稳定版客户端。`npm run dist` 始终使用 `publish: never`；真正发布仅由匹配版本的标签推送触发。跨仓库发布使用专用 Token，不使用私有源码仓库的 `GITHUB_TOKEN`。
 
-普通分支推送、PR 和手动运行只生成 Actions Artifacts；即使手动选择标签，也不会发布。正常版本发布由标签推送触发，失败后可重跑该次标签工作流。`npm run dist` 继续只负责打包，发布统一由独立作业完成。Release 附件不受 Actions Artifacts 的 30 天保留期限制。
+### 应用内更新
+
+签名的 macOS 安装版启动 30 秒后检查新版，之后每 6 小时检查，也可在设置页手动检查。手动检查会重置下次自动检查时间，避免启动定时器覆盖刚显示的结果或错误。发现新版时显示提示，由用户点击下载；下载完成后点击“重启并安装”，原生 Squirrel.Mac 验证应用签名并替换、重新启动应用。普通退出不会安装，并会清理临时下载包。已有未包含更新功能的旧版，需要先手动安装一个签名的新版本，之后才能验证原地升级。
+
+更新插件只接受固定公开源，跟随 HTTPS 的 GitHub 发布域名跳转；无远程上报和内置访问令牌。元数据限 64 KiB，ZIP 限 512 MiB，下载流式写盘并验证精确大小与 SHA-512，空间不足时在下载前拒绝。一次只执行一个检查、下载或安装，检查限时 30 秒、下载 15 分钟、原生交接 120 秒；取消和退出会终止请求、清理临时文件及监听器。常规进度每 250ms 节流，完成时立即推送最终状态。错误保留在更新设置中，不能通过重启或忽略校验伪装成功。
+
+开发模式、非 macOS 及未签名安装包显示明确禁用原因。当前维护者尚无 Apple 开发者账号，真实签名、公证、公开版本发布与“重启后版本号变化”尚未验收；本地下载测试不能代替这些步骤。官方依据：[Electron autoUpdater](https://www.electronjs.org/docs/latest/api/auto-updater)、[electron-builder 更新元数据](https://www.electron.build/v26/features/auto-update/)，核对日期 2026-11-05。
 
 ## 功能与统计口径
 
@@ -145,11 +161,12 @@ Hermes 执行数据库通过 Electron 自带 SQLite 在独立、只读的短时�
 - 界面字体：系统默认、PingFang SC、Helvetica Neue。
 - 代码字体：系统等宽、Menlo、Monaco，用于路径、PID 与代码等宽内容。
 - 点击托盘图标：打开菜单栏下的小面板，或恢复并聚焦主窗口。右键菜单始终提供打开主界面和退出。
+- 菜单栏标志：使用 `resources/brand/oc-chan-mono.svg` 对应的 OC 单色品牌图形，22 × 18 点，提供 1× / 2× 位图表示；作为 macOS Template Image 适配系统菜单栏背景。
 - 托盘面板：默认同时显示 Agent 与任务、CPU、内存、磁盘和网络的摘要；展开“显示内容”，可用复选框自由组合。每项指标可独立展开详情，多个详情可以同时打开；CPU／内存显示短时趋势及各自前五进程，内存有分项，磁盘显示数据卷容量，网络显示上下行趋势和实际接口名。组合保存在当前应用 profile 的本地存储中，关闭再打开、重载和重启后沿用；存储失败或无效组合会明确提示。折叠时不创建图表和进程榜；内容独立滚动，底部“打开主界面”固定可达。隐藏时停止面板数据订阅，重新显示时获取最新快照；后台采样继续。
 - 显示程序坞：控制 macOS Dock 图标；关闭主窗口后仍在菜单栏运行，可重新打开。
 - 防止休眠：运行期间阻止空闲休眠，关闭设置或退出应用时释放。不会阻止屏幕熄灭、合盖或手动休眠。
 
-常规窗口按“设置名称 + 控件”排列；设置内容宽度不超过 560px 时，每项改为名称在上、控件在下，九项仍在同一页纵向滚动。主题卡片随设置容器宽度从三列调整为两列或一列。放大后主导航收进菜单，设置控件不会被替换或隐藏，焦点保持在原控件。
+常规窗口按“设置名称 + 控件”排列；设置内容宽度不超过 560px 时，每项改为名称在上、控件在下，应用更新和偏好仍在同一页纵向滚动。主题卡片随设置容器宽度从三列调整为两列或一列。放大后主导航收进菜单，设置控件不会被替换或隐藏，焦点保持在原控件。
 
 Agent 活跃状态、任务范围／状态和两项字体设置的下拉框使用统一箭头留白；中英文、深浅色及最小窗口 200% 缩放下保持箭头居中与文字避让，仍使用原生选择菜单。
 
@@ -164,6 +181,7 @@ Agent 活跃状态、任务范围／状态和两项字体设置的下拉框使�
 - `src/main/monitor.ts`：独立发现与采样、错误管理、分区更新和去重。
 - `src/main/tern-navigation.ts`、`tern-present.swift`、`resources/tern-navigation/plugin/`：会话校验、原生窗口显示和 Tern 窗口标识；`scripts/build-native.mjs` 负责编译，打包时携带可执行文件与插件。
 - `src/main/settings.ts`、`desktop-settings.ts`、`src/shared/settings.ts`：偏好校验、持久化、原生主题 / Dock / 防休眠效果与共享契约。
+- `src/shared/plugins.ts`、`src/main/plugins/`、`src/shared/updates.ts`：插件生命周期、受限更新源、流式下载、原生安装交接与共享状态契约。
 - `src/preload/`、`src/shared/types.ts`：有限 IPC 接口与监控契约。
 - `src/renderer/src/`：概览、Agent、调度、系统、来源、设置及托盘视图。
 
@@ -178,6 +196,8 @@ node --import tsx --test src/main/collectors/hermes-runtime.test.ts
 node --import tsx --test src/renderer/src/agent-topology.test.ts
 node --import tsx --test src/main/live-agents.test.ts src/main/monitor.test.ts
 node --import tsx --test src/main/tern-navigation.test.ts
+node --import tsx --test src/main/app-updates.test.ts
+npm run test:release
 node --import tsx --test src/main/settings.test.ts
 npm run smoke
 ```

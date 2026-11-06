@@ -5,6 +5,7 @@ import AgentsView, { AgentTable } from './AgentsView'
 import SchedulesView, { ScheduleTable } from './SchedulesView'
 import SystemView from './SystemView'
 import SettingsView from './SettingsView'
+import { UpdateNotice } from './UpdateSettings'
 import { useI18n } from './i18n'
 import { bytes, CollectorError, duration, Empty, Meter, SectionHeader, Sources, time } from './components'
 
@@ -37,6 +38,7 @@ export default function App() {
   const [bridgeError, setBridgeError] = useState<string | null>(null)
   const [visible, setVisible] = useState(!document.hidden)
   const content = useRef<HTMLElement>(null)
+  const focusUpdates = useRef(false)
   useEffect(() => {
     const media = window.matchMedia('(max-width: 760px)')
     const change = () => {
@@ -92,7 +94,14 @@ export default function App() {
     document.addEventListener('visibilitychange', updateVisibility)
     return () => document.removeEventListener('visibilitychange', updateVisibility)
   }, [])
-  useEffect(() => { content.current?.scrollTo({ top: 0 }) }, [page])
+  useEffect(() => {
+    if (page === 'settings' && focusUpdates.current) {
+      focusUpdates.current = false
+      const heading = content.current?.querySelector<HTMLElement>('#app-updates-title')
+      heading?.focus({ preventScroll: true })
+      heading?.scrollIntoView({ block: 'start' })
+    } else content.current?.scrollTo({ top: 0 })
+  }, [page])
 
   async function refresh() {
     if (!window.monitor) return
@@ -151,6 +160,7 @@ export default function App() {
         <button className="button secondary" onClick={() => setPausedAt(value => value === null ? Date.now() : null)} aria-pressed={paused}>{paused ? <Play size={15} /> : <Pause size={15} />}{paused ? t('继续显示', 'Resume display') : t('暂停显示', 'Pause display')}</button>
       </div>}</div>
       {page === 'settings' ? <SettingsView /> : <>
+      <UpdateNotice onOpen={() => { focusUpdates.current = true; navigate('settings') }} />
       {paused && <div className="pause-note"><Pause size={14} />{t('当前显示已冻结；后台继续采集。点击“继续”查看最新状态。', 'The display is frozen; collection continues. Resume to see the latest state.')}</div>}
       <CollectorError error={bridgeError} onRetry={() => void refresh()} />
       {(page === 'overview' || page === 'agents') && <CollectorError error={agentError} onRetry={() => void refresh()} />}
