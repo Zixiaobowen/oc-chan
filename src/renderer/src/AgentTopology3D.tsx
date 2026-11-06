@@ -18,9 +18,12 @@ interface Props {
   evidenceCurrent: boolean
   liveIds: ReadonlySet<string>
   session: Topology3DSession
+  revealId: string | null
+  onRevealed(): void
+  onNodesReady(): void
 }
 
-export default memo(function AgentTopology3D({ graph, selectedId, onSelect, onToggleCollapse, filtering, evidenceCurrent, liveIds, session }: Props) {
+export default memo(function AgentTopology3D({ graph, selectedId, onSelect, onToggleCollapse, filtering, evidenceCurrent, liveIds, session, revealId, onRevealed, onNodesReady }: Props) {
   const { t } = useI18n()
   const { snapshot: { resolvedTheme, settings } } = useSettings()
   const host = useRef<HTMLDivElement>(null)
@@ -33,8 +36,8 @@ export default memo(function AgentTopology3D({ graph, selectedId, onSelect, onTo
   const [navigationError, setNavigationError] = useState<string | null>(null)
   const [picked, setPicked] = useState('')
   const [selectedFloorId, setSelectedFloorId] = useState<string | null>(session.floorId)
-  const latest = useRef({ graph, selectedId, onSelect, liveIds, t, evidenceCurrent, floorId: selectedFloorId })
-  latest.current = { graph, selectedId, onSelect, liveIds, t, evidenceCurrent, floorId: selectedFloorId }
+  const latest = useRef({ graph, selectedId, onSelect, liveIds, t, evidenceCurrent, floorId: selectedFloorId, revealId, onRevealed, onNodesReady })
+  latest.current = { graph, selectedId, onSelect, liveIds, t, evidenceCurrent, floorId: selectedFloorId, revealId, onRevealed, onNodesReady }
   const overBudget = graph.nodes.length > MAX_3D_NODES || graph.edges.length > MAX_3D_EDGES
   const { floors, layoutError } = useMemo(() => {
     if (overBudget) return { floors: [], layoutError: null }
@@ -61,11 +64,13 @@ export default memo(function AgentTopology3D({ graph, selectedId, onSelect, onTo
         floor: id => selectFloor(id),
         menu: (agentId, x, y, trigger) => setMenu({ agentId, x, y, trigger }),
         error: message => setFailure(message),
+        ready: () => latest.current.onNodesReady(),
       })
       scene.current = owned
       const current = latest.current
       owned.update(current.graph, current.selectedId, current.liveIds, current.t, current.evidenceCurrent)
       owned.selectFloor(current.floorId)
+      revealRequested()
       setLoading(false)
     }).catch(error => {
       owned?.dispose()
@@ -81,8 +86,9 @@ export default memo(function AgentTopology3D({ graph, selectedId, onSelect, onTo
       const current = latest.current
       scene.current.update(graph, selectedId, liveIds, t, evidenceCurrent)
       scene.current.selectFloor(current.floorId)
+      revealRequested()
     } catch (error) { setFailure(error instanceof Error ? error.message : String(error)) }
-  }, [graph, selectedId, liveIds, t, resolvedTheme, settings.textSize, settings.uiFont, evidenceCurrent, overBudget, layoutError])
+  }, [graph, selectedId, liveIds, t, resolvedTheme, settings.textSize, settings.uiFont, evidenceCurrent, overBudget, layoutError, revealId, onNodesReady])
 
   function selectFloor(id: string | null) {
     setSelectedFloorId(id)
@@ -90,6 +96,15 @@ export default memo(function AgentTopology3D({ graph, selectedId, onSelect, onTo
     try { scene.current?.selectFloor(id) }
     catch (error) { setFailure(error instanceof Error ? error.message : String(error)) }
     session.floorId = id
+  }
+
+  function revealRequested() {
+    const current = latest.current
+    const node = current.graph.nodes.find(item => item.agent.id === current.revealId)
+    if (!node || !scene.current) return
+    selectFloor(getAgentFloorId(node.agent))
+    scene.current.focus(node.agent.id)
+    current.onRevealed()
   }
 
   function selectEmployee(id: string, focus: boolean) {

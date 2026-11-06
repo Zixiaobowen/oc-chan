@@ -6,6 +6,7 @@ import path from 'node:path'
 import test, { type TestContext } from 'node:test'
 import { promisify } from 'node:util'
 import { collectHermesRuntime, hermesJobStatus, MAX_METADATA_BYTES, readScheduleMetadata, type HermesJobMetadata } from './hermes-runtime'
+import { collectionResources } from '../resource-budget'
 
 const exec = promisify(execFile)
 const now = Date.parse('2026-11-04T08:00:00Z')
@@ -123,18 +124,53 @@ test('query escapes job identifiers and never includes other jobs', { skip: proc
   assert.equal(stdout.trim(), '1')
 })
 
-test('execution and task budgets report incomplete status instead of silently dropping records', { skip: process.platform !== 'darwin' }, async t => {
+test('latest state and result stay identical with 4096, 4097 and 100000 older executions', { skip: process.platform !== 'darwin' }, async t => {
   const file = await database(t)
-  await exec('/usr/bin/sqlite3', [file, `WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<4097)
-    INSERT INTO executions SELECT CAST(x AS TEXT),'daily','completed',1,NULL,'2026-11-04T08:00:00Z',NULL,NULL FROM n;`])
-  const over = await collectHermesRuntime([scheduled], file)
-  assert.equal(over.statuses.get('daily')?.state, 'unknown')
-  assert.match(over.source.detail, /4096/)
+  await exec('/usr/bin/sqlite3', [file, `INSERT INTO executions VALUES
+    ('latest','daily','failed',1,NULL,'2026-11-04T08:00:00Z',NULL,'2026-11-04T08:01:00Z');`])
+  let previousCount = 0
+  for (const count of [4096, 4097, 100000]) {
+    await exec('/usr/bin/sqlite3', [file, `WITH RECURSIVE n(x) AS (VALUES(${previousCount + 1}) UNION ALL SELECT x+1 FROM n WHERE x<${count})
+      INSERT INTO executions SELECT CAST(x AS TEXT),'daily','completed',1,NULL,'2026-01-01T00:00:00Z',NULL,'2026-01-01T00:00:01Z' FROM n;`])
+    const result = await collectHermesRuntime([scheduled], file)
+    assert.equal(result.source.state, 'ok', result.source.detail)
+    assert.deepEqual(result.statuses.get('daily'), { state: 'waiting', lastRun: { result: 'failed', at: '2026-11-04T08:01:00.000Z' } })
+    previousCount = count
+  }
+})
+
+test('task budget reports incomplete status instead of silently dropping tasks', { skip: process.platform !== 'darwin' }, async t => {
+  const file = await database(t)
   const jobs = Array.from({ length: 257 }, (_, index) => ({ ...scheduled, id: String(index) }))
   const crowded = await collectHermesRuntime(jobs, file)
   assert.equal(crowded.statuses.size, 257)
   assert([...crowded.statuses.values()].every(job => job.state === 'unknown'))
   assert.match(crowded.source.detail, /256/)
+})
+
+test('latest evidence preserves milliseconds, deterministic ties and isolation between jobs', { skip: process.platform !== 'darwin' }, async t => {
+  const file = await database(t)
+  await exec('/usr/bin/sqlite3', [file, `INSERT INTO executions VALUES
+    ('older','daily','completed',1,NULL,'2026-11-04T16:00:00.000999+08:00',NULL,NULL),
+    ('b','daily','failed',1,NULL,'2026-11-04T08:00:00.001Z',NULL,'2026-11-04T08:01:00Z'),
+    ('a','daily','completed',1,NULL,'2026-11-04T08:00:00.001Z',NULL,NULL),
+    ('utc','offset','completed',1,NULL,'2026-11-04T08:00:00Z',NULL,NULL),
+    ('offset','offset','failed',1,NULL,'2026-11-04T16:00:00+08:00',NULL,'2026-11-04T08:02:00Z'),
+    ('other','other','claimed',1,NULL,'2026-11-04T09:00:00Z',NULL,NULL);`])
+  const result = await collectHermesRuntime([scheduled, { ...scheduled, id: 'offset' }, { ...scheduled, id: 'other', fireClaimAt: new Date().toISOString() }], file)
+  assert.deepEqual(result.statuses.get('daily')?.lastRun, { result: 'failed', at: '2026-11-04T08:01:00.000Z' })
+  assert.deepEqual(result.statuses.get('offset')?.lastRun, { result: 'failed', at: '2026-11-04T08:02:00.000Z' })
+  assert.equal(result.statuses.get('other')?.stateReason, 'hermes-dispatching')
+})
+
+test('invalid historical ordering evidence remains explicitly unavailable', { skip: process.platform !== 'darwin' }, async t => {
+  const file = await database(t)
+  await exec('/usr/bin/sqlite3', [file, `INSERT INTO executions VALUES
+    ('invalid','daily','completed',1,NULL,'invalid',NULL,NULL),
+    ('latest','daily','completed',1,NULL,'2026-11-04T08:00:00Z',NULL,NULL);`])
+  const result = await collectHermesRuntime([scheduled], file)
+  assert.equal(result.source.state, 'partial')
+  assert.equal(result.statuses.get('daily')?.stateReason, 'hermes-read-failed')
 })
 
 test('new terminal executions replace older metadata results without losing same-run delivery failures', () => {
@@ -166,4 +202,56 @@ test('metadata rejects oversized input before reading and preserves parse errors
   await assert.rejects(readScheduleMetadata(file), /1 MiB/)
   await writeFile(file, '{"jobs":')
   await assert.rejects(readScheduleMetadata(file), SyntaxError)
+})
+
+test('metadata queue cancellation precedes opening and releases the pending request', async t => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'oc-hermes-metadata-queue-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  const file = path.join(dir, 'jobs.json')
+  const { promise: held, resolve: release } = Promise.withResolvers<void>()
+  const { promise: ready, resolve: admitted } = Promise.withResolvers<void>()
+  let active = 0
+  const blockers = Array.from({ length: 8 }, () => collectionResources.run({
+    source: 'metadata-test-blockers', kind: 'file', bytes: 0
+  }, () => {
+    if (++active === 8) admitted()
+    return held
+  }))
+  try {
+    await ready
+    const controller = new AbortController()
+    const cancelled = assert.rejects(readScheduleMetadata(file, controller.signal), { name: 'AbortError', code: 'ABORT_ERR' })
+    controller.abort()
+    await cancelled
+  } finally {
+    release()
+    await Promise.all(blockers)
+  }
+  await assert.rejects(readScheduleMetadata(file), { code: 'ENOENT' })
+  await writeFile(file, '{"jobs":[]}')
+  assert.deepEqual(await readScheduleMetadata(file), { jobs: [] })
+})
+
+test('named pipes and directories fail before reads and return their global slots', { skip: process.platform !== 'darwin' }, async t => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'oc-hermes-nonregular-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  const fifo = path.join(dir, 'jobs.json')
+  await exec('/usr/bin/mkfifo', [fifo])
+  // An OS FIFO can block libuv's open forever; a separate process bounds failure of this regression.
+  const code = `import assert from 'node:assert/strict';
+    import {readScheduleMetadata,ReadFailure} from ${JSON.stringify(new URL('./hermes-runtime.ts', import.meta.url).href)};
+    import {SessionActivityReader} from ${JSON.stringify(new URL('./agent-activity.ts', import.meta.url).href)};
+    import {collectionResources} from ${JSON.stringify(new URL('../resource-budget.ts', import.meta.url).href)};
+    for(const input of process.argv.slice(1)) {
+      await assert.rejects(readScheduleMetadata(input), ReadFailure);
+      const activity=await new SessionActivityReader().read(input);
+      assert.equal(activity.activity,undefined);
+      assert.ok(activity.issues.some(issue=>issue.includes('NOT_REGULAR_FILE')));
+    }
+    const current=collectionResources.snapshot().global.current;
+    console.log(JSON.stringify({files:current.files,bytes:current.fileBytes}));`
+  const { stdout } = await exec(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', code, fifo, dir], {
+    timeout: 2000, killSignal: 'SIGKILL', maxBuffer: 16 * 1024
+  })
+  assert.deepEqual(JSON.parse(stdout), { files: 0, bytes: 0 })
 })

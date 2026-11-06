@@ -5,3 +5,5 @@ release/
 .impeccable/review/
 resources/tern-navigation/present-window
 .dev-instances/
+resources/liquid-glass/*.node
+resources/notification-permission/*.node
