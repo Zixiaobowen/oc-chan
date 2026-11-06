@@ -14,21 +14,26 @@
     "start": "electron out/main/index.js",
     "test": "tsx --test src/main/*.test.ts src/main/collectors/*.test.ts src/renderer/src/agent-topology.test.ts",
     "smoke": "tsx scripts/smoke.ts",
-    "package": "npm run build && electron-builder --mac dir --publish never",
-    "dist": "npm run build && electron-builder --mac dmg zip --publish never"
+    "package": "npm run build && node scripts/dist.mjs --dir",
+    "dist": "npm run build && node scripts/dist.mjs",
+    "test:release": "node --test scripts/prepare-release.test.mjs"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.1.3",
     "@xyflow/react": "^12.12.0",
+    "js-yaml": "^4.3.2",
     "lucide-react": "^0.468.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "semver": "^7.8.6",
     "systeminformation": "^5.33.19"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/semver": "^7.8.0",
     "@vitejs/plugin-react": "^6.0.0",
     "electron": "^45.2.1",
     "electron-builder": "^26.18.0",
@@ -48,14 +53,27 @@
       "package.json"
     ],
     "extraResources": [
-      { "from": "resources/tern-navigation", "to": "tern-navigation" }
+      {
+        "from": "resources/tern-navigation",
+        "to": "tern-navigation"
+      }
     ],
     "mac": {
       "artifactName": "OC-Chan-${version}-mac-${arch}.${ext}",
       "category": "public.app-category.developer-tools",
-      "identity": null,
-      "icon": "resources/icon.icns"
+      "icon": "resources/icon.icns",
+      "type": "distribution",
+      "hardenedRuntime": true,
+      "binaries": ["Resources/tern-navigation/present-window"]
     },
+    "publish": {
+      "provider": "github",
+      "owner": "Zixiaobowen",
+      "repo": "oc-chan-releases",
+      "releaseType": "draft",
+      "publishAutoUpdate": true
+    },
+    "generateUpdatesFilesForAllChannels": false,
     "asar": true
   }
 }

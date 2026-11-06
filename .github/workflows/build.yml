@@ -19,7 +19,7 @@ jobs:
   build:
     name: macOS ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -54,10 +54,24 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      - name: Verify release version
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Preflight signed release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          UPDATE_RELEASE_TOKEN: ${{ secrets.UPDATE_RELEASE_TOKEN }}
         run: |
-          node -e 'const expected = `v${require("./package.json").version}`; if (process.env.GITHUB_REF_NAME !== expected) throw new Error(`Release tag ${process.env.GITHUB_REF_NAME} must match package version ${expected}`)'
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs'
+          const version = JSON.parse(readFileSync('package.json', 'utf8')).version
+          if (process.env.GITHUB_REF_NAME !== `v${version}`) throw new Error(`Release tag must match package version v${version}`)
+          const required = ['CSC_LINK', 'CSC_KEY_PASSWORD', 'APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID', 'UPDATE_RELEASE_TOKEN']
+          const missing = required.filter(name => !process.env[name]?.trim())
+          if (missing.length) throw new Error(`Missing required release secrets: ${missing.join(', ')}`)
+          NODE
 
       - name: Verify native toolchain
         run: |
@@ -67,15 +81,45 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Build DMG and ZIP
+      - name: Check release preparation boundaries
+        if: matrix.arch == 'arm64'
+        run: npm run test:release
+
+      - name: Build unsigned DMG and ZIP
+        if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
+        run: npm run dist -- "--$TARGET_ARCH"
+
+      - name: Build signed and notarized DMG and ZIP
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          UPDATE_RELEASE_TOKEN: ${{ secrets.UPDATE_RELEASE_TOKEN }}
         run: npm run dist -- "--$TARGET_ARCH"
 
       - name: Verify packaged application
         run: |
           test -f "$APP_DIRECTORY/Contents/Resources/app.asar"
+          test -f "$APP_DIRECTORY/Contents/Resources/app-update.yml"
           test -x "$APP_DIRECTORY/Contents/Resources/tern-navigation/present-window"
           lipo "$APP_DIRECTORY/Contents/MacOS/OC Chan" -verify_arch "$MACHO_ARCH"
           lipo "$APP_DIRECTORY/Contents/Resources/tern-navigation/present-window" -verify_arch "$MACHO_ARCH"
+          node --input-type=module -e 'import { access } from "node:fs/promises"; import { packageReleaseInfo } from "./scripts/release-config.mjs"; await access(`release/${packageReleaseInfo().metadataName}`)'
+
+      - name: Verify Developer ID signature and notarization
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          requirement="anchor apple generic and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = \"$APPLE_TEAM_ID\""
+          codesign --verify --deep --strict --verbose=2 "$APP_DIRECTORY"
+          codesign --verify --strict --verbose=2 -R "$requirement" "$APP_DIRECTORY"
+          codesign --verify --strict --verbose=2 -R "$requirement" "$APP_DIRECTORY/Contents/Resources/tern-navigation/present-window"
+          xcrun stapler validate "$APP_DIRECTORY"
+          spctl --assess --type execute --verbose=2 "$APP_DIRECTORY"
 
       - name: Generate and verify checksums
         working-directory: release
@@ -90,19 +134,18 @@ jobs:
           path: |
             release/*.dmg
             release/*.zip
+            release/*-mac.yml
             release/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
 
   release:
-    name: Publish GitHub Release
+    name: Publish public update release
     needs: build
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: write
+    timeout-minutes: 15
     defaults:
       run:
         shell: bash
@@ -110,35 +153,32 @@ jobs:
       RELEASE_TAG: ${{ github.ref_name }}
 
     steps:
-      - name: Download build artifacts
+      - name: Check out release preparation scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install release script dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Download separate architecture artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: oc-chan-macos-*-${{ github.run_number }}
           path: artifacts
           merge-multiple: false
 
-      - name: Prepare and verify release assets
-        run: |
-          mkdir release-assets
-          for arch in arm64 x64; do
-            artifact="artifacts/oc-chan-macos-$arch-$GITHUB_RUN_NUMBER"
-            for extension in dmg zip; do
-              asset="$artifact/OC-Chan-${RELEASE_TAG#v}-mac-$arch.$extension"
-              test -s "$asset"
-              mv "$asset" release-assets/
-            done
-            cat "$artifact/SHA256SUMS.txt" >> release-assets/SHA256SUMS.txt
-          done
-          cd release-assets
-          shasum -a 256 -c SHA256SUMS.txt
+      - name: Validate and merge update metadata
+        run: node scripts/prepare-release.mjs artifacts release-assets "$GITHUB_RUN_NUMBER" "$RELEASE_TAG"
 
-      - name: Publish release with installers
+      - name: Upload draft and publish complete release
         env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          options=(--verify-tag --title "OC Chan $RELEASE_TAG" --generate-notes)
-          if [[ "${RELEASE_TAG%%+*}" == *-* ]]; then
-            options+=(--prerelease)
-          fi
-          gh release create "$RELEASE_TAG" release-assets/*.dmg release-assets/*.zip release-assets/SHA256SUMS.txt "${options[@]}"
+          UPDATE_RELEASE_TOKEN: ${{ secrets.UPDATE_RELEASE_TOKEN }}
+        run: node scripts/publish-release.mjs release-assets "$RELEASE_TAG"

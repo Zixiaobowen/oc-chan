@@ -9,6 +9,8 @@ import { describeError, readSettings, SettingsRollbackError, SettingsStore, sett
 import type { AppSettings, SettingsSnapshot, SettingsUpdateResult } from '../shared/settings'
 import type { MonitorSection, MonitorUpdate } from '../shared/types'
 import { THEMES } from '../shared/themes'
+import { AppUpdatesPlugin } from './plugins/app-updates'
+import type { AppPlugin } from '../shared/plugins'
 
 app.setName('OC Chan')
 const monitor = new Monitor()
@@ -24,6 +26,7 @@ let trayRequested = false
 let quitting = false
 let quitReady = false
 let exitCode = 0
+const plugins: AppPlugin[] = []
 const rendererFile = path.join(__dirname, '../renderer/index.html')
 const devUrl = process.env.ELECTRON_RENDERER_URL
 const ternResources = app.isPackaged
@@ -173,6 +176,20 @@ function broadcastSettings(): void {
   }
 }
 
+async function releaseResources(): Promise<void> {
+  const failures: unknown[] = []
+  try { await settings?.idle() } catch (error) { failures.push(error) }
+  for (const plugin of plugins) {
+    try { await plugin.stop() } catch (error) { failures.push(error) }
+  }
+  try { scheduleHistory.cancel() } catch (error) { failures.push(error) }
+  try { monitor.stop() } catch (error) { failures.push(error) }
+  try { desktop.dispose() } catch (error) { failures.push(error) }
+  try { tray?.destroy(); tray = null } catch (error) { failures.push(error) }
+  nativeTheme.removeListener('updated', broadcastSettings)
+  if (failures.length) throw new AggregateError(failures, '退出清理失败 / Shutdown cleanup failed')
+}
+
 if (!app.requestSingleInstanceLock()) app.quit()
 else {
   app.on('second-instance', () => { if (settings && app.isReady() && !quitting) showMainWindow() })
@@ -264,6 +281,27 @@ else {
       }
     })
     nativeTheme.on('updated', broadcastSettings)
+    const updates = new AppUpdatesPlugin({
+      authorize: trustedSender,
+      changed: snapshot => {
+        if (window && !window.isDestroyed() && !quitting) window.webContents.send('updates:changed', snapshot)
+      },
+      beforeInstall: async () => {
+        if (quitting) throw new Error('应用正在退出 / Application is quitting')
+        quitting = true
+        try {
+          await releaseResources()
+          // Squirrel must own the final quit; app.exit() bypasses its replacement/relaunch.
+          quitReady = true
+        } catch (error) {
+          quitting = false
+          fail(error)
+          throw error
+        }
+      }
+    })
+    plugins.push(updates)
+    void updates.start().catch(fail)
     createWindow()
     createTrayWindow()
     monitor.start()
@@ -274,15 +312,7 @@ else {
     if (quitting) return
     quitting = true
     void (async () => {
-      const failures: unknown[] = []
-      try { await settings?.idle() } catch (error) { failures.push(error) }
-      try { scheduleHistory.cancel() } catch (error) { failures.push(error) }
-      try { monitor.stop() } catch (error) { failures.push(error) }
-      try { desktop.dispose() } catch (error) { failures.push(error) }
-      try { tray?.destroy(); tray = null } catch (error) { failures.push(error) }
-      nativeTheme.removeListener('updated', broadcastSettings)
-      if (failures.length) {
-        const error = new AggregateError(failures, '退出清理失败 / Shutdown cleanup failed')
+      try { await releaseResources() } catch (error) {
         console.error(error)
         dialog.showErrorBox('OC Chan · 错误 / Error', describeError(error))
         exitCode = 1
