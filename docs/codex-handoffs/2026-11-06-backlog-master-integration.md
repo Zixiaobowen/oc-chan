@@ -7,6 +7,7 @@
 - 独立集成工作树：`/Users/zvf003/tmp/oc-chan-backlog-master-20261106`，当前分支 `master`。
 - 实施提交：`e4628c5`（`feat: harden local monitoring and collector lifecycle`），分支 `integrate/backlog-master-20261106`。
 - 已生成master合并提交：`002aac39e8b7f36ce1525bc06970403a0957f8a0`，父提交为`dab694d`与`e4628c5`。提交身份`bowen.sun <bowen.sun@zstack.io>`。
+- 最终应用/CI源码提交：`b8c364308cdb872cf3e195b98697c55cd3678b7a`，已普通推送到`origin/master`。其后仅提交本交接的完成回执，使用`[skip ci]`避免重复构建相同应用源码。
 - 合并基线：远端 `origin/master` 的 `dab694d`。本地 master 已从 `33068be` 快进到该远端基线，合并内容已通过本轮集成验证。
 - 源码取自已验证冻结目录 `/private/tmp/oc-chan-r04-admin-source-h4AzW7`，来源摘要 `bd23450ba0da1e4920abfb81e03a3661a25a1b93cd2cd7c6c38357f0075f358d`。196项中仅导入194个源码/配置文件，两个生成的原生二进制不提交；另导入21份相关配置及文档。
 - 并行 Codex 拓扑接入留在原工作区，未导入其新增文件、修改后的7个文件版本或专属验收段；不宣称该功能随本轮交付。
@@ -41,24 +42,26 @@
 - 最终smoke沿用已有目标返回场景的DOM `scrollIntoView`建立真实记录阅读位置；真实事件IPC、页内记录、输入焦点、同一可见记录及≤1px位置误差断言仍保留，没有轮询重试或失败后兜底。此项验证后台刷新保留阅读状态，不再把隐藏窗口输入当作原生滚轮验收；原生专项仍未完成，README及结果字段明确注明。
 - 最终本地完整smoke通过：`/tmp/oc-chan-ci-reading-position-20261106/result.json`，181.74秒，`complete=true`、`errors=[]`。初始scrollTop=344；新增事件后同一记录`smoke-f05-04949`距顶部始终-0.203125px，来源输入焦点未变。首轮与重启退出0、资源全归零，进程/profile/输入目录清理完成。
 - 最终smoke提交`530b4adf48df0dad36995229980a96eca058dfc2`已推送。云端运行`42179105685`的行为测试、完整Electron smoke及证据上传通过；后续失败于包检查入口：工作流传入相对`--app`，脚本明确要求绝对路径，错误为`Expected --app ABS_APP and --arch arm64|x64`。该次未完成产物上传。
-- 工作流`APP_DIRECTORY`已改为`${{ github.workspace }}/release/mac-arm64/OC Chan.app`。YAML实际解析与表达式展开检查通过；`node --test scripts/check-package.test.mjs`45/45通过，无跳过。待推送后核对真实云端包检查。
-- GitHub API期间出现TLS握手超时及unexpected EOF，未因此重跑旧提交。系统已有HTTP/HTTPS代理`127.0.0.1:7897`，后续命令临时使用`HTTPS_PROXY=http://127.0.0.1:7897`，未修改全局网络或Git配置；完整smoke artifact下载仍未成功，云端成功依据为Actions步骤回执。
+- 工作流`APP_DIRECTORY`已改为`${{ github.workspace }}/release/mac-arm64/OC Chan.app`。YAML实际解析与表达式展开检查通过；`node --test scripts/check-package.test.mjs`45/45通过，无跳过。修正提交`b8c3643`已推送。
+- 最终云端运行[42181153359](https://github.com/Zixiaobowen/oc-chan/actions/runs/42181153359)已完成且`conclusion=success`，实际head SHA为`b8c364308cdb872cf3e195b98697c55cd3678b7a`。工作流包括适用行为测试、完整Electron smoke、arm64 DMG/ZIP构建、依赖许可证/公告、包内容及冻结体积、SHA-256校验与上传；普通分支未发布Release。
+- API确认两份未过期产物：`oc-chan-renderer-smoke-24`，ID`13485870345`、4,171,966字节、摘要`sha256:d6ef249e2f55f85948cc47487d6eacae96ba5fc6bf0a6b4bc562e5373bfec9d8`；`oc-chan-macos-arm64-24`，ID`13484729871`、236,300,004字节、摘要`sha256:ade3181d9e90eaef06ca463a3e9318fe2e0e068dc9495bdfe7bdafd779cf17a3`。该摘要是GitHub产物压缩包摘要，不冒充本机文件复算；最终产物未下载或安装。
+- GitHub API期间出现TLS握手超时及unexpected EOF，未因此重跑旧提交。系统已有代理`127.0.0.1:7897`，仅临时用于命令；最终回执通过公共DNS实际返回的官方API地址、保留域名TLS校验读取。未修改全局网络、DNS或Git配置，凭据只在进程内使用，未写入仓库或日志。
 
 ## 未完成与限制
 
-- master及smoke修正已推送，云端行为测试与Electron smoke通过；包检查绝对路径修正待推送并验证，尚无完整云端产物回执。
+- 本轮master合并、源码推送、云端构建及产物上传均已完成。仅文档回执提交不改变已验收的应用源码。
 - 37卡仍为27卡有完整本地完成证据。R-04的24h验收未完成：管理员采样器定向检查和真实权限验证已有证据，但最近预验在macOS系统认证阶段超时，未启动Electron；没有长测运行，旧失败时长不累计。
 - U-05、U-07、U-08、F-06、D-03仍缺完整原生专项；系统通知权限denied。F-07只做调研，正式签名公证/发布和多人试用按用户决定延期。
-- 本轮未替换`/Applications/OC Chan.app`、未运行可见原生窗口，也未新增性能提升声明。云端已进入DMG/ZIP构建后的包检查；当前安装版不能当作本轮合并版本。
+- 本轮未替换`/Applications/OC Chan.app`、未运行可见原生窗口，也未新增性能提升声明。云端产物不能替代已安装应用验收；当前安装版不是本轮合并版本。
 
 ## 接续动作
 
-1. 提交并推送CI包路径修正和本交接；已通过的本地检查不重复运行。
-2. 按上述单次hook绕过推送，核对远端master的实际SHA与GitHub工作流回执。
-3. 更新本交接的最终提交、推送和CI结果；不得把普通smoke当成R-04或原生专项通过。
-4. 后续具备macOS认证条件时按原实施交接恢复6分钟管理员采样预验；通过后才新开24h，勿重复认证弹窗。
-5. 原工作区保留并行Codex改动，后续单独集成，禁止全量暂存、重置或清理来消除残留。
+1. 具备macOS系统认证条件时，从原实施交接恢复R-04的6分钟管理员采样预验；通过后新开24h，不累计旧失败时长，不重复认证弹窗。
+2. 安排隔离账号中的登录启动、物理托盘、VoiceOver、系统减少动态效果等原生专项，保持U-05/U-07/U-08/D-03未完成状态直到实际回执齐全。
+3. F-06需系统通知权限可用后验证投递、点击、专注模式及睡眠恢复；当前denied不能计为通过。
+4. 原工作区并行Codex拓扑改动单独集成；保留现有修改，不全量暂存、重置、强推或删除工作树。
+5. D-01/D-02正式分发、F-07接口实施和O-01多人试用按用户既有范围决定延期，恢复时重新确认对应发布或外发授权。
 
 ## 恢复提示
 
-继续OC Chan云端产物验收，工作树`/Users/zvf003/tmp/oc-chan-backlog-master-20261106`。master合并002aac3与最终smoke修正530b4ad已推送，云端运行42179105685的行为测试与完整Electron smoke均通过；之后包检查因相对--app参数失败。工作流APP_DIRECTORY已改为github.workspace绝对路径，YAML解析/展开及45项package定向测试通过；下一步提交推送工作流与本交接，核对包检查和artifact上传。GitHub直连偶发TLS超时，必要时命令级使用现有系统代理HTTPS_PROXY=http://127.0.0.1:7897，不改全局配置。用户已授权提交和推送，无需再问；单次禁用安装hook，不覆盖正式应用或发布标签。原仓库保留并行Codex拓扑工作。R-04系统认证阻塞、原生专项和延期项继续保持未完成。
+OC Chan本轮master提交与推送已完成。集成工作树`/Users/zvf003/tmp/oc-chan-backlog-master-20261106`，master合并002aac3，最终应用/CI源码b8c364308cdb872cf3e195b98697c55cd3678b7a；云端运行42181153359已success，两份artifact为oc-chan-macos-arm64-24与oc-chan-renderer-smoke-24。最终仅文档回执提交不重复构建。无需重做已通过的构建、82项集成定向检查、45项包检查及完整本地/云端smoke。原仓库保持fix/oc-chan-r04-admin-sampler-20261106及其并行Codex工作。37卡仍为27卡有完整本地证据；R-04系统认证阻塞、原生专项和用户延期项保持未完成。本轮未安装应用、发布标签或Release；后续安装和发布需要对应授权。
