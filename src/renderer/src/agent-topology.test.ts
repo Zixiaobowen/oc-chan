@@ -2,10 +2,12 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { AgentInfo } from '../../shared/types'
 import {
-  AGENT_NODE_HEIGHT,
-  AGENT_NODE_WIDTH,
   layoutAgentTopology,
+  MAX_TOPOLOGY_LAYOUT_NODES,
+  orderAgentTopology,
+  pageAgentTopology,
   projectAgentTopology,
+  type TopologyGraph,
 } from './agent-topology'
 
 function agent(id: string, overrides: Partial<AgentInfo> = {}): AgentInfo {
@@ -13,6 +15,12 @@ function agent(id: string, overrides: Partial<AgentInfo> = {}): AgentInfo {
 }
 
 const noCollapse = new Set<string>()
+
+const AGENT_NODE_WIDTH = 260
+const AGENT_NODE_HEIGHT = 182
+function standardLayout(graph: TopologyGraph) {
+  return layoutAgentTopology(graph, new Map(graph.nodes.map(node => [node.agent.id, { width: AGENT_NODE_WIDTH, height: AGENT_NODE_HEIGHT }])))
+}
 
 function assertNoOverlap(positions: Map<string, { x: number; y: number }>): void {
   const entries = [...positions]
@@ -94,7 +102,7 @@ test('work summaries and agent identifiers are searchable without case sensitivi
   assert.equal(missing.matchCount, 0)
   assert.equal(missing.contextCount, 0)
   assert.equal(missing.issueCount, 0)
-  assert.equal(layoutAgentTopology(missing).size, 0)
+  assert.equal(standardLayout(missing).size, 0)
 })
 
 test('missing parents and unknown subagent relations stay separate and report issues', () => {
@@ -142,10 +150,10 @@ test('collapse hides every descendant while filters temporarily expand the origi
 
 test('state metrics display fields and input ordering do not alter structural keys or coordinates', () => {
   const agents = [
-    agent('root'),
-    agent('child-b', { kind: 'subagent', parentId: 'root' }),
-    agent('child-a', { kind: 'subagent', parentId: 'root' }),
-    agent('other'),
+    agent('root', { cwd: '/Projects/Zeta' }),
+    agent('child-b', { kind: 'subagent', parentId: 'root', cwd: '/Projects/Zeta' }),
+    agent('child-a', { kind: 'subagent', parentId: 'root', cwd: '/Projects/Zeta' }),
+    agent('other', { cwd: '/Projects/Atlas' }),
   ]
   const before = projectAgentTopology(agents, 'all', 'all', '', noCollapse)
   const changed = agents.slice().reverse().map(item => ({
@@ -154,11 +162,11 @@ test('state metrics display fields and input ordering do not alter structural ke
   }))
   const after = projectAgentTopology(changed, 'all', 'all', '', noCollapse)
   assert.equal(before.layoutKey, after.layoutKey)
-  assert.deepEqual(layoutAgentTopology(before), layoutAgentTopology(after))
+  assert.deepEqual(standardLayout(before), standardLayout(after))
   const contextOnly = projectAgentTopology(agents, 'main', 'all', '', noCollapse)
   assert.equal(contextOnly.layoutKey, before.layoutKey)
   const reorderedGraph = { ...before, nodes: before.nodes.slice().reverse(), edges: before.edges.slice().reverse() }
-  assert.deepEqual(layoutAgentTopology(reorderedGraph), layoutAgentTopology(before))
+  assert.deepEqual(standardLayout(reorderedGraph), standardLayout(before))
   const reparented = projectAgentTopology(agents.map(item => item.id === 'child-a' ? { ...item, parentId: 'other' } : item), 'all', 'all', '', noCollapse)
   assert.notEqual(reparented.layoutKey, before.layoutKey)
 })
@@ -187,12 +195,12 @@ test('cycles retain real edges and visible warnings without counting the node it
   assert.deepEqual(collapsed.nodes.map(node => node.agent.id), ['a', 'self'])
   assert.equal(collapsed.hiddenCount, 3)
   assert.equal(collapsed.issueCount, 2)
-  assertNoOverlap(layoutAgentTopology(graph))
+  assertNoOverlap(standardLayout(graph))
 })
 
 test('independent roots share one horizontal row without overlaps', () => {
   const agents = Array.from({ length: 18 }, (_, index) => agent(`main-${String(index).padStart(2, '0')}`))
-  const positions = layoutAgentTopology(projectAgentTopology(agents, 'all', 'all', '', noCollapse))
+  const positions = standardLayout(projectAgentTopology(agents, 'all', 'all', '', noCollapse))
   assert.equal(positions.size, 18)
   for (const position of positions.values()) assert.equal(position.y, 0)
   assertNoOverlap(positions)
@@ -207,7 +215,7 @@ test('roots align across differently sized branches while every child stays belo
   }
   agents.push(agent('grandchild', { kind: 'subagent', parentId: 'child-0' }))
   const graph = projectAgentTopology(agents, 'all', 'all', '', noCollapse)
-  const positions = layoutAgentTopology(graph)
+  const positions = standardLayout(graph)
   for (const id of ['root', 'small-root', 'independent-a', 'independent-b', 'orphan']) {
     assert.equal(positions.get(id)!.y, 0)
   }
@@ -259,7 +267,7 @@ test('active main agents retain idle and unknown descendants as inspectable cont
     assert.deepEqual(graph.edges.map(edge => [edge.source, edge.target]), [
       ['active-main', 'idle-child'], ['active-main', 'unknown-child'], ['unknown-child', 'unknown-grandchild'],
     ])
-    assertNoOverlap(layoutAgentTopology(graph))
+    assertNoOverlap(standardLayout(graph))
   }
 })
 
@@ -303,4 +311,167 @@ test('activity changes update matches and clearing the filter restores collapsed
   assert.deepEqual(restored.nodes.map(node => node.agent.id), ['root'])
   assert.equal(restored.nodes[0].collapsed, true)
   assert.equal(restored.hiddenCount, 1)
+})
+
+test('measured node dimensions keep mixed-height branches apart and roots aligned', () => {
+  const graph = projectAgentTopology([
+    agent('root'), agent('other'),
+    agent('child-a', { parentId: 'root', kind: 'subagent' }),
+    agent('child-b', { parentId: 'root', kind: 'subagent' }),
+    agent('leaf', { parentId: 'child-a', kind: 'subagent' }),
+  ], 'all', 'all', '', noCollapse)
+  const sizes = new Map([
+    ['root', { width: 520, height: 420 }], ['other', { width: 520, height: 300 }],
+    ['child-a', { width: 520, height: 380 }], ['child-b', { width: 520, height: 320 }],
+    ['leaf', { width: 520, height: 340 }],
+  ])
+  const positions = layoutAgentTopology(graph, sizes)
+  assert.equal(positions.get('root')!.y, positions.get('other')!.y)
+  for (const edge of graph.edges)
+    assert.ok(positions.get(edge.target)!.y > positions.get(edge.source)!.y + sizes.get(edge.source)!.height)
+  for (const [id, a] of positions) for (const [otherId, b] of positions) {
+    if (id >= otherId) continue
+    const left = sizes.get(id)!, right = sizes.get(otherId)!
+    assert.ok(a.x + left.width <= b.x || b.x + right.width <= a.x ||
+      a.y + left.height <= b.y || b.y + right.height <= a.y, `${id} overlaps ${otherId}`)
+  }
+})
+
+test('layout rejects missing and non-finite measurements instead of inventing node bounds', () => {
+  const graph = projectAgentTopology([agent('root')], 'all', 'all', '', noCollapse)
+  for (const sizes of [new Map(), new Map([['root', { width: 0, height: 100 }]]), new Map([['root', { width: 260, height: NaN }]])])
+    assert.throws(() => layoutAgentTopology(graph, sizes), Error)
+})
+
+test('bounded pages preserve every object and only draw real in-page relationships', () => {
+  for (const count of [32, 128, 500, 2000]) {
+    const id = (index: number) => `node-${String(index).padStart(4, '0')}`
+    const agents = Array.from({ length: count }, (_, index) => agent(id(index), index % 8 ? { parentId: id(index - index % 8), kind: 'subagent' } : {}))
+    const graph = projectAgentTopology(agents, 'all', 'all', '', noCollapse)
+    const order = orderAgentTopology(graph)
+    const seen = new Set<string>()
+    for (let index = 0; index < Math.ceil(count / MAX_TOPOLOGY_LAYOUT_NODES); index++) {
+      const page = pageAgentTopology(graph, order, index)
+      assert.ok(page.graph.nodes.length <= MAX_TOPOLOGY_LAYOUT_NODES)
+      const visible = new Set(page.graph.nodes.map(node => node.agent.id))
+      for (const node of page.graph.nodes) {
+        assert.equal(seen.has(node.agent.id), false)
+        assert.equal(order.pageById.get(node.agent.id), index)
+        seen.add(node.agent.id)
+      }
+      assert.deepEqual(page.graph.edges, graph.edges.filter(edge => visible.has(edge.source) && visible.has(edge.target)))
+      assert.equal(page.shownMatches, page.graph.nodes.length)
+    }
+    assert.deepEqual(seen, new Set(agents.map(item => item.id)))
+    if (count > MAX_TOPOLOGY_LAYOUT_NODES) assert.throws(() => standardLayout(graph), RangeError)
+  }
+})
+
+test('deep-chain searches open the matching page and preserve explicit cross-page parents', () => {
+  const agents = Array.from({ length: 2000 }, (_, index) => agent(`chain-${String(index).padStart(4, '0')}`, index ? {
+    parentId: `chain-${String(index - 1).padStart(4, '0')}`, kind: 'subagent'
+  } : {}))
+  const graph = projectAgentTopology(agents, 'all', 'all', 'chain-1999', noCollapse)
+  const order = orderAgentTopology(graph)
+  const page = pageAgentTopology(graph, order, null)
+  assert.equal(page.index, 9)
+  assert.equal(page.shownMatches, 1)
+  assert.equal(page.graph.matchCount, 1)
+  assert.equal(page.graph.contextCount, 199)
+  assert.equal(page.graph.nodes.at(-1)!.agent.id, 'chain-1999')
+  assert.equal(page.graph.nodes[0].parentOutsidePage, true)
+  assert.equal(page.graph.nodes[0].agent.parentId, 'chain-1799')
+  assert.equal(order.pageById.get('chain-1799'), 8)
+  assert.equal(page.boundaryEdges, 1)
+  assert.equal(page.graph.edges.length, 199)
+  assert.equal(standardLayout(page.graph).size, 200)
+})
+
+test('cycles span pages without fabricated edges or lost relationship warnings', () => {
+  const id = (index: number) => `cycle-${String(index).padStart(4, '0')}`
+  const graph = projectAgentTopology(Array.from({ length: 501 }, (_, index) => agent(id(index), {
+    parentId: id((index + 500) % 501), kind: 'subagent'
+  })), 'all', 'all', '', noCollapse)
+  const order = orderAgentTopology(graph)
+  assert.equal(new Set(order.ids).size, 501)
+  for (let index = 0; index < 3; index++) {
+    const page = pageAgentTopology(graph, order, index)
+    assert.ok(page.graph.nodes.every(node => node.issue === '父子关系存在循环'))
+    assert.equal(page.boundaryEdges, 2)
+    assert.equal(page.graph.nodes.filter(node => node.parentOutsidePage).length, 1)
+    assert.ok(page.graph.edges.every(edge => graph.nodes.find(node => node.agent.id === edge.target)!.agent.parentId === edge.source))
+  }
+})
+
+test('paging clamps after object removal while metric changes keep the same layout structure', () => {
+  const agents = Array.from({ length: 500 }, (_, index) => agent(`root-${String(index).padStart(4, '0')}`))
+  const graph = projectAgentTopology(agents, 'all', 'all', '', noCollapse)
+  const order = orderAgentTopology(graph)
+  assert.equal(pageAgentTopology(graph, order, 99).index, 2)
+  const updated = projectAgentTopology(agents.map(item => ({ ...item, state: 'working', cpuPercent: 55 })), 'all', 'all', '', noCollapse)
+  assert.deepEqual(orderAgentTopology(updated).ids, order.ids)
+  assert.equal(pageAgentTopology(updated, order, 1).graph.layoutKey, pageAgentTopology(graph, order, 1).graph.layoutKey)
+  const smaller = projectAgentTopology(agents.slice(0, 128), 'all', 'all', '', noCollapse)
+  assert.equal(pageAgentTopology(smaller, orderAgentTopology(smaller), 2).index, 0)
+  const empty = projectAgentTopology([], 'all', 'all', '', noCollapse)
+  assert.deepEqual(pageAgentTopology(empty, orderAgentTopology(empty), 9).graph.nodes, [])
+})
+
+test('project branches stay adjacent despite interleaved IDs and different branch sizes', () => {
+  const graph = projectAgentTopology([
+    agent('a-unknown'),
+    agent('b-nebula', { cwd: '/Projects/Nebula' }),
+    agent('c-atlas', { cwd: '/Projects/Atlas/' }),
+    agent('d-nebula-child', { cwd: '/Projects/Nebula', parentId: 'b-nebula', kind: 'subagent' }),
+    agent('e-nebula-child', { cwd: '/Projects/Nebula', parentId: 'b-nebula', kind: 'subagent' }),
+    agent('z-atlas', { cwd: '/Projects/Atlas' }),
+    agent('a-atlas-child', { cwd: '/Projects/Elsewhere', parentId: 'z-atlas', kind: 'subagent' }),
+  ], 'all', 'all', '', noCollapse)
+  assert.deepEqual(orderAgentTopology(graph).ids, [
+    'c-atlas', 'z-atlas', 'a-atlas-child', 'b-nebula', 'd-nebula-child', 'e-nebula-child', 'a-unknown'
+  ])
+  const positions = standardLayout(graph)
+  const roots = ['c-atlas', 'z-atlas', 'b-nebula', 'a-unknown']
+  assert.deepEqual([...roots].sort((a, b) => positions.get(a)!.x - positions.get(b)!.x), roots)
+  const atlasRight = Math.max(...['c-atlas', 'z-atlas', 'a-atlas-child'].map(id => positions.get(id)!.x + AGENT_NODE_WIDTH))
+  const nebulaLeft = Math.min(...['b-nebula', 'd-nebula-child', 'e-nebula-child'].map(id => positions.get(id)!.x))
+  const withinProjectGap = positions.get('z-atlas')!.x - positions.get('c-atlas')!.x - AGENT_NODE_WIDTH
+  assert.ok(nebulaLeft - atlasRight > withinProjectGap, 'Project groups have more separation than sibling branches')
+  for (const edge of graph.edges) assert.ok(positions.get(edge.target)!.y > positions.get(edge.source)!.y + AGENT_NODE_HEIGHT)
+  assertNoOverlap(positions)
+  const reordered = { ...graph, nodes: [...graph.nodes].reverse(), edges: [...graph.edges].reverse() }
+  assert.deepEqual(orderAgentTopology(reordered).ids, orderAgentTopology(graph).ids)
+  assert.deepEqual(standardLayout(reordered), positions)
+})
+
+test('project changes invalidate layout while normalized directory aliases keep the same order', () => {
+  const agents = [agent('first', { cwd: '/Projects/Beta' }), agent('second', { cwd: '/Projects/Alpha' }), agent('root-directory', { cwd: '/' })]
+  const before = projectAgentTopology(agents, 'all', 'all', '', noCollapse)
+  const normalized = projectAgentTopology(agents.map(item => item.id === 'first' ? { ...item, cwd: '/Projects/Beta///' } : item), 'all', 'all', '', noCollapse)
+  assert.equal(normalized.layoutKey, before.layoutKey)
+  assert.deepEqual(orderAgentTopology(before).ids, ['root-directory', 'second', 'first'])
+  const moved = projectAgentTopology(agents.map(item => item.id === 'first' ? { ...item, cwd: '/Projects/Aardvark' } : item), 'all', 'all', '', noCollapse)
+  assert.notEqual(moved.layoutKey, before.layoutKey)
+  assert.deepEqual(orderAgentTopology(moved).ids, ['root-directory', 'first', 'second'])
+  const positions = standardLayout(moved)
+  assert.ok(positions.get('first')!.x < positions.get('second')!.x)
+})
+
+test('pagination keeps project runs contiguous across page boundaries and invalidates changed page projects', () => {
+  const agents = Array.from({ length: 402 }, (_, index) => agent(`root-${String(index).padStart(4, '0')}`, { cwd: index % 2 ? '/Projects/Beta' : '/Projects/Alpha' }))
+  const graph = projectAgentTopology(agents, 'all', 'all', '', noCollapse)
+  const order = orderAgentTopology(graph)
+  const pages = [0, 1, 2].map(index => pageAgentTopology(graph, order, index))
+  const nodes = pages.flatMap(page => page.graph.nodes)
+  assert.deepEqual(nodes.map(node => node.agent.id), order.ids)
+  assert.ok(nodes.slice(0, 201).every(node => node.agent.cwd === '/Projects/Alpha'))
+  assert.ok(nodes.slice(201).every(node => node.agent.cwd === '/Projects/Beta'))
+  for (const page of pages) {
+    const positions = standardLayout(page.graph)
+    assert.deepEqual([...page.graph.nodes].sort((a, b) => positions.get(a.agent.id)!.x - positions.get(b.agent.id)!.x).map(node => node.agent.id), page.graph.nodes.map(node => node.agent.id))
+  }
+  const updated = projectAgentTopology(agents.map(item => item.cwd === '/Projects/Beta' ? { ...item, cwd: '/Projects/Gamma' } : item), 'all', 'all', '', noCollapse)
+  const nextOrder = orderAgentTopology(updated)
+  assert.deepEqual(nextOrder.ids, order.ids)
+  assert.notEqual(pageAgentTopology(updated, nextOrder, 1).graph.layoutKey, pages[1].graph.layoutKey)
 })

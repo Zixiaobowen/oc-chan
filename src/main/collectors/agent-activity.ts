@@ -1,7 +1,9 @@
+import { constants } from 'node:fs'
 import { open } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import type { AgentActivity } from '../../shared/types'
 import { AGENT_ACTIVITY_WINDOW_MS } from '../../shared/types'
+import { collectionResources, isResourceCleanupFailure, ResourceCleanupError, throwIfAborted } from '../resource-budget'
 
 const maxTailBytes = 128 * 1024
 const maxCalls = 32
@@ -92,17 +94,48 @@ export interface ActivityRead { activity?: AgentActivity; issues: string[]; byte
 
 export class SessionActivityReader {
   private readonly cache = new Map<string, CacheEntry>()
+  private readonly inFlight = new Map<string, Set<AbortController>>()
 
   retain(paths: Set<string>): void {
     for (const path of this.cache.keys()) if (!paths.has(path)) this.cache.delete(path)
+    for (const [path, controllers] of this.inFlight) {
+      if (!paths.has(path)) for (const controller of controllers) controller.abort()
+    }
   }
 
-  async read(path: string, now?: number): Promise<ActivityRead> {
-    let file: FileHandle | undefined
+  async read(path: string, now?: number, signal?: AbortSignal): Promise<ActivityRead> {
+    const controller = new AbortController()
+    const operationSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal
+    let controllers = this.inFlight.get(path)
+    if (!controllers) { controllers = new Set(); this.inFlight.set(path, controllers) }
+    controllers.add(controller)
     try {
-      file = await open(path, 'r')
+      const result = await collectionResources.run({ source: 'agent-activity', kind: 'file', bytes: maxTailBytes, signal: operationSignal }, () => this.readFile(path, now, operationSignal))
+      throwIfAborted(operationSignal)
+      return result
+    } catch (error) {
+      this.cache.delete(path)
+      if (isResourceCleanupFailure(error)) throw error
+      throwIfAborted(operationSignal)
+      const code = object(error)?.code
+      return { issues: [`会话读取失败（${typeof code === 'string' && /^[A-Z_]+$/.test(code) ? code : 'READ_FAILED'}）`], bytesRead: 0 }
+    } finally {
+      controllers.delete(controller)
+      if (!controllers.size) this.inFlight.delete(path)
+    }
+  }
+
+  private async readFile(path: string, now: number | undefined, signal: AbortSignal): Promise<ActivityRead> {
+    const file: FileHandle = await open(path, constants.O_RDONLY | constants.O_NONBLOCK)
+    let closing: Promise<void> | undefined
+    const close = (): Promise<void> => closing ??= file.close()
+    const abort = (): void => { void close().catch(() => { /* Awaited in finally. */ }) }
+    signal.addEventListener('abort', abort, { once: true })
+    try {
+      throwIfAborted(signal)
       const stat = await file.stat()
-      if (!stat.isFile()) throw new Error('NOT_REGULAR_FILE')
+      throwIfAborted(signal)
+      if (!stat.isFile()) throw Object.assign(new Error('NOT_REGULAR_FILE'), { code: 'NOT_REGULAR_FILE' })
       let entry = this.cache.get(path)
       const reset = entry && (entry.inode !== stat.ino || entry.device !== stat.dev || stat.size < entry.size || (stat.size === entry.size && stat.mtimeMs !== entry.modified))
       if (!entry || reset) {
@@ -117,6 +150,7 @@ export class SessionActivityReader {
       if (omitted) clear(entry.state)
       const allocated = Buffer.allocUnsafe(stat.size - start)
       const { bytesRead } = await file.read(allocated, 0, allocated.length, start)
+      throwIfAborted(signal)
       // Calls can be appended while this file or an earlier session is being read.
       now ??= Date.now()
       const buffer = allocated.subarray(0, bytesRead)
@@ -150,10 +184,10 @@ export class SessionActivityReader {
       if (unsafe) clear(entry.state)
       entry.issues = [...new Set(issues)]
       return { activity: unsafe ? undefined : recentActivity(entry.state, now), issues: entry.issues, bytesRead }
-    } catch (error) {
-      this.cache.delete(path)
-      const code = object(error)?.code
-      return { issues: [`会话读取失败（${typeof code === 'string' && /^[A-Z_]+$/.test(code) ? code : 'READ_FAILED'}）`], bytesRead: 0 }
-    } finally { if (file) await file.close() }
+    } finally {
+      signal.removeEventListener('abort', abort)
+      try { await close() }
+      catch (error) { throw new ResourceCleanupError('file', error) }
+    }
   }
 }

@@ -1,10 +1,14 @@
 import type { ReactNode } from 'react'
 import type { AppSettings } from '../../shared/settings'
+import type { SourceStatus } from '../../shared/types'
 import { useI18n } from './i18n'
 import { useSettings } from './settings'
 import { NativeSelect } from './components'
 import SettingsSaveError from './SettingsSaveError'
 import ThemePicker from './ThemePicker'
+import LoginItemSetting from './LoginItemSetting'
+import LiquidGlassSetting from './LiquidGlassSetting'
+import NotificationSettings from './NotificationSettings'
 import './settings.css'
 
 function Choices<T extends string>({ name, label, value, options, disabled, onChange }: {
@@ -28,7 +32,7 @@ function SettingRow({ name, label, children, errorKeys }: { name: keyof AppSetti
   </section>
 }
 
-export default function SettingsView() {
+export default function SettingsView({ sources = [] }: { sources?: SourceStatus[] }) {
   const { t } = useI18n()
   const { snapshot: { settings, platform, resolvedTheme }, saving, error, update } = useSettings()
   const change = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => { if (!saving) void update({ [key]: value }) }
@@ -38,6 +42,9 @@ export default function SettingsView() {
         <Choices name="appearance" label={t('外观', 'Appearance')} value={settings.appearance} disabled={saving} onChange={value => change('appearance', value)} options={[
           { value: 'system', label: t('跟随系统', 'System') }, { value: 'light', label: t('浅色', 'Light') }, { value: 'dark', label: t('深色', 'Dark') }
         ]} />
+      </SettingRow>
+      <SettingRow name="glassIntensity" label={t('液态玻璃', 'Liquid Glass')}>
+        <LiquidGlassSetting />
       </SettingRow>
       <SettingRow name={resolvedTheme === 'dark' ? 'darkTheme' : 'lightTheme'} errorKeys={['lightTheme', 'darkTheme']} label={t('主题', 'Theme')}>
         <ThemePicker />
@@ -70,6 +77,8 @@ export default function SettingsView() {
         ]} />
         <p className="setting-help">{t('单击菜单栏图标时的操作；右键可打开主界面或退出。', 'Choose the menu bar icon’s click action. Right-click to open the main window or quit.')}</p>
       </SettingRow>
+      <LoginItemSetting />
+      <NotificationSettings sources={sources} />
       <SettingRow name="showDock" label={t('显示程序坞', 'Show in Dock')}>
         <div className="setting-toggle">
           <button type="button" role="switch" aria-labelledby="setting-showDock-label" aria-describedby="dock-help" aria-checked={settings.showDock} className="setting-switch" disabled={platform !== 'darwin'} aria-disabled={saving || platform !== 'darwin'} onClick={() => change('showDock', !settings.showDock)}><span /></button>
