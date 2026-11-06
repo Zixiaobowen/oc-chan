@@ -26,7 +26,7 @@ jobs:
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       TARGET_ARCH: arm64
-      APP_DIRECTORY: release/mac-arm64/OC Chan.app
+      APP_DIRECTORY: ${{ github.workspace }}/release/mac-arm64/OC Chan.app
 
     steps:
       - name: Check out source
