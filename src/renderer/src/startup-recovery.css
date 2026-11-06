@@ -1,0 +1,18 @@
+.startup-recovery {
+  min-height: 100vh;
+  padding: clamp(20px, 4vw, 44px);
+  overflow-wrap: anywhere;
+  line-height: 1.75;
+}
+.startup-recovery-content { max-width: 72ch; margin-inline: auto; min-width: 0; }
+.startup-recovery-intro { margin-block: 16px 28px; color: var(--muted); }
+.startup-recovery h2 { display: block; font-size: calc(16px * var(--font-scale)); line-height: 1.5; color: var(--error); }
+.startup-recovery .settings-save-error-path { margin-block: 20px; }
+.startup-recovery ol { padding-inline-start: 24px; margin-block: 20px; }
+.startup-recovery li + li { margin-block-start: 10px; }
+.startup-recovery [role='status']:empty { display: none; }
+.startup-recovery [role='alert'] { color: var(--error); margin-block: 12px; }
+.startup-recovery-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-block-start: 24px; }
+.startup-recovery-actions .button { min-height: 44px; max-width: 100%; font-size: inherit; white-space: normal; }
+.startup-recovery-actions [aria-disabled='true'] { cursor: wait; opacity: .65; }
+.startup-recovery .settings-save-error-details { border-color: var(--border); }

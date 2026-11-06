@@ -1,0 +1,24 @@
+.diagnostic-panel { margin-block-end: 22px; }
+.diagnostic-panel > div:first-child > .section-heading { padding: 18px 20px 15px; margin: 0; }
+.diagnostic-panel-body { min-width: 0; padding: 0 20px 20px; font-size: max(12px, calc(12px * var(--font-scale))); line-height: 1.7; overflow-wrap: anywhere; }
+.diagnostic-description { max-width: 75ch; color: var(--muted); }
+.diagnostic-description + .diagnostic-description { margin-block-start: 8px; }
+.diagnostic-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-block-start: 16px; }
+.diagnostic-actions .button { min-width: 0; max-width: 100%; min-height: 36px; font-size: inherit; line-height: 1.5; white-space: normal; overflow-wrap: anywhere; transition: none; }
+.diagnostic-actions [aria-disabled='true'] { opacity: .65; cursor: wait; }
+.diagnostic-status { margin-block-start: 12px; min-height: 1.7em; }
+.diagnostic-error { margin-block-start: 12px; padding: 12px; border: 1px solid var(--error-border); border-radius: 6px; color: var(--error); background: var(--error-surface); }
+.diagnostic-error summary { cursor: pointer; min-height: 36px; padding-block: 6px; }
+.diagnostic-safe-summary { font-family: var(--code-font); user-select: text; white-space: pre-wrap; }
+.diagnostic-preview { margin-block-start: 18px; padding-block-start: 18px; border-block-start: 1px solid var(--border); }
+.diagnostic-metadata { display: flex; flex-wrap: wrap; gap: 14px 24px; margin: 0; font-variant-numeric: tabular-nums; }
+.diagnostic-metadata > div { flex: 1 1 16em; min-width: 0; max-width: 100%; }
+.diagnostic-metadata dt { color: var(--muted); }
+.diagnostic-metadata dd { margin: 2px 0 0; }
+.diagnostic-budget { margin-block-start: 16px; color: var(--muted); }
+.diagnostic-limits { margin-block-start: 10px; }
+.diagnostic-limits ul { margin: 6px 0 0; padding-inline-start: 1.5em; }
+.diagnostic-json-label { display: block; margin-block-start: 20px; margin-block-end: 4px; font-weight: 600; }
+.diagnostic-preview textarea { display: block; box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; margin-block-start: 10px; padding: 10px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--ink); font-family: var(--code-font); font-size: inherit; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; resize: vertical; user-select: text; caret-color: var(--accent); -webkit-app-region: no-drag; }
+.diagnostic-panel textarea:focus-visible,
+.diagnostic-panel summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
