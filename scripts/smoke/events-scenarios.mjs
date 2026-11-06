@@ -151,9 +151,33 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     // Close native datalist suggestions without moving input focus before scrolling.
     await ui.key('Escape', 'Escape', 27)
     const geometry = await ui.evaluate(`(() => { const r = ${$('.main-content')}.getBoundingClientRect(); return {x:r.right-40,y:r.top+100}; })()`)
-    await renderer.call('Input.dispatchMouseEvent', { type: 'mouseMoved', ...geometry }, RPC_MS)
-    await renderer.call('Input.dispatchMouseEvent', { type: 'mouseWheel', ...geometry, deltaX: 0, deltaY: 240 }, RPC_MS)
-    await ui.dom('real wheel scroll moves event workspace', `${$('.main-content')}?.scrollTop > 0`)
+    await ui.evaluate(`(() => {
+      const content = ${$('.main-content')}, point = ${JSON.stringify(geometry)}, events = [];
+      const state = () => ({scroll:content.scrollTop, height:content.clientHeight, extent:content.scrollHeight,
+        overflow:getComputedStyle(content).overflowY, visibility:document.visibilityState, focus:document.activeElement?.id,
+        hit:document.elementFromPoint(point.x, point.y)?.outerHTML.slice(0, 256),
+        viewport:[innerWidth,innerHeight,devicePixelRatio], documentScroll:document.scrollingElement?.scrollTop});
+      const before = state();
+      const receive = event => {
+        if (events.length >= 16) return;
+        const row = {type:event.type, trusted:event.isTrusted, target:event.target?.tagName, id:event.target?.id,
+          x:event.clientX, y:event.clientY, deltaY:event.deltaY, scroll:content.scrollTop, prevented:event.defaultPrevented};
+        events.push(row); queueMicrotask(() => { row.prevented = event.defaultPrevented; });
+      };
+      for (const type of ['wheel','scroll','mousemove']) window.addEventListener(type, receive, {capture:true,passive:true});
+      window.__ocWheelProbe = () => {
+        for (const type of ['wheel','scroll','mousemove']) window.removeEventListener(type, receive, true);
+        delete window.__ocWheelProbe; return {before,after:state(),events};
+      };
+      return true;
+    })()`)
+    try {
+      await renderer.call('Input.dispatchMouseEvent', { type: 'mouseMoved', ...geometry }, RPC_MS)
+      await renderer.call('Input.dispatchMouseEvent', { type: 'mouseWheel', ...geometry, deltaX: 0, deltaY: 240 }, RPC_MS)
+      await ui.dom('real wheel scroll moves event workspace', `${$('.main-content')}?.scrollTop > 0`)
+    } finally {
+      console.log('[smoke] wheel diagnostics:', JSON.stringify(await ui.evaluate('window.__ocWheelProbe()')))
+    }
     await ui.frames()
     const position = `(() => {
       const content = ${$('.main-content')}, bounds = content.getBoundingClientRect();
