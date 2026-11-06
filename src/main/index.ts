@@ -9,6 +9,18 @@ import type { AppSettings, SettingsUpdateResult } from '../shared/settings'
 import type { MonitorSection, MonitorUpdate } from '../shared/types'
 
 app.setName('OC Chan')
+const developmentInstance = app.isPackaged ? undefined : process.env.OC_CHAN_DEV_INSTANCE
+const headless = !app.isPackaged && process.env.OC_CHAN_HEADLESS === '1'
+if (headless && !developmentInstance) {
+  console.error('无头模式需要独立实例目录，请通过 npm run dev 启动')
+  app.exit(1)
+}
+if (developmentInstance) {
+  app.setPath('userData', path.join(developmentInstance, 'user-data'))
+  app.setPath('sessionData', path.join(developmentInstance, 'session-data'))
+  app.setAppLogsPath(path.join(developmentInstance, 'logs'))
+}
+if (headless && process.platform === 'darwin') app.setActivationPolicy('prohibited')
 const monitor = new Monitor()
 const desktop = new DesktopSettings()
 let window: BrowserWindow | null = null
@@ -25,7 +37,7 @@ const rendererFile = path.join(__dirname, '../renderer/index.html')
 const devUrl = process.env.ELECTRON_RENDERER_URL
 const ternResources = app.isPackaged
   ? path.join(process.resourcesPath, 'tern-navigation')
-  : path.resolve(__dirname, '../../resources/tern-navigation')
+  : developmentInstance ? path.join(developmentInstance, 'tern-navigation') : path.resolve(__dirname, '../../resources/tern-navigation')
 
 function rendererUrl(popover = false): string {
   const url = devUrl ? new URL(devUrl) : pathToFileURL(rendererFile)
@@ -36,7 +48,7 @@ function rendererUrl(popover = false): string {
 
 function fail(error: unknown): void {
   console.error(error)
-  dialog.showErrorBox('OC Chan · 错误 / Error', describeError(error))
+  if (!headless) dialog.showErrorBox('OC Chan · 错误 / Error', describeError(error))
   exitCode = 1
   app.quit()
 }
@@ -65,6 +77,7 @@ function hideTrayWindow(): void {
 }
 
 function showMainWindow(): void {
+  if (headless) throw new Error('无头开发模式不允许显示原生窗口 / Native windows are disabled in headless development')
   if (quitting) throw new Error('应用正在退出 / Application is quitting')
   hideTrayWindow()
   if (!window || window.isDestroyed()) createWindow()
@@ -78,18 +91,23 @@ function createWindow(): void {
     width: 1280, height: 860, minWidth: 880, minHeight: 640,
     title: 'OC Chan', backgroundColor: desktop.snapshot(settings!.value).resolvedTheme === 'dark' ? '#171e1a' : '#f8faf9',
     titleBarStyle: 'hiddenInset', show: false,
+    focusable: !headless,
+    ...(headless ? { skipTaskbar: true, paintWhenInitiallyHidden: true } : {}),
     trafficLightPosition: { x: 20, y: 19 },
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'), contextIsolation: true,
-      nodeIntegration: false, sandbox: true
+      nodeIntegration: false, sandbox: true,
+      ...(headless ? { backgroundThrottling: false } : {})
     }
   })
   window = target
   secureWindow(target)
-  target.once('ready-to-show', () => { if (!quitting) { target.show(); target.focus() } })
+  target.once('ready-to-show', () => { if (!quitting && !headless) { target.show(); target.focus() } })
   target.on('close', (event) => { if (!quitting) { event.preventDefault(); target.hide() } })
   target.on('closed', () => { if (window === target) window = null })
-  void target.loadURL(rendererUrl()).catch(fail)
+  void target.loadURL(rendererUrl()).then(() => {
+    if (headless) console.log(`[oc-chan] Headless renderer ready; pid=${process.pid}`)
+  }).catch(fail)
 }
 
 function presentTrayWindow(): void {
@@ -107,6 +125,7 @@ function presentTrayWindow(): void {
 }
 
 function createTrayWindow(): void {
+  if (headless) throw new Error('无头开发模式不允许创建托盘窗口 / Tray windows are disabled in headless development')
   const target = new BrowserWindow({
     width: 360, height: 430, show: false, frame: false,
     resizable: false, maximizable: false, minimizable: false,
@@ -131,6 +150,7 @@ function createTrayWindow(): void {
 }
 
 function updateMenus(value: AppSettings): void {
+  if (headless) { Menu.setApplicationMenu(null); return }
   const chinese = resolvedLanguage(value) === 'zh-CN'
   trayMenu = Menu.buildFromTemplate([
     { label: chinese ? '打开主界面' : 'Open main window', click: showMainWindow },
@@ -163,36 +183,52 @@ function broadcastSettings(): void {
   }
 }
 
+async function applyDesktopSettings(value: AppSettings): Promise<void> {
+  if (headless) {
+    if (value.showDock || value.preventSleep) throw new Error('无头开发模式不允许显示 Dock 或阻止休眠 / Dock and sleep prevention are disabled in headless development')
+    nativeTheme.themeSource = value.appearance
+    return
+  }
+  await desktop.apply(value)
+}
+
 if (!app.requestSingleInstanceLock()) app.quit()
 else {
-  app.on('second-instance', () => { if (settings && app.isReady() && !quitting) showMainWindow() })
-  app.on('activate', () => { if (settings && !quitting) showMainWindow() })
+  app.on('second-instance', () => { if (!headless && settings && app.isReady() && !quitting) showMainWindow() })
+  app.on('activate', () => { if (!headless && settings && !quitting) showMainWindow() })
+  if (developmentInstance) {
+    for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) process.once(signal, () => app.quit())
+    app.on('window-all-closed', () => { if (headless) app.quit() })
+  }
   app.whenReady().then(async () => {
     const filename = path.resolve(app.getPath('userData'), 'settings.json')
     const initial = await readSettings(filename)
+    if (headless) { initial.showDock = false; initial.preventSleep = false }
     settings = new SettingsStore(filename, initial, async (value) => {
       const visible = window?.isVisible()
       const focused = window?.isFocused()
-      await desktop.apply(value)
-      if (visible && window && !window.isDestroyed()) {
+      await applyDesktopSettings(value)
+      if (!headless && visible && window && !window.isDestroyed()) {
         window.show()
         if (focused) window.focus()
       }
       updateMenus(value)
     })
-    tray = new Tray(createTrayIcon())
-    tray.setToolTip('OC Chan')
-    if (process.platform === 'darwin') tray.setIgnoreDoubleClickEvents(true)
-    tray.on('click', () => {
-      if (quitting || !settings) return
-      if (settings.value.trayClick === 'main') { showMainWindow(); return }
-      if (!trayWindow) createTrayWindow()
-      trayRequested = !trayRequested
-      if (trayRequested) presentTrayWindow()
-      else hideTrayWindow()
-    })
-    tray.on('right-click', () => { hideTrayWindow(); if (trayMenu) tray?.popUpContextMenu(trayMenu) })
-    await desktop.apply(initial)
+    if (!headless) {
+      tray = new Tray(createTrayIcon())
+      tray.setToolTip('OC Chan')
+      if (process.platform === 'darwin') tray.setIgnoreDoubleClickEvents(true)
+      tray.on('click', () => {
+        if (quitting || !settings) return
+        if (settings.value.trayClick === 'main') { showMainWindow(); return }
+        if (!trayWindow) createTrayWindow()
+        trayRequested = !trayRequested
+        if (trayRequested) presentTrayWindow()
+        else hideTrayWindow()
+      })
+      tray.on('right-click', () => { hideTrayWindow(); if (trayMenu) tray?.popUpContextMenu(trayMenu) })
+    }
+    await applyDesktopSettings(initial)
     updateMenus(initial)
     ipcMain.handle('settings:snapshot', async (event) => {
       trustedSender(event)
@@ -225,6 +261,7 @@ else {
     ipcMain.handle('monitor:focus-agent-in-tern', async (event, agentId: unknown) => {
       trustedSender(event)
       try {
+        if (headless) throw new Error('无头开发模式不允许跳转外部 Tern / External Tern navigation is disabled in headless development')
         if (typeof agentId !== 'string') throw new Error('无效的 Agent 标识')
         await focusAgentInTern(monitor.state.agents.data?.agents ?? [], agentId, undefined, ternResources)
         return { error: null }
@@ -239,7 +276,7 @@ else {
     })
     nativeTheme.on('updated', broadcastSettings)
     createWindow()
-    createTrayWindow()
+    if (!headless) createTrayWindow()
     monitor.start()
   }).catch(fail)
   app.on('before-quit', (event) => {
@@ -257,7 +294,7 @@ else {
       if (failures.length) {
         const error = new AggregateError(failures, '退出清理失败 / Shutdown cleanup failed')
         console.error(error)
-        dialog.showErrorBox('OC Chan · 错误 / Error', describeError(error))
+        if (!headless) dialog.showErrorBox('OC Chan · 错误 / Error', describeError(error))
         exitCode = 1
       }
       quitReady = true
