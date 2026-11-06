@@ -19,12 +19,37 @@
 .setting-font-sample { font-family: var(--code-font); font-size: inherit; line-height: 1.6; overflow-wrap: anywhere; }
 .setting-toggle { display: flex; align-items: center; gap: 12px; min-height: 32px; }
 .setting-toggle > span { color: var(--muted); }
+.login-item-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .setting-row > .settings-save-error { grid-column: 1 / -1; margin-block-start: 0; }
 .setting-switch { flex: 0 0 38px; width: 38px; height: 24px; padding: 3px; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--switch-off); transition: background 120ms ease-out; }
 .setting-switch span { display: block; width: 16px; height: 16px; border-radius: 50%; background: var(--surface); transition: transform 120ms ease-out; }
 .setting-switch[aria-checked='true'] { background: var(--accent); border-color: var(--accent); }
 .setting-switch[aria-checked='true'] span { transform: translateX(14px); background: var(--on-accent); }
 .setting-save-status { color: var(--muted); font-size: max(12px, calc(12px * var(--font-scale))); line-height: 1.6; margin-top: 16px; }
+.glass-setting-range { display: flex; align-items: center; gap: 16px; width: min(100%, 360px); min-height: 32px; }
+.glass-setting-range input { flex: 1; min-width: 0; min-height: 24px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.glass-setting-range input[aria-disabled='true'] { opacity: .6; cursor: default; }
+.glass-setting-value { display: flex; align-items: baseline; justify-content: flex-end; flex-wrap: wrap; gap: 6px; min-width: 7ch; font-variant-numeric: tabular-nums; }
+.glass-setting-value span { color: var(--muted); font-size: max(12px, calc(12px * var(--font-scale))); }
+.glass-setting-scale { display: flex; justify-content: space-between; width: min(calc(100% - 7ch - 16px), calc(360px - 7ch - 16px)); color: var(--muted); font-size: max(12px, calc(12px * var(--font-scale))); }
+.glass-preview-error { margin-top: 8px; color: var(--error); overflow-wrap: anywhere; }
+.glass-preview-error > .text-button { color: var(--accent); min-height: 32px; text-decoration: underline; text-underline-offset: 3px; }
+.theme-current { margin-bottom: 4px; }
+.theme-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; border: 0; padding: 0; margin: 0 0 6px; min-width: 0; }
+.theme-option { display: grid; gap: 6px; min-width: 0; padding: 6px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+.theme-option:hover { border-color: var(--border-strong); }
+.theme-option:has(input:checked) { border-color: var(--accent); }
+.theme-option:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.theme-options[aria-disabled='true'] .theme-option { cursor: wait; }
+.theme-swatch { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 60px; overflow: hidden; padding: 10px 10px 10px 34px; border: 1px solid; border-radius: 3px; }
+.theme-swatch-sidebar { position: absolute; inset: 0 auto 0 0; width: 24px; border-right: 1px solid; }
+.theme-swatch-sidebar i { display: block; height: 5px; margin: 12px 4px 0; border-radius: 2px; }
+.theme-swatch-type { font-size: calc(22px * var(--font-scale)); font-weight: 600; line-height: 1.2; }
+.theme-swatch-colors { display: grid; grid-template-columns: repeat(2, 7px); gap: 4px; flex-shrink: 0; }
+.theme-swatch-colors i { width: 7px; height: 7px; border-radius: 2px; }
+.theme-option-name { display: flex; align-items: center; gap: 6px; min-width: 0; line-height: 1.5; font-size: max(12px, calc(12px * var(--font-scale))); overflow-wrap: anywhere; }
+.theme-option-name input { margin: 0; width: 14px; height: 14px; flex-shrink: 0; accent-color: var(--accent); }
+.theme-option:has(input:checked) .theme-option-name { color: var(--accent); }
 .tray-view { display: flex; flex-direction: column; height: 100vh; overflow: hidden; overflow-wrap: anywhere; }
 .tray-content { flex: 1; min-height: 0; overflow: auto; padding: 20px 20px 0; }
 .tray-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; color: var(--accent); }
@@ -42,6 +67,12 @@
   .setting-row { grid-template-columns: minmax(0, 1fr); }
   .setting-row h2 { padding-top: 0; }
   .setting-choices { column-gap: 20px; }
+}
+@container (max-width: 420px) {
+  .theme-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container (max-width: 280px) {
+  .theme-options { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
   .setting-switch, .setting-switch span { transition: none; }

@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "lockSha256": "2388ec6c2635c63ae84ca874c17a23a7745e86d8c9edeb1509f16ade42e920ff",
+  "allowedLicenses": [
+    "(MIT OR CC0-1.0)",
+    "(WTFPL OR MIT)",
+    "0BSD",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BlueOak-1.0.0",
+    "CC-BY-4.0",
+    "ISC",
+    "MIT",
+    "MPL-2.0",
+    "Python-2.0",
+    "WTFPL",
+    "WTFPL OR ISC"
+  ],
+  "advisories": [
+    {
+      "id": "GHSA-g3hv-75wg-m249",
+      "scope": "build-only",
+      "reason": "2026-11-05核对npm audit与GitHub原公告：所有minimatch节点均为开发依赖；应用运行依赖不含它。GitHub标注>=7,<11.0.1且需攻击者控制pattern和optimizationLevel>=2；npm标注范围更广(<11)，报告保留该差异。构建glob来自仓库配置，CI有30分钟作业上限；新增/修改构建pattern需要评审。打包后还需确认该模块不在实际renderer清单或外部运行依赖中。未自动采用npm建议的electron-builder跨大版本降级。",
+      "reviewedAt": "2026-11-05"
+    }
+  ],
+  "dependencyChangeReason": "R-01已移除systeminformation，应用无外部npm运行时依赖。2026-11-05为Apple原生Liquid Glass增加node-api-headers@1.9.0构建依赖；D-02复用unzipper@0.12.5校验本地ZIP。2026-11-06为真实WebGL办公楼增加精确three@0.187.0与@types/three@0.187.0，两者MIT；新增8个锁节点全部为dev，现有锁节点与版本未改变。@types/three的6个传递开发依赖为rapier3d-compat（Apache-2.0）、tween.js、stats.js类型、webxr类型、fflate、meshoptimizer（其余MIT）。只有实际使用的Three.js模块由Vite按需打入独立scene chunk，物理引擎、压缩器、类型和node_modules不进入安装包；不加载外部模型或纹理。生产renderer启用压缩，保持现有3MiB ASAR预算及其他冻结预算不变；最终体积和实际打包依赖以本次产物检查回执为准。"
+}

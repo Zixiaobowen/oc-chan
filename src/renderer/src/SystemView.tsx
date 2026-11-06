@@ -1,16 +1,46 @@
-import { ArrowDown, ArrowUp, Cpu, HardDrive, MemoryStick, Network } from 'lucide-react'
+import { Cpu, HardDrive, MemoryStick, Network } from 'lucide-react'
 import type { SystemSnapshot } from '../../shared/types'
-import { bytes, Chart, duration, Empty, Meter, Sources, time } from './components'
+import { bytes, Chart, duration, Empty, Meter, NativeSelect, Sources, time } from './components'
+import { MemoryBreakdown, NetworkTraffic, ProcessRanking } from './SystemMetrics'
 import { useI18n } from './i18n'
 
-export default function SystemView({ data }: { data: SystemSnapshot | null }) {
+export default function SystemView({ data, enabled, processOrder, onProcessOrderChange }: {
+  data: SystemSnapshot | null; enabled: boolean; processOrder: 'cpu' | 'memory'; onProcessOrderChange: (order: 'cpu' | 'memory') => void
+}) {
   const { language, t } = useI18n()
-  if (!data) return <div className="panel"><Empty title={t('正在采样系统状态', 'Sampling system status')}>{t('CPU、内存、磁盘和默认网络接口。', 'CPU, memory, disk and the default network interface.')}</Empty></div>
-  return <>
+  if (!data) return <div className="panel"><Empty title={enabled ? t('正在采样系统状态', 'Sampling system status') : t('系统采集已停用', 'System collection disabled')}>{enabled ? t('CPU、内存、磁盘和默认网络接口。', 'CPU, memory, disk and the default network interface.') : t('尚无快照。可在数据来源中开启系统采集。', 'No snapshot yet. Enable system collection in Data sources.')}</Empty></div>
+  return <div className="system-view">
     <div className="machine-strip"><div><Cpu size={17} /><strong>{data.cpuModel}</strong><span>{t(`${data.cpuCores} 核心`, `${data.cpuCores} cores`)}</span></div><span>{t('已运行', 'Uptime')} {duration(data.uptimeSeconds, language)} · {time(data.collectedAt, language)}</span></div>
-    <div className="system-grid"><section className="panel chart-panel"><div className="section-heading"><h2><Cpu size={18} />{t('CPU 使用率', 'CPU usage')}</h2><strong className="chart-value">{data.cpuPercent.toFixed(1)}<small>%</small></strong></div><Chart samples={data.history} field="cpuPercent" label={t('CPU 使用率', 'CPU usage')} /></section><section className="panel chart-panel"><div className="section-heading"><h2><MemoryStick size={18} />{t('内存使用率', 'Memory usage')}</h2><strong className="chart-value">{(data.memoryUsed / data.memoryTotal * 100).toFixed(1)}<small>%</small></strong></div><Chart samples={data.history} field="memoryPercent" label={t('内存使用率', 'Memory usage')} /><p className="chart-note">{t('已用', 'Used')} {bytes(data.memoryUsed)} / {bytes(data.memoryTotal)} · {t('交换空间', 'Swap')} {bytes(data.swapUsed)}</p></section></div>
-    <div className="system-grid"><section className="panel resource-panel"><h2><HardDrive size={18} />{t('磁盘空间', 'Disk space')}</h2><Meter label={t('数据卷', 'Data volume')} value={data.diskTotal ? (data.diskUsed ?? 0) / data.diskTotal * 100 : null} detail={t(`${bytes(data.diskUsed)} 已用 / ${bytes(data.diskTotal)} 总容量`, `${bytes(data.diskUsed)} used / ${bytes(data.diskTotal)} total`)} tone="blue" /><p className="resource-detail">{t('可用空间', 'Available')} <strong>{bytes(data.diskAvailable)}</strong></p></section><section className="panel resource-panel"><h2><Network size={18} />{t('网络吞吐', 'Network throughput')}</h2><div className="network-values"><div><span><ArrowDown size={15} />{t('接收', 'Received')}</span><strong>{bytes(data.rxBytesPerSecond)}<small>/s</small></strong></div><div><span><ArrowUp size={15} />{t('发送', 'Sent')}</span><strong>{bytes(data.txBytesPerSecond)}<small>/s</small></strong></div></div><p className="footnote">{t('默认网络接口 · 首次采样完成后显示速率', 'Default network interface · Rates appear after the first sample')}</p></section></div>
-    <section className="panel"><div className="section-heading padded"><h2>{t('占用较高的进程', 'Top processes')}</h2><span className="muted">{t('按 CPU 排序 · 单核 100%', 'Sorted by CPU · 100% per core')}</span></div><div className="table-scroll"><table className="data-table"><thead><tr><th>{t('进程', 'Process')}</th><th>PID</th><th className="numeric">CPU</th><th className="numeric">{t('内存', 'Memory')}</th></tr></thead><tbody>{data.processes.map(process => <tr key={process.pid}><td><strong>{process.name}</strong></td><td className="mono muted">{process.pid}</td><td className="numeric mono">{process.cpuPercent.toFixed(1)}%</td><td className="numeric mono">{bytes(process.memoryBytes)}</td></tr>)}</tbody></table></div>{!data.processes.length && <Empty title={t('进程数据不可用', 'Process data unavailable')}>{t('查看下方数据来源中的采集错误。', 'See Data sources below for collection errors.')}</Empty>}</section>
-    <Sources sources={data.sources} compact />
-  </>
+    <div className="system-grid">
+      <section className="panel chart-panel">
+        <div className="section-heading"><h2><Cpu size={18} />{t('CPU 使用率', 'CPU usage')}</h2><strong className="chart-value">{data.cpuPercent === null ? '—' : <>{data.cpuPercent.toFixed(1)}<small>%</small></>}</strong></div>
+        <Chart samples={data.history} field="cpuPercent" label={t('CPU 使用率', 'CPU usage')} />
+        <p className="chart-note">{t('全机使用率 · 所有逻辑核心合计 100%', 'Total usage · All logical cores combined at 100%')}</p>
+      </section>
+      <section className="panel chart-panel">
+        <div className="section-heading"><h2><MemoryStick size={18} />{t('内存使用率', 'Memory usage')}</h2><strong className="chart-value">{(data.memoryUsed / data.memoryTotal * 100).toFixed(1)}<small>%</small></strong></div>
+        <Chart samples={data.history} field="memoryPercent" label={t('内存使用率', 'Memory usage')} />
+        <p className="chart-note">{t('已用', 'Used')} {bytes(data.memoryUsed)} / {bytes(data.memoryTotal)}</p>
+        <MemoryBreakdown data={data} />
+      </section>
+    </div>
+    <div className="system-grid">
+      <section className="panel resource-panel">
+        <h2><HardDrive size={18} />{t('磁盘空间', 'Disk space')}</h2>
+        <Meter label={t('数据卷', 'Data volume')} value={data.diskTotal && data.diskUsed !== null ? data.diskUsed / data.diskTotal * 100 : null} detail={t(`${bytes(data.diskUsed)} 已用 / ${bytes(data.diskTotal)} 总容量`, `${bytes(data.diskUsed)} used / ${bytes(data.diskTotal)} total`)} tone="blue" />
+        <p className="resource-detail">{t('可用空间', 'Available')} <strong>{bytes(data.diskAvailable)}</strong></p>
+      </section>
+      <section className="panel resource-panel"><h2><Network size={18} />{t('网络吞吐', 'Network throughput')}</h2><NetworkTraffic data={data} /></section>
+    </div>
+    <section className="panel">
+      <div className="section-heading padded system-process-heading">
+        <h2>{t('占用较高的进程', 'Top processes')}</h2>
+        <label className="system-process-order"><span>{t('排序', 'Sort by')}</span><NativeSelect value={processOrder} onChange={event => onProcessOrderChange(event.target.value as 'cpu' | 'memory')}>
+          <option value="cpu">{t('CPU · 单核 100%', 'CPU · 100% per core')}</option><option value="memory">{t('内存 · 常驻大小', 'Memory · Resident size')}</option>
+        </NativeSelect></label>
+      </div>
+      <ProcessRanking processes={processOrder === 'cpu' ? data.processes : data.memoryProcesses} by={processOrder} />
+    </section>
+    <Sources sources={data.sources} compact enabled={enabled} />
+  </div>
 }

@@ -21,6 +21,7 @@ interface Callbacks {
   floor(id: string): void
   menu(id: string, x: number, y: number, trigger: HTMLElement): void
   error(message: string): void
+  ready(): void
 }
 type Translate = (zh: string, en: string) => string
 const LABEL_LIMIT = 32
@@ -204,9 +205,13 @@ export class TopologyScene {
     }
     const occupied = new Set<string>()
     const cell = (id: string, p: Point3D) => `${id}:${Math.round(p.x / 140)}:${Math.round(p.z / 140)}`
+    for (const [id, p] of this.session.positions) {
+      const floorId = this.session.floorByAgent.get(id)
+      if (floorId !== undefined) occupied.add(cell(floorId, p))
+    }
     for (const floor of this.floors) for (const id of floor.nodeIds) {
       const p = this.session.positions.get(id)
-      if (p) { p.y = floor.y + 40; occupied.add(cell(floor.id, p)) }
+      if (p) p.y = floor.y + 40
     }
     for (const floor of this.floors) for (const id of floor.nodeIds) {
       if (this.session.positions.has(id)) continue
@@ -427,6 +432,7 @@ export class TopologyScene {
         this.renderer.render(this.scene, this.camera)
         this.projectLabels()
         if (this.graph?.nodes.length) this.session.camera = { position: this.camera.position.toArray(), target: this.controls.target.toArray() }
+        this.callbacks.ready()
       } catch (error) {
         this.failed = true
         this.callbacks.error(error instanceof Error ? error.message : String(error))
@@ -511,7 +517,10 @@ export class TopologyScene {
       label.setAttribute('aria-label', `${title}, ${state}, PID ${item.node.agent.pid}`)
       label.style.transform = `translate(${x}px, ${y}px)`
     }
-    for (const label of this.labels) if (!used.has(label)) label.hidden = true
+    for (const label of this.labels) if (!used.has(label)) {
+      if (document.activeElement === label) this.renderer.domElement.focus({ preventScroll: true })
+      label.hidden = true
+    }
   }
 
   fit(front = false, ids?: ReadonlySet<string>): void {
@@ -570,12 +579,19 @@ export class TopologyScene {
     this.fit()
   }
 
-  private hit(event: PointerEvent | MouseEvent): string | null {
+  private updateRay(event: PointerEvent | MouseEvent): void {
     const bounds = this.renderer.domElement.getBoundingClientRect()
     this.pointer.set((event.clientX - bounds.left) / bounds.width * 2 - 1, -(event.clientY - bounds.top) / bounds.height * 2 + 1)
     this.raycaster.setFromCamera(this.pointer, this.camera)
+  }
+
+  private hit(event: PointerEvent | MouseEvent): string | null {
+    this.updateRay(event)
     const hit = this.raycaster.intersectObjects([this.nodes, this.markers, this.desks, this.mutedNodes, this.mutedMarkers, this.mutedDesks], false)[0]
     if (hit?.instanceId === undefined) return null
+    const blockers = this.raycaster.intersectObjects([this.decks, this.frames, this.roof, this.entrance], false)
+    if (blockers.some(blocker => blocker.distance < hit.distance &&
+      (blocker.object as InstancedMesh<BufferGeometry, MeshLambertMaterial>).material.opacity === 1)) return null
     return (hit.object === this.nodes || hit.object === this.markers || hit.object === this.desks ? this.nodeSlots : this.mutedNodeSlots)[hit.instanceId] ?? null
   }
 
@@ -587,11 +603,16 @@ export class TopologyScene {
     this.pointerStart = { x: event.clientX, y: event.clientY, id, floorId, pointerId: event.pointerId }
     this.dragged = false
     if (!id || event.shiftKey || event.ctrlKey || event.metaKey) { this.pointerStart.id = null; return }
-    this.controls.enabled = false
     const p = this.session.positions.get(id)!
-    this.dragPlane.setFromNormalAndCoplanarPoint(this.up, this.point.set(p.x, p.y, p.z))
+    this.camera.getWorldDirection(this.direction)
+    // A nearly level camera needs a vertical drag plane; project movement back onto the floor.
+    if (Math.abs(this.direction.y) < 0.25) this.direction.set(this.direction.x, 0, this.direction.z).normalize()
+    else this.direction.copy(this.up)
+    this.dragPlane.setFromNormalAndCoplanarPoint(this.direction, this.point.set(p.x, p.y, p.z))
     const intersect = this.raycaster.ray.intersectPlane(this.dragPlane, this.point)
-    if (intersect) this.dragOffset.set(p.x, p.y, p.z).sub(intersect)
+    if (!intersect) { this.pointerStart.id = null; return }
+    this.dragOffset.set(p.x, p.y, p.z).sub(intersect)
+    this.controls.enabled = false
     this.renderer.domElement.setPointerCapture(event.pointerId)
     this.renderer.domElement.focus({ preventScroll: true })
   }
@@ -600,7 +621,7 @@ export class TopologyScene {
     if (this.pointerStart) {
       if (Math.hypot(event.clientX - this.pointerStart.x, event.clientY - this.pointerStart.y) > 4) this.dragged = true
       if (this.pointerStart.id && this.dragged) {
-        this.hit(event)
+        this.updateRay(event)
         if (this.raycaster.ray.intersectPlane(this.dragPlane, this.point)) {
           const floorId = this.session.floorByAgent.get(this.pointerStart.id)
           const floor = this.floors.find(floor => floor.id === floorId)!
