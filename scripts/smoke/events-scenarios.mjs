@@ -148,9 +148,22 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     await ui.click(action('next'))
     assert.deepEqual(await page(ui), second)
     await ui.click($('#event-source-filter'))
-    const geometry = await ui.evaluate(`(() => { const r = ${$('.main-content')}.getBoundingClientRect(); return {x:r.right-40,y:r.top+100}; })()`)
-    await renderer.call('Input.dispatchMouseEvent', { type: 'mouseWheel', ...geometry, deltaX: 0, deltaY: 240 }, RPC_MS)
-    await ui.dom('real wheel scroll moves event workspace', `${$('.main-content')}?.scrollTop > 0`)
+    // Dismiss native suggestions while keeping input focus, then move over the
+    // scroller and commit its hit-test region before dispatching the real wheel.
+    await ui.key('Escape', 'Escape', 27)
+    await ui.frames()
+    const geometry = await ui.evaluate(`(() => {
+      const content = ${$('.main-content')}, r = content.getBoundingClientRect();
+      const x = r.right - 40, y = r.top + r.height / 2;
+      if (!content.contains(document.elementFromPoint(x, y)) || content.scrollHeight <= content.clientHeight)
+        throw new Error('Event workspace must be scrollable and unobstructed');
+      return { x, y, scroll: content.scrollTop };
+    })()`)
+    const point = { x: geometry.x, y: geometry.y }
+    await renderer.call('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point }, RPC_MS)
+    await ui.frames()
+    await renderer.call('Input.dispatchMouseEvent', { type: 'mouseWheel', ...point, deltaX: 0, deltaY: 240 }, RPC_MS)
+    await ui.dom('real wheel scroll moves event workspace', `${$('.main-content')}?.scrollTop > ${geometry.scroll}`)
     await ui.frames()
     const position = `(() => {
       const content = ${$('.main-content')}, bounds = content.getBoundingClientRect();
