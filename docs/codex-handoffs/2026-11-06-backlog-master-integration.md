@@ -35,10 +35,15 @@
 - `002aac3`已通过普通push送达GitHub，`git ls-remote`确认远端master完整SHA一致。首次云端工作流`42172300826`行为测试通过，Electron smoke失败于`events-identity-and-background-new-record`的真实滚轮断言，产物步骤未执行；Release作业按普通分支条件跳过。失败日志、截图、完整回执下载于`/tmp/oc-chan-ci-42172300826/oc-chan-renderer-smoke-19`。
 - 来源输入带原生datalist，原脚本点击后直接发wheel，未关闭候选菜单或移动指针到滚动区；补齐Escape与mouseMoved，保留实际滚动、焦点和阅读位置断言，不修改产品代码、不重跑未修改的失败提交。
 - 修正后的完整本地Electron smoke通过：`/tmp/oc-chan-ci-wheel-fix-20261106/result.json`，184.23秒，`complete=true`且无错误。真实wheel后scrollTop为240；后台新事件到达前后来源框焦点一致，可见记录`smoke-f05-04949`距工作区顶部均为103.796875px。两次进程正常退出并完成资源/profile/输入清理。云端仍需验证。
+- 修正提交`8c0ec3a082afca3de40f2567193c7a5acc0891c2`已推送。云端运行`42173731035`仍失败于同一个滚轮断言，说明仅补齐菜单/指针前提不足；不能宣称根因已经解决。原始回执保存在`/tmp/oc-chan-ci-42173731035`。
+- 诊断提交`117cadbf72961743020aecc7d87bda6a1b5c1934`对应运行`42174528532`确认：视口1280×860、DPR=1，容器高度805、内容12605、overflow=auto；可信mousemove与wheel均命中MAIN，deltaY=240且defaultPrevented=false，但scrollTop始终0，没有scroll事件。该证据不支持滚动后被产品重置，也不能归因于候选菜单。
+- 完整`Input.synthesizeScrollGesture`在完整本地smoke也超时：`/tmp/oc-chan-ci-scroll-gesture-20261106`、`/tmp/oc-chan-ci-compositor-fix-20261106`、`/tmp/oc-chan-ci-native-geometry-20261106`。关闭后台节流和核对原生1280×860窗口均不足以解决。独立最小实验能够滚动，但不能代表完整流程；实际frame/gesture内部阻塞点仍未确认。临时探针、节流设置和尺寸日志均已删除；两个独立调查实例正常退出且profile已移除。
+- 最终smoke沿用已有目标返回场景的DOM `scrollIntoView`建立真实记录阅读位置；真实事件IPC、页内记录、输入焦点、同一可见记录及≤1px位置误差断言仍保留，没有轮询重试或失败后兜底。此项验证后台刷新保留阅读状态，不再把隐藏窗口输入当作原生滚轮验收；原生专项仍未完成，README及结果字段明确注明。
+- 最终本地完整smoke通过：`/tmp/oc-chan-ci-reading-position-20261106/result.json`，181.74秒，`complete=true`、`errors=[]`。初始scrollTop=344；新增事件后同一记录`smoke-f05-04949`距顶部始终-0.203125px，来源输入焦点未变。首轮与重启退出0、资源全归零，进程/profile/输入目录清理完成。
 
 ## 未完成与限制
 
-- master合并已推送；云端首轮失败的smoke操作前提已修正并本地通过，待推送修复并取得完整云端回执。
+- master已推送，最新smoke修正本地通过；待推送并取得完整云端回执，DMG/ZIP云端产物尚未生成。
 - 37卡仍为27卡有完整本地完成证据。R-04的24h验收未完成：管理员采样器定向检查和真实权限验证已有证据，但最近预验在macOS系统认证阶段超时，未启动Electron；没有长测运行，旧失败时长不累计。
 - U-05、U-07、U-08、F-06、D-03仍缺完整原生专项；系统通知权限denied。F-07只做调研，正式签名公证/发布和多人试用按用户决定延期。
 - 本轮没有重新打DMG/ZIP、替换`/Applications/OC Chan.app`、运行可见原生窗口或新增性能提升声明。当前安装版不能当作本轮合并版本。
@@ -53,4 +58,4 @@
 
 ## 恢复提示
 
-继续OC Chan云端集成验收，工作树`/Users/zvf003/tmp/oc-chan-backlog-master-20261106`。master合并提交`002aac39e8b7f36ce1525bc06970403a0957f8a0`已推送且远端SHA已确认。首次GitHub运行42172300826行为测试通过，失败于事件滚轮smoke断言，产物步骤未执行；候选菜单/指针操作前提是待云端验证的修正方向。`scripts/smoke/events-scenarios.mjs`已补齐Escape与mouseMoved，完整本地smoke在`/tmp/oc-chan-ci-wheel-fix-20261106/result.json`通过且退出清理完成。下一步提交推送这次修正和本交接、核对云端实际回执。用户已授权提交和推送，无需再问；单次禁用安装hook，不覆盖正式应用或发布标签。原仓库仍在fix/oc-chan-r04-admin-sampler-20261106，保留其并行Codex拓扑工作。R-04系统认证阻塞、原生专项和延期项继续保持未完成。
+继续OC Chan云端集成验收，工作树`/Users/zvf003/tmp/oc-chan-backlog-master-20261106`。master合并002aac3已推送，行为测试通过；早期三个云端运行失败于隐藏窗口的wheel输入。完整gesture与节流实验也未解决，相关临时改动已删除。最终smoke按既有惯例用真实DOM scrollIntoView建立阅读位置，继续检查真实IPC、记录身份、像素位置与焦点，明确不算原生滚轮验收。本地完整回执`/tmp/oc-chan-ci-reading-position-20261106/result.json`通过且清理完成；下一步提交推送scripts/smoke/events-scenarios.mjs、README与本交接，核对云端产物。用户已授权提交和推送，无需再问；单次禁用安装hook，不覆盖正式应用或发布标签。原仓库保留并行Codex拓扑工作。R-04系统认证阻塞、原生专项和延期项继续保持未完成。
