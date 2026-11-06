@@ -3,7 +3,10 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import SettingsProvider from './settings'
 import TrayView from './TrayView'
+import StartupRecoveryView from './StartupRecoveryView'
 import './styles.css'
 
-const isTray = new URLSearchParams(location.search).get('view') === 'tray'
-createRoot(document.getElementById('root')!).render(<React.StrictMode><SettingsProvider>{isTray ? <TrayView /> : <App />}</SettingsProvider></React.StrictMode>)
+const view = new URLSearchParams(location.search).get('view')
+createRoot(document.getElementById('root')!).render(<React.StrictMode>{view === 'recovery'
+  ? <StartupRecoveryView />
+  : <SettingsProvider>{view === 'tray' ? <TrayView /> : <App />}</SettingsProvider>}</React.StrictMode>)
