@@ -13,7 +13,8 @@ import { exerciseSmoke, verifyRestart } from './smoke/scenarios.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const exec = promisify(execFile)
-const limits = Object.freeze({ totalMs: 420000, startupMs: 120000, scenarioMs: 180000, restartMs: 60000,
+// Covers 3D round trips, 100 event samples and bilingual layout checks within the total deadline.
+const limits = Object.freeze({ totalMs: 420000, startupMs: 120000, scenarioMs: 300000, restartMs: 60000,
   logBytes: 8 * 1024 * 1024, records: 16384, screenshots: 40, screenshotBytes: 2 * 1024 * 1024,
   settingsBytes: 64 * 1024, protocolPending: 32, fixtureBytes: 128 * 1024 * 1024 })
 const options = { fault: null }

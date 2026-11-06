@@ -67,8 +67,8 @@ export default memo(function AgentsView({ data, enabled, error, pausedAt, intent
   const detailRef = useRef<HTMLElement>(null)
   const revealPending = useRef(false)
   const [collapseLimit, setCollapseLimit] = useState(false)
-  const [officeReveal, setOfficeReveal] = useState<string | null>(null)
-  const finishOfficeReveal = useCallback(() => setOfficeReveal(null), [])
+  const [revealId, setRevealId] = useState<string | null>(null)
+  const finishReveal = useCallback(() => setRevealId(null), [])
   const patchView = useCallback((patch: Partial<AgentViewState>) => onViewChange(current => ({ ...current, ...patch })), [onViewChange])
   const setQuery = (query: string) => patchView({ query, topologyPage: null })
   const setKind = (kind: AgentKindFilter) => patchView({ kind, topologyPage: null })
@@ -141,7 +141,7 @@ export default memo(function AgentsView({ data, enabled, error, pausedAt, intent
     if (!intent || intent.target.kind !== 'agent' || consumed.current === intent.sequence) return
     focusReturn.current = null
     consumed.current = intent.sequence
-    setOfficeReveal(intent.target.id)
+    setRevealId(intent.target.id)
     if (!open || selectedId !== intent.target.id || identity !== intent.target.identity) {
       revealPending.current = true
       patchView({ selectedId: intent.target.id, identity: intent.target.identity, unavailable: false, open: true, topologyPage: pageOrder.pageById.get(intent.target.id) ?? null })
@@ -156,7 +156,7 @@ export default memo(function AgentsView({ data, enabled, error, pausedAt, intent
   }, [view, open])
   function locateSelected() {
     if (!selected) return
-    setOfficeReveal(selected.id)
+    setRevealId(selected.id)
     if (selectedIncluded) patchView({ topologyPage: pageOrder.pageById.get(selected.id)! })
     else {
       const unfiltered = projectAgentTopology(agents, 'all', 'all', '', new Set())
@@ -208,8 +208,8 @@ export default memo(function AgentsView({ data, enabled, error, pausedAt, intent
         {!data ? <div className="topology-empty"><Empty title={!enabled ? t('Agent 采集已停用', 'Agent collection disabled') : error ? t('尚未取得 Agent 数据', 'Agent data unavailable') : t('正在连接本机 Agent', 'Connecting to local agents')}>{!enabled ? t('尚无快照。可在数据来源中开启采集，不会影响 Agent 的运行。', 'No snapshot yet. Enable collection in Data sources; running agents are unaffected.') : error ? t('请查看上方错误信息并重试。', 'Review the error above and retry.') : t('读取活动进程与父子关系。', 'Reading active processes and parent-child relationships.')}</Empty></div>
           : <div className="topology-stage">
             {topologyView === '3d'
-              ? <AgentTopology3D graph={graph} selectedId={selected ? selectedId : null} onSelect={select} onToggleCollapse={toggleCollapse} filtering={filtering} evidenceCurrent={enabled && !paused && !error} liveIds={liveIds} session={memory.office} revealId={officeReveal} onRevealed={finishOfficeReveal} onNodesReady={restoreNodeFocus} />
-              : <AgentTopology graph={topologyPage.graph} pageIndex={topologyPage.index} selectedId={selected ? selectedId : null} onSelect={select} onToggleCollapse={toggleCollapse} filterKey={filterKey} memory={memory} onNodesReady={restoreNodeFocus} />}
+              ? <AgentTopology3D graph={graph} selectedId={selected ? selectedId : null} onSelect={select} onToggleCollapse={toggleCollapse} filtering={filtering} evidenceCurrent={enabled && !paused && !error} liveIds={liveIds} session={memory.office} revealId={revealId} onRevealed={finishReveal} onNodesReady={restoreNodeFocus} />
+              : <AgentTopology graph={topologyPage.graph} pageIndex={topologyPage.index} selectedId={selected ? selectedId : null} onSelect={select} onToggleCollapse={toggleCollapse} filterKey={filterKey} memory={memory} revealId={revealId} onRevealed={finishReveal} onNodesReady={restoreNodeFocus} />}
             {!graph.nodes.length && <div className="topology-empty topology-empty-overlay"><Empty title={filtering ? t('没有匹配的 Agent', 'No matching agents') : !enabled ? t('旧快照中没有 Agent', 'No agents in the retained snapshot') : t('当前未发现运行中的 Agent', 'No running agents found')}>{filtering ? t('调整类型、活跃状态或搜索词。活跃筛选保留命中节点的父链与子树。', 'Adjust type, activity or search. Active filters preserve ancestors and descendants of matching nodes.') : !enabled ? t('在数据来源中重新开启采集以获取新状态。', 'Enable collection in Data sources for a fresh sample.') : t('启动 Agent 后等待下次采样；覆盖范围见数据来源。', 'Start an agent and wait for the next sample. See Data sources for coverage.')}</Empty>{filtering && <button className="button secondary" onClick={() => { setQuery(''); setKind('all'); setActivity('all') }}>{t('清除筛选', 'Clear filters')}</button>}</div>}
           </div>}
         {open && <section ref={detailRef} tabIndex={-1} data-agent-id={selectedId ?? undefined} aria-label={t('Agent 详情', 'Agent details')} className="agent-inspector">
