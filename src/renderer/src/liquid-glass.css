@@ -1,0 +1,20 @@
+/* Native NSGlassEffectView sits behind the web view. Only chrome exposes it. */
+html[data-liquid-glass] body { background: transparent; }
+html[data-liquid-glass] .main-content,
+html[data-liquid-glass] .settings-loading,
+html[data-liquid-glass] .tray-content { background: var(--ground); }
+html[data-liquid-glass] .topbar,
+html[data-liquid-glass] .tray-view { background: var(--ground); }
+html[data-liquid-glass] .sidebar { background: var(--sidebar); }
+html[data-liquid-glass='active'] .sidebar {
+  background: color-mix(in srgb, var(--sidebar) var(--glass-solid-percent), transparent);
+}
+html[data-liquid-glass='active'] .topbar,
+html[data-liquid-glass='active'] .tray-view {
+  background: color-mix(in srgb, var(--ground) var(--glass-solid-percent), transparent);
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  html[data-liquid-glass='active'] .sidebar { background: var(--sidebar); }
+  html[data-liquid-glass='active'] .topbar,
+  html[data-liquid-glass='active'] .tray-view { background: var(--ground); }
+}
