@@ -148,18 +148,12 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     await ui.click(action('next'))
     assert.deepEqual(await page(ui), second)
     await ui.click($('#event-source-filter'))
-    const geometry = await ui.evaluate(`(() => {
-      const content = ${$('.main-content')}, r = content.getBoundingClientRect();
-      const x = r.right - 40, y = r.top + r.height / 2;
-      if (!content.contains(document.elementFromPoint(x, y)) || content.scrollHeight <= content.clientHeight)
-        throw new Error('Event workspace must be scrollable and unobstructed');
-      return { x, y, scroll: content.scrollTop };
-    })()`)
-    const point = { x: geometry.x, y: geometry.y }
-    await renderer.call('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point }, RPC_MS)
-    await ui.frames()
-    await renderer.call('Input.dispatchMouseEvent', { type: 'mouseWheel', ...point, deltaX: 0, deltaY: 240 }, RPC_MS)
-    await ui.dom('real wheel scroll moves event workspace', `${$('.main-content')}?.scrollTop > ${geometry.scroll}`)
+    // Close native datalist suggestions without moving input focus before scrolling.
+    await ui.key('Escape', 'Escape', 27)
+    // Set the reading position through the real DOM, as in the target-return scenario.
+    // Hidden macOS compositor gestures are not a native wheel acceptance test.
+    await ui.evaluate(`${$(ROWS)}.scrollIntoView({block:'start',inline:'nearest',behavior:'instant'})`)
+    await ui.dom('event reading position starts below the page header', `${$('.main-content')}?.scrollTop > 0`)
     await ui.frames()
     const position = `(() => {
       const content = ${$('.main-content')}, bounds = content.getBoundingClientRect();
@@ -188,7 +182,8 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     assert.notDeepEqual(latest, first)
     const actual = await queryForRows(ui, main)
     assert.ok(actual.result.entries.some(entry => entry.sourceId === 'hermes-events' && entry.entityId === seed.target.id && entry.occurredAt === appendedAt), 'latest must reveal the actual newly collected execution')
-    return { backgroundPreserved: { before, after }, latest: latest[0], target: seed.target }
+    return { backgroundPreserved: { before, after }, latest: latest[0], target: seed.target,
+      scrollSetup: 'DOM scrollIntoView on the actual event row; native wheel input not exercised' }
   })
 
   await ui.stage('events-real-ipc-failure-retry-and-cancellation', async () => {

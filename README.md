@@ -48,7 +48,7 @@ npm run smoke:renderer -- --out /tmp/oc-chan-renderer-smoke
 
 验收先将唯一无头窗口的原生内容区设为1280×860并回读，再设置CSS视口；不能只扩大CSS模拟尺寸，否则较小云端显示区域可能使输入坐标超出实际滚动区域。后续880×640与200%文字检查仍由CDP/CSS控制。窗口始终隐藏且不可聚焦，原生窗口尺寸与CSS视口分别记证，不代表可见macOS窗口验收。
 
-事件页验收使用临时库追加5000条合成记录，检查每页50条、来源／类型／发现时间筛选、真实任务历史直达、失败翻页重试与返回、后台新记录保持阅读位置、SQLite锁下查询取消和恢复、停用及覆盖断档，并核对1280×860、880×640与200%文字。文本编辑和按钮使用CDP输入；下拉选项采用DOM选择后验证真实React状态与IPC查询，不将其算作macOS原生菜单键盘验收。
+事件页验收使用临时库追加5000条合成记录，检查每页50条、来源／类型／发现时间筛选、真实任务历史直达、失败翻页重试与返回、后台新记录保持阅读位置、SQLite锁下查询取消和恢复、停用及覆盖断档，并核对1280×860、880×640与200%文字。文本编辑和按钮使用CDP输入；阅读位置通过真实记录的DOM `scrollIntoView`设置，再检查后台刷新前后的记录身份、像素位置和输入焦点。下拉选项采用DOM选择后验证真实React状态与IPC查询；这些检查不计为macOS原生滚轮或菜单键盘验收。
 
 通知专项可用 `npm run smoke:renderer -- --scenario notifications --out /tmp/oc-chan-notification-smoke`。它检查默认关闭、Hermes完整身份订阅、来源与类型、静默时间草稿、真实写入拒绝后的回滚与焦点恢复、插件启停、中英文880×640/1280×860与200%文字、独立重启读取；时间字段采用DOM原生setter，不声称验收了macOS分段输入。无头实例明确返回系统通知不支持，始终不发送OS通知。
 
@@ -120,13 +120,13 @@ npm run install:local -- --delivery release/local-20261105-1
 
 ## GitHub Actions 构建、下载与发布
 
-[Build macOS 工作流](https://github.com/Zixiaobowen/oc-chan/actions/workflows/build.yml) 在推送 `main` 或 `master`、创建或更新目标为这两个分支的 PR、推送 `v*` 标签时自动运行，也可在 Actions 页面选择 **Run workflow** 手动构建指定分支或标签。开发分支通过目标为 `main`／`master` 的 PR 进入检查；此配置不修改远端默认分支和保护规则。
+[Build macOS 工作流](https://github.com/Zixiaobowen/oc-chan/actions/workflows/build.yml) 在推送 `main`、创建或更新目标为 `main` 的 PR、推送 `v*` 标签时自动运行，也可在 Actions 页面选择 **Run workflow** 手动构建指定分支或标签。日常开发使用 `main`，开发分支通过目标为 `main` 的 PR 进入检查。
 
 工作流使用 Node.js 24 和 `npm ci` 安装锁定依赖，在 `macos-26`（Apple Silicon）执行适用行为测试，使用提供 `NSGlassEffectView` 的 macOS SDK。涉及应用、界面资源、隔离启动／夹具、依赖或工作流的改动，另运行真实无头 Electron smoke。通过后执行类型检查、Vite构建、包内原生模块编译和arm64 DMG/ZIP打包，保留依赖许可证与安全公告、包内容及冻结体积门禁，最后生成并验证SHA-256。任一门禁失败都阻止上传安装产物，没有 `continue-on-error`；smoke失败证据仍上传并保留14天。同一分支或PR的新构建会取消旧构建，标签发布不自动取消。Actions固定提交SHA，源码仓库权限为contents:read，checkout不保留凭据；公开分发另用专用令牌。
 
 `scripts/ci-tests.mjs` 以 PR 的 base SHA 或 push 的 before SHA 与当前 checkout 比较（保留完整Git历史），输出测试清单与选取原因。Agent、任务、系统采集包含对应模块和直接调用方；拓扑、查看状态、任务历史、设置、Tern导航分别映射已有行为测试；安装脚本或Git hook改动必跑临时目录中的安装事务测试。直接改动测试只选该文件。普通文档不跑产品测试；公共IPC/快照入口、依赖或跨模块入口扩大到对应套件。删除且已无原模块映射的代码检查跨模块调用方；新增测试、未知代码路径、缺失映射或无效基准明确失败，新增功能须同步此映射。标签、手动构建及无前序提交的新分支检查全部确定性测试。
 
-本地可用 Node.js 24 执行 `npm run test:ci -- --plan src/renderer/src/AgentTopology.tsx` 查看单元测试选择与 `rendererSmoke` 标志，去掉 `--plan` 执行这些单元测试。测试进程并发上限为2；真实 Electron smoke 由独立步骤运行，不混进 Node 单元测试进程。纯文档、仅单元测试或安装脚本变更不额外跑 renderer smoke；标签、手动及无前序提交的新分支执行。真实个人环境 `npm run smoke` 不放进 CI。云端步骤尚需后续获推送授权后的实际回执，构建成功不能替代原生窗口、安装应用或真实个人数据源验收。
+本地可用 Node.js 24 执行 `npm run test:ci -- --plan src/renderer/src/AgentTopology.tsx` 查看单元测试选择与 `rendererSmoke` 标志，去掉 `--plan` 执行这些单元测试。测试进程并发上限为2；真实 Electron smoke 由独立步骤运行，不混进 Node 单元测试进程。纯文档、仅单元测试或安装脚本变更不额外跑 renderer smoke；标签、手动及无前序提交的新分支执行。真实个人环境 `npm run smoke` 不放进 CI。云端门禁以对应提交的实际运行回执为准，构建成功不能替代原生窗口、安装应用或真实个人数据源验收。
 
 打开成功运行记录，在 **Artifacts** 下载 `oc-chan-macos-arm64-<运行编号>`。每份包含arm64 `.dmg`、`.zip`、更新频道的 `*-mac.yml`、`SHA256SUMS.txt`、`package-manifest-arm64.json` 和 `dependency-review-arm64.json`，保留30天。解压外层ZIP后执行 `shasum -a 256 -c SHA256SUMS.txt`。DMG可拖入Applications，应用ZIP保留可执行权限与符号链接；实际替换安装按对应授权执行。
 
