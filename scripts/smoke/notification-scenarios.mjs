@@ -203,10 +203,15 @@ export async function exerciseNotifications({ ui, main, renderer, capture, manif
       assert.ok(manifest.hermesJobIds.includes(job.id) && job.id.startsWith('hermes-job:'))
       target = { kind: 'schedule', id: job.id, identity: JSON.stringify([job.source, job.scope, job.file ?? null, job.executable ?? null]) }
       await ui.navigate('定时任务', 'Scheduled tasks')
+      if (await ui.evaluate(`!!${$(DRAWER)}`)) {
+        await ui.key('Escape', 'Escape', 27)
+        await ui.dom('previous task details close before subscription scenario', `!${$(DRAWER)}`)
+      }
       // Earlier history scenarios intentionally leave their schedule search in view memory.
       const clearFilters = $('.schedule-result-summary .text-button')
       if (await ui.evaluate(`!!${clearFilters}`)) await ui.click(clearFilters)
       await ui.dom('subscription starts without inherited task filters', `!${clearFilters} && ${$('.schedule-toolbar .search-field input')}?.value === ''`)
+      await ui.dom('subscription scenario includes launchd tasks after clearing filters', `!!${$('.schedule-panel [data-job-id^="launchd:"]')}`)
       const taskRow = $(`.schedule-panel [data-job-id=${JSON.stringify(job.id)}] button`)
       await ui.click(taskRow)
       await ui.dom('subscription is attached to exact task details', `${$(DRAWER)}?.dataset.jobId === ${JSON.stringify(job.id)} && !!${$('.task-notification-subscription button[aria-pressed]')}`)
