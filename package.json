@@ -80,7 +80,7 @@
     "mac": {
       "artifactName": "OC-Chan-${version}-mac-${arch}.${ext}",
       "category": "public.app-category.developer-tools",
-      "icon": "resources/icon.icns",
+      "icon": "resources/brand/oc-chan.icns",
       "type": "distribution",
       "hardenedRuntime": true,
       "binaries": ["Resources/tern-navigation/present-window", "Resources/liquid-glass/liquid-glass.node", "Resources/notification-permission/notification-permission.node"]

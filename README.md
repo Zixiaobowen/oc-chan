@@ -1,10 +1,12 @@
+<img src="resources/brand/oc-chan-icon.svg" width="88" height="88" alt="OC Chan 蓝白标志" />
+
 # OC Chan
 
 本机运行观察桌面应用，使用 Electron、React、TypeScript。本阶段的开发、CI与签名发布面向macOS的M系列arm64，沿用主分支冻结预算；Intel不在本期支持与验收范围。
 
 源码仓库：[Zixiaobowen/oc-chan](https://github.com/Zixiaobowen/oc-chan)（私有）。
 
-默认品牌采用蓝白OC配色，O／C连成观察双眼；菜单栏使用OC单色Template Image（22 × 18点，1×／2×），适配系统背景。品牌资源位于 `resources/brand/`。
+默认品牌采用蓝白 OC 配色，O／C 连成观察双眼。仓库首页和应用侧栏共用 `resources/brand/oc-chan-icon.svg`，macOS 安装包使用同套 `oc-chan.icns`；菜单栏使用 OC 单色 Template Image（22 × 18 点，1×／2×），适配系统背景。可编辑与导出资源均位于 `resources/brand/`。
 
 开发、重构和评审统一遵循仓库级 [全局工程规则](./AGENTS.md)：插件式架构、保持体积精简、高性能、OOM 防护、响应式布局与 SOTA 级 motion。
 
