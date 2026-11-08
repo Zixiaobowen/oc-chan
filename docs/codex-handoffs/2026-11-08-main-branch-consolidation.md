@@ -8,6 +8,15 @@
 - 合并前 main：`ea507625be77a39fa7f6f3fa60961421bf243900`；origin/master：`fed665ef75f0a1ab8f0742c9535cb471957fcade`。
 - 两个工作树原有未提交文档均保留，尤其本集成工作树的 `docs/codex-handoffs/2026-11-06-app-updates-main.md`；它不属于本次提交。
 
+## Git交付回执
+
+- 双亲合并提交：`a8b809ed819ba16fa57687d17546ecc2a76e06f1`，已普通推送到 `origin/main`。两个合并前分支的提交均通过祖先检查。
+- GitHub API确认默认分支为 `main`，仓库继续保持私有。远端分支列表已没有 `master`。
+- 已删除本地 `master` 与远端 `origin/master`，`origin/HEAD` 指向 `origin/main`；其他分支和两个工作树保留。
+- 删除远端时限定 master 必须仍指向已合并的 `fed665e`，防止误删期间新到的提交；没有重写 main 历史。
+- 推送单次跳过本机安装hook，没有修改持久配置或替换已安装应用。提交后集成工作树只余原有未提交安装交接。
+- 合并提交对应云端运行：[42440322285](https://github.com/Zixiaobowen/oc-chan/actions/runs/42440322285) 已完成，状态为 `failure`。适用行为测试和完整Electron smoke均通过；上传smoke证据仍因 `Artifact storage quota has been hit` 失败，后续DMG/ZIP构建、包审计和上传均跳过，Release作业也未执行。最终交接只改文档，以 `[skip ci]` 提交，不重复构建同一应用源码。
+
 ## 合并决定与文件
 
 - 采用双亲合并，保留两条分支的提交历史。两边曾分别集成同一批基础监控工作，逐项比较后，`src/**`、依赖锁、打包配置及主线拓扑验收均保留 main，净改动为零。
@@ -33,11 +42,10 @@
 
 ## 接续动作
 
-1. 本地验证已通过，完成双亲合并并普通推送 main。
-2. 将 GitHub 默认分支改为 main，删除远端及已合并的本地 master，并更新 origin/HEAD。
-3. 记录远端提交与默认分支、master不存在的回执及新 CI 实际结果；保持存储配额限制可见。
-4. 后续需要处理 Actions 存储时先取得相应删除或计费调整授权，不批量删除历史证据。
+1. 需要恢复云端产物交付时，先按实际保留需求取得Actions产物删除或计费调整授权，处理存储配额；不得批量删除历史证据或忽略上传失败。
+2. 配额恢复后再运行对应云端门禁，取得DMG/ZIP、包审计和上传回执；不要将本次通过的行为测试和smoke称为整条CI成功。
+3. 日常开发使用main集成工作树；原工作树仍有独立分支和用户未提交文件，不为切换入口而强行重置或删除。
 
 ## 恢复提示
 
-继续 OC Chan 主分支统一任务。当前集成工作树 `/Users/zixiaobowen/myProjects/oc-chan-main-integration-20261106` 在 main 上合并 origin/master=fed665e，所有冲突已解决并显式暂存，主线源码与打包配置没有净变动。已有未提交 `2026-11-06-app-updates-main.md` 必须保留，不夹带提交。类型检查、9项CI选择器测试、工作流解析和真实 Electron smoke 全部通过，原始证据在 `/tmp/oc-chan-main-merge-smoke-20261108`，不用重跑。需要完成合并推送、默认分支切换、删除master和最终回执。旧main的云端失败仅因Actions存储配额，不能绕过门禁或无授权清理产物。用户本次未授权新版本发布或重新安装应用。
+OC Chan 主分支统一已完成：双亲合并a8b809e已推送main，GitHub默认分支main，本地及远端master已删除，origin/HEAD已更新。集成工作树是 `/Users/zixiaobowen/myProjects/oc-chan-main-integration-20261106`；原工作树及两处已有未提交文档均保留。类型检查、9项CI选择器测试、工作流解析和真实Electron的8阶段smoke全部通过，证据在 `/tmp/oc-chan-main-merge-smoke-20261108`，无需重跑。新CI运行42440322285的行为测试和Electron smoke也通过，但证据上传因Actions存储配额满失败，未继续打包，不能宣称CI整体通过。需要恢复产物交付时先解决外部配额，不能绕过门禁或无授权清理产物。本次没有新版本发布或重新安装应用。
