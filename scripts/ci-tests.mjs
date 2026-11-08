@@ -17,7 +17,7 @@ export const suites = {
   topology: ['src/renderer/src/agent-topology.test.ts', 'src/renderer/src/agent-topology-3d-layout.test.ts'],
   views: ['src/renderer/src/view-state.test.ts'],
   navigation: ['src/main/navigation.test.ts'],
-  tern: ['src/main/tern-navigation.test.ts'],
+  tern: ['src/main/tern-navigation.test.ts', 'src/main/tern-present.test.ts'],
   settings: ['src/main/settings.test.ts', 'src/main/window-geometry.test.ts', 'src/main/startup-recovery.test.ts', 'src/main/login-items.test.ts'],
   diagnostics: ['src/shared/diagnostics.test.ts', 'src/main/diagnostic-report.test.ts', 'src/main/diagnostics.test.ts'],
   ipc: ['src/main/ipc-boundary.test.ts', 'src/main/monitor-subscriptions.test.ts', 'src/main/tray-window.test.ts'],
