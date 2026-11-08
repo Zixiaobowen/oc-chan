@@ -1,8 +1,8 @@
 # Tern 右键跳转候选与进程身份修复
 
-- Repo：`/Users/zixiaobowen/myProjects/oc-chan`
-- Branch：`fix/tern-navigation-candidates-20261108`
-- 目标：修复协作拓扑右键“跳转到 Tern 标签页”报 `OC_TERN_AMBIGUOUS`。
+- Repo：`/Users/zixiaobowen/myProjects/oc-chan`；主线工作区：`/Users/zixiaobowen/myProjects/oc-chan-main-integration-20261106`
+- Branch：修复分支 `fix/tern-navigation-candidates-20261108` 已快进合并到 `main`
+- 目标：修复拓扑右键Tern跳转，合并并推送 `main`，更新和验收本机应用；均已完成。
 
 ## 已完成
 
@@ -19,9 +19,20 @@
 - `npm run typecheck`：补齐依赖后通过。首次失败是缺少Three.js及其类型依赖。
 - `npm run smoke:renderer -- --scenario topology`：补齐依赖后通过。真实无头Electron、preload、React、IPC、拓扑交互、重启恢复和正常退出通过；`nativeWindowAcceptance=false`，不是实际跨应用焦点验收。
 - Smoke成功证据：`/var/folders/sw/0g6s73xd04n89bg0lympw6_40000gn/T/oc-chan-smoke-evidence-JkwHOV/result.json`，`complete=true`、8阶段通过、errors为空、临时工作目录已删除。
-- 最终原生helper按发布参数 `xcrun swiftc -O -target arm64-apple-macos13.0 ...` 编译通过，无警告，117744字节，小于163840字节现有预算。未执行完整打包或x64编译。
+- 原生helper按发布参数 `xcrun swiftc -O -target arm64-apple-macos13.0 ...` 编译通过，无警告，117744字节，小于163840字节现有预算。后续交付的arm64应用目录打包也已通过；未构建x64、DMG或ZIP。
 - 最终真实 `probe` 成功：PID79787、`/Applications/Tern.app/Contents/MacOS/tern`、Bundle ID=`so.stencil.tern`、Team ID=`VTLHGQC72S`。
 - 经用户授权，从实际 `tern inspect` 重取窗口与pane，调用生产 `TernNavigation.focus()`（真实资源、命令与原生helper，未注入mock）通过。回执：`{"ok":true,"paneId":9723805958155,"windowKey":"14","durationMs":1068}`。该方法完成session复核、pane focus、原生窗口激活并确认主窗口焦点稳定；只操作本会话目标。
+
+## 合并、推送与本机安装
+
+- 修复提交：`330d1fc4ff3dcb28f87143e4aa0c259b76c4c377`，仅包含Swift、原生回归测试、CI映射、README及本交接5个文件。
+- `git merge --ff-only fix/tern-navigation-candidates-20261108` 在主线工作区成功，`e184bc8` → `330d1fc`，无冲突。
+- `git -c core.hooksPath=.githooks push origin main` 成功。仅本次命令使用仓库现有pre-push安装钩子，没有永久修改Git配置；远端 `git ls-remote --refs origin refs/heads/main` 回读为完整修复SHA。
+- 钩子以该提交的 `git archive` 独立快照执行 `npm ci`、类型检查、Vite构建、arm64目录打包及原生编译，完成来源、内容、架构、签名、磁盘和权限预检，再替换 `/Applications/OC Chan.app`。没有将工作区未提交文件混入应用。
+- 已安装版本 `0.1.0`，实际应用PID27126。安装回执 `status=ready`、`renderer=true`、`ipc=true`，agents/schedules/system/events均ready，Hermes历史读取25条。个人设置和数据目录保留。
+- **已安装应用真实右键验收通过**：用原生鼠标右键3D拓扑中的本会话员工标签，真实菜单出现“跳转到 Tern 标签页”；点击该菜单项后，前台应用为 `so.stencil.tern`、PID79787、原生窗口 `[Tern "14"] Default`。随后 `tern inspect --json --window 14` 证实tab `8169027796994` 的 `shown=true`，本会话pane `9723805958155` 的 `focused=true`。
+- 验收通过Electron公开的 `AXManualAccessibility` 临时暴露已安装应用控件树；原值false，结束后设置并读回false。未开启调试端口、未重启额外开发窗口、未改变系统辅助功能权限。
+- 本交接随后补充交付回执；仅文档变更不重复构建或安装相同产品代码。
 
 ## 已处理的现场问题
 
@@ -35,17 +46,17 @@
 
 ## 限制与状态
 
-- 用户现有 `docs/codex-handoffs/2026-11-04-github-release-publishing.md` 修改原样保留。
-- 未提交、未推送、未替换 `/Applications/OC Chan.app`，没有沿用旧任务的安装授权。
-- Tern重启及本会话原生跳转已按本次明确授权完成；没有打开可见开发窗口，没有变更辅助功能授权或任何登录资料。
-- 修复候选选择与进程启动身份，不放宽签名、不选择第一个歧义目标、不吞掉错误。已完成本轮修复及当前会话真实验收；跨空间/全屏及安装应用验收未执行。
+- 保留原工作区的 `docs/codex-handoffs/2026-11-04-github-release-publishing.md` 修改、并行任务的 `2026-11-08-push-update-audit.md/.html`；保留主线工作区的 `2026-11-06-app-updates-main.md` 修改。
+- 用户在本会话明确授权“合并到main并push，更新本机应用”，已执行并验收；没有创建公开Release或修改GitHub默认分支。
+- Tern重启及原生跳转也已按本次授权完成。没有变更辅助功能授权或任何登录资料；临时验收脚本、资源和开关已清理/恢复。
+- 构建仍提示现有依赖弃用和大于500KB的渲染chunk；构建成功。跨空间/全屏切换、x64及公开签名发布不在本轮验收内。没有运行全仓库测试。
 
 ## 后续操作边界
 
-1. 用户要求提交/合并时，仅处理本次源码、测试、README、CI映射及本交接；保留无关handoff改动。
-2. 用户要求安装时，通过仓库交付/安装流程构建并替换OC Chan；当前已安装应用尚未包含本轮源码改动，不能把源代码验收当成安装验收。
-3. 将来出现新的原生跳转报错时，重新采集窗口/pane/PID及系统签名证据，不沿用这里的临时PID，也不机械重跑全部测试。
+1. 无新增代码或故障时，不重复构建、安装或执行已通过检查；已安装产品代码来自修复提交，后续交接文档提交不改变产物。
+2. 后续开发以主线工作区 `main` 为准，保留两个工作区的无关未提交记录和并行任务文件，不清理或删除分支/worktree。
+3. 若原生跳转再报错，重新采集窗口/pane/PID、内核启动时间与系统签名证据，不沿用本记录中的临时PID。
 
 ## 恢复提示
 
-继续 `/Users/zixiaobowen/myProjects/oc-chan` 的 `fix/tern-navigation-candidates-20261108`。本轮修复完成：Swift选择器先排除后台/退出项；进程身份用内核启动时间代替CLI启动时为空的AppKit launchDate。81项定向检查、相关27项复测、typecheck、无头topology smoke通过。用户已授权且已完成Tern官方重启，旧程序路径问题已解除；生产TernNavigation.focus真实跳转本会话pane成功，约1068ms。临时资源已清理。未提交/推送/安装OC Chan，保留无关handoff修改。已通过且仍适用的检查不要重复跑。
+继续主线工作区 `/Users/zixiaobowen/myProjects/oc-chan-main-integration-20261106` 的main。本轮Tern跳转修复已提交为330d1fc4ff3dcb28f87143e4aa0c259b76c4c377，快进合并并推送origin/main。本机OC Chan已由该提交独立快照构建并替换，版本0.1.0、renderer/IPC/四类采集/历史就绪通过；实际在已安装3D拓扑右键本会话并点击跳转，Tern14窗口成为前台，本会话pane9723805958155所在tab shown且pane focused。81项定向检查、27项相关复测、typecheck、无头smoke均通过，未跑全仓库测试。临时AX模式已恢复false，未改全局权限/登录。产品交付已完成，最后交接提交仅文档。保留两个工作区的无关记录与并行任务文件，不重复安装、测试或清理。
