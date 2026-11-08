@@ -16,6 +16,7 @@ import { agentTarget, navigationPage, parseNavigationTarget, scheduleTarget, typ
 import { createScheduleMemory, createTopologyMemory, initialAgentView, initialScheduleView,
   pruneTopologyMemory, reconcileAgentView, reconcileScheduleView, type ScrollPosition } from './view-state'
 import { useSettings } from './settings'
+import brandIcon from '../../../resources/brand/oc-chan-icon.svg'
 
 const initial: MonitorSnapshot = {
   agents: { data: null, error: null, refreshing: false },
@@ -242,7 +243,7 @@ export default function App() {
   return <div className="app-shell" data-compact-navigation={compactNavigation} data-agent-collection={plugins.agents} data-agent-evidence={agentEvidenceCurrent ? 'current' : 'stale'} data-agent-motion={agentMotion ? 'running' : 'paused'} data-display-live={!paused && visible}>
     <div className="window-drag" />
     <aside ref={navigation} id="main-navigation" className="sidebar" popover={compactNavigation ? 'auto' : undefined}>
-      <div className="brand"><span className="brand-mark"><Activity size={23} strokeWidth={2.2} /></span><div><strong>OC Chan</strong><span>{t('本机运行观察', 'Local monitor')}</span></div></div>
+      <div className="brand"><img className="brand-mark" src={brandIcon} width={35} height={35} alt="" aria-hidden="true" /><div><strong>OC Chan</strong><span>{t('本机运行观察', 'Local monitor')}</span></div></div>
       <nav aria-label={t('主导航', 'Main navigation')}>{pages.filter(item => item.id !== 'sources' && item.id !== 'settings').map(item => <button key={item.id} className={`nav-item ${page === item.id ? 'selected' : ''}`} onClick={() => navigate(item.id)} aria-current={page === item.id ? 'page' : undefined}><item.icon size={18} /><span>{item.label}</span>{item.id === 'agents' && plugins.agents && agents && <small>{agents.agents.length}</small>}{item.id === 'schedules' && plugins.schedules && scheduled && <small>{scheduled.length}</small>}</button>)}</nav>
       <div className="sidebar-bottom">
         <button className={`nav-item ${page === 'sources' ? 'selected' : ''}`} onClick={() => navigate('sources')} aria-current={page === 'sources' ? 'page' : undefined}><Database size={18} /><span>{t('数据来源', 'Data sources')}</span>{issues > 0 && <small className="warning-count">{issues}</small>}</button>

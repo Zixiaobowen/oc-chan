@@ -27,7 +27,7 @@ h3 { font-size: calc(14px * var(--font-scale)); font-weight: 600; }
 .sidebar-resize-handle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .app-shell[data-sidebar-resizing], .app-shell[data-sidebar-resizing] * { cursor: ew-resize !important; user-select: none; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 0 10px 36px; }
-.brand-mark { width: 35px; height: 35px; flex-shrink: 0; border-radius: 10px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; }
+.brand-mark { display: block; width: 35px; height: 35px; flex-shrink: 0; }
 .brand strong { display: block; font-size: calc(19px * var(--font-scale)); letter-spacing: -.025em; font-weight: 700; }
 .brand div > span { font-size: max(12px, calc(12px * var(--font-scale))); color: var(--muted); }
 .sidebar nav { display: grid; gap: 7px; }
