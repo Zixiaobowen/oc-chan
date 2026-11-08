@@ -50,12 +50,17 @@ func parseCommand(_ arguments: [String]) throws -> Command {
     return .present(pid, arguments[3], key)
 }
 
+struct ProcessStartTime: Equatable {
+    let seconds: UInt64
+    let microseconds: UInt64
+}
+
 struct TernIdentity {
     let application: NSRunningApplication
     let pid: pid_t
     let executable: String
     let bundle: String
-    let launchDate: Date
+    let startTime: ProcessStartTime
 }
 
 func canonicalPath(_ url: URL) throws -> String {
@@ -73,20 +78,35 @@ func processExecutable(_ pid: pid_t) throws -> String {
     return try canonicalPath(URL(fileURLWithPath: String(cString: buffer)))
 }
 
-func uniqueApplication() throws -> NSRunningApplication {
-    let applications = NSRunningApplication.runningApplications(withBundleIdentifier: ternBundleID)
-    guard !applications.isEmpty else { throw NavigationError.unavailable }
-    guard applications.count == 1 else { throw NavigationError.ambiguous }
-    let application = applications[0]
-    guard application.processIdentifier > 0, !application.isTerminated,
-          application.activationPolicy == .regular else { throw NavigationError.identity }
-    return application
+func processStartTime(_ pid: pid_t) throws -> ProcessStartTime {
+    // AppKit's launchDate is nil when the app was not started via Launch Services.
+    // Kernel start time binds the PID even for Tern's own restart/CLI launch path.
+    var info = proc_bsdinfo()
+    let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+    guard pid > 0, proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size,
+          info.pbi_pid == UInt32(pid), info.pbi_start_tvsec > 0 else {
+        throw NavigationError.identity
+    }
+    return ProcessStartTime(seconds: info.pbi_start_tvsec, microseconds: info.pbi_start_tvusec)
+}
+
+func uniqueApplication(_ applications: [NSRunningApplication] = NSRunningApplication.runningApplications(withBundleIdentifier: ternBundleID)) throws -> NSRunningApplication {
+    // Launch Services also lists background clients and stale, terminated apps.
+    // Only live, regular applications can own the native window we will present.
+    var candidate: NSRunningApplication?
+    for application in applications where !application.isTerminated && application.activationPolicy == .regular {
+        guard application.processIdentifier > 0 else { throw NavigationError.identity }
+        guard candidate == nil else { throw NavigationError.ambiguous }
+        candidate = application
+    }
+    guard let candidate else { throw NavigationError.unavailable }
+    return candidate
 }
 
 func sameRunningApplication(_ identity: TernIdentity) throws {
     let current = try uniqueApplication()
     guard current.processIdentifier == identity.pid,
-          current.launchDate == identity.launchDate,
+          try processStartTime(current.processIdentifier) == identity.startTime,
           let executableURL = current.executableURL, let bundleURL = current.bundleURL,
           try canonicalPath(executableURL) == identity.executable,
           try canonicalPath(bundleURL) == identity.bundle,
@@ -97,8 +117,10 @@ func sameRunningApplication(_ identity: TernIdentity) throws {
 
 func verifiedIdentity() throws -> TernIdentity {
     let application = try uniqueApplication()
-    guard let bundleURL = application.bundleURL, let executableURL = application.executableURL,
-          let launchDate = application.launchDate else { throw NavigationError.identity }
+    let startTime = try processStartTime(application.processIdentifier)
+    guard let bundleURL = application.bundleURL, let executableURL = application.executableURL else {
+        throw NavigationError.identity
+    }
     let bundlePath = try canonicalPath(bundleURL)
     let executablePath = try canonicalPath(executableURL)
     let bundle = Bundle(url: URL(fileURLWithPath: bundlePath))
@@ -150,7 +172,7 @@ func verifiedIdentity() throws -> TernIdentity {
         throw NavigationError.identity
     }
     let identity = TernIdentity(application: application, pid: application.processIdentifier,
-                                executable: executablePath, bundle: bundlePath, launchDate: launchDate)
+                                executable: executablePath, bundle: bundlePath, startTime: startTime)
     try sameRunningApplication(identity)
     return identity
 }
@@ -311,6 +333,7 @@ func presentWindow(_ identity: TernIdentity, key: String) throws -> [String: Any
     throw NavigationError.window
 }
 
+#if !TERN_NAVIGATION_TESTING
 do {
     let command = try parseCommand(CommandLine.arguments)
     let identity = try verifiedIdentity()
@@ -330,3 +353,4 @@ do {
     FileHandle.standardError.write(Data((code.rawValue + "\n").utf8))
     exit(1)
 }
+#endif
