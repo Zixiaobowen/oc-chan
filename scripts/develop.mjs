@@ -19,25 +19,30 @@ let child
 let requestedSignal
 let forceTimer
 
+function groupMembers(pid) {
+  const output = execFileSync('/bin/ps', ['-axo', 'pid=,pgid='], { encoding: 'utf8', timeout: 2000, maxBuffer: 1024 * 1024 })
+  const rows = output.trim().split('\n')
+  if (rows.length > 16384) throw new Error('进程组核验超出 PID 数量上限')
+  const members = []
+  for (const row of rows) {
+    const match = row.match(/^\s*(\d+)\s+(\d+)\s*$/)
+    if (!match) throw new Error('进程组核验返回无效 PID 表')
+    if (Number(match[2]) === pid) members.push(Number(match[1]))
+  }
+  return members
+}
+
 function signalGroup(pid, signal) {
   try { process.kill(-pid, signal); return true } catch (error) {
     if (error.code === 'ESRCH') return false
     if (error.code === 'EPERM') {
-      // A disappearing macOS process group can reject kill(0). Verify absence
-      // independently; a real member or a failed enumeration still aborts cleanup.
-      const output = execFileSync('/bin/ps', ['-axo', 'pid=,pgid='], { encoding: 'utf8', timeout: 2000, maxBuffer: 1024 * 1024 })
-      const rows = output.trim().split('\n')
-      if (rows.length > 16384) throw new Error('进程组核验超出 PID 数量上限', { cause: error })
-      const members = rows.map(row => {
-        const match = row.match(/^\s*(\d+)\s+(\d+)\s*$/)
-        if (!match) throw new Error('进程组核验返回无效 PID 表', { cause: error })
-        return { pid: Number(match[1]), group: Number(match[2]) }
-      }).filter(row => row.group === pid)
+      // Signal permission does not prove liveness during macOS process exit.
+      const members = groupMembers(pid)
       if (!members.length) {
         console.error(`[oc-chan] 进程组 ${pid} 返回 EPERM；独立 PID 表确认该组已退出`)
         return false
       }
-      throw new Error(`进程组 ${pid} 无权访问；仍有成员 ${members.map(row => row.pid).join(',')}，保留实例`, { cause: error })
+      throw new Error(`进程组 ${pid} 无权访问；仍有成员 ${members.join(',')}，保留实例`, { cause: error })
     }
     throw error
   }
@@ -66,15 +71,15 @@ async function run(args, env) {
   })
   clearTimeout(forceTimer)
   // electron-vite and native compiler descendants must exit before their files are removed.
-  if (signalGroup(child.pid, 'SIGTERM')) {
-    const deadline = Date.now() + 5_000
-    while (signalGroup(child.pid, 0)) {
-      if (Date.now() >= deadline) {
-        signalGroup(child.pid, 'SIGKILL')
-        throw new Error('子进程退出超时；已终止本实例进程组')
-      }
-      await delay(100)
+  // stop() has already notified the whole group. Do not signal exiting members again.
+  if (!requestedSignal) signalGroup(child.pid, 'SIGTERM')
+  const deadline = Date.now() + 5_000
+  while (groupMembers(child.pid).length) {
+    if (Date.now() >= deadline) {
+      signalGroup(child.pid, 'SIGKILL')
+      throw new Error('子进程退出超时；已终止本实例进程组')
     }
+    await delay(100)
   }
   child = undefined
   if (!requestedSignal && (result.code !== 0 || result.signal)) {
@@ -146,7 +151,7 @@ async function main() {
       ...(options.has('--inspect') ? ['--inspect=0'] : [])
     ], env)
   } finally {
-    if (child?.pid && signalGroup(child.pid, 0)) {
+    if (child?.pid && groupMembers(child.pid).length) {
       throw new Error(`开发进程仍存活，保留实例目录供排查：${instance}`)
     }
     await rm(instance, { recursive: true, force: true })

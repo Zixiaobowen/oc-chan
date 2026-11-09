@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict'
+import { execFile } from 'node:child_process'
 import { test } from 'node:test'
-import { link, mkdtemp, open, rm, symlink, writeFile } from 'node:fs/promises'
+import { copyFile, link, mkdir, mkdtemp, open, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { promisify } from 'node:util'
+import { fileURLToPath } from 'node:url'
 import { artifactDigest, verifyArtifactDigests } from './local-delivery.mjs'
 
 async function fixture(t) {
@@ -46,4 +49,29 @@ test('artifact paths cannot escape through links and oversized files are rejecte
   const handle = await open(large, 'wx')
   try { await handle.truncate(1024 ** 3 + 1) } finally { await handle.close() }
   await assert.rejects(artifactDigest(large), /bounded regular file/)
+})
+
+const exec = promisify(execFile)
+test('distribution CLI rejects malformed and obsolete output arguments before building', async () => {
+  for (const args of [
+    ['--config.directories.output=/tmp/unused'], ['--out'], ['--out', '--dir'],
+    ['--out', ''], ['--out', '/tmp/one', '--out', '/tmp/two'], ['--arm64', '--x64'], ['--dir', '--dir'],
+  ]) {
+    await assert.rejects(exec(process.execPath, [fileURLToPath(new URL('./dist.mjs', import.meta.url)), ...args], { timeout: 10000 }),
+      error => error.code === 1 && /Usage: node scripts\/dist.mjs/.test(error.stderr) && !/build:app/.test(error.stdout))
+  }
+})
+
+test('distribution rejects invalid release versions before application compilation', { skip: process.platform !== 'darwin' }, async t => {
+  const root = await mkdtemp(path.join(tmpdir(), 'oc-chan-dist-preflight-'))
+  t.after(() => rm(root, { recursive: true }))
+  await mkdir(path.join(root, 'scripts'))
+  for (const name of ['dist.mjs', 'release-config.mjs']) await copyFile(new URL(name, import.meta.url), path.join(root, 'scripts', name))
+  await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), path.join(root, 'node_modules'))
+  for (const version of ['01.2.3', '1.2.3+local', '1.2.3-latest.1']) {
+    await writeFile(path.join(root, 'package.json'), JSON.stringify({ version }))
+    await assert.rejects(exec(process.execPath, [path.join(root, 'scripts/dist.mjs'), '--dir', '--out', path.join(root, 'artifacts')], {
+      cwd: root, timeout: 10000, env: { ...process.env, GITHUB_EVENT_NAME: '', GITHUB_REF: '' },
+    }), error => error.code === 1 && /Invalid release version|build metadata|Prerelease channel/.test(error.stderr) && !/build:app/.test(error.stdout))
+  }
 })

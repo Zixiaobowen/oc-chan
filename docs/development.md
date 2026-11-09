@@ -16,7 +16,7 @@ npm run dev
 
 `npm run dev` 默认以无头模式运行真实 Electron 主进程、采集、IPC 与渲染器：不显示窗口、Dock 或托盘，不弹原生错误框，也不允许跳转并激活其他应用。可通过终端输出的本地 `DevTools listening` 地址进行页面操作和截图；原生窗口始终不可聚焦。无头启动只编译原生玻璃模块，不编译窗口导航程序；错误仍写入终端，不能把无头截图当作 Dock、托盘、原生焦点或可见玻璃合成效果的验收。
 
-每次启动自动创建独立的 `.dev-instances/instance-*`，隔离构建输出、Vite 缓存、配置与会话数据；开发服务器和调试端口由系统分配。主进程／preload 支持热重载，多个实例不会争用正式应用的单实例锁。按 Ctrl+C 结束时终止本实例子进程并清理临时目录；配置只在该实例存活期间保留，不读取或改写正式安装的个人设置。异常未退出的进程会明确报错并保留其目录，不能在进程仍使用目录时手动删除。
+每次启动自动创建独立的 `.dev-instances/instance-*`，隔离构建输出、Vite 缓存、配置与会话数据，并记录启动器进程与工作目录的归属；开发服务器和调试端口由系统分配。主进程／preload 支持热重载，多个实例不会争用正式应用的单实例锁。按 Ctrl+C 结束时终止本实例子进程并清理临时目录；配置只在该实例存活期间保留，不读取或改写正式安装的个人设置。异常未退出的进程会明确报错并保留其目录，不能在进程仍使用目录时手动删除。
 
 开发实例统一使用无头模式。只有用户明确要求原生窗口交互时才使用：
 
@@ -91,7 +91,7 @@ npm run delivery:local -- --out release/local-20261105-1
 
 构建只在临时源码副本中进行，包含当前未提交的构建输入；`delivery.json`记录真实HEAD、分支、版本tag或null、dirty状态、输入摘要及逐文件来源清单。HEAD不代表未提交内容。临时副本先按原锁文件执行`npm ci`，依赖与许可证核对均留在副本目录内；构建完成后复核工作区来源，期间变化则失败，不生成成功清单。包清单包含文件、符号链接及空目录；ZIP逐成员核对类型、权限、长度、CRC和SHA-256，DMG验证校验和、只读挂载并核对包清单后卸载。单归档≤1GiB、成员≤20000、单成员≤512MiB，ZIP worker限时120秒；沿用应用内容与冻结体积门禁，不放宽预算。
 
-目录包含arm64 DMG/ZIP、目录包、`source-manifest.json`、`package-manifest-arm64.json`、`dependency-review-arm64.json`、`SHA256SUMS.txt`和最终`delivery.json`。依赖审查基于本次构建的许可证清单、精确锁文件及真实npm公告查询；错误或未审查项阻止交付。清单记录实际codesign状态，公证为not-requested、Gatekeeper为not-assessed、安装为false，CI运行和正式下载地址为null。本地SHA-256只用于核对字节，没有开发者身份认证含义。失败记录在`failure.json`，不能将残留产物当作通过验收的交付。
+目录包含arm64 DMG/ZIP、目录包、`source-manifest.json`、`validation-source/`、`package-manifest-arm64.json`、`dependency-review-arm64.json`、`SHA256SUMS.txt`和最终的schema 2 `delivery.json`。`validation-source/`只保留构建时的`package.json`、锁文件、包预算和两个Tern插件源文件，逐项绑定来源清单中的原路径、字节数和SHA-256，总上限28MiB，不导入或执行其中的源码。依赖审查基于本次构建的许可证清单、精确锁文件及真实npm公告查询；错误或未审查项阻止交付。清单记录实际codesign状态，公证为not-requested、Gatekeeper为not-assessed、安装为false，CI运行和正式下载地址为null。本地SHA-256只用于核对字节，没有开发者身份认证含义。失败记录在`failure.json`，不能将残留产物当作通过验收的交付。
 
 手动升级按下列顺序操作；生成交付本身不退出或替换已安装应用：
 
@@ -99,7 +99,7 @@ npm run delivery:local -- --out release/local-20261105-1
 2. 保留当前可用的旧`.app`及其版本信息，退出OC Chan并确认已退出。不要改动应用数据目录；安装包不包含个人设置、事件或上游会话数据。
 3. 从已核对DMG或ZIP取出完整`OC Chan.app`，手动整包替换`/Applications/OC Chan.app`，不要合并新旧包内文件；本期仅M系列Mac。需要通过hook安装时，须独立确认该命令将安装的源码及替换范围，不能把它当作这个清单的安装回执。
 4. 打开新包，确认实际启动路径、版本、界面、采集、任务历史和原设置，并检查托盘等原生交互。仅主进程存活不代表就绪；本次工作区的实际安装/原生回执仍待D-03专项。
-5. 新包不能就绪时退出新包、恢复完整旧`.app`并保留错误信息和失败包供定位；不删除个人数据，不自动迁移设置。若旧包也失败，保留两次错误及现场，停止反复覆盖。只有新版验收成功后再处理旧包。
+5. 新包不能就绪时退出新包、恢复完整旧`.app`并保留错误信息和失败包供定位；不删除个人数据，不自动迁移设置。若旧包也失败，保留两次错误及现场，停止反复覆盖。新版验收成功后删除本次旧包和解包产生的额外应用，长期只保留`/Applications/OC Chan.app`。
 
 也可用安装工具核验并安装已生成的交付目录。第一条仅核验来源、归档摘要、包内容与实际签名，不启动或替换应用；第二条会退出旧应用、整包替换`/Applications/OC Chan.app`并验证新包就绪，失败自动尝试还原。两条命令都使用Node.js 24：
 
@@ -108,7 +108,7 @@ npm run install:local -- --check-delivery release/local-20261105-1
 npm run install:local -- --delivery release/local-20261105-1
 ```
 
-已生成的旧交付只代表其`source.digest`对应源码；安装器不把它当作当前工作区版本。升级失败保留暂存目录里的旧包/失败包、`installation-source.json`及独立启动回执位置；先核对错误和进程状态再处理。退出等待期间目标被其它任务替换时拒绝覆盖，不强杀正式应用，也不自行清除他人的安装锁。
+schema 2交付只代表其`source.digest`对应源码；安装器核对交付内的来源快照，并用同一份已认证数据复验暂存包，当前工作区的版本、插件和预算变化不会改变历史交付的判定。缺少来源快照的schema 1交付明确拒绝，须重新生成；篡改快照、包或归档仍会失败。安装就绪协议保留完整的规范SemVer身份，包括预发布与`+build`组合；该身份校验不放宽正式发布的版本格式限制。升级失败保留暂存目录里的旧包/失败包、`installation-source.json`及独立启动回执位置；先核对错误和进程状态再处理。退出等待期间目标被其它任务替换时拒绝覆盖，不强杀正式应用，也不自行清除他人的安装锁。
 
 本地工具不创建tag、推送、发布、检查更新或上传应用数据；应用离线行为沿用已有本地采集。后续正式发布需要独立版本与发布授权，不能用本地材料完成状态代替正式下载回执。
 
@@ -116,13 +116,13 @@ npm run install:local -- --delivery release/local-20261105-1
 
 [Build macOS 工作流](https://github.com/Zixiaobowen/oc-chan/actions/workflows/build.yml) 在推送 `main`、创建或更新目标为 `main` 的 PR、推送 `v*` 标签时自动运行，也可在 Actions 页面选择 **Run workflow** 手动构建指定分支或标签。日常开发使用 `main`，开发分支通过目标为 `main` 的 PR 进入检查。
 
-工作流使用 Node.js 24 和 `npm ci` 安装锁定依赖，在 `macos-26`（Apple Silicon）执行适用行为测试，使用提供 `NSGlassEffectView` 的 macOS SDK。涉及应用、界面资源、隔离启动／夹具、依赖或工作流的改动，另运行真实无头 Electron smoke。通过后执行类型检查、Vite构建、包内原生模块编译和arm64 DMG/ZIP打包，保留依赖许可证与安全公告、包内容及冻结体积门禁，最后生成并验证SHA-256。任一门禁失败都阻止上传安装产物，没有 `continue-on-error`；smoke失败证据仍上传并保留14天。同一分支或PR的新构建会取消旧构建，标签发布不自动取消。Actions固定提交SHA，源码仓库权限为contents:read，checkout不保留凭据；公开分发另用专用令牌。
+工作流使用 Node.js 24 和 `npm ci` 安装锁定依赖，在 `macos-26`（Apple Silicon）执行适用行为测试，使用提供 `NSGlassEffectView` 的 macOS SDK。涉及应用、界面资源、隔离启动／夹具、依赖或工作流的改动，另运行真实无头 Electron smoke。通过后执行类型检查、Vite构建、包内原生模块编译和arm64 DMG/ZIP打包，保留依赖许可证与安全公告、包内容及冻结体积门禁，最后生成并验证SHA-256。任一门禁失败都阻止上传安装产物，没有 `continue-on-error`；smoke失败证据仍上传并保留3天。同一分支或PR的新构建会取消旧构建；不同标签的发布作业共用串行队列，最多100个待处理作业，不替换已排队的标签。Actions固定提交SHA，构建作业权限为contents:read，只有发布作业获得contents:write；checkout不保留凭据。
 
 `scripts/ci-tests.mjs` 以 PR 的 base SHA 或 push 的 before SHA 与当前 checkout 比较（保留完整Git历史），输出测试清单与选取原因。Agent、任务、系统采集包含对应模块和直接调用方；拓扑、查看状态、任务历史、设置、Tern导航分别映射已有行为测试；安装脚本或Git hook改动必跑临时目录中的安装事务测试。直接改动测试只选该文件。普通文档不跑产品测试；公共IPC/快照入口、依赖或跨模块入口扩大到对应套件。删除且已无原模块映射的代码检查跨模块调用方；新增测试、未知代码路径、缺失映射或无效基准明确失败，新增功能须同步此映射。标签、手动构建及无前序提交的新分支检查全部确定性测试。
 
 本地可用 Node.js 24 执行 `npm run test:ci -- --plan src/renderer/src/AgentTopology.tsx` 查看单元测试选择与 `rendererSmoke` 标志，去掉 `--plan` 执行这些单元测试。测试进程并发上限为2；真实 Electron smoke 由独立步骤运行，不混进 Node 单元测试进程。纯文档、仅单元测试或安装脚本变更不额外跑 renderer smoke；标签、手动及无前序提交的新分支执行。真实个人环境 `npm run smoke` 不放进 CI。云端门禁以对应提交的实际运行回执为准，构建成功不能替代原生窗口、安装应用或真实个人数据源验收。
 
-打开成功运行记录，在 **Artifacts** 下载 `oc-chan-macos-arm64-<运行编号>`。每份包含arm64 `.dmg`、`.zip`、更新频道的 `*-mac.yml`、`SHA256SUMS.txt`、`package-manifest-arm64.json` 和 `dependency-review-arm64.json`，保留30天。解压外层ZIP后执行 `shasum -a 256 -c SHA256SUMS.txt`。DMG可拖入Applications，应用ZIP保留可执行权限与符号链接；实际替换安装按对应授权执行。
+普通主线与PR构建保留 `oc-chan-package-checks-arm64-<运行编号>`，包含SHA-256、包内容和依赖审查报告，保留7天；它们仍真实生成并校验DMG/ZIP，但不重复上传大体积安装包。需要下载开发安装包时手动运行工作流，再从成功记录的 **Artifacts** 下载 `oc-chan-macos-arm64-<运行编号>`。手动构建的安装包保留3天，标签构建保留7天；每份包含arm64 `.dmg`、`.zip`、频道的 `*-mac.yml` 及上述三份报告。解压外层ZIP后执行 `shasum -a 256 -c SHA256SUMS.txt`。保留期只作用于新上传的产物，不会追溯清理历史积压；上传配额错误继续使CI失败，既有产物清理需要明确范围。正式GitHub Release附件不受Actions保留期影响。
 
 也可通过已登录的 GitHub CLI 下载指定运行的全部产物：
 
@@ -130,11 +130,11 @@ npm run install:local -- --delivery release/local-20261105-1
 gh run download <运行ID> --repo Zixiaobowen/oc-chan --dir downloads
 ```
 
-源码仓库现已公开；Actions 构建产物可从源码仓库的工作流记录下载。面向客户端的安装包使用独立公开仓库 `Zixiaobowen/oc-chan-releases`，不在客户端内置 GitHub 凭据；发布说明面向使用者描述变更。普通分支、PR 和手动构建仅作本地ad-hoc签名，不发布；缺少Developer ID签名或公证凭据的标签构建会明确失败，不发布不能原地更新的安装包。
+源码仓库已公开；不要把源码或Actions产物当作私密存储。安装包和客户端更新统一发布在 [Zixiaobowen/oc-chan Releases](https://github.com/Zixiaobowen/oc-chan/releases)，客户端匿名读取，不内置GitHub凭据；发布说明面向使用者描述变更。普通分支、PR和手动构建仅作本地ad-hoc签名，不发布；缺少Developer ID签名或公证凭据的标签构建会明确失败，不发布不能原地更新的安装包。
 
 ### 发布签名更新
 
-先创建并初始化公开分发仓库 `Zixiaobowen/oc-chan-releases` 的默认分支。在源码仓库的 Actions Secrets 中配置以下项目；不要把证书、密码或令牌提交进仓库：
+在本仓库的 Actions Secrets 中配置以下签名与公证凭据；不要把证书或密码提交进仓库：
 
 | Secret | 用途 |
 | --- | --- |
@@ -143,19 +143,20 @@ gh run download <运行ID> --repo Zixiaobowen/oc-chan --dir downloads
 | `APPLE_ID` | 用于公证的 Apple 开发者账号 |
 | `APPLE_APP_SPECIFIC_PASSWORD` | Apple 应用专用密码 |
 | `APPLE_TEAM_ID` | 10 位 Apple Team ID |
-| `UPDATE_RELEASE_TOKEN` | 仅授予公开分发仓库 Contents 写权限的发布令牌 |
 
-正式发布须单独获得版本发布授权；合并与推送分支不授权创建标签或发布版本。标签必须严格等于 `v` 加 `package.json` 的版本。获得发布授权并确认源码和锁文件已提交到要发布的提交后，再推送相应版本标签。版本号必须递增，已发布版本不覆盖。
+正式发布须单独获得版本发布授权；合并与推送分支不授权创建标签或发布版本。标签必须严格等于 `v` 加 `package.json` 的规范SemVer版本；允许稳定版及预发布版本，拒绝带 `+build` 元数据的发布版本，因为当前builder安全文件名与更新产物契约不支持该格式。获得发布授权后，将 `package.json` 和锁文件版本更新为尚未发布的更高版本并提交，再推送相应版本标签。已发布版本不覆盖。
 
 ```sh
-# 示例；使用实际尚未发布的版本。
-git tag -a v0.1.0 -m "OC Chan v0.1.0"
-git push origin v0.1.0
+# 示例：先将 package.json 和锁文件版本更新为 0.2.0 并提交，且确认该版本尚未发布。
+git tag -a v0.2.0 -m "OC Chan v0.2.0"
+git push origin v0.2.0
 ```
 
-标签流水线在arm64原生架构上强制Developer ID签名、公证，并用 `codesign`、`stapler`、`spctl` 验证应用、Swift helper与两个N-API模块。发布作业逐一核对版本、架构、文件大小、SHA-512和SHA-256；稳定版生成含DMG与ZIP的 `latest-mac.yml`。先创建草稿并上传DMG、ZIP、一个频道元数据和 `SHA256SUMS.txt` 共四个附件，验证完整后才公开。已有同名Release或中断留下的草稿会阻止覆盖，应先检查失败原因。此流程尚无真实签名发布回执。
+标签流水线在arm64原生架构上强制Developer ID签名、公证，并用 `codesign`、`stapler`、`spctl` 验证应用、Swift helper与两个N-API模块。发布作业逐一核对版本、架构、文件大小、SHA-512和SHA-256；稳定版生成含DMG与ZIP的 `latest-mac.yml`。先核对本仓库已存在触发构建的标签，再使用 `--verify-tag` 创建草稿，上传DMG、ZIP、一个频道元数据和 `SHA256SUMS.txt` 共四个附件，验证完整后才公开。上传后重新读取Latest，仅更高稳定版本设为Latest；旧稳定版和预发布不改变Latest，公开后读回Release身份、附件及Latest状态。缺失标签、已有同名Release或中断留下的草稿会阻止发布，失败保留实际远端状态及回查地址。所有发布者必须参与同一串行约束；外部手动发布不受此工作流锁保护。此流程尚无真实签名发布回执。
 
-稳定版更新源只消费 `latest-mac.yml`。预发布版本（如 `0.2.0-beta.1`）生成 `beta-mac.yml` 并标记为预发布，不会推送给稳定版客户端。`npm run dist` 始终使用 `publish: never`；真正发布仅由匹配版本的标签推送触发。跨仓库发布使用专用 Token，不使用源码仓库的 `GITHUB_TOKEN`。
+稳定版更新源只消费 `https://github.com/Zixiaobowen/oc-chan/releases/latest/download/latest-mac.yml`。预发布版本（如 `0.2.0-beta.1`）生成 `beta-mac.yml` 并标记为预发布，不会推送给稳定版客户端。`npm run dist` 始终使用 `publish: never`；真正发布仅由匹配版本的标签推送触发。发布作业将 GitHub Actions 自带的 `GITHUB_TOKEN` 作为 `GH_TOKEN` 传给发布器，只有该作业获得 `contents: write`；构建作业维持只读权限。
+
+截至2026-11-08，公开的 `v0.1.0` 只有安装包和校验和，没有 `latest-mac.yml`。发布页可访问不代表自动更新已可用；需要先发布包含签名应用及更新元数据的新版本，才能进行真实升级验收。
 
 ### 应用内更新
 
@@ -199,7 +200,7 @@ npm run hooks:install
 
 hook从待推送提交导出独立源码快照，执行`npm ci`与`npm run package`，不混入工作目录的未提交改动。安装工具使用Node.js 24。它先核对来源、完整包内容、版本、arm64、实际签名类型、路径、写权限与可用空间；空间预留包含新包全部字节、每条目4KiB和64MiB余量。本地ad-hoc签名在打包时完成，暂存复制后重新验证，不改写已校验包；ad-hoc不代表Developer ID签名或Apple公证。
 
-退出旧应用前完成预检与同盘暂存。整包替换后的成功标准是一份仅限本次启动的就绪回执：随机nonce、实际可执行路径、版本和PID一致，主界面、IPC、已启用采集域及可用Hermes历史均通过。主动停用的域记录disabled，没有Hermes任务记录unavailable，不伪造历史成功。就绪协议文件分别限8KiB、目录0700/文件0600，拒绝链接、过期或重复回执；应用内限时30秒，安装器总等待45秒，并确认回执PID仍是目标应用且再存活2秒。白屏、IPC/采集/历史错误或超时会触发还原。
+退出旧应用前完成预检与同盘暂存。整包替换后的成功标准是一份仅限本次启动的就绪回执：随机nonce、实际可执行路径、版本和PID一致，主界面、IPC、已启用采集域及可用Hermes历史均通过。主动停用的域记录disabled，尚未安装的系统插件记录not-installed，没有Hermes任务记录unavailable，不伪造采集或历史成功。就绪协议文件分别限8KiB、目录0700/文件0600，拒绝链接、过期或重复回执；应用内限时30秒，安装器总等待45秒，并确认回执PID仍是目标应用且再存活2秒。白屏、IPC/采集/历史错误或超时会触发还原。
 
 构建、退出或安装失败会明确报错并阻止本次推送；新包启动失败会尝试还原旧包，无法还原时保留现场并报告路径。安装锁阻止多个任务同时替换；异常中断遗留的锁必须先确认对应任务已结束再处理。一次推送多个不同提交的分支会拒绝安装，需分别推送。由于是 `pre-push`，后续网络上传即使失败，本机也可能已更新；它不代表 GitHub 已接收提交或 PR 已合并。
 
@@ -209,11 +210,26 @@ hook从待推送提交导出独立源码快照，执行`npm ci`与`npm run packa
 npm run install:local
 ```
 
-本机长期只保留 `/Applications/OC Chan.app`。正式应用实际就绪后，安装器回收本次来源 `.app`；从提交导出的临时源码快照由安装器回收。失败时保留诊断及必要现场，不先删除唯一可用的正式应用。
+本机长期只保留 `/Applications/OC Chan.app`。`release/**/OC Chan.app` 与 `.dev-instances/instance-*` 是临时构建或调试资源；安装成功后清理本次源应用，Git 快照构建在退出时回收整个自有快照。安装失败保留可定位现场，不删除唯一可用的正式安装。
 
-合并到本地 `main` 后执行 `npm run push:main`。该入口保留标准 Git hooks，确认 GitHub 已接收且远端包含本次提交后，才清理当前主线及本次新合入工作区的临时应用和有归属的开发实例。其他客户端完成推送时，在核对远端后使用 `npm run cleanup:local -- --apply`。源码工作区、分支、未提交产品文件、个人数据、ZIP／DMG 和交付证据不删除；此前已合入、未合入、归属不明或有未提交产品代码的其他工作区保留。
+合并到本地 `main` 后，使用以下入口推送：
 
-安装脚本的定向回归测试为 `npm run test:install`，覆盖推送范围、整包替换、退出/启动/还原失败、锁占用、磁盘不足、权限拒绝、链接重定向、退出期间目标变化，以及一次性就绪协议的身份、取消和超时边界。真实无头Electron就绪与故障注入已有独立证据；实际安装包首装/升级、Dock、物理托盘及VoiceOver仍须D-03原生专项。
+```sh
+npm run push:main
+```
+
+入口只接受本项目 GitHub `origin` 和当前 `main`。它先执行标准 `git push origin main`，保留现有 hooks；推送成功并现场核对远端 `main` 包含本次提交后，清理当前主线工作区及本次新合入任务的调试应用和有归属记录的开发实例。未合入、存在未提交产品源码、推送前已合入的其他工作区会保留并说明原因。未提交 Markdown 交接文档及 `docs/codex-handoffs/*.html` 回执不会阻止对应任务的清理。推送失败或远端核验失败时不清理；清理失败会明确报告“推送已成功，但清理失败”。
+
+Git 没有本地 `post-push` hook，普通 `git push` 和网页合并不会自动执行上述收尾。通过其他入口完成合并推送时，在核对 GitHub 回执后到对应任务工作区执行：
+
+```sh
+npm run cleanup:local
+npm run cleanup:local -- --apply
+```
+
+第一条只报告本工作区范围，第二条才停止有启动身份和工作目录证明的开发实例、等待退出并删除对应临时目录，以及注销和删除已验证的 OC Chan 应用副本。结果中的 `registration` 区分 `unregistered`（已注销）和 `not-registered`（该路径原本未登记）；后者只接受注销工具明确返回的 `kLSApplicationNotFoundErr`，其他注销错误继续阻止删除。清理有遍历与等待上限，不跟随符号链接、不凭进程名批量终止、不跨仓库操作。正式安装、源码 worktree、分支、未提交文件、个人数据、ZIP/DMG 和交付证据均保留；未知归属、活动应用、权限或清理失败明确报错。
+
+安装脚本的定向回归测试为 `npm run test:install`，覆盖推送成功后的范围判断、应用登记/注销、实例身份与退出、目录预算和保留边界，以及整包替换、退出/启动/还原失败、锁占用、磁盘不足、权限拒绝、链接重定向、退出期间目标变化和一次性就绪协议的身份、取消、超时边界。真实无头 Electron 就绪与故障注入已有独立证据；实际安装包首装/升级、Dock、物理托盘及 VoiceOver 仍须 D-03 原生专项。
 
 ## 功能与统计口径
 

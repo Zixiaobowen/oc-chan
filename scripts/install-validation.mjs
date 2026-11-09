@@ -4,6 +4,7 @@ import { lstat, open } from 'node:fs/promises'
 import path from 'node:path'
 import { inspectPackage } from './check-package.mjs'
 import { artifactDigest, signatureStatus, verifyArtifactDigests } from './local-delivery.mjs'
+import { readDeliveryValidationSource, VALIDATION_SOURCE_DIRECTORY } from './delivery-source.mjs'
 
 const appId = 'local.oc-chan.desktop'
 function requireThat(condition, message) { if (!condition) throw new Error(message) }
@@ -11,7 +12,7 @@ function command(file, args) {
   return execFileSync(file, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 120000, maxBuffer: 1024 * 1024 }).trim()
 }
 export async function installationJson(filename, maximum = 8 * 1024 * 1024) {
-  const file = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW)
+  const file = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
   try {
     const info = await file.stat()
     requireThat(info.isFile() && info.nlink === 1 && info.size > 0 && info.size <= maximum, 'Installation metadata must be a bounded regular file')
@@ -59,12 +60,13 @@ export function checkInstallSpace(directory, inventory, statfs = statfsSync) {
   requireThat(info.bavail * info.bsize >= required, `安装磁盘空间不足：需要至少 ${required} 字节可用空间`)
   return required
 }
-export async function verifyInstallBundle(bundle, { root, version, expected, expectedSignature }) {
+export async function verifyInstallBundle(bundle, { root, sources, version, expected, expectedSignature }) {
   const directory = await lstat(bundle)
   requireThat(directory.isDirectory() && !directory.isSymbolicLink(), 'Installation source must be a real application directory')
-  const inventory = await inspectPackage({ app: path.resolve(bundle), arch: 'arm64', root })
-  if (expected) requireThat(JSON.stringify(inventory.entries) === JSON.stringify(expected.entries) && inventory.appBytes === expected.appBytes && inventory.asarBytes === expected.asarBytes,
-    'Installation application differs from its package manifest')
+  const inventory = await inspectPackage({ app: path.resolve(bundle), arch: 'arm64', root, sources })
+  if (expected) requireThat(JSON.stringify(inventory.entries) === JSON.stringify(expected.entries) && inventory.appBytes === expected.appBytes && inventory.asarBytes === expected.asarBytes &&
+    inventory.source.packageHash === expected.source?.packageHash && inventory.source.lockHash === expected.source?.lockHash,
+  'Installation application differs from its package manifest')
   const plist = path.join(bundle, 'Contents/Info.plist')
   requireThat((await lstat(plist)).size <= 64 * 1024, 'Application Info.plist exceeds 64 KiB')
   requireThat(command('/usr/bin/plutil', ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', plist]) === appId &&
@@ -76,10 +78,11 @@ export async function verifyInstallBundle(bundle, { root, version, expected, exp
     JSON.stringify(signature.authorities) === JSON.stringify(expectedSignature.authorities), 'Installation signature differs from its delivery manifest')
   return { inventory, signature }
 }
-export async function verifyDeliveryForInstall(directory, root) {
+export async function verifyDeliveryForInstall(directory) {
   requireThat(lstatSync(directory).isDirectory() && !lstatSync(directory).isSymbolicLink(), 'Delivery directory must not be a symlink')
   const delivery = await installationJson(path.join(directory, 'delivery.json'), 64 * 1024)
-  requireThat(delivery.schema === 1 && delivery.scope === 'local-development-only' && delivery.architecture === 'arm64' &&
+  requireThat(delivery.schema === 2, 'Unsupported delivery schema; regenerate a schema 2 delivery with validation sources')
+  requireThat(delivery.scope === 'local-development-only' && delivery.architecture === 'arm64' && delivery.source?.validationPath === VALIDATION_SOURCE_DIRECTORY &&
     delivery.application?.path === 'mac-arm64/OC Chan.app' && delivery.application.version === delivery.version &&
     delivery.application.signature?.verified === true && ['ad-hoc', 'developer-id', 'other'].includes(delivery.application.signature.kind) &&
     delivery.validation?.packageBudget === 'passed' && delivery.validation.dependencies === 'verified', 'Delivery is not a verified local arm64 build')
@@ -94,10 +97,11 @@ export async function verifyDeliveryForInstall(directory, root) {
   }
   const [source, expected, dependencies] = values
   requireThat(source.version === delivery.version && source.digest === delivery.source.digest && expected.arch === 'arm64' && expected.budget?.status === 'passed' && dependencies.status === 'verified', 'Delivery source, package or dependency evidence differs')
+  const sources = await readDeliveryValidationSource(path.join(directory, VALIDATION_SOURCE_DIRECTORY), source)
   await verifyArtifactDigests(directory, delivery.version, delivery.artifacts)
   const bundle = path.join(directory, delivery.application.path)
-  const { inventory, signature } = await verifyInstallBundle(bundle, { root, version: delivery.version, expected, expectedSignature: delivery.application.signature })
-  return { bundle, version: delivery.version, inventory, signature, source: delivery.source }
+  const { inventory, signature } = await verifyInstallBundle(bundle, { sources, version: delivery.version, expected, expectedSignature: delivery.application.signature })
+  return { bundle, version: delivery.version, inventory, signature, source: delivery.source, sources }
 }
 export async function stageInstallBundle(source, target, validation) {
   checkInstallTarget(target)
