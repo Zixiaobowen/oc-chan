@@ -2,9 +2,9 @@ import { createHash } from 'node:crypto'
 import { open, rename, rm, statfs, type FileHandle } from 'node:fs/promises'
 import { join } from 'node:path'
 import { load, JSON_SCHEMA } from 'js-yaml'
-import { gt, valid } from 'semver'
+import { gt, parse, valid } from 'semver'
 
-export const RELEASES_URL = 'https://github.com/Zixiaobowen/oc-chan-releases/releases'
+export const RELEASES_URL = 'https://github.com/Zixiaobowen/oc-chan/releases'
 export const METADATA_URL = `${RELEASES_URL}/latest/download/latest-mac.yml`
 export const MAX_METADATA_BYTES = 64 * 1024
 export const MAX_UPDATE_BYTES = 512 * 1024 * 1024
@@ -66,10 +66,14 @@ export function parseUpdate(text: string, currentVersion: string, arch: string):
   // Generated builder metadata needs no YAML aliases, anchors or tags. Reject them before parsing.
   if (/(?:^|[\s,[{])[&*!]/m.test(text)) throw new Error('Unsupported YAML reference or tag')
   const value: unknown = load(text, { schema: JSON_SCHEMA })
-  if (!value || typeof value !== 'object' || !('version' in value) || typeof value.version !== 'string' || value.version.length > 64 || valid(value.version) !== value.version || !valid(currentVersion)) {
+  if (!value || typeof value !== 'object' || !('version' in value) || typeof value.version !== 'string' || value.version.length > 64 || !valid(currentVersion)) {
     throw new Error('更新版本无效 / Invalid update version')
   }
-  if (value.version.includes('-')) throw new Error('稳定更新源包含预发布版本 / Prerelease in stable update feed')
+  const version = parse(value.version)
+  const canonicalVersion = version && `${version.version}${version.build.length ? `+${version.build.join('.')}` : ''}`
+  if (!version || canonicalVersion !== value.version) throw new Error('更新版本无效 / Invalid update version')
+  if (version.prerelease.length) throw new Error('稳定更新源包含预发布版本 / Prerelease in stable update feed')
+  if (version.build.length) throw new Error('稳定更新源包含构建元数据 / Build metadata in stable update feed')
   if (!('files' in value) || !Array.isArray(value.files) || value.files.length < 1 || value.files.length > 8) throw new Error('更新文件列表无效 / Invalid update file list')
   if (arch !== 'arm64' && arch !== 'x64') throw new Error('不支持此架构 / Unsupported architecture')
   const name = `OC-Chan-${value.version}-mac-${arch}.zip`
