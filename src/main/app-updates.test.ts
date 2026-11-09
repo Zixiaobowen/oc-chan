@@ -9,7 +9,7 @@ import { UpdateController } from './plugins/update-controller'
 import { downloadAsset, fetchUpdate, MAX_METADATA_BYTES, parseUpdate, readMetadata, type UpdateAsset, type FetchUpdate } from './plugins/update-source'
 
 const payload = Buffer.from('verified update archive test contents')
-const asset: UpdateAsset = { version: '0.2.0', url: 'https://github.com/Zixiaobowen/oc-chan-releases/releases/download/v0.2.0/OC-Chan-0.2.0-mac-arm64.zip', size: payload.length, sha512: createHash('sha512').update(payload).digest('base64') }
+const asset: UpdateAsset = { version: '0.2.0', url: 'https://github.com/Zixiaobowen/oc-chan/releases/download/v0.2.0/OC-Chan-0.2.0-mac-arm64.zip', size: payload.length, sha512: createHash('sha512').update(payload).digest('base64') }
 const metadata = dump({ version: asset.version, files: [{ url: 'OC-Chan-0.2.0-mac-arm64.zip', size: asset.size, sha512: asset.sha512 }, { url: 'OC-Chan-0.2.0-mac-x64.zip', size: 123, sha512: asset.sha512 }] })
 
 test('stable update selection respects semver and machine architecture', () => {
@@ -19,6 +19,18 @@ test('stable update selection respects semver and machine architecture', () => {
   assert.equal(parseUpdate(metadata, '1.0.0', 'arm64'), null)
   assert.throws(() => parseUpdate(metadata.replaceAll('0.2.0', '0.3.0-beta.1'), '0.1.0', 'arm64'), /Prerelease/)
   assert.throws(() => parseUpdate(metadata, '0.1.0', 'riscv64'), /architecture/)
+})
+
+test('stable update metadata explicitly excludes prereleases and build metadata', () => {
+  for (const version of ['0.3.0-beta.1', '0.3.0-rc.1+local.7']) {
+    assert.throws(() => parseUpdate(metadata.replaceAll('0.2.0', version), '0.1.0', 'arm64'), /Prerelease in stable update feed/)
+  }
+  for (const version of ['0.3.0+local.7', '0.3.0+001']) {
+    assert.throws(() => parseUpdate(metadata.replaceAll('0.2.0', version), '0.1.0', 'arm64'), /Build metadata in stable update feed/)
+  }
+  for (const version of ['v0.3.0', '00.3.0', '0.03.0', '0.3.00', '0.3.0-01', '0.3.0+']) {
+    assert.throws(() => parseUpdate(metadata.replaceAll('0.2.0', version), '0.1.0', 'arm64'), /Invalid update version/)
+  }
 })
 
 test('rejects missing/duplicate architecture, unsafe size and YAML aliases', () => {

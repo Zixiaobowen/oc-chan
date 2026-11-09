@@ -3,9 +3,11 @@ import { createHash } from 'node:crypto'
 import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { finished } from 'node:stream/promises'
 import test from 'node:test'
 import * as asar from '@electron/asar'
-import { enforceBudget, inspectPackage } from './check-package.mjs'
+import { enforceBudget, inspectPackage, readPackageSources } from './check-package.mjs'
+import { createDeliveryValidationSource, readDeliveryValidationSource } from './delivery-source.mjs'
 
 const darwinOnly = { skip: process.platform !== 'darwin' ? 'Executable architecture checks require macOS /usr/bin/lipo' : false }
 const helper = 'Contents/Resources/tern-navigation/present-window'
@@ -82,7 +84,8 @@ async function fixture(t, arch = 'arm64') {
   await put(staging, 'out/main/THIRD_PARTY_NOTICES.txt', mainPackages.map(name => `${name}@1.0.0\nMIT License\nCopyright fixture\n`).join('\n'))
   const repack = async () => {
     asar.uncache(path.join(app, archive))
-    await asar.createPackage(staging, path.join(app, archive))
+    // ASAR resolves with the output stream after end(), before buffered bytes finish writing.
+    await finished(await asar.createPackage(staging, path.join(app, archive)))
   }
   await repack()
   const inspect = options => inspectPackage({ app, arch, root, measure: true, ...options })
@@ -116,6 +119,11 @@ for (const arch of ['arm64', 'x64']) {
     assert.equal(report.appBytes, report.entries.filter(item => item.kind !== 'asar').reduce((sum, item) => sum + item.bytes, 0))
     assert.ok(report.entries.every(item => /^[a-f0-9]{64}$/.test(item.sha256) && !path.isAbsolute(item.path)))
     assert.match(report.source.lockHash, /^[a-f0-9]{64}$/)
+    assert.match(report.source.packageHash, /^[a-f0-9]{64}$/)
+    assert.equal(report.glassBytes, 32)
+    assert.equal(report.notificationBytes, 32)
+    assert.ok(report.entries.some(item => item.path === 'Contents/Resources/plugin-market/system-1.0.0.ocplugin'))
+    assert.ok(report.bundledDependencies.some(item => item.name === 'semver'))
     assert.deepEqual(JSON.parse(await readFile(output, 'utf8')), report)
     const baseline = baselineFor(report)
     const budget = await put(f.root, 'baseline.json', JSON.stringify(baseline))
@@ -139,6 +147,19 @@ test('packaging refuses tampered or extra independently installable plugins', da
   await put(f.app, packagePath, original)
   await put(f.app, 'Contents/Resources/plugin-market/unknown-1.0.0.ocplugin', original)
   await assert.rejects(f.inspect(), /Unlisted plugin package/)
+})
+
+test('packaging binds the catalog and plugin bytes to the current build output', darwinOnly, async t => {
+  const f = await fixture(t)
+  const directory = 'out/plugin-market/'
+  const catalog = await readFile(path.join(f.root, directory, 'catalog.json'))
+  await put(f.root, directory + 'catalog.json', Buffer.concat([catalog, Buffer.from(' ')]))
+  await assert.rejects(f.inspect(), /Plugin catalog differs from the built source/)
+  await put(f.root, directory + 'catalog.json', catalog)
+  await put(f.root, directory + 'system-1.0.0.ocplugin', '{}')
+  await assert.rejects(f.inspect(), /Plugin package differs from the built source/)
+  await rm(path.join(f.root, directory), { recursive: true })
+  await assert.rejects(f.inspect(), { code: 'ENOENT' })
 })
 
 for (const name of ['out/main/index.test.js', 'out/renderer/assets/debug.log', 'out/renderer/.cache/data', 'out/main/index.d.ts', 'out/main/index.js.map']) {
@@ -338,4 +359,49 @@ test('dependency growth, absent architecture, and missing distribution limits fa
   const invalid = baselineFor(measured)
   delete invalid.architectures.arm64.limits.dmgBytes
   assert.throws(() => enforceBudget(measured, invalid), /baseline limit: dmgBytes/)
+})
+
+test('historical delivery sources drive package checks after workspace version, plugin and budget upgrades', darwinOnly, async t => {
+  const f = await fixture(t)
+  const original = await f.inspect()
+  await put(f.root, 'docs/package-baseline.json', JSON.stringify(baselineFor(original)))
+  const hash = bytes => createHash('sha256').update(bytes).digest('hex')
+  const files = Object.entries(await readPackageSources(f.root)).map(([name, bytes]) => ({ path: name, bytes: bytes.length, mode: 0o600, sha256: hash(bytes) }))
+  const source = { version: f.manifest.version, files, digest: hash(JSON.stringify(files)) }
+  const directory = path.join(f.root, 'validation-source')
+  await createDeliveryValidationSource(f.root, directory, source)
+  f.manifest.version = '2.0.0'
+  f.lock.version = f.lock.packages[''].version = '2.0.0'
+  await put(f.root, 'package.json', JSON.stringify(f.manifest))
+  await put(f.root, 'package-lock.json', JSON.stringify(f.lock))
+  await put(f.root, 'resources/tern-navigation/plugin/window.luau', 'return { upgraded = true }\n')
+  await put(f.root, 'docs/package-baseline.json', '{}')
+  await assert.rejects(f.inspect(), /differs from source/)
+  await rm(path.join(f.root, 'out/plugin-market'), { recursive: true })
+  const inspectDelivery = async () => inspectPackage({ app: f.app, arch: 'arm64', root: f.root, sources: await readDeliveryValidationSource(directory, source) })
+  const historical = await inspectDelivery()
+  assert.deepEqual(historical.entries, original.entries)
+  assert.deepEqual(historical.source, original.source)
+  assert.equal(historical.budget.status, 'passed')
+  const catalogPath = 'Contents/Resources/plugin-market/catalog.json'
+  const catalogBytes = await readFile(path.join(f.app, catalogPath))
+  const catalog = JSON.parse(catalogBytes.toString('utf8'))
+  catalog.plugins[0].sha256 = '0'.repeat(64)
+  await put(f.app, catalogPath, JSON.stringify(catalog))
+  await assert.rejects(inspectDelivery(), /plugin integrity mismatch/)
+  await put(f.app, catalogPath, catalogBytes)
+  const systemPackagePath = 'Contents/Resources/plugin-market/system-1.0.0.ocplugin'
+  const systemPackage = await readFile(path.join(f.app, systemPackagePath))
+  await put(f.app, systemPackagePath, Buffer.concat([systemPackage, Buffer.from(' ')]))
+  await assert.rejects(inspectDelivery(), /plugin integrity mismatch/)
+  await put(f.app, systemPackagePath, systemPackage)
+  const extraPackage = await put(f.app, 'Contents/Resources/plugin-market/unknown-1.0.0.ocplugin', systemPackage)
+  await assert.rejects(inspectDelivery(), /Unlisted plugin package/)
+  await rm(extraPackage)
+  await put(f.app, plugin + 'window.luau', 'return { tampered = true }\n')
+  await assert.rejects(inspectDelivery(), /differs from source/)
+  await put(f.app, plugin + 'window.luau', 'return {}\n')
+  await put(f.staging, 'package.json', JSON.stringify({ name: f.manifest.name, version: '2.0.0', main: f.manifest.main }))
+  await f.repack()
+  await assert.rejects(inspectDelivery(), /version|manifest/i)
 })

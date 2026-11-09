@@ -90,6 +90,49 @@ export async function exerciseMarketplace({ ui, main, renderer, feed }) {
     return { installedContributionRetained: true, collectorStopped: true, collectionResumed: true }
   })
   await ui.navigate('插件市场', 'Plugin marketplace')
+  await ui.stage('marketplace-uninstall-clears-paused-and-tray-surfaces', async () => {
+    await ui.navigate('本机概览', 'Overview')
+    await main.evaluate('globalThis.__ocPerformanceTray.open()')
+    const endpoint = new URL('/json/list', renderer.socket.url)
+    endpoint.protocol = 'http:'
+    const response = await fetch(endpoint, { signal: AbortSignal.timeout(5000) })
+    assert.equal(response.status, 200)
+    const target = (await response.json()).find(target => target.type === 'page' && new URL(target.url).searchParams.get('view') === 'tray')
+    assert.ok(target?.webSocketDebuggerUrl, 'the real tray renderer must be available')
+    const tray = await Protocol.connect(target.webSocketDebuggerUrl)
+    const cpuChoice = `Array.from(document.querySelectorAll('.tray-customize label')).find(label => label.querySelector('span')?.textContent === 'CPU')?.querySelector('input')`
+    try {
+      await ui.expect('tray renders installed system metrics', () => tray.evaluate(`!!document.querySelector('[data-metric="memory"]') && document.querySelector('[data-metric="memory"] .tray-metric-value')?.textContent !== '—'`))
+      await tray.evaluate(`document.querySelector('.tray-customize').open = true; (${cpuChoice}).click()`)
+      await ui.expect('tray CPU exclusion is applied', () => tray.evaluate(`(${cpuChoice})?.checked === false && !document.querySelector('[data-metric="cpu"]')`))
+      await ui.click($('.page-actions button[aria-pressed]'))
+      await ui.dom('main display is paused', `${$('.app-shell')}?.dataset.displayLive === 'false'`)
+      await ui.navigate('插件市场', 'Plugin marketplace')
+      await uninstall(ui)
+      await ui.expect('tray removes uninstalled metrics and samples', () => tray.evaluate(`!document.querySelector('[data-metric="memory"]') && !document.querySelector('.tray-sample') && !(${cpuChoice})`))
+      await ui.navigate('本机概览', 'Overview')
+      await ui.dom('paused main window removes system metrics and shows installation entry', `${$('.app-shell')}?.dataset.displayLive === 'false' && document.querySelectorAll('.health-panel').length === 1 && !!${$('.health-panel .plugin-required')} && !${$('.uptime-number')}`)
+      await ui.navigate('插件市场', 'Plugin marketplace')
+      feed.setMode('updated')
+      await ui.click($('[data-marketplace-action="check"]'))
+      await ui.expect('verified version is offered again', () => ui.evaluate(`${item}.then(item => item.manifest.version === '1.1.0')`))
+      await ui.click(action('install'))
+      await ready(ui, '1.1.0')
+      await ui.expect('reinstallation preserves tray selection and restores live memory', () => tray.evaluate(`(${cpuChoice})?.checked === false && !document.querySelector('[data-metric="cpu"]') && document.querySelector('[data-metric="memory"] .tray-metric-value')?.textContent !== '—' && !!document.querySelector('.tray-sample')`))
+      await ui.navigate('本机概览', 'Overview')
+      await ui.dom('paused reinstallation cannot reuse the removed snapshot', `${$('.health-panel')} && ${$('.uptime-number')}?.textContent === '—'`)
+      await ui.click($('.page-actions button[aria-pressed]'))
+      await ui.dom('resuming loads the current system snapshot', `${$('.app-shell')}?.dataset.displayLive === 'true' && !!${$('.uptime-number')} && ${$('.uptime-number')}.textContent !== '—'`)
+      await ui.info()
+      return { pausedSnapshotCleared: true, traySnapshotCleared: true, traySelectionPreserved: true, nativeWindowAcceptance: false }
+    } finally {
+      try {
+        await main.evaluate('globalThis.__ocPerformanceTray.dispose()')
+        await ui.expect('test tray window is released', async () => (await ui.info()).windows.length === 1)
+      } finally { tray.close() }
+    }
+  })
+  await ui.navigate('插件市场', 'Plugin marketplace')
   await ui.stage('marketplace-rejects-failed-activation', async () => {
     feed.setMode('broken')
     await ui.click($('[data-marketplace-action="check"]'))
@@ -137,43 +180,6 @@ export async function exerciseMarketplace({ ui, main, renderer, feed }) {
     await renderer.call('Emulation.setDeviceMetricsOverride', { width: 1280, height: 860, deviceScaleFactor: 1, mobile: false })
     await ui.expect('restored viewport is persisted before restart', () => ui.evaluate('window.desktopSettings.snapshot().then(value => value.settings.windowBounds?.width === 1280 && value.settings.windowBounds?.height === 860)'))
     return { cssViewports: ['880x640', '1024x768', '1280x860', '1600x1000'], textScale: 2, languages: ['en', 'zh-CN'], visibleNativeAcceptance: false }
-  })
-  await ui.stage('marketplace-uninstall-clears-paused-and-tray-surfaces', async () => {
-    await ui.navigate('本机概览', 'Overview')
-    await main.evaluate('globalThis.__ocPerformanceTray.open()')
-    const endpoint = new URL('/json/list', renderer.socket.url)
-    endpoint.protocol = 'http:'
-    const response = await fetch(endpoint, { signal: AbortSignal.timeout(5000) })
-    assert.equal(response.status, 200)
-    const target = (await response.json()).find(target => target.type === 'page' && new URL(target.url).searchParams.get('view') === 'tray')
-    assert.ok(target?.webSocketDebuggerUrl, 'the real tray renderer must be available')
-    const tray = await Protocol.connect(target.webSocketDebuggerUrl)
-    const cpuChoice = `Array.from(document.querySelectorAll('.tray-customize label')).find(label => label.querySelector('span')?.textContent === 'CPU')?.querySelector('input')`
-    try {
-      await ui.expect('tray renders installed system metrics', () => tray.evaluate(`!!document.querySelector('[data-metric="memory"]') && document.querySelector('[data-metric="memory"] .tray-metric-value')?.textContent !== '—'`))
-      await tray.evaluate(`document.querySelector('.tray-customize').open = true; (${cpuChoice}).click()`)
-      await ui.expect('tray CPU exclusion is applied', () => tray.evaluate(`(${cpuChoice})?.checked === false && !document.querySelector('[data-metric="cpu"]')`))
-      await ui.click($('.page-actions button[aria-pressed]'))
-      await ui.dom('main display is paused', `${$('.app-shell')}?.dataset.displayLive === 'false'`)
-      await ui.navigate('插件市场', 'Plugin marketplace')
-      await uninstall(ui)
-      await ui.expect('tray removes uninstalled metrics and samples', () => tray.evaluate(`!document.querySelector('[data-metric="memory"]') && !document.querySelector('.tray-sample') && !(${cpuChoice})`))
-      await ui.navigate('本机概览', 'Overview')
-      await ui.dom('paused main window removes system contribution', `${$('.app-shell')}?.dataset.displayLive === 'false' && !${$('.health-panel')} && !${$('.uptime-number')}`)
-      await ui.navigate('插件市场', 'Plugin marketplace')
-      feed.setMode('updated')
-      await ui.click($('[data-marketplace-action="check"]'))
-      await ui.expect('verified version is offered again', () => ui.evaluate(`${item}.then(item => item.manifest.version === '1.1.0')`))
-      await ui.click(action('install'))
-      await ready(ui, '1.1.0')
-      await ui.expect('reinstallation preserves tray selection and restores live memory', () => tray.evaluate(`(${cpuChoice})?.checked === false && !document.querySelector('[data-metric="cpu"]') && document.querySelector('[data-metric="memory"] .tray-metric-value')?.textContent !== '—' && !!document.querySelector('.tray-sample')`))
-      await ui.navigate('本机概览', 'Overview')
-      await ui.dom('paused reinstallation cannot reuse the removed snapshot', `${$('.health-panel')} && ${$('.uptime-number')}?.textContent === '—'`)
-      await ui.click($('.page-actions button[aria-pressed]'))
-      await ui.dom('resuming loads the current system snapshot', `${$('.app-shell')}?.dataset.displayLive === 'true' && ${$('.uptime-number')}?.textContent !== '—'`)
-      await ui.info()
-      return { pausedSnapshotCleared: true, traySnapshotCleared: true, traySelectionPreserved: true, nativeWindowAcceptance: false }
-    } finally { tray.close() }
   })
   const settings = (await ui.evaluate('window.desktopSettings.snapshot()')).settings
   return { settings: { plugins: settings.plugins }, pluginVersion: '1.1.0' }

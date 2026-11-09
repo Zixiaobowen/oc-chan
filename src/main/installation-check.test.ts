@@ -1,18 +1,21 @@
 import assert from 'node:assert/strict'
+import { execFile } from 'node:child_process'
 import { getEventListeners } from 'node:events'
-import { chmod, link, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { chmod, link, mkdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import test, { type TestContext } from 'node:test'
+import { promisify } from 'node:util'
 import { runInNewContext } from 'node:vm'
 import { createInstallationCheck, readInstallationJson, runInstallationCheck, verifyInstallationResult, INSTALLATION_PROBE, type InstallationEvidence } from './installation-check.mjs'
 
 const version = '0.1.0'
 const evidence: InstallationEvidence = { renderer: true, ipc: true, collections: { agents: 'ready', schedules: 'ready', system: 'ready', events: 'disabled' }, history: 'hermes', historyEntries: 2 }
-async function fixture(t: TestContext) {
+const execute = promisify(execFile)
+async function fixture(t: TestContext, requestedVersion = version) {
   const executable = await realpath(process.execPath)
-  const check = await createInstallationCheck(executable, version)
+  const check = await createInstallationCheck(executable, requestedVersion)
   t.after(() => rm(check.directory, { recursive: true, force: true }))
-  return { check, options: { executable, version, signal: new AbortController().signal, probe: async () => evidence, timeoutMs: 1000 } }
+  return { check, options: { executable, version: requestedVersion, signal: new AbortController().signal, probe: async () => evidence, timeoutMs: 1000 } }
 }
 test('readiness is bound to one launch and includes renderer, IPC, collection and history evidence', async t => {
   const { check, options } = await fixture(t)
@@ -27,6 +30,48 @@ test('readiness is bound to one launch and includes renderer, IPC, collection an
   t.after(() => rm(other.directory, { recursive: true, force: true }))
   await writeFile(path.join(other.directory, 'result.json'), await readFile(path.join(check.directory, 'result.json')), { mode: 0o600 })
   await assert.rejects(verifyInstallationResult(other), /does not match/)
+})
+test('an uninstalled system plugin preserves host version in launch-bound evidence', async t => {
+  const { check, options } = await fixture(t, '2.0.0-rc.1+local.7')
+  const uninstalled: InstallationEvidence = { ...evidence, collections: { ...evidence.collections, system: 'not-installed' } }
+  await runInstallationCheck(check.filename, { ...options, probe: async () => uninstalled })
+  const result = await verifyInstallationResult(check)
+  assert.equal(result?.version, '2.0.0-rc.1+local.7')
+  assert.deepEqual(result?.evidence, uninstalled)
+})
+for (const section of ['agents', 'schedules', 'events'] as const) test(`${section} cannot claim an uninstalled plugin`, async t => {
+  const { check, options } = await fixture(t)
+  await runInstallationCheck(check.filename, { ...options, probe: async () => ({ ...evidence, collections: { ...evidence.collections, [section]: 'not-installed' } }) })
+  await assert.rejects(verifyInstallationResult(check), /readiness evidence is invalid/)
+})
+for (const requestedVersion of ['2.0.0', '2.0.0-rc.1', '2.0.0+local.7', '2.0.0-rc.1+local.7', '2.0.0+001']) {
+  test(`readiness preserves the complete canonical SemVer identity: ${requestedVersion}`, async t => {
+    const { check, options } = await fixture(t, requestedVersion)
+    const request = await readInstallationJson(check.filename)
+    assert.deepEqual(request, check.request)
+    assert.equal(check.request.version, requestedVersion)
+    await runInstallationCheck(check.filename, options)
+    const result = await verifyInstallationResult(check)
+    assert.equal(result?.status, 'ready')
+    assert.equal(result?.version, requestedVersion)
+    assert.deepEqual(result?.evidence, evidence)
+  })
+}
+test('creation, request consumption and result verification reject noncanonical or invalid SemVer', async t => {
+  const { check, options } = await fixture(t)
+  let probes = 0
+  const invalidVersions = ['', 'v2.0.0', '=2.0.0', ' 2.0.0', '2.0.0 ', '2.0', '02.0.0', '2.00.0', '2.0.00',
+    '-2.0.0', '2.0.0-01', '2.0.0-rc.01', '2.0.0-rc..1', '2.0.0-', '2.0.0+', '2.0.0+local..7',
+    '2.0.0+local+7', '2.0.0-rc_1', '9007199254740992.0.0', `2.0.0+${'a'.repeat(256)}`]
+  for (const invalidVersion of invalidVersions) {
+    await assert.rejects(createInstallationCheck(options.executable, invalidVersion), /Invalid or expired installation request/)
+    const request = { ...check.request, version: invalidVersion }
+    await writeFile(check.filename, JSON.stringify(request))
+    await assert.rejects(runInstallationCheck(check.filename, { ...options, probe: async () => { probes++; return evidence } }), /Invalid or expired installation request/)
+    await writeFile(path.join(check.directory, 'result.json'), JSON.stringify({ ...request, pid: process.pid, checkedAt: Date.now(), status: 'ready', evidence }), { mode: 0o600 })
+    await assert.rejects(verifyInstallationResult(check), /Invalid or expired installation request/)
+  }
+  assert.equal(probes, 0)
 })
 for (const mismatch of ['version', 'executable'] as const) test(`a mismatching ${mismatch} never passes readiness`, async t => {
   const { check, options } = await fixture(t)
@@ -90,6 +135,29 @@ test('request symlinks, hard links and non-private directories are refused', asy
   await rm(saved)
   await chmod(check.directory, 0o755)
   await assert.rejects(readInstallationJson(check.filename), /private directory/)
+})
+for (const name of ['request.json', 'result.json']) {
+  test(`a FIFO at ${name} is rejected without waiting for a writer`, async t => {
+    const { check } = await fixture(t)
+    const filename = path.join(check.directory, name)
+    if (name === 'request.json') await rm(filename)
+    await execute('mkfifo', ['-m', '600', filename], { timeout: 1000 })
+    // Isolate the reader so a blocking-open regression is killed instead of hanging the test runner's thread pool.
+    const reader = `
+      import assert from 'node:assert/strict';
+      import { readInstallationJson } from ${JSON.stringify(new URL('./installation-check.mts', import.meta.url).href)};
+      await assert.rejects(readInstallationJson(process.argv[1]), /Invalid installation check file/);
+    `
+    await execute(process.execPath, ['--import', 'tsx', '--input-type=module', '--eval', reader, filename], {
+      timeout: 5000, killSignal: 'SIGKILL', maxBuffer: 64 * 1024
+    })
+  })
+}
+test('a directory in place of a readiness file is rejected', async t => {
+  const { check } = await fixture(t)
+  await rm(check.filename)
+  await mkdir(check.filename, { mode: 0o700 })
+  await assert.rejects(readInstallationJson(check.filename), /Invalid installation check file/)
 })
 test('a published result cannot be replaced by a subsequent check', async t => {
   const { check, options } = await fixture(t)

@@ -216,6 +216,64 @@ test('registered running owner is previewed without signals then stopped through
   assert.deepEqual(JSON.parse(await readFile(path.join(f.root, 'launcher-stopped.json'))), { signal: 'SIGTERM', pid: child.pid })
 })
 
+test('real development launcher signals descendants once and waits for their graceful exit', mac, async t => {
+  const f = await fixture(t)
+  await copyFile(new URL('./develop.mjs', import.meta.url), path.join(f.root, 'scripts/develop.mjs'))
+  const resources = path.join(f.root, 'resources/tern-navigation/plugin')
+  await mkdir(resources, { recursive: true })
+  for (const name of ['plugin.toml', 'window.luau']) {
+    await copyFile(new URL(`../resources/tern-navigation/plugin/${name}`, import.meta.url), path.join(resources, name))
+  }
+  // Replace the external build/watch commands with a real process group whose
+  // leader exits before its descendant finishes an asynchronous shutdown.
+  await writeFile(path.join(f.root, 'scripts/build-glass.mjs'), 'process.exit(0)\n')
+  await writeFile(path.join(f.root, 'scripts/build-plugin-market.mjs'), 'process.exit(0)\n')
+  await writeFile(path.join(f.root, 'scripts/draining-worker.mjs'), `
+import { writeFileSync } from 'node:fs'
+let signals = 0
+process.on('SIGTERM', () => {
+  writeFileSync('termination-count', String(++signals))
+  if (signals === 1) setTimeout(() => process.exit(0), 750)
+})
+setTimeout(() => process.exit(2), 10000)
+process.stdout.write('draining-worker-ready\\n')
+`)
+  const runner = path.join(f.root, 'node_modules/electron-vite/bin')
+  await mkdir(runner, { recursive: true })
+  await writeFile(path.join(runner, 'electron-vite.js'), `
+const { spawn } = require('node:child_process')
+process.on('SIGTERM', () => process.exit(0))
+spawn(process.execPath, ['scripts/draining-worker.mjs'], { stdio: 'inherit' })
+`)
+  const child = spawn(process.execPath, ['scripts/develop.mjs'], {
+    cwd: f.root, env: { ...process.env, OC_CHAN_PERFORMANCE_CONFIG: '', OC_CHAN_SMOKE_CONFIG: '' }, stdio: ['ignore', 'pipe', 'pipe']
+  })
+  f.children.push(child)
+  const closed = once(child, 'close')
+  let output = '', errors = ''
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`launcher readiness timed out: ${errors}`)), 15000)
+    child.stdout.on('data', chunk => {
+      output += chunk
+      if (output.length > 65536) { clearTimeout(timer); reject(new Error('launcher output budget exceeded')) }
+      if (output.includes('draining-worker-ready\n')) { clearTimeout(timer); resolve() }
+    })
+    child.stderr.on('data', chunk => {
+      errors += chunk
+      if (errors.length > 65536) { clearTimeout(timer); reject(new Error('launcher error budget exceeded')) }
+    })
+    child.once('error', error => { clearTimeout(timer); reject(error) })
+    child.once('exit', code => { clearTimeout(timer); reject(new Error(`launcher exited ${code}: ${errors}`)) })
+  })
+  const result = await f.api.cleanupLocalWorktree({ root: f.root, apply: true })
+  const [code, signal] = await closed
+  assert.equal(code, 143, errors)
+  assert.equal(signal, null)
+  assert.equal(await readFile(path.join(f.root, 'termination-count'), 'utf8'), '1')
+  assert.equal(await exists(result.instances[0].instance), false)
+  assert.doesNotMatch(errors, /开发启动失败|子进程退出超时|无权访问/)
+})
+
 test('stale registered instance is removable; ownerless instances are never guessed', mac, async t => {
   const f = await fixture(t)
   const { child, instance } = await launcher(f, { cleanup: false })

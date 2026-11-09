@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { promisify } from 'node:util'
-import { captureDeliverySource } from './delivery-source.mjs'
+import { captureDeliverySource, createDeliveryValidationSource, readDeliveryValidationSource } from './delivery-source.mjs'
 
 const exec = promisify(execFile)
 const sha256 = value => createHash('sha256').update(value).digest('hex')
@@ -15,6 +15,8 @@ const initialFiles = {
   'scripts/build.mjs': 'console.log("build")\n',
   'resources/icon.txt': 'icon\n',
   'src/plugins/system-monitor/main/index.ts': 'export const pluginVersion = "1.0.0"\n',
+  'resources/tern-navigation/plugin/plugin.toml': 'schema = 1\nid = "oc-chan-navigation"\nwindow = "window.luau"\n',
+  'resources/tern-navigation/plugin/window.luau': 'return {}\n',
   'electron.vite.config.ts': 'export default {}\n',
   'package.json': '{"name":"delivery-fixture","version":"1.2.3"}\n',
   'package-lock.json': '{"name":"delivery-fixture","version":"1.2.3","lockfileVersion":3}\n',
@@ -299,4 +301,60 @@ test('bounds Git stdout and rejects a missing Git executable', async t => {
     if (previousPath === undefined) delete process.env.PATH
     else process.env.PATH = previousPath
   }
+})
+
+test('validation snapshot preserves historical version and plugins after workspace changes', async t => {
+  const root = await fixture(t)
+  const source = await captureDeliverySource(root)
+  const directory = path.join(root, 'validation-source')
+  const original = await createDeliveryValidationSource(root, directory, source)
+  await put(root, 'package.json', '{"version":"2.0.0"}')
+  await put(root, 'resources/tern-navigation/plugin/window.luau', 'return { changed = true }\n')
+  assert.deepEqual(await readDeliveryValidationSource(directory, source), original)
+  assert.equal(Object.keys(original).length, 5)
+  await assert.rejects(readDeliveryValidationSource(root, source), /hash mismatch/)
+})
+
+for (const name of ['package.json', 'package-lock.json', 'docs/package-baseline.json', 'resources/tern-navigation/plugin/plugin.toml', 'resources/tern-navigation/plugin/window.luau']) {
+  test(`validation snapshot authenticates ${name} against the source manifest`, async t => {
+    const root = await fixture(t)
+    const source = await captureDeliverySource(root)
+    const directory = path.join(root, 'validation-source')
+    await createDeliveryValidationSource(root, directory, source)
+    const entry = source.files.find(entry => entry.path === name)
+    await put(directory, name, 'x'.repeat(entry.bytes))
+    await assert.rejects(readDeliveryValidationSource(directory, source), /hash mismatch/)
+  })
+}
+
+test('validation source references reject changed digests, duplicate paths and excess aggregate bytes', async t => {
+  const root = await fixture(t)
+  const source = await captureDeliverySource(root)
+  const check = files => readDeliveryValidationSource(root, { ...source, files, digest: sha256(JSON.stringify(files)) })
+  await assert.rejects(readDeliveryValidationSource(root, { ...source, digest: '0'.repeat(64) }), /manifest digest/)
+  await assert.rejects(check([...source.files, source.files[0]]), /file reference/)
+  await assert.rejects(check(source.files.filter(entry => entry.path !== 'package-lock.json')), /Missing or oversized/)
+  await assert.rejects(check(source.files.map(entry => ({ ...entry, bytes: 16 * 1024 * 1024 }))), /total 64 MiB/)
+})
+
+test('validation source rejects oversized files, symlink ancestors and FIFOs without blocking', async t => {
+  const root = await fixture(t)
+  const source = await captureDeliverySource(root)
+  const directory = path.join(root, 'validation-source')
+  await createDeliveryValidationSource(root, directory, source)
+  await sparse(directory, 'package-lock.json', 8 * 1024 * 1024 + 1)
+  await assert.rejects(readDeliveryValidationSource(directory, source), /bounded regular file/)
+  await put(directory, 'package-lock.json', initialFiles['package-lock.json'])
+  const real = path.join(directory, 'real-resources')
+  await rename(path.join(directory, 'resources'), real)
+  await symlink(real, path.join(directory, 'resources'))
+  await assert.rejects(readDeliveryValidationSource(directory, source), /directory must be real/)
+  await rm(path.join(directory, 'resources'))
+  await rename(real, path.join(directory, 'resources'))
+  const file = path.join(directory, 'package.json')
+  await rm(file)
+  await exec('mkfifo', [file])
+  const code = `import { readDeliveryValidationSource } from ${JSON.stringify(new URL('./delivery-source.mjs', import.meta.url).href)}; await readDeliveryValidationSource(process.argv[1], JSON.parse(process.argv[2]))`
+  await assert.rejects(exec(process.execPath, ['--input-type=module', '-e', code, directory, JSON.stringify(source)], { timeout: 3000 }),
+    error => error.code === 1 && /bounded regular file/.test(error.stderr))
 })

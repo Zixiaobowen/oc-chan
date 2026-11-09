@@ -20,7 +20,7 @@
 
 ## 安装与运行
 
-当前可从源码构建，或在仓库的 **Actions → Build macOS** 中查找成功构建的 Artifacts。构建产物名为 `oc-chan-macos-arm64-<运行编号>`；下载 Actions 产物通常需要登录 GitHub，并受产物保留期限制。
+当前可从源码构建，或在仓库的 **Actions → Build macOS → Run workflow** 手动构建后下载 Artifacts。安装包产物名为 `oc-chan-macos-arm64-<运行编号>`，手动构建保留3天；日常主线与PR仅上传校验报告。下载 Actions 产物通常需要登录 GitHub。公开发布页为 [OC Chan Releases](https://github.com/Zixiaobowen/oc-chan/releases)，现有 `v0.1.0` 尚不包含自动更新元数据。
 
 正式 Developer ID 签名、公证和公开 Release 分发尚未完成验证。普通构建使用 ad-hoc 签名，不能视为已通过 Apple 公证的正式安装包；macOS 可能阻止打开。请保留系统提示用于反馈，不要关闭系统安全防护。
 
@@ -28,7 +28,7 @@
 
 1. 解压外层归档，在产物目录执行 `shasum -a 256 -c SHA256SUMS.txt` 核对文件完整性。
 2. 打开 DMG，将完整的 `OC Chan.app` 放入“应用程序”；也可从应用 ZIP 中取出完整应用。
-3. 升级前退出旧版并保留旧应用副本，再整包替换。不要合并新旧应用包里的文件，也不需要删除个人设置。
+3. 升级前退出旧版并保留旧应用副本，再整包替换。不要合并新旧应用包里的文件，也不需要删除个人设置。新版验收成功后删除旧包和解包产生的多余应用，长期只保留 `/Applications/OC Chan.app`。
 
 哈希校验用于确认文件完整性，不能替代开发者签名认证。安装包不需要 Node.js 或编译器。
 
@@ -52,7 +52,7 @@ npm run dev:window
 npm run install:local
 ```
 
-该命令会构建当前工作目录（包括未提交的改动）、退出已有 OC Chan、替换 `/Applications/OC Chan.app` 并检查新应用是否就绪。失败时会尝试恢复旧包，并报告具体错误。
+该命令会构建当前工作目录（包括未提交的改动）、退出已有 OC Chan、替换 `/Applications/OC Chan.app` 并检查新应用是否就绪。成功后清理本次构建的应用副本；失败时会尝试恢复旧包，并报告具体错误。
 
 只生成安装包、不安装或启动应用：
 
@@ -130,6 +130,8 @@ npm run test:ci -- --plan src/renderer/src/AgentTopology.tsx
 # 涉及桌面渲染与交互时，运行隔离的真实 Electron 检查
 npm run smoke:renderer
 ```
+
+合并到本地 `main` 后使用 `npm run push:main`：确认 GitHub 接收提交后，回收对应任务的调试应用和开发实例，保留源码、个人数据与安装归档。其他推送入口的处理方式见[本机安装与推送后的清理](docs/development.md#本机安装与推送后的清理)。
 
 请阅读[工程约定](AGENTS.md)和[开发与维护指南](docs/development.md)。[产品说明](PRODUCT.md)介绍产品范围，[设计说明](DESIGN.md)记录界面设计，[待办清单](docs/oc-chan-todolist.md)记录实现与验收进展。提交时说明改动目的、验证方式及尚未覆盖的场景。
 

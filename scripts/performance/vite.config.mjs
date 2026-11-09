@@ -30,7 +30,7 @@ const trayControl = {
       if ((source.match(/await marketplace\.initialize\(\)/g) ?? []).length !== 1) throw new Error('Expected one plugin marketplace initialization')
       source = source.replace('await marketplace.initialize()', 'await marketplace.initialize(); await marketplace.install("system")')
     }
-    return { code: `${source}\nObject.defineProperty(globalThis, '__ocPerformanceTray', {value: {open: () => trayPanel.ensure().then(panel => panel.webContents.id), notifications: () => eventNotifications.snapshot()}});`, map: null }
+    return { code: `${source}\nObject.defineProperty(globalThis, '__ocPerformanceTray', {value: {open: () => trayPanel.ensure().then(panel => panel.webContents.id), dispose: () => trayPanel.dispose(), notifications: () => eventNotifications.snapshot()}});`, map: null }
   }
 }
 const fixtures = config.level === 'L0' ? null : createFixturePlugin({ ...config.fixture, level: config.level }, root)
