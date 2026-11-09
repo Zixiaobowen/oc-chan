@@ -6,11 +6,12 @@ import {
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import type { TopologyGraph, TopologyNode } from './agent-topology'
-import { buildOfficeLayout, getAgentFloorId, MAX_3D_EDGES, MAX_3D_NODES, type OfficeFloor, type Point3D } from './agent-topology-3d-layout'
+import { buildOfficeLayout, MAX_3D_EDGES, MAX_3D_NODES, type OfficeBuilding, type OfficeFloor, type Point3D } from './agent-topology-3d-layout'
 import { createEmployeeGeometry, createWorkstationGeometry } from './agent-office-employee'
-import { createEntranceGeometry, createFacadeGeometry, createFloorFrameGeometry, createRoofGeometry } from './agent-office-building'
+import { createEntranceGeometry, createFacadeGeometry, createFloorFrameGeometry, createMainOfficeGeometry, createRoofGeometry } from './agent-office-building'
 
 export interface Topology3DSession {
+  // x/z stay relative to the office centre, so project repacking preserves manual seats.
   positions: Map<string, Point3D>
   floorByAgent: Map<string, string>
   floorId: string | null
@@ -49,8 +50,9 @@ export class TopologyScene {
   private readonly decks = new InstancedMesh(new BoxGeometry(1, 1, 1), new MeshLambertMaterial(), MAX_3D_NODES)
   private readonly frames = new InstancedMesh(new BufferGeometry(), new MeshLambertMaterial({ vertexColors: true }), MAX_3D_NODES)
   private readonly facades = new InstancedMesh(new BufferGeometry(), new MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.65, depthWrite: false, side: DoubleSide }), MAX_3D_NODES)
-  private readonly roof = new InstancedMesh(new BufferGeometry(), new MeshLambertMaterial({ vertexColors: true, transparent: true }), 1)
-  private readonly entrance = new InstancedMesh(new BufferGeometry(), new MeshLambertMaterial({ vertexColors: true, transparent: true, side: DoubleSide }), 1)
+  private readonly roof = new InstancedMesh(new BufferGeometry(), new MeshLambertMaterial({ vertexColors: true, transparent: true }), MAX_3D_NODES)
+  private readonly entrance = new InstancedMesh(new BufferGeometry(), new MeshLambertMaterial({ vertexColors: true, transparent: true, side: DoubleSide }), MAX_3D_NODES)
+  private readonly offices = new InstancedMesh(createMainOfficeGeometry(), new MeshLambertMaterial({ vertexColors: true, transparent: true, side: DoubleSide, depthWrite: false }), MAX_3D_NODES)
   private buildingWidth = 0
   private buildingDepth = 0
   private readonly floorPaint = new Color('#d9d6cc')
@@ -62,8 +64,11 @@ export class TopologyScene {
   private readonly mutedDecks = mutedMesh(this.decks)
   private readonly mutedFrames = mutedMesh(this.frames)
   private readonly mutedFacades = mutedMesh(this.facades)
+  private readonly mutedOffices = mutedMesh(this.offices)
+  private readonly mutedRoofs = mutedMesh(this.roof)
+  private readonly mutedEntrances = mutedMesh(this.entrance)
   private readonly mutedArrows = mutedMesh(this.arrows)
-  private readonly meshes = [this.nodes, this.markers, this.desks, this.decks, this.frames, this.facades, this.roof, this.entrance, this.arrows, this.mutedNodes, this.mutedMarkers, this.mutedDesks, this.mutedDecks, this.mutedFrames, this.mutedFacades, this.mutedArrows]
+  private readonly meshes = [this.nodes, this.markers, this.desks, this.decks, this.frames, this.facades, this.roof, this.entrance, this.offices, this.arrows, this.mutedNodes, this.mutedMarkers, this.mutedDesks, this.mutedDecks, this.mutedFrames, this.mutedFacades, this.mutedOffices, this.mutedRoofs, this.mutedEntrances, this.mutedArrows]
   private readonly nodeSlots: string[] = []
   private readonly mutedNodeSlots: string[] = []
   private readonly floorSlots: string[] = []
@@ -76,12 +81,17 @@ export class TopologyScene {
   private readonly raycaster = new Raycaster()
   private readonly pointer = new Vector2()
   private readonly point = new Vector3()
+  private readonly edgeStart = new Vector3()
+  private readonly edgeEnd = new Vector3()
   private readonly direction = new Vector3()
   private readonly up = new Vector3(0, 1, 0)
   private readonly dragPlane = new Plane()
   private readonly dragOffset = new Vector3()
   private readonly labels: HTMLButtonElement[] = []
   private readonly floorLabels: HTMLButtonElement[] = []
+  private readonly buildingLabels: HTMLButtonElement[] = []
+  private buildings: OfficeBuilding[] = []
+  private floorById = new Map<string, OfficeFloor>()
   private floors: OfficeFloor[] = []
   private readonly tint = new Color()
   private readonly observer: ResizeObserver
@@ -166,6 +176,18 @@ export class TopologyScene {
       host.append(label)
       this.floorLabels.push(label)
     }
+    for (let i = 0; i < FLOOR_LABEL_LIMIT; i++) {
+      const label = document.createElement('button')
+      label.type = 'button'
+      label.className = 'topology-3d-floor-label topology-3d-building-label'
+      label.hidden = true
+      label.addEventListener('click', () => {
+        const building = this.buildings.find(item => item.id === label.dataset.buildingId)
+        if (building) this.fit(false, new Set(building.floors.flatMap(floor => floor.nodeIds)))
+      })
+      host.append(label)
+      this.buildingLabels.push(label)
+    }
     // Capture runs before OrbitControls: dragging a node must not also orbit the camera.
     canvas.addEventListener('pointerdown', this.pointerDown, true)
     canvas.addEventListener('pointermove', this.pointerMove)
@@ -193,14 +215,22 @@ export class TopologyScene {
     this.byId = new Map(graph.nodes.map(node => [node.agent.id, node]))
     if (this.pointerStart?.id && !this.byId.has(this.pointerStart.id)) this.pointerCancel()
     this.floors = layout.floors
+    this.buildings = layout.buildings
+    this.floorById = new Map(this.floors.map(floor => [floor.id, floor]))
     this.selected = selected
     this.t = t
     this.evidenceCurrent = evidenceCurrent
     for (const id of this.session.positions.keys()) {
       const node = this.byId.get(id)
-      if (!liveIds.has(id) || (node && this.session.floorByAgent.get(id) !== getAgentFloorId(node.agent))) {
+      if (!liveIds.has(id) || (node && this.session.floorByAgent.get(id) !== layout.floorByAgent.get(id))) {
         this.session.positions.delete(id)
         this.session.floorByAgent.delete(id)
+      }
+    }
+    for (const floor of this.floors) for (const id of floor.nodeIds) {
+      const p = this.session.positions.get(id)
+      if (p && (id === floor.mainAgentId ? Math.abs(p.x) > 50 || Math.abs(p.z) > 70 : p.x < 230)) {
+        this.session.positions.delete(id)
       }
     }
     const occupied = new Set<string>()
@@ -223,20 +253,33 @@ export class TopologyScene {
         }
       }
       const p = layout.positions.get(id)!
+      p.x += floor.width / 2 - 160
       while (occupied.has(cell(floor.id, p))) p.x += 140
       occupied.add(cell(floor.id, p))
       this.session.positions.set(id, p)
       this.session.floorByAgent.set(id, floor.id)
     }
-    // Retained workstations remain on their floor, including after filters and new arrivals.
-    let width = this.floors[0]?.width ?? 0
-    let depth = this.floors[0]?.depth ?? 0
-    for (const node of graph.nodes) {
-      const p = this.session.positions.get(node.agent.id)!
-      width = Math.max(width, (Math.abs(p.x) + 110) * 2)
+    // Preserve seats relative to the office while buildings repack around them.
+    const baseWidth = this.floors[0]?.width ?? 0
+    const baseDepth = this.floors[0]?.depth ?? 0
+    let width = baseWidth, depth = baseDepth
+    for (const [id, p] of this.session.positions) {
+      if (!this.floorById.has(this.session.floorByAgent.get(id)!)) continue
+      width = Math.max(width, p.x + 270)
       depth = Math.max(depth, (Math.abs(p.z) + 90) * 2)
     }
-    for (const floor of this.floors) { floor.width = width; floor.depth = depth }
+    for (const building of this.buildings) {
+      building.x *= (width + 320) / (baseWidth + 320)
+      building.z *= (depth + 360) / (baseDepth + 360)
+      building.width = width
+      building.depth = depth
+      for (const floor of building.floors) {
+        floor.width = width
+        floor.depth = depth
+        floor.x = building.x
+        floor.z = building.z
+      }
+    }
     const style = getComputedStyle(this.host)
     this.colors.ground.set(style.getPropertyValue('--ground').trim())
     this.colors.surface.set(style.getPropertyValue('--surface').trim())
@@ -246,10 +289,16 @@ export class TopologyScene {
     this.colors.edge.set(style.getPropertyValue('--edge').trim())
     this.colors.warning.set(style.getPropertyValue('--warning').trim())
     this.colors.context.set(style.getPropertyValue('--muted').trim())
-    this.renderer.domElement.setAttribute('aria-label', t('工程办公楼。选择楼层淡化其他层；方向键平移，Shift 加方向键旋转，F 显示全楼。上方菜单可定位任意员工。', 'Project office. Select a floor to dim other floors. Arrow keys pan, Shift plus arrows orbit, F fits the building. Use the picker above to locate any employee.'))
+    this.renderer.domElement.setAttribute('aria-label', t('项目建筑群，每层一个任务，主 Agent 独立办公室、子 Agent 共享工位。方向键平移，Shift 加方向键旋转，F 显示全部项目。', 'Project buildings, one task per floor, main agents in private offices and subagents at shared desks. Arrow keys pan, Shift plus arrows orbit, F fits all projects.'))
     this.syncGeometry()
     if (!this.session.camera && graph.nodes.length) this.fit()
     this.invalidate()
+  }
+
+  private worldPosition(id: string, target: Vector3): Vector3 {
+    const p = this.session.positions.get(id)!
+    const floor = this.floorById.get(this.session.floorByAgent.get(id)!)!
+    return target.set(floor.x - floor.width / 2 + 160 + p.x, p.y, floor.z + p.z)
   }
 
   private isMuted(floorId: string): boolean {
@@ -271,7 +320,7 @@ export class TopologyScene {
   private selectAgent(id: string): void {
     const node = this.byId.get(id)
     if (!node) return
-    this.callbacks.floor(getAgentFloorId(node.agent))
+    this.callbacks.floor(this.session.floorByAgent.get(id)!)
     this.callbacks.select(id)
   }
 
@@ -280,8 +329,8 @@ export class TopologyScene {
     const replacements: [InstancedMesh, InstancedMesh | null, BufferGeometry][] = [
       [this.frames, this.mutedFrames, createFloorFrameGeometry(width, depth)],
       [this.facades, this.mutedFacades, createFacadeGeometry(width, depth)],
-      [this.roof, null, createRoofGeometry(width, depth)],
-      [this.entrance, null, createEntranceGeometry(width, depth)],
+      [this.roof, this.mutedRoofs, createRoofGeometry(width, depth)],
+      [this.entrance, this.mutedEntrances, createEntranceGeometry(width, depth)],
     ]
     for (const [mesh, muted, geometry] of replacements) {
       mesh.geometry.dispose()
@@ -305,36 +354,41 @@ export class TopologyScene {
       const slots = muted ? this.mutedFloorSlots : this.floorSlots
       const index = mesh.count++
       slots.push(floor.id)
-      this.transform.position.set(0, floor.y - 4, 0)
+      this.transform.position.set(floor.x, floor.y - 4, floor.z)
       this.transform.scale.set(floor.width, 8, floor.depth)
       this.transform.updateMatrix()
       mesh.setMatrixAt(index, this.transform.matrix)
       mesh.setColorAt(index, this.session.floorId === floor.id ? this.tint.copy(this.floorPaint).lerp(this.colors.active, 0.1) : this.floorPaint)
-      this.transform.position.set(0, floor.y, 0)
+      this.transform.position.set(floor.x, floor.y, floor.z)
       this.transform.scale.setScalar(1)
       this.transform.updateMatrix()
       for (const part of muted ? [this.mutedFrames, this.mutedFacades] : [this.frames, this.facades]) {
         part.setMatrixAt(index, this.transform.matrix)
         part.count++
       }
+      if (floor.mainAgentId !== null) {
+        const offices = muted ? this.mutedOffices : this.offices
+        this.transform.position.set(floor.x - floor.width / 2 + 160, floor.y, floor.z)
+        this.transform.updateMatrix()
+        offices.setMatrixAt(offices.count++, this.transform.matrix)
+      }
     }
-    if (this.floors.length) {
-      const first = this.floors[0], last = this.floors[this.floors.length - 1]
-      this.roof.count = this.entrance.count = 1
-      this.transform.position.set(0, last.y + 240, 0)
+    this.roof.material.opacity = this.session.floorId === null ? 1 : 0.05
+    this.roof.material.depthWrite = this.session.floorId === null
+    for (const building of this.buildings) {
+      const muted = this.session.floorId !== null && !building.floors.some(floor => floor.id === this.session.floorId)
+      const roof = muted ? this.mutedRoofs : this.roof
+      const entrance = muted ? this.mutedEntrances : this.entrance
+      this.transform.position.set(building.x, building.floors.length * 240, building.z)
       this.transform.scale.setScalar(1)
       this.transform.updateMatrix()
-      this.roof.setMatrixAt(0, this.transform.matrix)
-      this.roof.material.opacity = this.session.floorId === null ? 1 : 0.05
-      this.roof.material.depthWrite = this.session.floorId === null
-      this.transform.position.set(0, first.y, 0)
+      roof.setMatrixAt(roof.count++, this.transform.matrix)
+      this.transform.position.set(building.x, 0, building.z)
       this.transform.updateMatrix()
-      this.entrance.setMatrixAt(0, this.transform.matrix)
-      this.entrance.material.opacity = this.isMuted(first.id) ? 0.12 : 1
-      this.entrance.material.depthWrite = !this.isMuted(first.id)
+      entrance.setMatrixAt(entrance.count++, this.transform.matrix)
     }
     for (const node of this.graph.nodes) {
-      const muted = this.isMuted(getAgentFloorId(node.agent))
+      const muted = this.isMuted(this.session.floorByAgent.get(node.agent.id)!)
       const body = muted ? this.mutedNodes : this.nodes
       const markers = muted ? this.mutedMarkers : this.markers
       const desks = muted ? this.mutedDesks : this.desks
@@ -342,12 +396,11 @@ export class TopologyScene {
       const index = body.count++
       markers.count = desks.count = body.count
       slots.push(node.agent.id)
-      const p = this.session.positions.get(node.agent.id)!
+      const p = this.worldPosition(node.agent.id, this.point)
       const size = node.agent.id === this.selected ? 1.08 : 1
-      const facing = node.agent.id.charCodeAt(node.agent.id.length - 1) % 2 === 0 ? Math.PI : 0
       const color = node.agent.id === this.selected ? this.colors.active : node.issue ? this.colors.warning
         : node.contextOnly ? this.colors.context : this.evidenceCurrent && (node.agent.state === 'working' || node.agent.activity) ? this.colors.active : this.colors.node
-      this.transform.rotation.set(0, facing, 0)
+      this.transform.rotation.set(0, 0, 0)
       this.transform.position.set(p.x, p.y + 40 * (size - 1), p.z)
       this.transform.scale.setScalar(size)
       this.transform.updateMatrix()
@@ -373,8 +426,8 @@ export class TopologyScene {
       for (const edge of this.graph.edges) {
         const edgeMuted = this.isMuted(this.session.floorByAgent.get(edge.source)!) && this.isMuted(this.session.floorByAgent.get(edge.target)!)
         if (edgeMuted !== muted) continue
-        const start = this.session.positions.get(edge.source)!
-        const end = this.session.positions.get(edge.target)!
+        const start = this.worldPosition(edge.source, this.edgeStart)
+        const end = this.worldPosition(edge.target, this.edgeEnd)
         this.direction.set(end.x - start.x, end.y - start.y, end.z - start.z)
         const length = this.direction.length()
         this.direction.normalize()
@@ -445,48 +498,15 @@ export class TopologyScene {
     const scale = Number(getComputedStyle(this.host).getPropertyValue('--font-scale')) || 1
     const boxes: { x: number; y: number; w: number; h: number }[] = []
     const intersects = (x: number, y: number, w: number, h: number) => boxes.some(b => x < b.x + b.w + 6 && x + w + 6 > b.x && y < b.y + b.h + 5 && y + h + 5 > b.y)
-    const floorCandidates = this.floors.map(floor => {
-      this.point.set(-floor.width / 2, floor.y, floor.depth / 2).project(this.camera)
-      return { floor, x: (this.point.x + 1) * this.width / 2, y: (1 - this.point.y) * this.height / 2, depth: this.point.z }
-    }).filter(p => p.depth > -1 && p.depth < 1 && p.x > -100 && p.x < this.width && p.y > 0 && p.y < this.height)
-    floorCandidates.sort((a, b) => Number(b.floor.id === this.session.floorId) - Number(a.floor.id === this.session.floorId) || b.floor.level - a.floor.level)
-    const visibleFloors: typeof floorCandidates = []
-    const fw = Math.min(210, this.width - 8), fh = 30 * scale + 8
-    for (const item of floorCandidates) {
-      if (visibleFloors.length === FLOOR_LABEL_LIMIT) break
-      item.x = Math.max(4, Math.min(this.width - fw - 4, item.x - fw - 10))
-      item.y = Math.max(4, Math.min(this.height - fh - 4, item.y))
-      if (intersects(item.x, item.y, fw, fh)) continue
-      visibleFloors.push(item)
-      boxes.push({ x: item.x, y: item.y, w: fw, h: fh })
-    }
-    const wantedFloors = new Set(visibleFloors.map(item => item.floor.id))
-    const usedFloors = new Set<HTMLButtonElement>()
-    for (const { floor, x, y } of visibleFloors) {
-      const label = this.floorLabels.find(label => label.dataset.floorId === floor.id)
-        ?? this.floorLabels.find(label => !usedFloors.has(label) && !wantedFloors.has(label.dataset.floorId ?? ''))!
-      usedFloors.add(label)
-      const name = floor.cwd ? floor.name : this.t('工程未识别', 'Unidentified project')
-      const text = `${floor.level}F · ${name} · ${floor.nodeIds.length}`
-      if (label.textContent !== text) label.textContent = text
-      label.dataset.floorId = floor.id
-      label.title = `${name}\n${floor.cwd ?? this.t('没有工作目录证据', 'No working-directory evidence')}`.slice(0, 4096)
-      label.setAttribute('aria-pressed', String(floor.id === this.session.floorId))
-      label.classList.toggle('is-selected', floor.id === this.session.floorId)
-      label.classList.toggle('is-dimmed', this.isMuted(floor.id))
-      label.style.transform = `translate(${x}px, ${y}px)`
-      label.hidden = false
-    }
-    for (const label of this.floorLabels) if (!usedFloors.has(label)) label.hidden = true
     const candidates = this.graph.nodes.map(node => {
-      const p = this.session.positions.get(node.agent.id)!
+      const p = this.worldPosition(node.agent.id, this.edgeStart)
       this.point.set(p.x, p.y - 40, p.z).project(this.camera)
       const footY = this.point.y
       this.point.set(p.x, p.y + 70, p.z).project(this.camera)
       return { node, x: (this.point.x + 1) * this.width / 2, y: (1 - this.point.y) * this.height / 2, depth: this.point.z, size: Math.abs(this.point.y - footY) * this.height / 2 }
     }).filter(p => p.depth > -1 && p.depth < 1 && p.x > 0 && p.x < this.width && p.y > 0 && p.y < this.height
       && (p.size >= 42 || p.node.agent.id === this.selected || p.node.agent.id === this.hovered))
-    const priority = (node: TopologyNode) => (this.isMuted(getAgentFloorId(node.agent)) ? 10 : 0) + (node.agent.id === this.selected ? 0 : node.agent.id === this.hovered ? 1 : node.agent.kind === 'main' ? 2 : 3)
+    const priority = (node: TopologyNode) => (this.isMuted(this.session.floorByAgent.get(node.agent.id)!) ? 10 : 0) + (node.agent.id === this.selected ? 0 : node.agent.id === this.hovered ? 1 : node.agent.kind === 'main' ? 2 : 3)
     candidates.sort((a, b) => priority(a.node) - priority(b.node) || a.depth - b.depth)
     const w = Math.min(200, this.width - 8), h = 34.5 * scale + 14
     const placed: { item: typeof candidates[number]; x: number; y: number }[] = []
@@ -508,19 +528,77 @@ export class TopologyScene {
       label.hidden = false
       if (label.firstElementChild!.textContent !== title) label.firstElementChild!.textContent = title
       const state = item.node.agent.state === 'working' ? this.t('工作中', 'Working') : item.node.agent.state === 'idle' ? this.t('空闲', 'Idle') : item.node.agent.state === 'running' ? this.t('进程存活', 'Process alive') : this.t('状态未知', 'Unknown')
-      const subtitle = `${item.node.agent.runtime} · ${state}${item.node.contextOnly ? this.t(' · 关联', ' · Context') : ''}${item.node.issue ? this.t(' · 关系待确认', ' · Unconfirmed relation') : ''}`
+      const floor = this.floorById.get(this.session.floorByAgent.get(item.node.agent.id)!)!
+      const role = floor.mainAgentId === item.node.agent.id ? this.t('主 Agent · 独立办公室', 'Main · Private office') : this.t('共享工位', 'Shared desk')
+      const subtitle = `${role} · ${state}${item.node.contextOnly ? this.t(' · 关联', ' · Context') : ''}${item.node.issue ? this.t(' · 关系待确认', ' · Unconfirmed relation') : ''}`
       if (label.lastElementChild!.textContent !== subtitle) label.lastElementChild!.textContent = subtitle
       label.dataset.id = item.node.agent.id
       label.classList.toggle('is-selected', item.node.agent.id === this.selected)
-      label.classList.toggle('is-dimmed', this.isMuted(getAgentFloorId(item.node.agent)))
+      label.classList.toggle('is-dimmed', this.isMuted(floor.id))
       label.title = `${title}\n${item.node.agent.cwd ?? ''}`.slice(0, 4096)
-      label.setAttribute('aria-label', `${title}, ${state}, PID ${item.node.agent.pid}`)
+      label.setAttribute('aria-label', `${title}, ${role}, ${state}, PID ${item.node.agent.pid}`)
       label.style.transform = `translate(${x}px, ${y}px)`
     }
     for (const label of this.labels) if (!used.has(label)) {
       if (document.activeElement === label) this.renderer.domElement.focus({ preventScroll: true })
       label.hidden = true
     }
+    const floorCandidates = this.floors.map(floor => {
+      this.point.set(floor.x - floor.width / 2, floor.y, floor.z + floor.depth / 2).project(this.camera)
+      return { floor, x: (this.point.x + 1) * this.width / 2, y: (1 - this.point.y) * this.height / 2, depth: this.point.z }
+    }).filter(p => p.depth > -1 && p.depth < 1 && p.x > -100 && p.x < this.width && p.y > 0 && p.y < this.height)
+    floorCandidates.sort((a, b) => Number(b.floor.id === this.session.floorId) - Number(a.floor.id === this.session.floorId) || b.floor.level - a.floor.level)
+    const visibleFloors: typeof floorCandidates = []
+    const fw = Math.min(210, this.width - 8), fh = 30 * scale + 8
+    for (const item of floorCandidates) {
+      if (visibleFloors.length === FLOOR_LABEL_LIMIT) break
+      item.x = Math.max(4, Math.min(this.width - fw - 4, item.x - fw - 10))
+      item.y = Math.max(4, Math.min(this.height - fh - 4, item.y))
+      if (intersects(item.x, item.y, fw, fh)) continue
+      visibleFloors.push(item)
+      boxes.push({ x: item.x, y: item.y, w: fw, h: fh })
+    }
+    const wantedFloors = new Set(visibleFloors.map(item => item.floor.id))
+    const usedFloors = new Set<HTMLButtonElement>()
+    for (const { floor, x, y } of visibleFloors) {
+      const label = this.floorLabels.find(label => label.dataset.floorId === floor.id)
+        ?? this.floorLabels.find(label => !usedFloors.has(label) && !wantedFloors.has(label.dataset.floorId ?? ''))!
+      usedFloors.add(label)
+      const name = floor.name
+      const text = `${floor.level}F · ${name}${floor.unresolved ? this.t(' · 待归属', ' · Unassigned') : ''}`
+      if (label.textContent !== text) label.textContent = text
+      label.dataset.floorId = floor.id
+      label.title = `${name}\n${floor.cwd ?? this.t('没有工作目录证据', 'No working-directory evidence')}`.slice(0, 4096)
+      label.setAttribute('aria-pressed', String(floor.id === this.session.floorId))
+      label.classList.toggle('is-selected', floor.id === this.session.floorId)
+      label.classList.toggle('is-dimmed', this.isMuted(floor.id))
+      label.style.transform = `translate(${x}px, ${y}px)`
+      label.hidden = false
+    }
+    for (const label of this.floorLabels) if (!usedFloors.has(label)) label.hidden = true
+    const buildingCandidates = this.buildings.map(building => {
+      this.point.set(building.x, building.floors.length * 240 + 90, building.z).project(this.camera)
+      return { building, x: (this.point.x + 1) * this.width / 2 - fw / 2, y: (1 - this.point.y) * this.height / 2 - fh, depth: this.point.z }
+    }).filter(item => item.depth > -1 && item.depth < 1 && item.x > -fw && item.x < this.width && item.y > -fh && item.y < this.height)
+    buildingCandidates.sort((a, b) => a.depth - b.depth)
+    let buildingLabelCount = 0
+    for (const item of buildingCandidates) {
+      if (buildingLabelCount === this.buildingLabels.length) break
+      const x = Math.max(4, Math.min(this.width - fw - 4, item.x))
+      const y = Math.max(4, Math.min(this.height - fh - 4, item.y))
+      if (intersects(x, y, fw, fh)) continue
+      const label = this.buildingLabels[buildingLabelCount++]
+      const name = item.building.cwd ? item.building.name : this.t('项目未识别', 'Unidentified project')
+      label.textContent = `${name} · ${this.t(`${item.building.floors.length} 个任务`, `${item.building.floors.length} tasks`)}`
+      label.title = item.building.cwd ?? this.t('没有工作目录证据', 'No working-directory evidence')
+      label.dataset.buildingId = item.building.id
+      label.setAttribute('aria-label', this.t(`聚焦项目：${label.textContent}`, `Focus project: ${label.textContent}`))
+      label.classList.toggle('is-dimmed', this.session.floorId !== null && !item.building.floors.some(floor => floor.id === this.session.floorId))
+      label.style.transform = `translate(${x}px, ${y}px)`
+      label.hidden = false
+      boxes.push({ x, y, w: fw, h: fh })
+    }
+    for (let index = buildingLabelCount; index < this.buildingLabels.length; index++) this.buildingLabels[index].hidden = true
   }
 
   fit(front = false, ids?: ReadonlySet<string>): void {
@@ -528,8 +606,8 @@ export class TopologyScene {
     const bounds = new Box3()
     for (const floor of this.floors) {
       if (ids && !floor.nodeIds.some(id => ids.has(id))) continue
-      bounds.expandByPoint(this.point.set(-floor.width / 2 - 20, floor.y - 8, -floor.depth / 2 - 20))
-      bounds.expandByPoint(this.point.set(floor.width / 2 + 20, floor.y + (ids ? 135 : 300), floor.depth / 2 + 90))
+      bounds.expandByPoint(this.point.set(floor.x - floor.width / 2 - 20, floor.y - 8, floor.z - floor.depth / 2 - 20))
+      bounds.expandByPoint(this.point.set(floor.x + floor.width / 2 + 20, floor.y + (ids ? 160 : 330), floor.z + floor.depth / 2 + 90))
     }
     if (bounds.isEmpty()) return
     bounds.getCenter(this.controls.target)
@@ -550,8 +628,8 @@ export class TopologyScene {
   }
 
   focus(id: string): void {
-    const p = this.session.positions.get(id)
-    if (!p || !this.byId.has(id)) return
+    if (!this.session.positions.has(id) || !this.byId.has(id)) return
+    const p = this.worldPosition(id, this.point)
     this.direction.subVectors(this.camera.position, this.controls.target).normalize()
     this.controls.target.set(p.x, p.y + 10, p.z)
     this.camera.position.copy(this.controls.target).addScaledVector(this.direction, 340)
@@ -569,13 +647,10 @@ export class TopologyScene {
 
   reset(): void {
     if (!this.graph) return
-    const layout = buildOfficeLayout(this.graph)
-    this.floors = layout.floors
+    const graph = this.graph
     this.session.positions.clear()
     this.session.floorByAgent.clear()
-    for (const [id, p] of layout.positions) this.session.positions.set(id, p)
-    for (const floor of this.floors) for (const id of floor.nodeIds) this.session.floorByAgent.set(id, floor.id)
-    this.syncGeometry()
+    this.update(graph, this.selected, new Set(this.byId.keys()), this.t, this.evidenceCurrent)
     this.fit()
   }
 
@@ -603,7 +678,7 @@ export class TopologyScene {
     this.pointerStart = { x: event.clientX, y: event.clientY, id, floorId, pointerId: event.pointerId }
     this.dragged = false
     if (!id || event.shiftKey || event.ctrlKey || event.metaKey) { this.pointerStart.id = null; return }
-    const p = this.session.positions.get(id)!
+    const p = this.worldPosition(id, this.edgeStart)
     this.camera.getWorldDirection(this.direction)
     // A nearly level camera needs a vertical drag plane; project movement back onto the floor.
     if (Math.abs(this.direction.y) < 0.25) this.direction.set(this.direction.x, 0, this.direction.z).normalize()
@@ -624,11 +699,16 @@ export class TopologyScene {
         this.updateRay(event)
         if (this.raycaster.ray.intersectPlane(this.dragPlane, this.point)) {
           const floorId = this.session.floorByAgent.get(this.pointerStart.id)
-          const floor = this.floors.find(floor => floor.id === floorId)!
+          const floor = this.floorById.get(floorId!)!
+          const main = this.pointerStart.id === floor.mainAgentId
           this.point.add(this.dragOffset)
-          this.point.x = Math.max(-floor.width / 2 + 100, Math.min(floor.width / 2 - 100, this.point.x))
-          this.point.z = Math.max(-floor.depth / 2 + 80, Math.min(floor.depth / 2 - 80, this.point.z))
-          this.session.positions.set(this.pointerStart.id, { x: this.point.x, y: floor.y + 40, z: this.point.z })
+          const x = this.point.x - floor.x + floor.width / 2 - 160
+          const z = this.point.z - floor.z
+          this.session.positions.set(this.pointerStart.id, {
+            x: main ? Math.max(-50, Math.min(50, x)) : Math.max(230, Math.min(floor.width - 260, x)),
+            y: floor.y + 40,
+            z: main ? Math.max(-60, Math.min(70, z)) : Math.max(-floor.depth / 2 + 80, Math.min(floor.depth / 2 - 80, z)),
+          })
           this.syncGeometry()
           this.invalidate()
         }
@@ -701,6 +781,9 @@ export class TopologyScene {
     canvas.remove()
     for (const label of this.labels) label.remove()
     for (const label of this.floorLabels) label.remove()
+    for (const label of this.buildingLabels) label.remove()
+    this.buildings = []
+    this.floorById.clear()
     this.floors = []
     this.byId.clear()
     this.graph = null
