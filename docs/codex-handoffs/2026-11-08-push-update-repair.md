@@ -1,5 +1,7 @@
 # OC Chan 推送与更新机制修复
 
+> 后续状态（2026-11-09）：本记录中的修复已提交为 `269595c`，通过 `8c5a2ed` 合入GitHub main并推送。合并后的222项定向测试、真实交付与Electron无头smoke均通过；最新状态与恢复入口见 [main合并交接](2026-11-09-update-main.md)。下文保留2026-11-08各阶段当时的状态与证据。
+
 - 日期：2026-11-08
 - Repo/worktree：`/Users/zixiaobowen/myProjects/oc-chan-update-mechanism-20261108`
 - 分支：`fix/push-update-mechanism-20261108`，基线 `330d1fc4ff3dcb28f87143e4aa0c259b76c4c377`。
