@@ -18,9 +18,9 @@
     "test:ci": "node scripts/ci-tests.mjs",
     "smoke": "tsx scripts/smoke.ts",
     "smoke:renderer": "node scripts/smoke-renderer.mjs",
-    "package": "npm run build:app && node scripts/dist.mjs --dir",
-    "dist": "npm run build:app && node scripts/dist.mjs",
-    "test:release": "node --test scripts/prepare-release.test.mjs",
+    "package": "node scripts/dist.mjs --dir",
+    "dist": "node scripts/dist.mjs",
+    "test:release": "node --test scripts/prepare-release.test.mjs scripts/publish-release.test.mjs",
     "check:package": "node scripts/check-package.mjs",
     "delivery:local": "node scripts/local-delivery.mjs",
     "audit:dependencies": "node scripts/dependency-review.mjs",
@@ -90,7 +90,7 @@
     "publish": {
       "provider": "github",
       "owner": "Zixiaobowen",
-      "repo": "oc-chan-releases",
+      "repo": "oc-chan",
       "releaseType": "draft",
       "publishAutoUpdate": true
     },

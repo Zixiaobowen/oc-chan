@@ -105,3 +105,12 @@ NSWorkspace 的已安装应用 URL 列表会漏掉临时目录中确实登记的
 - 集成证据 `/tmp/oc-chan-merge-exit-20261109-lGXId6/result.json`、`fixed-1.log`；首次实际界面 `/var/folders/sw/0g6s73xd04n89bg0lympw6_40000gn/T/omp-sshots-15c773d80d0278bd.webp`。浏览器接管已释放。
 - 当前仓库没有 `core.hooksPath`，默认 hooks 只有 sample；本轮不改 hook 配置、不重新安装正式应用、不部署或发布。
 
+## 最新主线集成结果（推送前记录）
+
+- 清理实现提交 `28b7ad405eafb9702e52cdf06a9cede4a51bf895`。集成期间远端新增 `269595c255fc122081b668f4cb762dd81457c775`（更新交付与公开发布源）；已保留它的 schema 2 交付校验源、SemVer 就绪检查、发布测试和 GitHub 发布源。
+- 冲突仅在 `scripts/install-local.mjs`、`scripts/install-local.test.mjs`、`scripts/ci-tests.mjs`；组合本轮来源应用回收与上游新 `verifyDeliveryForInstall(directory)` 契约，保留两侧用例。
+- 合并后的安装、安装就绪、CI 选择、交付源、交付包和包检查定向测试 156/156 通过。清理生命周期 17/17 已通过且代码未再变化；push-main 相关用例包含在前述 68 项通过记录中。未运行全仓库测试。
+- 最终真实无头 Electron 验收：约 2268ms 得到 agents/schedules/events/system 四域真实数据，四域 error 均为 null；清理入口有意终止后退出 143，临时实例已删除，无退出报错。记录在 `/tmp/oc-chan-merge-exit-20261109-lGXId6/final-main.json` 和 `final-main.log`。
+- `oc-chan-main-integration-20261106` 已被并行插件市场任务切到 `integrate/plugin-marketplace-20261109` 并处于冲突处理期间，禁止操作其分支、索引和文件。本轮在独立 `oc-chan-single-app-20261109` 工作区完成本地 main 快进与 push；不安装正式应用。
+- 恢复入口：以此最新段落为准。推送回执应核对本轮最终消息与 `git ls-remote origin refs/heads/main`；不得继续使用上文旧主线工作区执行 merge 或 cleanup。
+
