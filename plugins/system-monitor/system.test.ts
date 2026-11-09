@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { parseMemory, parseProcesses, SystemCollector, type CpuTimes, type SystemMemory } from './system'
 import { NetworkReader } from './network'
+import { pluginSdk } from '../../src/main/marketplace/sdk'
 
 const vm = (pageSize: number) => `Mach Virtual Memory Statistics: (page size of ${pageSize} bytes)\nAnonymous pages: 100.\nPages purgeable: 20.\nPages wired down: 40.\nPages occupied by compressor: 30.\n`
 
@@ -68,11 +69,11 @@ test('两个进程排名在相同指标下保持原始顺序，并限制为十�
 
 function collector(cpu: () => CpuTimes, memory = async () => parseMemory(vm(4096), 'used = 0M', 1024 ** 3)) {
   let networkSample = 0
-  return new SystemCollector({
+  return new SystemCollector(pluginSdk, {
     cpu, memory,
     disk: async () => ({ type: 0, bsize: 4096, frsize: 4096, blocks: 100, bfree: 40, bavail: 30, files: 100, ffree: 50 }),
     processes: async () => parseProcesses(Array.from({ length: 25 }, (_, i) => `${i + 1} ${i} ${100 - i} /bin/process-${i}`).join('\n')),
-    network: new NetworkReader(async file => file === '/sbin/route' ? 'interface: en0\n'
+    network: new NetworkReader(pluginSdk, async file => file === '/sbin/route' ? 'interface: en0\n'
       : `Name Mtu Network Address Ipkts Ierrs Ibytes Opkts Oerrs Obytes\nen0 1500 <Link#1> aa 1 0 ${++networkSample * 100} 1 0 ${networkSample * 50}\n`, () => networkSample * 1000),
   })
 }
@@ -131,12 +132,12 @@ test('IO 期间 dispose 取消采集，晚到结果不得写入 CPU 与历史', 
   system.dispose()
   await assert.rejects(system.collect(), { name: 'AbortError' })
   assert.equal(cpuReads, 0)
-  const inFlight = new SystemCollector({
+  const inFlight = new SystemCollector(pluginSdk, {
     cpu: () => { cpuReads++; return { total: 100, idle: 50 } },
     memory: signal => { observedSignal = signal; return pending.promise },
     disk: async () => ({ type: 0, bsize: 4096, frsize: 4096, blocks: 100, bfree: 40, bavail: 30, files: 100, ffree: 50 }),
     processes: async () => ({ cpu: [], memory: [] }),
-    network: new NetworkReader(async file => file === '/sbin/route' ? 'interface: en0\n' : ''),
+    network: new NetworkReader(pluginSdk, async file => file === '/sbin/route' ? 'interface: en0\n' : ''),
   })
   const work = inFlight.collect()
   const rejected = assert.rejects(work, { name: 'AbortError' })

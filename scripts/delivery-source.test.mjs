@@ -14,6 +14,7 @@ const initialFiles = {
   'src/main/index.ts': 'export const answer = 42\n',
   'scripts/build.mjs': 'console.log("build")\n',
   'resources/icon.txt': 'icon\n',
+  'plugins/system-monitor/index.ts': 'export const pluginVersion = "1.0.0"\n',
   'electron.vite.config.ts': 'export default {}\n',
   'package.json': '{"name":"delivery-fixture","version":"1.2.3"}\n',
   'package-lock.json': '{"name":"delivery-fixture","version":"1.2.3","lockfileVersion":3}\n',
@@ -167,7 +168,7 @@ test('uses only HEAD tags and accepts SemVer prereleases and build metadata', as
 })
 
 test('rejects missing inputs and incorrect required input types', async t => {
-  for (const input of ['src', 'scripts', 'resources', ...Object.keys(initialFiles).filter(name => !/^(src|scripts|resources)\//.test(name))]) {
+  for (const input of ['src', 'scripts', 'resources', 'plugins', ...Object.keys(initialFiles).filter(name => !/^(src|scripts|resources|plugins)\//.test(name))]) {
     await t.test(input, async t => {
       const root = await fixture(t)
       await rm(path.join(root, input), { recursive: true })

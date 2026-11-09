@@ -6,7 +6,7 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 
 const exec = promisify(execFile)
-const directories = ['src', 'scripts', 'resources']
+const directories = ['src', 'scripts', 'resources', 'plugins']
 const requiredFiles = [
   'electron.vite.config.ts', 'package.json', 'package-lock.json', 'tsconfig.json',
   'docs/package-baseline.json', 'docs/dependency-review-policy.json'

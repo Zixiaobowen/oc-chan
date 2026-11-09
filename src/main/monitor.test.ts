@@ -6,7 +6,9 @@ import { collectionResources, resourceAbortError, ResourceCleanupError } from '.
 import { summarizeDiagnostic } from '../shared/diagnostics'
 import type { AgentSnapshot, MonitorUpdate, ScheduleHistory, ScheduledJob, ScheduleSnapshot, SourceHeartbeat, SourceStatus, SystemSnapshot } from '../shared/types'
 import { Monitor } from './monitor'
-import { createSystemPlugin } from './plugins/system'
+import { createPlugin } from '../../plugins/system-monitor'
+import { SystemCollector } from '../../plugins/system-monitor/system'
+import { pluginSdk } from './marketplace/sdk'
 import { createAgentsPlugin } from './plugins/agents'
 import { createSchedulesPlugin } from './plugins/schedules'
 import type { CollectionPluginContext, CollectionPluginDefinition } from './plugins/contracts'
@@ -18,6 +20,13 @@ const scheduleSource = (collect: () => Promise<ScheduleSnapshot>) => ({ collect,
   supports: () => false, retry: async (): Promise<ScheduleSnapshot> => { throw new Error('Unsupported test source') }, dispose: () => {} })
 const schedulesPlugin = (collector: Pick<ScheduleCollector, 'collect' | 'retry' | 'supports' | 'dispose'>) =>
   createSchedulesPlugin({ uid: 501, createCollector: () => collector })
+const createSystemPlugin = (factory: () => Pick<SystemCollector, 'collect' | 'dispose'> = () => new SystemCollector(pluginSdk)): CollectionPluginDefinition<'system'> => ({
+  ...createPlugin(pluginSdk),
+  create() {
+    const collector = factory()
+    return { collect: signal => collector.collect(signal), stop: () => collector.dispose() }
+  }
+})
 
 const systemSnapshot: SystemSnapshot = {
   collectedAt: empty.collectedAt, hostname: 'test', platform: 'darwin', osVersion: 'test',
@@ -744,4 +753,155 @@ test('explicit history cancellation rejects old results without disabling future
   release.resolve()
   assert.equal((await next).offset, 50)
   assert.equal(monitor.pluginStatuses()[0].enabled, true)
+})
+
+const dynamicSystemPlugin = (patch: Partial<CollectionPluginDefinition<'system'>> = {}): CollectionPluginDefinition<'system'> => ({
+  id: 'system', section: 'system', capabilities: ['read'], intervalMs: 1000, timeoutMs: 1000,
+  create: () => ({ collect: async () => systemSnapshot, stop() {} }), ...patch
+})
+const currentSystem = (monitor: Monitor): SystemSnapshot | null => monitor.state.system.data
+
+test('monitor dynamic registration publishes its awaited first sample before and after start', async () => {
+  for (const started of [false, true]) {
+    const monitor = new Monitor()
+    if (started) monitor.start()
+    const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<SystemSnapshot>()
+    let done = false
+    const registration = monitor.registerPlugin(dynamicSystemPlugin({ create: () => ({
+      collect: () => { entered.resolve(); return release.promise }, stop() {}
+    }) })).then(() => { done = true })
+    await entered.promise
+    assert.equal(done, false)
+    assert.equal(monitor.state.system.data, null)
+    release.resolve(systemSnapshot)
+    await registration
+    assert.equal(currentSystem(monitor)?.hostname, 'test')
+    await assert.rejects(monitor.registerPlugin(dynamicSystemPlugin({ id: 'another' })), { code: 'OC_PLUGIN_DEFINITION' })
+    await monitor.stop()
+    assert.equal(monitor.diagnostics().timers, 0)
+  }
+})
+
+test('monitor removal drains late sampling, clears only its section, and allows a fresh reinstall', async () => {
+  const monitor = new Monitor({ plugins: [schedulesPlugin(scheduleSource(async () => ({ collectedAt: 'core', jobs: [], sources: [] })))] })
+  const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<SystemSnapshot>()
+  const contexts: CollectionPluginContext<'system'>[] = []
+  const updates: MonitorUpdate[] = []
+  let instances = 0, samples = 0, stops = 0
+  const plugin = dynamicSystemPlugin({ create: context => {
+    contexts.push(context)
+    instances++
+    return { collect: () => { if (++samples === 2) { entered.resolve(); return release.promise } return Promise.resolve(systemSnapshot) }, stop() { stops++ } }
+  } })
+  monitor.on('change', update => updates.push(update))
+  await monitor.refresh('schedules')
+  const core = monitor.state.schedules
+  await monitor.registerPlugin(plugin)
+  const refresh = monitor.refresh('system')
+  await entered.promise
+  const removal = monitor.unregisterPlugin('system')
+  assert.equal(monitor.unregisterPlugin('system'), removal)
+  await assert.rejects(monitor.registerPlugin(plugin), { code: 'OC_PLUGIN_BUSY' })
+  contexts[0].publish({ ...systemSnapshot, hostname: 'late' })
+  release.resolve({ ...systemSnapshot, hostname: 'late' })
+  await Promise.all([removal, refresh])
+  assert.deepEqual(monitor.state.system, { data: null, error: null, refreshing: false })
+  assert.equal(monitor.state.schedules, core)
+  assert.equal(stops, 1)
+  assert.equal(updates.at(-1)?.section, 'system')
+  assert.equal(updates.at(-1)?.state.data, null)
+  await monitor.registerPlugin(plugin)
+  assert.equal(instances, 2)
+  contexts[0].publish({ ...systemSnapshot, hostname: 'retired' })
+  assert.equal(currentSystem(monitor)?.hostname, 'test')
+  await monitor.refresh('schedules')
+  assert.equal(monitor.state.schedules.error, null)
+  await monitor.stop()
+})
+
+test('monitor registration rolls back collection failure and keeps failed removal visible without releasing its section', async () => {
+  const monitor = new Monitor()
+  let stopped = 0
+  await assert.rejects(monitor.registerPlugin(dynamicSystemPlugin({ create: () => ({
+    collect: async () => { throw new Error('installation collection failed') }, stop() { stopped++ }
+  }) })), /installation collection failed/)
+  assert.equal(stopped, 1)
+  assert.deepEqual(monitor.pluginStatuses(), [])
+  assert.deepEqual(monitor.state.system, { data: null, error: null, refreshing: false })
+  await monitor.registerPlugin(dynamicSystemPlugin({ create: () => ({
+    collect: async () => systemSnapshot, stop() { stopped++; throw new Error('uninstall cleanup failed') }
+  }) }))
+  await assert.rejects(monitor.unregisterPlugin('system'), /uninstall cleanup failed/)
+  assert.equal(monitor.pluginStatuses()[0].phase, 'failed')
+  assert.equal(currentSystem(monitor)?.hostname, 'test')
+  assert.match(monitor.state.system.error!, /uninstall cleanup failed/)
+  await assert.rejects(monitor.registerPlugin(dynamicSystemPlugin({ id: 'replacement' })), { code: 'OC_PLUGIN_DEFINITION' })
+  await assert.rejects(monitor.unregisterPlugin('system'), /uninstall cleanup failed/)
+  await assert.rejects(monitor.stop(), AggregateError)
+  assert.equal(stopped, 2)
+})
+
+test('monitor stop during registration waits for rollback and prevents late state restoration', async () => {
+  const monitor = new Monitor()
+  const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<SystemSnapshot>()
+  let context!: CollectionPluginContext<'system'>, stops = 0
+  const registration = assert.rejects(monitor.registerPlugin(dynamicSystemPlugin({ create: value => {
+    context = value
+    return { collect: () => { entered.resolve(); return release.promise }, stop() { stops++ } }
+  } })), { name: 'AbortError' })
+  await entered.promise
+  const closing = monitor.stop()
+  assert.equal(context.signal.aborted, true)
+  release.resolve(systemSnapshot)
+  await Promise.all([registration, closing])
+  context.publish(systemSnapshot)
+  assert.equal(stops, 1)
+  assert.deepEqual(monitor.pluginStatuses(), [])
+  assert.deepEqual(monitor.state.system, { data: null, error: null, refreshing: false })
+  assert.equal(monitor.diagnostics().pendingSections.length, 0)
+  assert.equal(monitor.diagnostics().timers, 0)
+  await assert.rejects(monitor.registerPlugin(dynamicSystemPlugin()), { name: 'AbortError' })
+})
+
+test('disabled dynamic monitor installation allocates no collector and enables through the existing lifecycle', async () => {
+  const monitor = new Monitor()
+  let factories = 0
+  await monitor.registerPlugin(dynamicSystemPlugin({ create: () => {
+    factories++
+    return { collect: async () => systemSnapshot, stop() {} }
+  } }), false)
+  monitor.start()
+  await monitor.refresh('system')
+  assert.equal(factories, 0)
+  assert.equal(monitor.diagnostics().timers, 0)
+  assert.equal(monitor.state.system.data, null)
+  await monitor.setPluginEnabled('system', true)
+  assert.equal(factories, 1)
+  assert.equal(currentSystem(monitor)?.hostname, 'test')
+  await monitor.setPluginEnabled('system', false)
+  await monitor.unregisterPlugin('system')
+  assert.deepEqual(monitor.pluginStatuses(), [])
+  await monitor.stop()
+})
+
+test('monitor forwards operation cancellation and removes the rolled back snapshot before rejecting', async () => {
+  const monitor = new Monitor()
+  const operation = new AbortController()
+  const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<SystemSnapshot>()
+  let context!: CollectionPluginContext<'system'>
+  const registration = assert.rejects(monitor.registerPlugin(dynamicSystemPlugin({ create: value => {
+    context = value
+    return { collect: () => { context.publish(systemSnapshot); entered.resolve(); return release.promise }, stop() {} }
+  } }), true, operation.signal), { name: 'AbortError' })
+  await entered.promise
+  assert.equal(monitor.state.system.data?.hostname, 'test')
+  operation.abort()
+  assert.equal(context.signal.aborted, true)
+  release.resolve(systemSnapshot)
+  await registration
+  assert.deepEqual(monitor.pluginStatuses(), [])
+  assert.deepEqual(monitor.state.system, { data: null, error: null, refreshing: false })
+  assert.equal(getEventListeners(operation.signal, 'abort').length, 0)
+  await monitor.registerPlugin(dynamicSystemPlugin())
+  await monitor.stop()
 })

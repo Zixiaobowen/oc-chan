@@ -18,6 +18,7 @@ const HELPER = 'Contents/Resources/tern-navigation/present-window'
 const GLASS = 'Contents/Resources/liquid-glass/liquid-glass.node'
 const NOTIFICATION_PERMISSION = 'Contents/Resources/notification-permission/notification-permission.node'
 const PLUGIN = 'Contents/Resources/tern-navigation/plugin/'
+const MARKET = 'Contents/Resources/plugin-market/'
 const ARCHIVE = 'Contents/Resources/app.asar'
 const BUNDLE_SCOPES = ['main', 'renderer']
 const RENDERER_PACKAGES = ['@dagrejs/dagre', '@xyflow/react', 'lucide-react', 'react', 'react-dom']
@@ -83,6 +84,7 @@ const EMPTY_HASH = hashBuffer(Buffer.alloc(0))
 
 function appFileAllowed(value, product) {
   if (['Contents/Info.plist', 'Contents/PkgInfo', `Contents/MacOS/${product}`, ARCHIVE, HELPER, GLASS, NOTIFICATION_PERMISSION, `${PLUGIN}plugin.toml`, `${PLUGIN}window.luau`, 'Contents/Resources/app-update.yml', 'Contents/Resources/icon.icns', 'Contents/Resources/LICENSE.electron.txt', 'Contents/Resources/LICENSES.chromium.html', 'Contents/_CodeSignature/CodeResources'].includes(value)) return true
+  if (value === `${MARKET}catalog.json` || /^Contents\/Resources\/plugin-market\/[a-z][a-z0-9.-]{0,127}\.ocplugin$/.test(value)) return true
   if (/^Contents\/Resources\/[a-zA-Z0-9_]+\.lproj\/InfoPlist\.strings$/.test(value)) return true
   const prefix = 'Contents/Frameworks/'
   if (!value.startsWith(prefix)) return false
@@ -99,6 +101,7 @@ function appFileAllowed(value, product) {
 }
 function appDirectoryAllowed(value, product) {
   if (['Contents', 'Contents/MacOS', 'Contents/Resources', 'Contents/Frameworks', 'Contents/_CodeSignature', 'Contents/Resources/tern-navigation', 'Contents/Resources/tern-navigation/plugin', 'Contents/Resources/liquid-glass', 'Contents/Resources/notification-permission'].includes(value)) return true
+  if (value === 'Contents/Resources/plugin-market') return true
   if (/^Contents\/Resources\/[a-zA-Z0-9_]+\.lproj$/.test(value)) return true
   for (const suffix of ['', ' (GPU)', ' (Plugin)', ' (Renderer)']) {
     const base = `Contents/Frameworks/${product} Helper${suffix}.app`
@@ -366,6 +369,36 @@ export function enforceBudget(report, baseline) {
   return { status: 'passed', largestGrowth: growth }
 }
 
+async function marketPackages(app, root, entries) {
+  const catalogBytes = await boundedRead(path.join(app, MARKET, 'catalog.json'), 256 * 1024)
+  const sourceDirectory = path.join(root, 'out/plugin-market')
+  requireThat(catalogBytes.equals(await boundedRead(path.join(sourceDirectory, 'catalog.json'), 256 * 1024)), 'Plugin catalog differs from the built source')
+  const catalog = parseJson(catalogBytes, 'plugin catalog')
+  requireThat(catalog.schema === 1 && Array.isArray(catalog.plugins) && catalog.plugins.length > 0 && catalog.plugins.length <= 64, 'Invalid packaged plugin catalog')
+  const listed = new Set([`${MARKET}catalog.json`])
+  const ids = new Set()
+  let total = 0
+  for (const entry of catalog.plugins) {
+    requireThat(object(entry) && object(entry.manifest) && typeof entry.manifest.id === 'string' && !ids.has(entry.manifest.id), 'Invalid or duplicate packaged plugin')
+    requireThat(typeof entry.package === 'string' && /^[a-z][a-z0-9.-]{0,127}\.ocplugin$/.test(entry.package), 'Unsafe plugin package filename')
+    requireThat(/^[a-f0-9]{64}$/.test(entry.sha256) && integer(entry.bytes) && entry.bytes > 0 && entry.bytes <= 2 * 1024 * 1024, 'Invalid plugin package digest or size')
+    const filename = `${MARKET}${entry.package}`
+    requireThat(!listed.has(filename), 'Duplicate packaged plugin file')
+    const bytes = await boundedRead(path.join(app, filename), 2 * 1024 * 1024)
+    requireThat(bytes.length === entry.bytes && hashBuffer(bytes) === entry.sha256, 'Packaged plugin integrity mismatch')
+    requireThat(bytes.equals(await boundedRead(path.join(sourceDirectory, entry.package), 2 * 1024 * 1024)), 'Plugin package differs from the built source')
+    const payload = parseJson(bytes, entry.package)
+    requireThat(payload.schema === 1 && JSON.stringify(payload.manifest) === JSON.stringify(entry.manifest) && typeof payload.code === 'string' && Buffer.byteLength(payload.code) > 0 && Buffer.byteLength(payload.code) <= 1024 * 1024, 'Invalid packaged plugin payload')
+    total += bytes.length
+    requireThat(total <= 32 * 1024 * 1024, 'Packaged plugins exceed 32 MiB')
+    listed.add(filename)
+    ids.add(entry.manifest.id)
+  }
+  for (const entry of entries) {
+    if (entry.kind === 'file' && entry.path.startsWith(MARKET)) requireThat(listed.has(entry.path), `Unlisted plugin package: ${entry.path}`)
+  }
+}
+
 export async function inspectPackage(options) {
   const { app, arch, artifactsDir, output, measure = false } = options
   const root = path.resolve(options.root ?? ROOT)
@@ -385,6 +418,7 @@ export async function inspectPackage(options) {
   await executable(path.join(app, `Contents/MacOS/${product}`), arch, `Contents/MacOS/${product}`)
   for (const required of ['Contents/Info.plist', 'Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework', 'Contents/Resources/LICENSE.electron.txt', 'Contents/Resources/LICENSES.chromium.html']) requireThat(appTree.entries.some(entry => entry.path === required && entry.kind === 'file' && entry.bytes > 0), `Missing app runtime resource: ${required}`)
   await pluginSources(app, root)
+  await marketPackages(app, root, appTree.entries)
   const archive = await inspectArchive(path.join(app, ARCHIVE), manifest, lock)
   const report = {
     schema: 1, arch, appBytes: appTree.bytes, asarBytes: archive.bytes, helperBytes, glassBytes, notificationBytes,

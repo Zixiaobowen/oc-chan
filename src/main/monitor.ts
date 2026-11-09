@@ -42,6 +42,7 @@ export class Monitor extends EventEmitter {
   private readonly collectionErrors = new Map<MonitorSection, string>()
   private readonly plugins: CollectionPluginRegistry
   private readonly pluginSections = new Map<MonitorSection, string>()
+  private pluginMutation?: { id: string; kind: 'register' | 'unregister'; work: Promise<void> }
   private readonly controller = new AbortController()
 
   constructor(options: MonitorOptions = {}) {
@@ -54,7 +55,8 @@ export class Monitor extends EventEmitter {
     }
     const signal = options.signal ? AbortSignal.any([this.controller.signal, options.signal]) : this.controller.signal
     this.plugins = new CollectionPluginRegistry(options.plugins ?? [], {
-      onSnapshot: ({ section, snapshot, sourceId, incremental }) => {
+      onSnapshot: ({ id, section, snapshot, sourceId, incremental }) => {
+        if (this.pluginSections.get(section) !== id) return
         const current = this.state[section]
         if (!sourceId && !incremental) this.collectionErrors.delete(section)
         this.update(section, {
@@ -65,6 +67,7 @@ export class Monitor extends EventEmitter {
         } as MonitorSnapshot[typeof section], sourceId, incremental)
       },
       onError: (id, section, error, sourceId) => {
+        if (this.pluginSections.get(section) !== id) return
         const message = error instanceof Error ? error.message : String(error)
         if (sourceId === undefined) this.collectionErrors.set(section, message)
         this.update(section, { ...this.state[section], error: message,
@@ -72,7 +75,7 @@ export class Monitor extends EventEmitter {
             ? new Date().toISOString() : this.state[section].lastAttemptAt })
       },
       onState: status => {
-        if (status.enabled) return
+        if (status.enabled || this.pluginSections.get(status.section) !== status.id) return
         const state = this.state[status.section]
         if (status.phase === 'disabled') this.collectionErrors.delete(status.section)
         this.update(status.section, { ...state, error: status.phase === 'disabled' ? null : state.error, refreshing: false, data: state.data ? {
@@ -97,12 +100,14 @@ export class Monitor extends EventEmitter {
     this.parentSignal?.removeEventListener('abort', this.abort)
     this.controller.abort()
     const pending = [...this.pending.values(), ...Array.from(this.sourceRetries.values(), retry => retry.work)]
+    if (this.pluginMutation) pending.push(this.pluginMutation.work)
     void Promise.allSettled([this.plugins.close(), ...pending]).then(results => {
       // Registry owns collection failures, cancellation and every plugin's actual cleanup.
       const shutdown = results[0]
       this.pending.clear()
       this.sourceRetries.clear()
       this.collectionErrors.clear()
+      this.pluginSections.clear()
       this.removeAllListeners()
       this.state = { agents: { data: null, error: null, refreshing: false }, schedules: { data: null, error: null, refreshing: false }, system: { data: null, error: null, refreshing: false }, events: { data: null, error: null, refreshing: false } }
       if (shutdown.status === 'rejected') completion.reject(shutdown.reason)
@@ -126,6 +131,54 @@ export class Monitor extends EventEmitter {
     return this.plugins.statuses()
   }
 
+  registerPlugin(definition: AnyCollectionPlugin, enabled = true, signal?: AbortSignal): Promise<void> {
+    if (this.stopped) return Promise.reject(resourceAbortError())
+    if (this.pluginMutation) return Promise.reject(Object.assign(new Error('插件变更进行中 / Plugin change is in progress'), { code: 'OC_PLUGIN_BUSY' }))
+    if (!definition || !Object.hasOwn(this.state, definition.section)) {
+      return Promise.reject(Object.assign(new Error('无效采集分区 / Invalid collection section'), { code: 'OC_PLUGIN_DEFINITION' }))
+    }
+    if (this.pluginSections.has(definition.section) || this.plugins.statuses().some(plugin => plugin.id === definition.id)) {
+      return Promise.reject(Object.assign(new Error('采集插件或分区重复 / Duplicate collection plugin or section'), { code: 'OC_PLUGIN_DEFINITION' }))
+    }
+    const { id, section } = definition
+    this.pluginSections.set(section, id)
+    const work = this.plugins.register(definition, enabled, signal).catch(async error => {
+      if (!this.plugins.statuses().some(plugin => plugin.id === id)) {
+        await this.drainSection(section)
+        this.pluginSections.delete(section)
+        this.collectionErrors.delete(section)
+        this.update(section, { data: null, error: null, refreshing: false })
+      }
+      throw error
+    }).finally(() => { this.pluginMutation = undefined })
+    this.pluginMutation = { id, kind: 'register', work }
+    return work
+  }
+
+  unregisterPlugin(id: string): Promise<void> {
+    if (this.stopped) return Promise.reject(resourceAbortError())
+    if (this.pluginMutation) {
+      return this.pluginMutation.id === id && this.pluginMutation.kind === 'unregister' ? this.pluginMutation.work
+        : Promise.reject(Object.assign(new Error('插件变更进行中 / Plugin change is in progress'), { code: 'OC_PLUGIN_BUSY' }))
+    }
+    const plugin = this.plugins.statuses().find(plugin => plugin.id === id)
+    if (!plugin) return Promise.reject(Object.assign(new Error('采集插件未注册 / Collection plugin is not registered'), { code: 'OC_PLUGIN_UNKNOWN' }))
+    const work = this.plugins.unregister(id).then(async () => {
+      await this.drainSection(plugin.section)
+      this.pluginSections.delete(plugin.section)
+      this.collectionErrors.delete(plugin.section)
+      this.update(plugin.section, { data: null, error: null, refreshing: false })
+    }).finally(() => { this.pluginMutation = undefined })
+    this.pluginMutation = { id, kind: 'unregister', work }
+    return work
+  }
+
+  private async drainSection(section: MonitorSection): Promise<void> {
+    const pending = this.pending.get(section)
+    const retries = Array.from(this.sourceRetries.values()).filter(retry => retry.section === section).map(retry => retry.work)
+    await Promise.allSettled(pending ? [pending, ...retries] : retries)
+  }
+
   setPluginEnabled(id: string, enabled: boolean): Promise<void> {
     return this.plugins.setEnabled(id, enabled)
   }
@@ -135,7 +188,7 @@ export class Monitor extends EventEmitter {
     if (!section) return Promise.all(this.plugins.statuses().filter(plugin => plugin.enabled)
       .map(plugin => this.refresh(plugin.section, manual))).then(() => {})
     const pluginId = this.pluginSections.get(section)
-    if (!pluginId || !this.plugins.statuses().find(plugin => plugin.id === pluginId)!.enabled) return Promise.resolve()
+    if (!pluginId || !this.plugins.statuses().find(plugin => plugin.id === pluginId)?.enabled) return Promise.resolve()
     const existing = this.pending.get(section)
     if (existing) return existing
     this.update(section, { ...this.state[section], refreshing: manual || this.state[section].refreshing,

@@ -12,5 +12,5 @@
     "resolveJsonModule": true,
     "types": ["node", "vite/client"]
   },
-  "include": ["src", "scripts", "electron.vite.config.ts"]
+  "include": ["src", "plugins", "scripts", "electron.vite.config.ts"]
 }

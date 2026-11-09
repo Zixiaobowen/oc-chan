@@ -129,6 +129,7 @@ export class CollectionPluginRegistry {
   private started = false
   private closed = false
   private closing?: Promise<void>
+  private mutation?: { id: string; kind: 'register' | 'unregister'; work: Promise<void> }
   private readonly parentSignal?: AbortSignal
   private readonly onAbort = (): void => {
     // Every cleanup failure has already reached onError before close rejects.
@@ -149,6 +150,79 @@ export class CollectionPluginRegistry {
       this.closing = Promise.resolve()
       for (const entry of this.order) { entry.enabled = false; entry.phase = 'disabled' }
     } else this.parentSignal?.addEventListener('abort', this.onAbort, { once: true })
+  }
+
+  register(input: AnyCollectionPlugin, enabled = true, signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(pluginError('registry', 'OC_PLUGIN_CLOSED', 'registry is closed'))
+    if (this.mutation) return Promise.reject(pluginError('registry', 'OC_PLUGIN_BUSY', 'registration change is in progress'))
+    let definition: CollectionPluginDefinition<MonitorSection>
+    try {
+      throwIfAborted(signal)
+      if (typeof enabled !== 'boolean') throw pluginError('registry', 'OC_PLUGIN_DEFINITION', 'enabled must be boolean')
+      const registered = definitions([...this.order.map(entry => entry.definition), input] as AnyCollectionPlugin[])
+      topologicalOrder(registered)
+      definition = registered[registered.length - 1]
+    } catch (error) { return Promise.reject(error) }
+    const entry: Entry = { definition, enabled, phase: enabled ? 'idle' : 'disabled', generation: 0,
+      error: null, retries: new Map(), collectionError: null, historyRevision: 0 }
+    if (enabled) {
+      const failure = this.dependencyFailure(entry)
+      if (failure) return Promise.reject(failure)
+    }
+    this.entries.set(definition.id, entry)
+    // A new plugin only depends on existing entries, so appending preserves topological order.
+    this.order.push(entry)
+    const abort = (): void => { entry.enabled = false; this.cancel(entry) }
+    const work = Promise.resolve().then(async () => {
+      try {
+        if (this.closed) throw resourceAbortError()
+        throwIfAborted(signal)
+        if (enabled) await this.collect(definition.id)
+        if (this.closed) throw resourceAbortError()
+        throwIfAborted(signal)
+        signal?.removeEventListener('abort', abort)
+      } catch (error) {
+        signal?.removeEventListener('abort', abort)
+        entry.enabled = false
+        this.cancel(entry)
+        try { await this.stopEntry(entry) }
+        catch (cleanup) { throw new AggregateError([error, cleanup], `Plugin ${definition.id}: registration rollback failed`) }
+        this.remove(entry)
+        throw error
+      }
+    }).finally(() => {
+      signal?.removeEventListener('abort', abort)
+      this.mutation = undefined
+    })
+    this.mutation = { id: definition.id, kind: 'register', work }
+    signal?.addEventListener('abort', abort, { once: true })
+    return work
+  }
+
+  unregister(id: string): Promise<void> {
+    if (this.closed) return Promise.reject(pluginError(id, 'OC_PLUGIN_CLOSED', 'registry is closed'))
+    if (this.mutation) {
+      return this.mutation.kind === 'unregister' && this.mutation.id === id ? this.mutation.work
+        : Promise.reject(pluginError(id, 'OC_PLUGIN_BUSY', 'registration change is in progress'))
+    }
+    const entry = this.entries.get(id)
+    if (!entry) return Promise.reject(pluginError(id, 'OC_PLUGIN_UNKNOWN', 'unknown plugin'))
+    if (entry.transition) return Promise.reject(pluginError(id, 'OC_PLUGIN_BUSY', 'enable transition is in progress'))
+    const consumer = this.order.find(candidate => candidate.definition.dependencies!.includes(id))
+    if (consumer) return Promise.reject(pluginError(id, 'OC_PLUGIN_DEPENDENCY', `required by ${consumer.definition.id}`))
+    entry.enabled = false
+    const work = Promise.resolve().then(async () => {
+      await this.stopEntry(entry)
+      this.remove(entry)
+    }).finally(() => { this.mutation = undefined })
+    this.mutation = { id, kind: 'unregister', work }
+    this.cancel(entry)
+    return work
+  }
+
+  private remove(entry: Entry): void {
+    this.entries.delete(entry.definition.id)
+    this.order.splice(this.order.indexOf(entry), 1)
   }
 
   start(): void {
@@ -258,6 +332,7 @@ export class CollectionPluginRegistry {
     const entry = this.entries.get(id)
     if (!entry) return Promise.reject(pluginError(id, 'OC_PLUGIN_UNKNOWN', 'unknown plugin'))
     if (this.closed) return this.reject(entry, pluginError(id, 'OC_PLUGIN_CLOSED', 'registry is closed'))
+    if (this.mutation?.id === id) return this.reject(entry, pluginError(id, 'OC_PLUGIN_BUSY', 'registration change is in progress'))
     if (typeof enabled !== 'boolean') return this.reject(entry, pluginError(id, 'OC_PLUGIN_DEFINITION', 'enabled must be boolean'))
     if (entry.transition) {
       return entry.transition.enabled === enabled ? entry.transition.work
@@ -295,6 +370,8 @@ export class CollectionPluginRegistry {
     this.started = false
     this.parentSignal?.removeEventListener('abort', this.onAbort)
     this.closing = Promise.resolve().then(async () => {
+      // Registrations own rollback; wait before traversing the now-stable dependency order.
+      if (this.mutation) await Promise.allSettled([this.mutation.work])
       const failures: unknown[] = []
       for (let index = this.order.length - 1; index >= 0; index--) {
         try { await this.stopEntry(this.order[index]) }
@@ -368,7 +445,7 @@ export class CollectionPluginRegistry {
   private dependencyFailure(entry: Entry): Error | undefined {
     for (const id of entry.definition.dependencies!) {
       const dependency = this.entries.get(id)!
-      if (!dependency.enabled || dependency.stopping || dependency.terminalFailure || dependency.stopFailure) {
+      if (!dependency || !dependency.enabled || dependency.stopping || dependency.terminalFailure || dependency.stopFailure) {
         return pluginError(entry.definition.id, 'OC_PLUGIN_DEPENDENCY', `dependency ${id} is unavailable`)
       }
     }
@@ -415,7 +492,7 @@ export class CollectionPluginRegistry {
   }
 
   private publish(entry: Entry, controller: AbortController, snapshot: CollectionSnapshots[MonitorSection], sourceId?: string, incremental?: boolean): void {
-    if (this.closed || !entry.enabled || entry.controller !== controller || controller.signal.aborted) return
+    if (this.closed || this.entries.get(entry.definition.id) !== entry || !entry.enabled || entry.controller !== controller || controller.signal.aborted) return
     this.observer.onSnapshot({ id: entry.definition.id, section: entry.definition.section, snapshot, sourceId, incremental } as PluginPublication)
   }
 

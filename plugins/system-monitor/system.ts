@@ -2,9 +2,8 @@ import os from 'node:os'
 import { statfs } from 'node:fs/promises'
 import type { StatsFs } from 'node:fs'
 import { NetworkReader } from './network'
-import { collectionResources, isResourceAbort, isResourceCleanupFailure, resourceSourceStatus, settleResourceWork, throwIfAborted } from '../resource-budget'
-import { runBudgetedCommand } from '../resource-io'
-import type { ProcessInfo, SourceStatus, SystemSample, SystemSnapshot } from '../../shared/types'
+import type { PluginSdk } from '../../src/main/marketplace/sdk'
+import type { ProcessInfo, SourceStatus, SystemSample, SystemSnapshot } from '../../src/shared/types'
 
 export interface CpuTimes { idle: number; total: number }
 export interface SystemMemory {
@@ -51,7 +50,8 @@ export function parseMemory(vmOutput: string, swapOutput: string, total: number)
   return { total, active, app, wired, compressed, available: total - active, swapused }
 }
 
-async function readMemory(signal?: AbortSignal) {
+async function readMemory(sdk: PluginSdk, signal?: AbortSignal) {
+  const { settleResourceWork, runBudgetedCommand } = sdk
   const [vm, swap] = await settleResourceWork([
     runBudgetedCommand('system-memory', '/usr/bin/vm_stat', [], { timeout: 4000, maxBuffer: 1024 * 1024 }, signal),
     runBudgetedCommand('system-memory', '/usr/sbin/sysctl', ['-n', 'vm.swapusage'], { timeout: 4000, maxBuffer: 1024 * 1024 }, signal)
@@ -89,8 +89,8 @@ export function parseProcesses(output: string): { cpu: ProcessInfo[]; memory: Pr
   return { cpu, memory }
 }
 
-async function topProcesses(signal?: AbortSignal) {
-  const { stdout } = await runBudgetedCommand('system-processes', '/bin/ps', ['-axo', 'pid=,pcpu=,rss=,comm='], {
+async function topProcesses(sdk: PluginSdk, signal?: AbortSignal) {
+  const { stdout } = await sdk.runBudgetedCommand('system-processes', '/bin/ps', ['-axo', 'pid=,pcpu=,rss=,comm='], {
     timeout: 4000, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, LC_ALL: 'C' }
   }, signal)
   return parseProcesses(stdout)
@@ -101,7 +101,7 @@ interface SystemCollectorOptions {
   memory?: (signal?: AbortSignal) => Promise<SystemMemory>
   disk?: (signal?: AbortSignal) => Promise<StatsFs>
   network?: Pick<NetworkReader, 'read' | 'dispose'>
-  processes?: typeof topProcesses
+  processes?: (signal?: AbortSignal) => Promise<{ cpu: ProcessInfo[]; memory: ProcessInfo[] }>
   now?: () => number
 }
 
@@ -111,8 +111,8 @@ export class SystemCollector {
   private readonly controller = new AbortController()
   private readonly network: Pick<NetworkReader, 'read' | 'dispose'>
 
-  constructor(private readonly options: SystemCollectorOptions = {}) {
-    this.network = options.network ?? new NetworkReader()
+  constructor(private readonly sdk: PluginSdk, private readonly options: SystemCollectorOptions = {}) {
+    this.network = options.network ?? new NetworkReader(sdk)
   }
 
   dispose(): void {
@@ -123,13 +123,14 @@ export class SystemCollector {
   }
 
   async collect(signal?: AbortSignal): Promise<SystemSnapshot> {
+    const { throwIfAborted, collectionResources, isResourceCleanupFailure, isResourceAbort, resourceSourceStatus } = this.sdk
     signal = signal ? AbortSignal.any([this.controller.signal, signal]) : this.controller.signal
     throwIfAborted(signal)
     const results = await Promise.allSettled([
-      (this.options.memory ?? readMemory)(signal),
+      this.options.memory ? this.options.memory(signal) : readMemory(this.sdk, signal),
       this.options.disk ? this.options.disk(signal) : collectionResources.run({ source: 'system-disk', kind: 'file', bytes: 0, signal }, () => statfs('/System/Volumes/Data')),
       this.network.read(signal),
-      (this.options.processes ?? topProcesses)(signal)
+      this.options.processes ? this.options.processes(signal) : topProcesses(this.sdk, signal)
     ])
     const failures = results.flatMap(result => result.status === 'rejected' && (isResourceCleanupFailure(result.reason) || signal.aborted && !isResourceAbort(result.reason)) ? [result.reason] : [])
     if (failures.length) throw new AggregateError(failures, '系统采集关闭失败 / System collection cleanup failed')
