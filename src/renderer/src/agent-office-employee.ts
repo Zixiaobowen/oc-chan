@@ -111,38 +111,36 @@ export function createEmployeeGeometry(): BufferGeometry {
   parts.oval([1.5, 2.2, 2.1], [0, 52.5, -8], palette.skin, 6, 3)
   parts.box([3.2, 0.6, 0.6], [0, 49, -7.6], palette.mouth)
 
-  // Relaxed arms hang outside the hips; elbows bend slightly toward the desk.
+  // Seated posture: forearms reach the keyboard, thighs turn toward the desk.
   parts.oval([5.6, 6.2, 5.3], [-15, 29, 0], palette.shirt)
   parts.oval([5.6, 6.2, 5.3], [15, 29, 0], palette.shirt)
-  parts.limb([-16, 29, 0], [-20, 14, -1], 4.8, 4, palette.shirt)
-  parts.limb([16, 29, 0], [20, 14, 0], 4.8, 4, palette.shirt)
-  parts.limb([-20, 14, -1], [-21, 1, -5], 3.5, 2.7, palette.skin)
-  parts.limb([20, 14, 0], [22, 2, -3], 3.5, 2.7, palette.skin)
-  parts.oval([3.2, 5, 2.5], [-21, -2, -5], palette.skin)
-  parts.oval([3.2, 5, 2.5], [22, -1, -3], palette.skin)
+  parts.limb([-16, 29, 0], [-20, 12, -10], 4.8, 4, palette.shirt)
+  parts.limb([16, 29, 0], [20, 12, -10], 4.8, 4, palette.shirt)
+  parts.limb([-20, 12, -10], [-12, 5, -32], 3.5, 2.7, palette.skin)
+  parts.limb([20, 12, -10], [12, 5, -32], 3.5, 2.7, palette.skin)
+  parts.oval([3.2, 2.5, 5], [-12, 5, -34], palette.skin)
+  parts.oval([3.2, 2.5, 5], [12, 5, -34], palette.skin)
 
   parts.box([23, 8, 14], [0, 0, 0], palette.trousers)
-  // Independent trouser legs and offset feet leave a readable gap below the hips.
-  parts.limb([-6.5, 0, 0], [-7.5, -17, -1], 5.5, 4.5, palette.trousers)
-  parts.limb([-7.5, -17, -1], [-8, -34, -2], 4.5, 3.6, palette.trousers)
-  parts.limb([6.5, 0, 0], [7, -17, 2], 5.5, 4.5, palette.trousers)
-  parts.limb([7, -17, 2], [8, -34, 2], 4.5, 3.6, palette.trousers)
-  parts.box([9, 6, 16], [-8, -37, -5], palette.shoes)
-  parts.box([9, 6, 16], [8, -37, -1], palette.shoes)
+  for (const x of [-7, 7]) {
+    parts.limb([x, 0, 0], [x, -3, -22], 5.5, 4.5, palette.trousers)
+    parts.limb([x, -3, -22], [x, -34, -24], 4.5, 3.6, palette.trousers)
+    parts.box([9, 6, 16], [x, -37, -29], palette.shoes)
+  }
 
   return parts.finish()
 }
 
-/** Same anchor as the employee; desk ahead at z=-48, chair behind at z=35. */
+/** Desk segments meet at the 140-unit seat pitch to form open shared benches. */
 export function createWorkstationGeometry(): BufferGeometry {
   const parts = new GeometryParts()
-  parts.box([80, 4, 44], [0, 2, -48], palette.wood)
-  for (const x of [-35, 35]) {
-    for (const z of [-64, -32]) {
+  parts.box([140, 4, 52], [0, 2, -48], palette.wood)
+  for (const x of [-62, 62]) {
+    for (const z of [-68, -28]) {
       parts.box([4, 40, 4], [x, -20, z], palette.metal)
     }
   }
-  parts.box([70, 6, 3], [0, -5, -64], palette.metal)
+  parts.box([132, 6, 3], [0, -5, -68], palette.metal)
 
   parts.box([20, 2, 12], [0, 5, -62], palette.frame)
   parts.box([4, 13, 4], [0, 11.5, -62], palette.metal)
@@ -158,13 +156,13 @@ export function createWorkstationGeometry(): BufferGeometry {
   }
   parts.oval([3, 1.3, 4], [17, 5.3, -36], palette.frame)
 
-  // The chair's front edge starts at z=22, clear of the employee silhouette.
-  parts.box([28, 5, 26], [0, -4, 35], palette.upholstery)
-  parts.box([27, 25, 4], [0, 8, 49], palette.upholstery)
-  parts.box([4, 22, 4], [0, -10, 47], palette.frame)
-  parts.add(new CylinderGeometry(2.3, 2.3, 27, 6), palette.metal, [0, -20, 35])
-  for (const [x, z] of [[-16, 35], [16, 35], [0, 19], [0, 51]]) {
-    parts.limb([0, -33, 35], [x, -36, z], 1.8, 1.8, palette.frame)
+  // The seat supports the employee's hips; the backrest stays behind the torso.
+  parts.box([28, 5, 26], [0, -4, 0], palette.upholstery)
+  parts.box([27, 25, 4], [0, 8, 14], palette.upholstery)
+  parts.box([4, 22, 4], [0, -10, 12], palette.frame)
+  parts.add(new CylinderGeometry(2.3, 2.3, 27, 6), palette.metal, [0, -20, 0])
+  for (const [x, z] of [[-16, 0], [16, 0], [0, -16], [0, 16]]) {
+    parts.limb([0, -33, 0], [x, -36, z], 1.8, 1.8, palette.frame)
     parts.box([5, 5, 5], [x, -37.5, z], palette.frame)
   }
 
