@@ -1,4 +1,9 @@
-import { AlertCircle, ChevronDown, ChevronRight, Database, RefreshCw, Search } from 'lucide-react'
+import CircleAlert from 'kubai-icons-react/icons/circle-alert'
+import ChevronDown from 'kubai-icons-react/icons/chevron-down'
+import ChevronRight from 'kubai-icons-react/icons/chevron-right'
+import Database from 'kubai-icons-react/icons/database'
+import Sync from 'kubai-icons-react/icons/sync'
+import Search from 'kubai-icons-react/icons/search'
 import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react'
 import type { AgentInfo, SourceCapabilityId, SourceDiagnostic, SourceObservation, SourceStatus, SystemSample } from '../../shared/types'
 import { AGENT_ACTIVITY_WINDOW_MS } from '../../shared/types'
@@ -8,7 +13,7 @@ import type { ResolvedLanguage } from '../../shared/settings'
 import { useI18n } from './i18n'
 
 export function NativeSelect(props: ComponentProps<'select'>) {
-  return <span className="select-control"><select {...props} /><ChevronDown className="select-chevron" size={16} aria-hidden="true" /></span>
+  return <span className="select-control"><select {...props} /><ChevronDown trigger="none" className="select-chevron" size={16} aria-hidden="true" /></span>
 }
 
 
@@ -98,7 +103,7 @@ export function Badge({ state }: { state: string }) {
 }
 
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
-  return <div className="empty-state"><Search size={26} strokeWidth={1.5} /><h3>{title}</h3>{children && <p>{children}</p>}</div>
+  return <div className="empty-state"><Search trigger="none" size={26} strokeWidth={1.5} /><h3>{title}</h3>{children && <p>{children}</p>}</div>
 }
 
 export function CollectionStatus({ enabled, collectedAt, label }: { enabled: boolean; collectedAt?: string; label?: string }) {
@@ -110,13 +115,13 @@ export function CollectionStatus({ enabled, collectedAt, label }: { enabled: boo
 }
 
 export function SectionHeader({ title, count, action, onAction }: { title: string; count?: number; action?: string; onAction?: () => void }) {
-  return <div className="section-heading"><h2>{title}{count !== undefined && <span className="count-label">{count}</span>}</h2>{action && <button className="text-button" onClick={onAction}>{action}<ChevronRight size={15} /></button>}</div>
+  return <div className="section-heading"><h2>{title}{count !== undefined && <span className="count-label">{count}</span>}</h2>{action && <button className="text-button" onClick={onAction}>{action}<ChevronRight trigger="none" size={15} /></button>}</div>
 }
 
 export function CollectorError({ error, onRetry }: { error: string | null; onRetry: () => void }) {
   const { t } = useI18n()
   if (!error) return null
-  return <div role="alert" className="error-notice"><AlertCircle size={18} /><div><strong>{t('更新失败', 'Update failed')}</strong><p>{error}{t('。已有数据保留在上次采样状态。', '. Existing data remains at the last sample.')}</p></div><button className="button secondary" onClick={onRetry}><RefreshCw size={14} />{t('重试', 'Retry')}</button></div>
+  return <div role="alert" className="error-notice"><CircleAlert trigger="none" size={18} /><div><strong>{t('更新失败', 'Update failed')}</strong><p>{error}{t('。已有数据保留在上次采样状态。', '. Existing data remains at the last sample.')}</p></div><button className="button secondary" onClick={onRetry}><Sync trigger="none" size={14} />{t('重试', 'Retry')}</button></div>
 }
 
 const sourceLabels: Record<string, string> = {
@@ -252,7 +257,7 @@ function SourceRow({ source, observation, enabled }: { source: SourceStatus; obs
   }
   const observed = observation ?? source
   return <div className="source-row" data-source-id={source.id} tabIndex={-1}>
-    <Database size={18} aria-hidden="true" />
+    <Database trigger="none" size={18} aria-hidden="true" />
     <div className="source-body">
       <div className="source-title"><strong>{name}</strong><Badge state={enabled ? source.state : 'disabled'} /></div>
       <p>{language === 'zh-CN' ? source.detail : sourceDetail(source)}</p>
@@ -268,7 +273,7 @@ function SourceRow({ source, observation, enabled }: { source: SourceStatus; obs
       {(canRetry || pending || keepAction) && <div className="source-actions">
         <button className="button secondary" aria-busy={pending} aria-disabled={pending || !canRetry}
           onFocus={() => setKeepAction(true)} onBlur={() => setKeepAction(false)} onClick={() => void retry()}>
-          <RefreshCw size={14} aria-hidden="true" />{pending ? t('正在重新读取', 'Reading again') : !enabled ? t('采集已停用', 'Collection disabled') : !canRetry ? t('已重新检查', 'Checked') : source.retry === 'source' ? t('重试此来源', 'Retry source') : t('重试所属分区', 'Retry section')}
+          <Sync trigger="none" size={14} aria-hidden="true" />{pending ? t('正在重新读取', 'Reading again') : !enabled ? t('采集已停用', 'Collection disabled') : !canRetry ? t('已重新检查', 'Checked') : source.retry === 'source' ? t('重试此来源', 'Retry source') : t('重试所属分区', 'Retry section')}
         </button>
         {source.retry === 'section' && <span>{t('该来源与同分区共用采集；其它分区保持当前数据。', 'This source shares collection with its section; other sections retain their data.')}</span>}
       </div>}
@@ -289,7 +294,7 @@ export function Sources({ sources, compact = false, observations, enabled = true
   const byId = useMemo(() => observations ? new Map(observations.map(observation => [observation.id, observation])) : undefined, [observations])
   if (compact) {
     const problems = enabled ? sources.filter(source => source.state !== 'ok' && source.state !== 'empty' && source.state !== 'disabled') : []
-    return problems.length > 0 ? <div className="coverage-note"><AlertCircle size={15} /><span>{t(`${problems.length} 个数据来源存在覆盖限制，详情见「数据来源」。`, `${problems.length} data sources have limited coverage. See Data sources for details.`)}</span></div> : null
+    return problems.length > 0 ? <div className="coverage-note"><CircleAlert trigger="none" size={15} /><span>{t(`${problems.length} 个数据来源存在覆盖限制，详情见「数据来源」。`, `${problems.length} data sources have limited coverage. See Data sources for details.`)}</span></div> : null
   }
   return <div className="source-list">{sources.map(source => <SourceRow key={source.id} source={source} observation={byId?.get(source.id)} enabled={enabled} />)}</div>
 }

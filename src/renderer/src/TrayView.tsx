@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Activity, ArrowDown, ArrowUp, ArrowUpRight, ChevronDown, Coffee, Cpu, HardDrive, MemoryStick, Network } from 'lucide-react'
+import Activity from 'kubai-icons-react/icons/activity'
+import ArrowDown from 'kubai-icons-react/icons/arrow-down'
+import ArrowUp from 'kubai-icons-react/icons/arrow-up'
+import ArrowUpRight from 'kubai-icons-react/icons/arrow-up-right'
+import ChevronDown from 'kubai-icons-react/icons/chevron-down'
+import Coffee from 'kubai-icons-react/icons/coffee'
+import Cpu from 'kubai-icons-react/icons/cpu'
+import HardDrive from 'kubai-icons-react/icons/hard-drive'
+import MemoryStick from 'kubai-icons-react/icons/memory-stick'
+import Network from 'kubai-icons-react/icons/network'
 import type { MonitorSection, MonitorSnapshot, MonitorUpdate, SystemSnapshot } from '../../shared/types'
 import { bytes, Chart, CollectionStatus, Meter, time } from './components'
 import { MemoryBreakdown, NetworkTraffic, ProcessRanking } from './SystemMetrics'
@@ -48,9 +57,9 @@ function MetricSummary({ data, panel, enabled }: { data: SystemSnapshot | null; 
   const Icon = { cpu: Cpu, memory: MemoryStick, disk: HardDrive, network: Network }[panel]
   const percent = !data ? null : panel === 'cpu' ? data.cpuPercent : panel === 'memory' ? data.memoryUsed / data.memoryTotal * 100 : panel === 'disk' && data.diskTotal && data.diskUsed !== null ? data.diskUsed / data.diskTotal * 100 : null
   const detail = !enabled ? t('采集已停用 · 旧快照', 'Collection disabled · Retained snapshot') : !data ? t('等待采样', 'Waiting for samples') : panel === 'cpu' ? t(`${data.cpuCores} 个逻辑核心`, `${data.cpuCores} logical cores`) : panel === 'memory' ? `${bytes(data.memoryUsed)} / ${bytes(data.memoryTotal)}` : panel === 'disk' ? t(`${bytes(data.diskAvailable)} 可用`, `${bytes(data.diskAvailable)} available`) : data.networkInterface ?? t('接口不可用', 'Interface unavailable')
-  return <><Icon className="tray-metric-icon" size={17} aria-hidden="true" /><span className="tray-metric-label">{names[panel]}<small>{detail}</small></span>
-    {panel === 'network' ? <span className="tray-metric-rates"><span><ArrowDown size={12} aria-hidden="true" /><span className="sr-only">{t('接收', 'Received')}</span>{bytes(data?.rxBytesPerSecond)}/s</span><span><ArrowUp size={12} aria-hidden="true" /><span className="sr-only">{t('发送', 'Sent')}</span>{bytes(data?.txBytesPerSecond)}/s</span></span> : <strong className="tray-metric-value">{percent === null ? '—' : `${percent.toFixed(1)}%`}</strong>}
-    <ChevronDown className="tray-disclosure" size={15} aria-hidden="true" />
+  return <><Icon trigger="none" className="tray-metric-icon" size={17} aria-hidden="true" /><span className="tray-metric-label">{names[panel]}<small>{detail}</small></span>
+    {panel === 'network' ? <span className="tray-metric-rates"><span><ArrowDown trigger="none" size={12} aria-hidden="true" /><span className="sr-only">{t('接收', 'Received')}</span>{bytes(data?.rxBytesPerSecond)}/s</span><span><ArrowUp trigger="none" size={12} aria-hidden="true" /><span className="sr-only">{t('发送', 'Sent')}</span>{bytes(data?.txBytesPerSecond)}/s</span></span> : <strong className="tray-metric-value">{percent === null ? '—' : `${percent.toFixed(1)}%`}</strong>}
+    <ChevronDown trigger="none" className="tray-disclosure" size={15} aria-hidden="true" />
   </>
 }
 
@@ -130,11 +139,11 @@ export default function TrayView() {
   }
   return <main className="tray-view">
     <div className="tray-top">
-      <header className="tray-heading"><Activity size={23} /><div><h1>OC Chan</h1><p title={system?.hostname}>{system?.hostname || t('此 Mac', 'This Mac')}</p></div>{settings.preventSleep && <Coffee size={18} aria-label={t('防止休眠已开启', 'Prevent sleep enabled')} />}</header>
+      <header className="tray-heading"><Activity trigger="none" size={23} /><div><h1>OC Chan</h1><p title={system?.hostname}>{system?.hostname || t('此 Mac', 'This Mac')}</p></div>{settings.preventSleep && <Coffee trigger="none" size={18} title={t('防止休眠已开启', 'Prevent sleep enabled')} />}</header>
     </div>
     <div className="tray-content" id="tray-panel">
       <details className="tray-customize">
-        <summary><span>{t('显示内容', 'Show metrics')}</span><span>{t(`${selectedPanels.length} 项`, `${selectedPanels.length} selected`)}<ChevronDown className="tray-disclosure" size={15} aria-hidden="true" /></span></summary>
+        <summary><span>{t('显示内容', 'Show metrics')}</span><span>{t(`${selectedPanels.length} 项`, `${selectedPanels.length} selected`)}<ChevronDown trigger="none" className="tray-disclosure" size={15} aria-hidden="true" /></span></summary>
         <fieldset><legend className="sr-only">{t('选择要同时显示的内容', 'Choose metrics to show together')}</legend>{panels.map(panel => <label key={panel}>
           <input type="checkbox" checked={selectedPanels.includes(panel)} onChange={event => selectPanel(panel, event.target.checked)} />
           <span>{{ overview: t('Agent 与任务', 'Agents & schedules'), cpu: 'CPU', memory: t('内存', 'Memory'), disk: t('磁盘', 'Disk'), network: t('网络', 'Network') }[panel]}</span>
@@ -147,8 +156,8 @@ export default function TrayView() {
         <CollectionStatus enabled={settings.plugins.schedules} collectedAt={snapshot.schedules.data?.collectedAt} label={t('定时任务', 'Schedules')} />
         <dl className="tray-counts"><div><dt>{t('主 Agent', 'Main agents')}{!settings.plugins.agents && <small>{t('采集已停用', 'Collection disabled')}</small>}</dt><dd>{settings.plugins.agents ? agents?.agents.filter(agent => agent.kind === 'main').length ?? '—' : '—'}</dd></div><div><dt>{t('活动子代理', 'Active subagents')}</dt><dd title={t('仅显示已确认的活动数量；不可见时保留未知。', 'Only confirmed activity counts are shown; unavailable counts remain unknown.')}>{settings.plugins.agents ? agents?.activeSubagentCount ?? '—' : '—'}</dd></div><div><dt>{t('定时任务', 'Schedules')}{!settings.plugins.schedules && <small>{t('采集已停用', 'Collection disabled')}</small>}</dt><dd>{settings.plugins.schedules ? jobs?.length ?? '—' : '—'}</dd></div></dl>
         <details className="tray-object-list"><summary>{t('查看 Agent 与任务', 'View agents and tasks')}</summary>
-          {agents?.agents.slice(0, 5).map(agent => <button key={agent.id} className="text-button" title={agent.summary || agent.name} onClick={() => void openMain(agentTarget(agent))}>{agent.summary || agent.name}<ArrowUpRight size={14} aria-hidden="true" /></button>)}
-          {jobs?.slice(0, 5).map(job => <button key={job.id} className="text-button" title={job.name} onClick={() => void openMain(scheduleTarget(job))}>{job.name}<ArrowUpRight size={14} aria-hidden="true" /></button>)}
+          {agents?.agents.slice(0, 5).map(agent => <button key={agent.id} className="text-button" title={agent.summary || agent.name} onClick={() => void openMain(agentTarget(agent))}>{agent.summary || agent.name}<ArrowUpRight trigger="none" size={14} aria-hidden="true" /></button>)}
+          {jobs?.slice(0, 5).map(job => <button key={job.id} className="text-button" title={job.name} onClick={() => void openMain(scheduleTarget(job))}>{job.name}<ArrowUpRight trigger="none" size={14} aria-hidden="true" /></button>)}
           <button className="text-button" onClick={() => void openMain({ kind: 'page', page: 'agents' })}>{t('全部 Agent', 'All agents')}</button>
           <button className="text-button" onClick={() => void openMain({ kind: 'page', page: 'schedules' })}>{t('全部任务', 'All tasks')}</button>
         </details>
@@ -157,8 +166,8 @@ export default function TrayView() {
       <div className="tray-metrics">{panels.filter((panel): panel is Exclude<TrayPanel, 'overview'> => panel !== 'overview' && selectedPanels.includes(panel)).map(panel => <MetricSection key={panel} data={system} panel={panel} enabled={settings.plugins.system} />)}</div>
       {selectedPanels.length === 0 && <p className="tray-note tray-empty">{t('尚未选择内容。展开“显示内容”，勾选你想同时查看的指标。', 'No metrics selected. Open “Show metrics” to choose what to display together.')}</p>}
       <p className="tray-sample">{t('最近系统采样', 'Last system sample')} {system ? time(system.collectedAt, language) : settings.plugins.system ? t('等待采样', 'Waiting for samples') : t('尚无采样', 'No sample')}</p>
-      {problems.length > 0 && <details className="tray-warning"><summary>{t(`${problems.length} 个来源存在限制`, `${problems.length} sources have limitations`)}</summary>{sections.flatMap(section => (snapshot[section].data?.sources ?? []).filter(source => source.state !== 'ok' && source.state !== 'empty' && source.state !== 'disabled').map(source => <div key={`${section}-${source.id}`}><p>{source.detail}</p><button className="text-button" onClick={() => void openMain({ kind: 'source', section, id: source.id })}>{t('查看来源', 'View source')}<ArrowUpRight size={14} aria-hidden="true" /></button></div>))}</details>}
+      {problems.length > 0 && <details className="tray-warning"><summary>{t(`${problems.length} 个来源存在限制`, `${problems.length} sources have limitations`)}</summary>{sections.flatMap(section => (snapshot[section].data?.sources ?? []).filter(source => source.state !== 'ok' && source.state !== 'empty' && source.state !== 'disabled').map(source => <div key={`${section}-${source.id}`}><p>{source.detail}</p><button className="text-button" onClick={() => void openMain({ kind: 'source', section, id: source.id })}>{t('查看来源', 'View source')}<ArrowUpRight trigger="none" size={14} aria-hidden="true" /></button></div>))}</details>}
     </div>
-    <button className="button secondary tray-open" onClick={() => void openMain()}>{t('打开主界面', 'Open main window')}<ArrowUpRight size={15} /></button>
+    <button className="button secondary tray-open" onClick={() => void openMain()}>{t('打开主界面', 'Open main window')}<ArrowUpRight trigger="none" size={15} /></button>
   </main>
 }

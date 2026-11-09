@@ -80,6 +80,13 @@ export type SettingsUpdateResult =
   | { ok: true; snapshot: SettingsSnapshot }
   | { ok: false; error: SettingsUpdateFailure }
 
+export type PermissionSettingsTarget = 'accessibility' | 'notifications'
+export interface AccessibilityState {
+  availability: 'available' | 'headless' | 'unsupported'
+  status: 'authorized' | 'not-authorized' | 'unknown'
+  details: string | null
+}
+
 export interface SettingsApi {
   snapshot(): Promise<SettingsSnapshot>
   retryGeometry(): Promise<SettingsUpdateResult>
@@ -87,6 +94,8 @@ export interface SettingsApi {
   previewGlass(intensity: number | null): Promise<void>
   updateLoginItem(enabled: boolean): Promise<LoginItemUpdateResult>
   requestNotificationPermission(): Promise<NotificationState>
+  accessibilityState(): Promise<AccessibilityState>
+  openPermissionSettings(target: PermissionSettingsTarget): Promise<void>
   subscribe(listener: (snapshot: SettingsSnapshot) => void): () => void
   showMainWindow(target?: NavigationTarget): Promise<void>
 }

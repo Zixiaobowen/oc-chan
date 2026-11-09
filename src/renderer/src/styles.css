@@ -14,6 +14,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 ::selection { background: var(--selection); color: var(--ink); }
 ::-webkit-scrollbar { width: 7px; height: 7px; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border: 2px solid var(--ground); border-radius: 6px; }
+[data-theme="dark"] .kubai-icon { --ki-e: color-mix(in srgb, currentColor 60%, #000); --ki-w: var(--ground); }
+/* Compact monitoring icons retain Kubai layers without per-icon blur surfaces. */
+.kubai-icon [filter] { filter: none; }
 h1, h2, h3, p { margin: 0; }
 h1 { font-size: calc(26px * var(--font-scale)); line-height: 1.3; font-weight: 650; letter-spacing: -.025em; }
 h2 { font-size: calc(14px * var(--font-scale)); font-weight: 650; display: flex; align-items: center; gap: 9px; }

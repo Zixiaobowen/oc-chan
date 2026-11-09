@@ -41,6 +41,7 @@ const valid: { [K in IpcChannel]: IpcArguments[K] } = {
   'settings:retry-geometry': [], 'settings:update-login-item': [true],
   'settings:preview-glass': [65],
   'settings:request-notification-permission': [],
+  'settings:accessibility-state': [], 'settings:open-permission-settings': ['accessibility'],
   'monitor:snapshot': [], 'monitor:refresh': ['system'], 'monitor:retry-source': ['launchctl:system'],
   'monitor:subscription': [true, false],
   'monitor:focus-agent-in-tern': ['agent-1'], 'monitor:schedule-history': ['hermes-job:daily', 0],
@@ -84,7 +85,7 @@ test('a tray document cannot write settings, read or cancel history, retry tools
   const current = fixture()
   for (const channel of ['settings:update', 'settings:preview-glass', 'settings:retry-geometry', 'settings:update-login-item', 'monitor:schedule-history', 'monitor:cancel-schedule-history',
     'monitor:retry-source', 'monitor:focus-agent-in-tern', 'monitor:navigation', 'monitor:acknowledge-navigation', 'monitor:events', 'monitor:cancel-events',
-    'settings:request-notification-permission',
+    'settings:request-notification-permission', 'settings:accessibility-state', 'settings:open-permission-settings',
     'diagnostics:generate', 'diagnostics:copy', 'diagnostics:save', 'diagnostics:cancel'] as const) {
     let effects = 0
     assert.throws(() => current.protect(channel, () => { effects++ })(current.trayEvent, ...valid[channel]), rejected('capability'))
@@ -100,6 +101,8 @@ test('invalid argument shapes, arity, IDs and numeric bounds never reach a data 
     invalid.push(['settings:update-login-item', [value]])
   }
   invalid.push(['monitor:subscription', [true]])
+  for (const value of [undefined, null, {}, ['accessibility'], true, '', 'camera', 'Accessibility', 'https://example.com', 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'])
+    invalid.push(['settings:open-permission-settings', [value]])
   for (const intensity of [undefined, {}, [], NaN, Infinity, -1, 101, 1.5, '65', true])
     invalid.push(['settings:preview-glass', [intensity]])
   for (const channel of ['monitor:retry-source', 'monitor:focus-agent-in-tern', 'monitor:schedule-history'] as const) {
@@ -210,7 +213,7 @@ test('headless activation is rejected before native or external operations', () 
   const current = fixture()
   current.context.headless = true
   let activations = 0
-  for (const channel of ['settings:show-main-window', 'monitor:focus-agent-in-tern', 'settings:update-login-item'] as const) {
+  for (const channel of ['settings:show-main-window', 'monitor:focus-agent-in-tern', 'settings:update-login-item', 'settings:open-permission-settings'] as const) {
     assert.throws(() => current.protect(channel, () => { activations++ })(current.event, ...valid[channel]), rejected('headless'))
   }
   assert.equal(activations, 0)

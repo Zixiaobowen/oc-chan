@@ -119,21 +119,39 @@ test('download cancellation interrupts the read, preserves offer, and releases i
   } finally { await controller.stop(); await rm(directory, { recursive: true, force: true }) }
 })
 
-test('disabled plugins never fetch and repeated lifecycle leaves no update files', async () => {
+test('unsigned and development builds allow manual checks but never download or install', async context => {
   const directory = await mkdtemp(join(tmpdir(), 'oc-update-stop-'))
+  context.mock.timers.enable({ apis: ['setTimeout'] })
   let requests = 0
+  let installs = 0
   const controller = new UpdateController({ version: '0.1.0', arch: 'arm64', directory,
-    fetch: async () => { requests++; return new Response(metadata) }, changed: () => {}, install: async () => {} })
+    fetch: async () => { requests++; return new Response(metadata) }, changed: () => {}, install: async () => { installs++ } })
   try {
-    for (let i = 0; i < 25; i++) {
-      controller.start('unsigned')
-      await controller.check()
-      await controller.download()
-      await controller.stop()
+    for (const reason of ['unsigned', 'development'] as const) {
+      for (let i = 0; i < 25; i++) {
+        const before = requests
+        controller.start(reason)
+        assert.equal(controller.snapshot.phase, 'idle')
+        context.mock.timers.tick(30_000)
+        await Promise.resolve()
+        assert.equal(requests, before)
+        await controller.check()
+        assert.equal(requests, before + 1)
+        assert.equal(controller.snapshot.phase, 'available')
+        assert.equal(controller.snapshot.availableVersion, asset.version)
+        assert.equal(controller.snapshot.disabledReason, reason)
+        await controller.download()
+        await controller.install()
+        assert.equal(controller.snapshot.phase, 'available')
+        assert.equal(requests, before + 1)
+        assert.equal(installs, 0)
+        await controller.stop()
+        await controller.check()
+        assert.equal(requests, before + 1)
+      }
     }
-    assert.equal(requests, 0)
     assert.deepEqual(await readdir(directory), [])
-  } finally { await rm(directory, { recursive: true, force: true }) }
+  } finally { await controller.stop(); context.mock.timers.reset(); await rm(directory, { recursive: true, force: true }) }
 })
 
 test('a manual check postpones the startup check so errors remain visible', async context => {
@@ -153,17 +171,65 @@ test('a manual check postpones the startup check so errors remain visible', asyn
   } finally { await controller.stop(); context.mock.timers.reset(); await rm(directory, { recursive: true, force: true }) }
 })
 
-test('an error cannot enable network checks in an unsigned build', async () => {
+test('signature and check errors remain visible without automatic checks and allow manual retry', async context => {
   const directory = await mkdtemp(join(tmpdir(), 'oc-update-disabled-error-'))
+  context.mock.timers.enable({ apis: ['setTimeout'] })
   let requests = 0
-  const controller = new UpdateController({ version: '0.1.0', arch: 'arm64', directory,
-    fetch: async () => { requests++; return new Response(metadata) }, changed: () => {}, install: async () => {} })
+  let rejectCheck = true
+  const controller = new UpdateController({ version: '0.2.0', arch: 'arm64', directory,
+    fetch: async () => { requests++; return rejectCheck ? new Response(null, { status: 503 }) : new Response(metadata) }, changed: () => {}, install: async () => {} })
   try {
-    controller.start('unsigned')
-    controller.fail(new Error('Signature validation failed'))
+    for (const reason of ['unsigned', 'development'] as const) {
+      const before = requests
+      rejectCheck = true
+      controller.start(reason)
+      controller.fail(new Error('Signature validation failed'))
+      assert.equal(controller.snapshot.phase, 'error')
+      assert.equal(controller.snapshot.error, 'Signature validation failed')
+      context.mock.timers.tick(6 * 60 * 60 * 1000)
+      await Promise.resolve()
+      assert.equal(requests, before)
+      await controller.check()
+      assert.equal(requests, before + 1)
+      assert.match(controller.snapshot.error!, /HTTP 503/)
+      context.mock.timers.tick(6 * 60 * 60 * 1000)
+      await Promise.resolve()
+      assert.equal(requests, before + 1)
+      assert.match(controller.snapshot.error!, /HTTP 503/)
+      rejectCheck = false
+      await controller.check()
+      assert.equal(requests, before + 2)
+      assert.equal(controller.snapshot.disabledReason, reason)
+      assert.equal(controller.snapshot.phase, 'idle')
+      assert.equal(controller.snapshot.error, null)
+      context.mock.timers.tick(6 * 60 * 60 * 1000)
+      await Promise.resolve()
+      assert.equal(requests, before + 2)
+      await controller.stop()
+    }
+  } finally { await controller.stop(); context.mock.timers.reset(); await rm(directory, { recursive: true, force: true }) }
+})
+
+test('unsupported platforms never check, download or install even after an error', async context => {
+  const directory = await mkdtemp(join(tmpdir(), 'oc-update-platform-'))
+  context.mock.timers.enable({ apis: ['setTimeout'] })
+  let requests = 0
+  let installs = 0
+  const controller = new UpdateController({ version: '0.1.0', arch: 'arm64', directory,
+    fetch: async () => { requests++; return new Response(metadata) }, changed: () => {}, install: async () => { installs++ } })
+  try {
+    controller.start('platform')
+    assert.equal(controller.snapshot.phase, 'disabled')
     await controller.check()
+    controller.fail(new Error('Platform unavailable'))
+    await controller.check()
+    await controller.download()
+    await controller.install()
+    context.mock.timers.tick(6 * 60 * 60 * 1000)
+    await Promise.resolve()
     assert.equal(requests, 0)
-    assert.equal(controller.snapshot.disabledReason, 'unsigned')
-    assert.equal(controller.snapshot.phase, 'error')
-  } finally { await controller.stop(); await rm(directory, { recursive: true, force: true }) }
+    assert.equal(installs, 0)
+    assert.equal(controller.snapshot.disabledReason, 'platform')
+    assert.equal(controller.snapshot.error, 'Platform unavailable')
+  } finally { await controller.stop(); context.mock.timers.reset(); await rm(directory, { recursive: true, force: true }) }
 })

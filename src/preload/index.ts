@@ -62,6 +62,8 @@ const desktopSettings: SettingsApi = {
   retryGeometry: () => ipcRenderer.invoke('settings:retry-geometry'),
   updateLoginItem: enabled => ipcRenderer.invoke('settings:update-login-item', enabled),
   requestNotificationPermission: () => ipcRenderer.invoke('settings:request-notification-permission'),
+  accessibilityState: () => ipcRenderer.invoke('settings:accessibility-state'),
+  openPermissionSettings: target => ipcRenderer.invoke('settings:open-permission-settings', target),
   showMainWindow: (target) => ipcRenderer.invoke('settings:show-main-window', target),
   subscribe: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, snapshot: SettingsSnapshot) => listener(snapshot)

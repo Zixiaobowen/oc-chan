@@ -86,7 +86,10 @@ export class AppUpdatesPlugin implements AppPlugin {
         this.controller.start(disabled)
       }
     } catch (error) {
-      if (!this.stopped) this.controller.fail(error)
+      if (!this.stopped) {
+        this.controller.start('unsigned')
+        this.controller.fail(error)
+      }
     }
   }
 

@@ -12,7 +12,7 @@ const glass = 'Contents/Resources/liquid-glass/liquid-glass.node'
 const notificationPermission = 'Contents/Resources/notification-permission/notification-permission.node'
 const plugin = 'Contents/Resources/tern-navigation/plugin/'
 const archive = 'Contents/Resources/app.asar'
-const rendererPackages = ['@dagrejs/dagre', '@xyflow/react', 'lucide-react', 'react', 'react-dom']
+const rendererPackages = ['@dagrejs/dagre', '@xyflow/react', 'kubai-icons-react', 'react', 'react-dom']
 const mainPackages = ['js-yaml', 'semver']
 
 async function put(root, name, content, mode) {

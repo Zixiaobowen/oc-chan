@@ -1,5 +1,9 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { ArrowRight, Bot, CornerDownRight, Search, X } from 'lucide-react'
+import ArrowRight from 'kubai-icons-react/icons/arrow-right'
+import Bot from 'kubai-icons-react/icons/bot'
+import CornerDownRight from 'kubai-icons-react/icons/corner-down-right'
+import Search from 'kubai-icons-react/icons/search'
+import CircleX from 'kubai-icons-react/icons/circle-x'
 import type { AgentInfo, AgentSnapshot } from '../../shared/types'
 import { AGENT_DISCOVERY_INTERVAL_MS } from '../../shared/types'
 import { AgentActivity, Badge, bytes, CollectionStatus, Empty, NativeSelect, Sources, time, useRecentAgents } from './components'
@@ -19,7 +23,7 @@ export function AgentTable({ agents, onSelect, pausedAt }: { agents: AgentInfo[]
   return <div className="table-scroll"><table className="data-table agent-table">
     <thead><tr><th>{t('Agent / 项目', 'Agent / Project')}</th><th>{t('运行时', 'Runtime')}</th><th>{t('状态 / 近期调用', 'Status / Recent calls')}</th><th>PID</th><th className="numeric">CPU</th><th className="numeric">{t('内存', 'Memory')}</th></tr></thead>
     <tbody>{recentAgents.map(agent => <tr key={agent.id}>
-      <td><button className="entity-button" onClick={() => onSelect(agent)}>{agent.kind === 'subagent' ? <CornerDownRight size={17} /> : <span className="agent-avatar"><Bot size={17} /></span>}<span className="entity-text"><strong title={agent.summary || agent.name}>{agent.summary || agent.name}</strong><small title={agent.cwd}>{agent.kind === 'subagent' ? t('子代理', 'Subagent') : agent.cwd || t('工作目录不可见', 'Working directory unavailable')}</small></span></button></td>
+      <td><button className="entity-button" onClick={() => onSelect(agent)}>{agent.kind === 'subagent' ? <CornerDownRight trigger="none" size={17} /> : <span className="agent-avatar"><Bot trigger="none" size={17} /></span>}<span className="entity-text"><strong title={agent.summary || agent.name}>{agent.summary || agent.name}</strong><small title={agent.cwd}>{agent.kind === 'subagent' ? t('子代理', 'Subagent') : agent.cwd || t('工作目录不可见', 'Working directory unavailable')}</small></span></button></td>
       <td><span className="runtime-label">{agent.runtime}</span></td>
       <td><div className="agent-state-cell"><Badge state={agent.state} /><AgentActivity agent={agent} /></div></td>
       <td className="mono muted">{agent.pid}</td>
@@ -179,7 +183,7 @@ export default memo(function AgentsView({ data, enabled, error, pausedAt, intent
           </NativeSelect>
         </label>
       </div>
-      <label className="search-field agent-search"><Search size={16} /><input ref={searchRef} aria-label={t('搜索 Agent', 'Search agents')} maxLength={MAX_VIEW_QUERY_LENGTH} value={query} onChange={event => setQuery(event.target.value)} placeholder={t('搜索工作内容、名称、项目或 PID', 'Search work, name, project or PID')} /></label>
+      <label className="search-field agent-search"><Search trigger="none" size={16} /><input ref={searchRef} aria-label={t('搜索 Agent', 'Search agents')} maxLength={MAX_VIEW_QUERY_LENGTH} value={query} onChange={event => setQuery(event.target.value)} placeholder={t('搜索工作内容、名称、项目或 PID', 'Search work, name, project or PID')} /></label>
     </div>
     <section className="panel topology-panel" aria-label={t('协作拓扑', 'Agent topology')}>
       <div className="list-caption topology-caption">
@@ -213,7 +217,7 @@ export default memo(function AgentsView({ data, enabled, error, pausedAt, intent
             {!graph.nodes.length && <div className="topology-empty topology-empty-overlay"><Empty title={filtering ? t('没有匹配的 Agent', 'No matching agents') : !enabled ? t('旧快照中没有 Agent', 'No agents in the retained snapshot') : t('当前未发现运行中的 Agent', 'No running agents found')}>{filtering ? t('调整类型、活跃状态或搜索词。活跃筛选保留命中节点的父链与子树。', 'Adjust type, activity or search. Active filters preserve ancestors and descendants of matching nodes.') : !enabled ? t('在数据来源中重新开启采集以获取新状态。', 'Enable collection in Data sources for a fresh sample.') : t('启动 Agent 后等待下次采样；覆盖范围见数据来源。', 'Start an agent and wait for the next sample. See Data sources for coverage.')}</Empty>{filtering && <button className="button secondary" onClick={() => { setQuery(''); setKind('all'); setActivity('all') }}>{t('清除筛选', 'Clear filters')}</button>}</div>}
           </div>}
         {open && <section ref={detailRef} tabIndex={-1} data-agent-id={selectedId ?? undefined} aria-label={t('Agent 详情', 'Agent details')} className="agent-inspector">
-          <div className="section-heading"><h2>{selected?.name ?? t('Agent 已离开当前采样', 'Agent no longer in the current sample')}</h2><button className="icon-button" onClick={close} aria-label={t('关闭 Agent 详情', 'Close agent details')} title={t('关闭 Agent 详情 (Esc)', 'Close agent details (Esc)')} aria-keyshortcuts="Escape"><X size={18} aria-hidden="true" /></button></div>
+          <div className="section-heading"><h2>{selected?.name ?? t('Agent 已离开当前采样', 'Agent no longer in the current sample')}</h2><button className="icon-button" onClick={close} aria-label={t('关闭 Agent 详情', 'Close agent details')} title={t('关闭 Agent 详情 (Esc)', 'Close agent details (Esc)')} aria-keyshortcuts="Escape"><CircleX trigger="none" size={18} aria-hidden="true" /></button></div>
           <CollectionStatus enabled={enabled} collectedAt={data?.collectedAt} />
           {selected && !selectedVisible && <p className="footnote">{selectedIncluded ? t('该 Agent 位于其它分页。', 'This agent is on another page.') : t('该 Agent 不在当前筛选结果或展开分支中。', 'This agent is outside the current filters or expanded branches.')} <button className="text-button" onClick={locateSelected}>{selectedIncluded ? t('定位到该页', 'Locate on its page') : t('清除筛选并定位', 'Clear filters and locate')}</button></p>}
           {selected ? <dl className="detail-grid">
@@ -233,7 +237,7 @@ export default memo(function AgentsView({ data, enabled, error, pausedAt, intent
           </dl> : <p className="muted">{t('当前采样中该 Agent 已不存在或身份已变化。详情保持打开，可查看最新画布及采集状态。', 'This agent is missing from the current sample or its identity has changed. Details remain open while you review the latest canvas and collection status.')}</p>}
         </section>}
       </div>
-      <div className="topology-footer"><span>{t('父 Agent', 'Parent agent')} <ArrowRight size={14} /> {t('子代理', 'Subagent')}</span><span>{graph.issueCount > 0 ? t(`${graph.issueCount} 个节点的关系待确认，见节点提示。`, `Relationships for ${graph.issueCount} nodes need confirmation. See node hints.`) : filtering ? t('关联节点用于保留父子关系；筛选期间展开分支。', 'Related nodes preserve parent-child relationships; branches stay expanded while filtering.') : t('拖动节点整理位置，点击查看详情。', 'Drag nodes to arrange them. Click to view details.')}</span>{topologyView === '2d' && <span className="topology-motion-legend">{t('同一工作目录的节点同色；状态看图标与文字。', 'Nodes sharing a working directory share a color; icons and text show status. ')}<i className="topology-legend-stream" aria-hidden="true" />{t('流动只表示父 → 子方向；', 'Flow indicates parent → child direction only; ')}<i className="topology-legend-stream is-active" aria-hidden="true" />{t('加粗表示子节点工作中或近 6 秒收到调用事件，不代表调用仍在执行。', 'thicker flow indicates a working child or a call event within the last 6 seconds, not an ongoing call.')}</span>}</div>
+      <div className="topology-footer"><span>{t('父 Agent', 'Parent agent')} <ArrowRight trigger="none" size={14} /> {t('子代理', 'Subagent')}</span><span>{graph.issueCount > 0 ? t(`${graph.issueCount} 个节点的关系待确认，见节点提示。`, `Relationships for ${graph.issueCount} nodes need confirmation. See node hints.`) : filtering ? t('关联节点用于保留父子关系；筛选期间展开分支。', 'Related nodes preserve parent-child relationships; branches stay expanded while filtering.') : t('拖动节点整理位置，点击查看详情。', 'Drag nodes to arrange them. Click to view details.')}</span>{topologyView === '2d' && <span className="topology-motion-legend">{t('同一工作目录的节点同色；状态看图标与文字。', 'Nodes sharing a working directory share a color; icons and text show status. ')}<i className="topology-legend-stream" aria-hidden="true" />{t('流动只表示父 → 子方向；', 'Flow indicates parent → child direction only; ')}<i className="topology-legend-stream is-active" aria-hidden="true" />{t('加粗表示子节点工作中或近 6 秒收到调用事件，不代表调用仍在执行。', 'thicker flow indicates a working child or a call event within the last 6 seconds, not an ongoing call.')}</span>}</div>
     </section>
     {collapseLimit && <p className="footnote" role="status">{t('本次会话最多保留 4096 个分支的折叠状态；超长标识不保存。请先展开部分分支。', 'This session saves collapse state for up to 4096 branches; oversized identifiers are not saved. Expand some branches first.')}</p>}
     {data && <Sources sources={data.sources} compact enabled={enabled} />}
