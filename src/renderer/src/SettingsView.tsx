@@ -7,6 +7,7 @@ import { NativeSelect } from './components'
 import SettingsSaveError from './SettingsSaveError'
 import ThemePicker from './ThemePicker'
 import LoginItemSetting from './LoginItemSetting'
+import AccessibilitySetting from './AccessibilitySetting'
 import LiquidGlassSetting from './LiquidGlassSetting'
 import NotificationSettings from './NotificationSettings'
 import UpdateSettings from './UpdateSettings'
@@ -80,6 +81,7 @@ export default function SettingsView({ sources = [] }: { sources?: SourceStatus[
         <p className="setting-help">{t('单击菜单栏图标时的操作；右键可打开主界面或退出。', 'Choose the menu bar icon’s click action. Right-click to open the main window or quit.')}</p>
       </SettingRow>
       <LoginItemSetting />
+      <AccessibilitySetting />
       <NotificationSettings sources={sources} />
       <SettingRow name="showDock" label={t('显示程序坞', 'Show in Dock')}>
         <div className="setting-toggle">

@@ -20,7 +20,7 @@ const NOTIFICATION_PERMISSION = 'Contents/Resources/notification-permission/noti
 const PLUGIN = 'Contents/Resources/tern-navigation/plugin/'
 const ARCHIVE = 'Contents/Resources/app.asar'
 const BUNDLE_SCOPES = ['main', 'renderer']
-const RENDERER_PACKAGES = ['@dagrejs/dagre', '@xyflow/react', 'lucide-react', 'react', 'react-dom']
+const RENDERER_PACKAGES = ['@dagrejs/dagre', '@xyflow/react', 'kubai-icons-react', 'react', 'react-dom']
 const policy = {
   necessary: ['Electron macOS runtime and localization', 'compiled main/preload/renderer and referenced assets', 'bundled renderer dependency inventory and license notices', 'single-architecture native Liquid Glass and notification permission modules, executable navigation helper and exact source plugin copies'],
   forbidden: ['unlisted app/ASAR resources and dependencies', 'tests, development sources, source maps, declarations, caches, logs and personal state', 'ASAR symlinks/unpacked payloads and escaping app symlinks'],

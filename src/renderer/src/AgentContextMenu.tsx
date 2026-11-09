@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react'
-import { ArrowUpRight } from 'lucide-react'
+import ArrowUpRight from 'kubai-icons-react/icons/arrow-up-right'
 import { useI18n } from './i18n'
 
 export interface AgentMenuAnchor {
@@ -44,7 +44,7 @@ export default function AgentContextMenu({ anchor, busy, onClose, onNavigate }: 
       }
     }}>
     <button type="button" role="menuitem" disabled={busy} onClick={() => onNavigate(anchor.agentId)}>
-      <ArrowUpRight size={16} aria-hidden="true" />
+      <ArrowUpRight trigger="none" size={16} aria-hidden="true" />
       {busy ? t('正在跳转…', 'Navigating…') : t('跳转到 Tern 标签页', 'Go to Tern tab')}
     </button>
   </div>

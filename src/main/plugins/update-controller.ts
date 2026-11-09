@@ -30,7 +30,7 @@ export class UpdateController {
   start(disabledReason: UpdateSnapshot['disabledReason']) {
     if (this.running) return
     this.running = true
-    this.publish({ phase: disabledReason ? 'disabled' : 'idle', disabledReason, error: null, availableVersion: null, checkedAt: null, progress: null })
+    this.publish({ phase: disabledReason === 'platform' ? 'disabled' : 'idle', disabledReason, error: null, availableVersion: null, checkedAt: null, progress: null })
     if (!disabledReason) this.schedule(30_000)
   }
 
@@ -69,9 +69,9 @@ export class UpdateController {
   }
 
   check(): Promise<UpdateSnapshot> {
-    if (!this.running || this.value.disabledReason || this.value.phase === 'downloaded' || this.value.phase === 'installing') return Promise.resolve(this.value)
+    if (!this.running || this.value.disabledReason === 'platform' || this.value.phase === 'downloaded' || this.value.phase === 'installing') return Promise.resolve(this.value)
     if (this.operation) return this.operation.promise
-    this.schedule()
+    if (!this.value.disabledReason) this.schedule()
     this.candidate = null
     this.publish({ phase: 'checking', error: null, availableVersion: null, progress: null })
     return this.run('check', 30_000, async signal => {
@@ -85,6 +85,7 @@ export class UpdateController {
   }
 
   download(): Promise<UpdateSnapshot> {
+    if (this.value.disabledReason) return Promise.resolve(this.value)
     if (this.operation) return this.operation.promise
     if (!this.running || !this.candidate || !['available', 'error'].includes(this.value.phase)) return Promise.resolve(this.value)
     const asset = this.candidate
@@ -108,6 +109,7 @@ export class UpdateController {
   }
 
   install(): Promise<UpdateSnapshot> {
+    if (this.value.disabledReason) return Promise.resolve(this.value)
     if (this.operation) return this.operation.promise
     if (!this.running || this.value.phase !== 'downloaded' || !this.downloaded || !this.candidate) return Promise.resolve(this.value)
     const file = this.downloaded

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, screen, Tray } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, screen, shell, systemPreferences, Tray } from 'electron'
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -15,7 +15,7 @@ import { TernNavigation } from './tern-navigation'
 import { createTrayIcon, DesktopSettings, resolvedLanguage } from './desktop-settings'
 import { readSettings, SettingsRollbackError, SettingsStore, settingsUpdateFailure } from './settings'
 import { DiagnosticError, summarizeDiagnostic, type DiagnosticStage } from '../shared/diagnostics'
-import type { AppSettings, PluginSettings, SettingsSnapshot, SettingsUpdateResult } from '../shared/settings'
+import type { AccessibilityState, AppSettings, PluginSettings, SettingsSnapshot, SettingsUpdateResult } from '../shared/settings'
 import type { MonitorUpdate, SourceHeartbeat } from '../shared/types'
 import { THEMES } from '../shared/themes'
 import { PendingNavigation, scheduleTarget } from '../shared/navigation'
@@ -490,6 +490,23 @@ else {
       const result = desktop.loginItems.update(enabled)
       broadcastSettings()
       return result
+    })
+    handle('settings:accessibility-state', (): AccessibilityState => {
+      if (process.platform !== 'darwin') return { availability: 'unsupported', status: 'unknown', details: null }
+      if (headless) return { availability: 'headless', status: 'unknown', details: null }
+      try {
+        return { availability: 'available', status: systemPreferences.isTrustedAccessibilityClient(false) ? 'authorized' : 'not-authorized', details: null }
+      } catch (error) {
+        return { availability: 'available', status: 'unknown', details: summarizeDiagnostic(error, 'settings-connection').details }
+      }
+    })
+    handle('settings:open-permission-settings', async target => {
+      if (process.platform !== 'darwin') throw new Error('系统权限设置仅适用于 macOS / System permission settings are available on macOS only')
+      const url = target === 'accessibility'
+        ? 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
+        : 'x-apple.systempreferences:com.apple.Notifications-Settings.extension'
+      try { await shell.openExternal(url) }
+      catch (error) { throw new Error(summarizeDiagnostic(error, 'settings-connection').details) }
     })
     handle('settings:request-notification-permission', async () => {
       await settings!.idle()

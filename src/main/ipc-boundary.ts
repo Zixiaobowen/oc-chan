@@ -1,5 +1,5 @@
 import type { BrowserWindow, IpcMainEvent, IpcMainInvokeEvent } from 'electron'
-import type { SettingsPatch } from '../shared/settings'
+import type { PermissionSettingsTarget, SettingsPatch } from '../shared/settings'
 import type { MonitorSection } from '../shared/types'
 import { HISTORY_PAGE_SIZE, MAX_HISTORY_OFFSET, MAX_SCHEDULE_ID_LENGTH, MAX_AGENT_ID_LENGTH, MAX_SOURCE_ID_LENGTH, MAX_HERMES_JOB_ID_LENGTH } from '../shared/types'
 import { parseNavigationTarget, type NavigationTarget } from '../shared/navigation'
@@ -13,6 +13,8 @@ export interface IpcArguments {
   'settings:retry-geometry': []
   'settings:update-login-item': [enabled: boolean]
   'settings:request-notification-permission': []
+  'settings:accessibility-state': []
+  'settings:open-permission-settings': [target: PermissionSettingsTarget]
   'settings:show-main-window': [target?: NavigationTarget]
   'monitor:snapshot': []
   'monitor:subscription': [updates: boolean, sources: boolean]
@@ -54,6 +56,8 @@ const channels: Record<IpcChannel, { mainOnly: boolean; min: number; max: number
   'settings:retry-geometry': { mainOnly: true, min: 0, max: 0 },
   'settings:update-login-item': { mainOnly: true, min: 1, max: 1 },
   'settings:request-notification-permission': { mainOnly: true, min: 0, max: 0 },
+  'settings:accessibility-state': { mainOnly: true, min: 0, max: 0 },
+  'settings:open-permission-settings': { mainOnly: true, min: 1, max: 1 },
   'settings:show-main-window': { mainOnly: false, min: 0, max: 1 },
   'monitor:snapshot': { mainOnly: false, min: 0, max: 0 },
   'monitor:subscription': { mainOnly: false, min: 2, max: 2 },
@@ -76,7 +80,7 @@ export class IpcBoundaryError extends Error {
   constructor(readonly category: 'source' | 'capability' | 'arguments' | 'headless') {
     super(category === 'source' ? '不允许的窗口来源 / Untrusted window'
       : category === 'capability' ? '此窗口不允许该操作 / Window capability denied'
-        : category === 'headless' ? '无头开发模式不允许修改登录项、显示窗口或切换应用 / Login item changes and native activation are disabled in headless development'
+        : category === 'headless' ? '无头开发模式不允许修改登录项、打开系统设置、显示窗口或切换应用 / Login item changes, System Settings and native activation are disabled in headless development'
           : 'IPC 请求参数无效 / Invalid IPC arguments')
     this.name = 'IpcBoundaryError'
   }
@@ -99,6 +103,9 @@ function validateArguments(channel: IpcChannel, args: unknown[]): void {
       break
     case 'settings:update-login-item':
       if (typeof value !== 'boolean') throw new IpcBoundaryError('arguments')
+      break
+    case 'settings:open-permission-settings':
+      if (value !== 'accessibility' && value !== 'notifications') throw new IpcBoundaryError('arguments')
       break
     case 'settings:show-main-window':
       if (value !== undefined) {
@@ -165,7 +172,7 @@ export function createIpcGuard(context: IpcContext): IpcGuard {
       if (!rule || (rule.mainOnly && owner !== main)) throw new IpcBoundaryError('capability')
       if (args.length < rule.min || args.length > rule.max) throw new IpcBoundaryError('arguments')
       validateArguments(channel, args)
-      if (context.headless && (channel === 'settings:show-main-window' || channel === 'monitor:focus-agent-in-tern' || channel === 'settings:update-login-item'))
+      if (context.headless && (channel === 'settings:show-main-window' || channel === 'monitor:focus-agent-in-tern' || channel === 'settings:update-login-item' || channel === 'settings:open-permission-settings'))
         throw new IpcBoundaryError('headless')
       return action(...args as IpcArguments[K])
     }

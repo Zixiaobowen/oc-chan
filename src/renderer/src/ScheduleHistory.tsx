@@ -1,5 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
+import ChevronLeft from 'kubai-icons-react/icons/chevron-left'
+import ChevronRight from 'kubai-icons-react/icons/chevron-right'
+import Sync from 'kubai-icons-react/icons/sync'
 import { HISTORY_PAGE_SIZE, MAX_HISTORY_OFFSET, type ScheduleExecution, type ScheduleHistory as HistoryPage } from '../../shared/types'
 import { useI18n } from './i18n'
 
@@ -115,7 +117,7 @@ export default function ScheduleHistory({ jobId, enabled, active, offset, onOffs
   return <section className="schedule-history" aria-labelledby="schedule-history-title" aria-busy={enabled && active && phase === 'loading'}>
     <div className="schedule-history-heading">
       <h3 id="schedule-history-title" ref={headingRef} tabIndex={-1}>{t('执行历史', 'Execution history')}</h3>
-      <button className="text-button" onClick={() => { if (enabled && active && phase !== 'loading') setAttempt(value => value + 1) }} aria-disabled={!enabled || !active || phase === 'loading'} aria-label={t('刷新执行历史', 'Refresh execution history')}><RefreshCw size={14} aria-hidden="true" />{enabled && active && phase === 'loading' ? t('读取中', 'Loading') : t('刷新', 'Refresh')}</button>
+      <button className="text-button" onClick={() => { if (enabled && active && phase !== 'loading') setAttempt(value => value + 1) }} aria-disabled={!enabled || !active || phase === 'loading'} aria-label={t('刷新执行历史', 'Refresh execution history')}><Sync trigger="none" size={14} aria-hidden="true" />{enabled && active && phase === 'loading' ? t('读取中', 'Loading') : t('刷新', 'Refresh')}</button>
     </div>
     <p className="schedule-history-note">{t('这里展示数据库中的执行记录。“运行记录”不代表进程仍然存活；当前状态见上方。', 'These are database execution records. “Recorded as running” does not confirm a live process; see the current status above.')}</p>
     {!enabled && <p className="collection-status" role="status">{t('任务采集已停用，执行历史读取已取消。保留的记录不是新读取结果；重新开启任务采集后会重新读取。', 'Schedule collection is disabled and history reads are cancelled. Retained records are from a previous read. Enabling schedule collection reads history again.')}</p>}
@@ -150,9 +152,9 @@ export default function ScheduleHistory({ jobId, enabled, active, offset, onOffs
       {currentPage.source === 'hermes' && <>
         <p>{currentPage.entries.length ? t(`第 ${currentPage.offset + 1}–${currentPage.offset + currentPage.entries.length} 条 · 每页最多 ${currentPage.limit} 条`, `Records ${currentPage.offset + 1}–${currentPage.offset + currentPage.entries.length} · Up to ${currentPage.limit} per page`) : t(`本页 0 条 · 从第 ${currentPage.offset + 1} 条开始 · 每页最多 ${currentPage.limit} 条`, `0 records · Starting at ${currentPage.offset + 1} · Up to ${currentPage.limit} per page`)}{phase !== 'ready' ? t('（上次读取）', ' (previous read)') : ''}</p>
         <nav className="schedule-history-pagination" aria-label={t('执行历史分页', 'Execution history pages')}>
-          <button className="button secondary" disabled={offset === 0 || phase === 'error' && currentPage.offset !== offset - HISTORY_PAGE_SIZE} aria-disabled={!enabled || !active || phase === 'loading'} onClick={() => changePage(Math.max(0, offset - HISTORY_PAGE_SIZE))}><ChevronLeft size={15} aria-hidden="true" />{t('上一页', 'Previous')}</button>
+          <button className="button secondary" disabled={offset === 0 || phase === 'error' && currentPage.offset !== offset - HISTORY_PAGE_SIZE} aria-disabled={!enabled || !active || phase === 'loading'} onClick={() => changePage(Math.max(0, offset - HISTORY_PAGE_SIZE))}><ChevronLeft trigger="none" size={15} aria-hidden="true" />{t('上一页', 'Previous')}</button>
           {offset > 0 && phase === 'ready' && !currentPage.entries.length && <button className="button secondary" aria-disabled={!enabled || !active} onClick={() => changePage(0)}>{t('返回首页', 'First page')}</button>}
-          <button className="button secondary" disabled={offset >= MAX_HISTORY_OFFSET || (phase === 'error' ? currentPage.offset !== offset + HISTORY_PAGE_SIZE : !currentPage.hasMore)} aria-disabled={!enabled || !active || phase === 'loading'} onClick={() => changePage(offset + HISTORY_PAGE_SIZE)}>{t('下一页', 'Next')}<ChevronRight size={15} aria-hidden="true" /></button>
+          <button className="button secondary" disabled={offset >= MAX_HISTORY_OFFSET || (phase === 'error' ? currentPage.offset !== offset + HISTORY_PAGE_SIZE : !currentPage.hasMore)} aria-disabled={!enabled || !active || phase === 'loading'} onClick={() => changePage(offset + HISTORY_PAGE_SIZE)}>{t('下一页', 'Next')}<ChevronRight trigger="none" size={15} aria-hidden="true" /></button>
         </nav>
       </>}
     </footer>}
