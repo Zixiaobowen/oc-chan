@@ -88,6 +88,16 @@ test('stable and prerelease channels cannot collide', () => {
   for (const version of ['../bad', '1.2', 'v1.2.3', '1.2.3-01']) assert.throws(() => releaseInfo(version), /Invalid release version/)
 })
 
+for (const version of ['1.2.3+local.7', '1.2.3+001', '1.2.3-beta.2+local.7', '1.2.3-rc.1+build-7']) {
+  test(`rejects unsupported build metadata before preparing release assets: ${version}`, async t => {
+    const expected = /Release build metadata is not supported by builder artifact names or the stable update feed/
+    assert.throws(() => releaseInfo(version), expected)
+    const options = await fixture(t)
+    await assert.rejects(prepareRelease({ ...options, version, tag: `v${version}` }), expected)
+    await assert.rejects(stat(options.output), { code: 'ENOENT' })
+  })
+}
+
 test('signed release preflight requires matching push tag and every secret', () => {
   const info = releaseInfo('1.2.3')
   const env = { GITHUB_EVENT_NAME: 'push', GITHUB_REF: 'refs/tags/v1.2.3', ...Object.fromEntries(signingSecrets.map(name => [name, 'present'])), APPLE_TEAM_ID: 'ABCDE12345' }

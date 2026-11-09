@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { createReadStream } from 'node:fs'
+import { constants, createReadStream } from 'node:fs'
 import { lstat, mkdir, open, opendir, readlink, realpath, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import path from 'node:path'
@@ -21,6 +21,15 @@ const PLUGIN = 'Contents/Resources/tern-navigation/plugin/'
 const ARCHIVE = 'Contents/Resources/app.asar'
 const BUNDLE_SCOPES = ['main', 'renderer']
 const RENDERER_PACKAGES = ['@dagrejs/dagre', '@xyflow/react', 'lucide-react', 'react', 'react-dom']
+// Complete source-data contract for package inspection; delivery snapshots contain only these files.
+export const PACKAGE_SOURCE_FILES = Object.freeze({
+  'package.json': MAX_METADATA,
+  'package-lock.json': MAX_HEADER,
+  'docs/package-baseline.json': MAX_HEADER,
+  'resources/tern-navigation/plugin/plugin.toml': MAX_METADATA,
+  'resources/tern-navigation/plugin/window.luau': MAX_METADATA,
+})
+const MAX_SOURCE_BYTES = 28 * 1024 * 1024
 const policy = {
   necessary: ['Electron macOS runtime and localization', 'compiled main/preload/renderer and referenced assets', 'bundled renderer dependency inventory and license notices', 'single-architecture native Liquid Glass and notification permission modules, executable navigation helper and exact source plugin copies'],
   forbidden: ['unlisted app/ASAR resources and dependencies', 'tests, development sources, source maps, declarations, caches, logs and personal state', 'ASAR symlinks/unpacked payloads and escaping app symlinks'],
@@ -51,15 +60,43 @@ function checkPath(value) {
   requireThat(!forbidden(value), `Prohibited package entry: ${value}`)
 }
 async function boundedRead(filename, limit = MAX_METADATA) {
-  const info = await lstat(filename)
-  requireThat(info.isFile() && info.size <= limit, `Metadata must be a bounded regular file: ${path.basename(filename)}`)
-  const handle = await open(filename, 'r')
+  const handle = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
   try {
-    const bytes = Buffer.alloc(info.size)
-    const result = await handle.read(bytes, 0, bytes.length, 0)
-    requireThat(result.bytesRead === bytes.length && (await handle.stat()).size === bytes.length, `Metadata changed while reading: ${path.basename(filename)}`)
-    return bytes
+    const info = await handle.stat()
+    requireThat(info.isFile() && info.nlink === 1 && info.size <= limit, `Metadata must be a bounded regular file: ${path.basename(filename)}`)
+    const bytes = Buffer.alloc(info.size + 1)
+    let offset = 0
+    while (offset < bytes.length) {
+      const { bytesRead } = await handle.read(bytes, offset, bytes.length - offset, offset)
+      if (!bytesRead) break
+      offset += bytesRead
+    }
+    const after = await handle.stat()
+    requireThat(offset === info.size && after.size === info.size && after.mtimeMs === info.mtimeMs && after.ctimeMs === info.ctimeMs, `Metadata changed while reading: ${path.basename(filename)}`)
+    return bytes.subarray(0, offset)
   } finally { await handle.close() }
+}
+
+export async function readPackageSources(root, { includeBudget = true } = {}) {
+  const base = path.resolve(root)
+  const sources = Object.create(null)
+  let total = 0
+  for (const [name, maximum] of Object.entries(PACKAGE_SOURCE_FILES)) {
+    if (name === 'docs/package-baseline.json' && !includeBudget) continue
+    const parts = name.split('/')
+    for (let count = 0; count < parts.length; count++) {
+      const directory = path.join(base, ...parts.slice(0, count))
+      const info = await lstat(directory)
+      requireThat(info.isDirectory() && !info.isSymbolicLink(), `Package source directory must be real: ${directory}`)
+    }
+    const filename = path.join(base, name)
+    const bytes = await boundedRead(filename, maximum)
+    requireThat(await realpath(filename) === path.join(await realpath(base), name), `Package source path escapes: ${name}`)
+    total += bytes.length
+    requireThat(total <= MAX_SOURCE_BYTES, 'Package sources exceed total 28 MiB')
+    sources[name] = bytes
+  }
+  return sources
 }
 function parseJson(bytes, label) {
   try { return JSON.parse(bytes.toString('utf8')) } catch (error) { throw new Error(`Invalid JSON: ${label}`, { cause: error }) }
@@ -303,9 +340,9 @@ async function inspectArchive(filename, manifest, lock) {
     return { bytes, entries, dependencies: [], bundledDependencies }
   } finally { asar.uncache(filename) }
 }
-async function pluginSources(app, root) {
+async function pluginSources(app, sources) {
   for (const name of ['plugin.toml', 'window.luau']) {
-    const source = await boundedRead(path.join(root, 'resources/tern-navigation/plugin', name))
+    const source = sources[`resources/tern-navigation/plugin/${name}`]
     const packed = await boundedRead(path.join(app, PLUGIN, name))
     requireThat(source.length > 0 && source.equals(packed), `Packaged plugin differs from source: ${name}`)
     if (name === 'plugin.toml') {
@@ -370,8 +407,14 @@ export async function inspectPackage(options) {
   const { app, arch, artifactsDir, output, measure = false } = options
   const root = path.resolve(options.root ?? ROOT)
   requireThat(typeof app === 'string' && path.isAbsolute(app) && ['arm64', 'x64'].includes(arch), 'Expected --app ABS_APP and --arch arm64|x64')
-  const packageBytes = await boundedRead(path.join(root, 'package.json'))
-  const lockBytes = await boundedRead(path.join(root, 'package-lock.json'), MAX_HEADER)
+  requireThat(!options.sources || !options.budget, 'Snapshot inspection cannot override its package budget')
+  const sources = options.sources ?? await readPackageSources(root, { includeBudget: false })
+  for (const [name, maximum] of Object.entries(PACKAGE_SOURCE_FILES)) {
+    if (name === 'docs/package-baseline.json' && !options.sources) continue
+    requireThat(Buffer.isBuffer(sources[name]) && sources[name].length <= maximum, `Invalid package source bytes: ${name}`)
+  }
+  const packageBytes = sources['package.json']
+  const lockBytes = sources['package-lock.json']
   const manifest = parseJson(packageBytes, 'package.json')
   const lock = parseJson(lockBytes, 'package-lock.json')
   checkRoot(manifest, lock)
@@ -384,7 +427,7 @@ export async function inspectPackage(options) {
   requireThat(notificationBytes <= 256 * 1024, 'Notification permission module exceeds 256 KiB budget')
   await executable(path.join(app, `Contents/MacOS/${product}`), arch, `Contents/MacOS/${product}`)
   for (const required of ['Contents/Info.plist', 'Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework', 'Contents/Resources/LICENSE.electron.txt', 'Contents/Resources/LICENSES.chromium.html']) requireThat(appTree.entries.some(entry => entry.path === required && entry.kind === 'file' && entry.bytes > 0), `Missing app runtime resource: ${required}`)
-  await pluginSources(app, root)
+  await pluginSources(app, sources)
   const archive = await inspectArchive(path.join(app, ARCHIVE), manifest, lock)
   const report = {
     schema: 1, arch, appBytes: appTree.bytes, asarBytes: archive.bytes, helperBytes, glassBytes, notificationBytes,
@@ -398,7 +441,9 @@ export async function inspectPackage(options) {
   let failure
   if (!measure) {
     try {
-      const baseline = parseJson(await boundedRead(path.resolve(options.budget ?? path.join(root, 'docs/package-baseline.json')), MAX_HEADER), 'package baseline')
+      const baselineBytes = options.sources ? sources['docs/package-baseline.json']
+        : await boundedRead(path.resolve(options.budget ?? path.join(root, 'docs/package-baseline.json')), MAX_HEADER)
+      const baseline = parseJson(baselineBytes, 'package baseline')
       report.budget = enforceBudget(report, baseline)
     } catch (error) {
       report.budget = { status: 'failed', error: error.code ? `Cannot read frozen package baseline (${error.code})` : error.message, largestGrowth: error.growth ?? [] }

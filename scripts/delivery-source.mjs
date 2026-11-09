@@ -1,9 +1,10 @@
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { constants } from 'node:fs'
-import { lstat, open, opendir, realpath } from 'node:fs/promises'
+import { lstat, mkdir, open, opendir, realpath, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
+import { PACKAGE_SOURCE_FILES, readPackageSources } from './check-package.mjs'
 
 const exec = promisify(execFile)
 const directories = ['src', 'scripts', 'resources']
@@ -192,4 +193,56 @@ export async function captureDeliverySource(root) {
     tag: selectTag(initialGit.tags, version), workspace: initialGit.workspace,
     digest: sha256(JSON.stringify(files)), files
   }
+}
+
+// Schema 2 deliveries retain data only: no snapshot JavaScript is imported or executed.
+export const VALIDATION_SOURCE_DIRECTORY = 'validation-source'
+
+function validationReferences(source) {
+  if (!Array.isArray(source?.files) || source.files.length === 0 || source.files.length > maxFiles ||
+    source.digest !== sha256(JSON.stringify(source.files))) throw new Error('Invalid delivery source manifest digest')
+  const entries = new Map()
+  let total = 0
+  for (const entry of source.files) {
+    if (!entry || typeof entry.path !== 'string' || entry.path.length > 1024 || /[\\\x00-\x1f\x7f]/.test(entry.path) ||
+      entry.path.split('/').some(part => !part || part === '.' || part === '..') || entries.has(entry.path) ||
+      !Number.isSafeInteger(entry.bytes) || entry.bytes < 0 || entry.bytes > maxFileBytes ||
+      !Number.isSafeInteger(entry.mode) || entry.mode < 0 || entry.mode > 0o7777 || !/^[a-f0-9]{64}$/.test(entry.sha256)) {
+      throw new Error('Invalid delivery source file reference')
+    }
+    total += entry.bytes
+    if (total > maxTotalBytes) throw new Error('Delivery source exceeds total 64 MiB')
+    entries.set(entry.path, entry)
+  }
+  for (const [name, maximum] of Object.entries(PACKAGE_SOURCE_FILES)) {
+    const entry = entries.get(name)
+    if (!entry || entry.bytes === 0 || entry.bytes > maximum) throw new Error(`Missing or oversized validation source reference: ${name}`)
+  }
+  return entries
+}
+
+export async function readDeliveryValidationSource(directory, source) {
+  const references = validationReferences(source)
+  const sources = await readPackageSources(directory)
+  for (const [name, bytes] of Object.entries(sources)) {
+    const expected = references.get(name)
+    if (bytes.length !== expected.bytes || sha256(bytes) !== expected.sha256) throw new Error(`Delivery validation source hash mismatch: ${name}`)
+  }
+  let manifest
+  try { manifest = JSON.parse(sources['package.json'].toString('utf8')) } catch (error) {
+    throw new Error('Invalid validation source package.json', { cause: error })
+  }
+  if (manifest.version !== source.version) throw new Error('Validation source version differs from source manifest')
+  return sources
+}
+
+export async function createDeliveryValidationSource(root, directory, source) {
+  const sources = await readDeliveryValidationSource(root, source)
+  await mkdir(directory, { mode: 0o700 })
+  for (const [name, bytes] of Object.entries(sources)) {
+    const target = path.join(directory, name)
+    await mkdir(path.dirname(target), { recursive: true, mode: 0o700 })
+    await writeFile(target, bytes, { flag: 'wx', mode: 0o600 })
+  }
+  return sources
 }
