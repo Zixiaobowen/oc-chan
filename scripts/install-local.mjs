@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { lstatSync, mkdirSync, mkdtempSync, renameSync, rmSync } from 'node:fs'
+import { lstatSync, mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -9,6 +9,7 @@ import { createInstallationCheck, INSTALL_CHECK_ARGUMENT, verifyInstallationResu
 import { acquireInstallLock, checkInstallTarget, installationJson, stageInstallBundle, verifyDeliveryForInstall, verifyInstallBundle } from './install-validation.mjs'
 import { captureDeliverySource } from './delivery-source.mjs'
 import { artifactDigest } from './local-delivery.mjs'
+import { cleanupBuildApplication } from './local-app-lifecycle.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const destination = '/Applications/OC Chan.app'
@@ -43,6 +44,25 @@ function exists(file) {
     if (error.code === 'ENOENT') return false
     throw error
   }
+}
+
+export function deliveryCleanupRoot({ root, application }) {
+  const bundle = realpathSync(application)
+  const common = realpathSync(run('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: root, capture: true }))
+  const entries = run('git', ['worktree', 'list', '--porcelain', '-z'], { cwd: root, capture: true }).split('\0')
+    .filter(field => field.startsWith('worktree ')).map(field => field.slice(9))
+  if (entries.length > 128) throw new Error('工作区数量超过 128，拒绝定位交付应用归属')
+  for (const entry of entries) {
+    // Stale worktree registrations cannot own an existing delivery application.
+    if (!exists(entry)) continue
+    const candidate = realpathSync(entry)
+    const relative = path.relative(path.join(candidate, 'release'), bundle)
+    if (!relative || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) continue
+    if (realpathSync(run('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: candidate, capture: true })) !== common)
+      throw new Error(`交付应用所在工作区的仓库归属发生变化：${candidate}`)
+    return candidate
+  }
+  throw new Error(`交付应用不属于本仓库已登记工作区的受管 release，已保留来源：${application}`)
 }
 
 
@@ -159,8 +179,11 @@ async function main() {
   try {
     writeOwner()
     let buildRoot = root, prepared, sourceEvidence
-    if (deliveryDirectory) prepared = await verifyDeliveryForInstall(deliveryDirectory, root)
-    else {
+    if (deliveryDirectory) {
+      prepared = await verifyDeliveryForInstall(deliveryDirectory, root)
+      prepared.bundle = realpathSync(prepared.bundle)
+      buildRoot = deliveryCleanupRoot({ root, application: prepared.bundle })
+    } else {
       if (commit) {
         const resolved = run('git', ['rev-parse', '--verify', `${commit}^{commit}`], { capture: true })
         if (resolved !== commit) throw new Error('待推送引用不是提交')
@@ -201,6 +224,14 @@ async function main() {
       throw new Error(`${error.message}；安装现场保留在 ${staging}，启动证据在 ${check.directory}`, { cause: error })
     }
     console.log(`[oc-chan] 已替换 ${destination}，旧应用包已删除；个人设置和数据保留`)
+    if (!snapshot) {
+      try {
+        const cleanup = await cleanupBuildApplication({ root: buildRoot, application: prepared.bundle })
+        console.log(`[oc-chan] 来源应用清理 ${JSON.stringify(cleanup)}`)
+      } catch (error) {
+        throw new Error(`正式应用已成功安装并就绪，但来源应用清理失败：${error.message}`, { cause: error })
+      }
+    }
   } catch (error) { failure = error }
   for (const owned of [snapshot, !preserveStaging && staging, !preserveStaging && check?.directory, lock].filter(Boolean)) {
     try { rmSync(owned, { recursive: true }) }
@@ -211,7 +242,7 @@ async function main() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   main().catch(error => {
-    console.error('[oc-chan] 本机安装失败，pre-push 将阻止推送：', inspect(error, { depth: null }))
+    console.error('[oc-chan] 本机安装或安装后清理失败；如用于 pre-push，将阻止推送：', inspect(error, { depth: null }))
     process.exitCode = 1
   })
 }

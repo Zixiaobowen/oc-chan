@@ -1,4 +1,4 @@
-import { builtinPlugins, monitorSections } from '../shared/plugin-catalog'
+import { monitorPlugins, monitorSections } from '../shared/plugin-catalog'
 import { types } from 'node:util'
 import {
   DIAGNOSTIC_REPORT_MAX_BYTES, DIAGNOSTIC_REPORT_MAX_DIAGNOSTICS,
@@ -13,7 +13,7 @@ const sourceIds: Record<string, true> = {
   processes: true, 'omp-ownership': true, 'tern-state': true, 'omp-socket': true, 'agent-activity': true,
   'omp-cron': true, 'hermes-cron': true, 'hermes-runtime': true, 'hermes-metadata-errors': true,
   crontab: true, 'schedule-semantics': true, 'collection-resources': true, 'schedule-limits': true,
-  ...Object.fromEntries(builtinPlugins.flatMap(plugin => (plugin.diagnostics?.sourceIds ?? []).map(id => [id, true as const]))),
+  ...Object.fromEntries(monitorPlugins.flatMap(plugin => (plugin.diagnostics?.sourceIds ?? []).map(id => [id, true as const]))),
   'event-store': true, 'hermes-events': true, 'source-events': true,
 }
 const resourceIds: Record<string, true> = {
@@ -21,7 +21,7 @@ const resourceIds: Record<string, true> = {
   'agent-collab': true, 'agent-tern': true, 'schedule-files': true, 'schedule-plist': true,
   'schedule-commands': true, 'schedule-metadata': true, 'hermes-history': true,
   'hermes-executions': true, 'hermes-processes': true, 'tern-navigation': true,
-  ...Object.fromEntries(builtinPlugins.flatMap(plugin => (plugin.diagnostics?.resourceIds ?? []).map(id => [id, true as const]))),
+  ...Object.fromEntries(monitorPlugins.flatMap(plugin => (plugin.diagnostics?.resourceIds ?? []).map(id => [id, true as const]))),
   'diagnostic-export': true,
   'event-store': true, 'hermes-events': true,
 }
@@ -206,7 +206,7 @@ export function buildDiagnosticReport(snapshot: MonitorSnapshot, resources: Reso
       collectedAt: available ? timestamp(data(raw, 'collectedAt')) : null,
       totals: section === 'agents' ? { agents: total('agents') } : section === 'schedules' ? { jobs: total('jobs') }
         : section === 'events' ? { events: available ? number(data(data(raw, 'retention'), 'count')) : null }
-          : Object.fromEntries((builtinPlugins.find(plugin => plugin.section === section)?.diagnostics?.totals ?? []).map(key => [key, total(key)])),
+          : Object.fromEntries((monitorPlugins.find(plugin => plugin.section === section)?.diagnostics?.totals ?? []).map(key => [key, total(key)])),
       sources: available ? sourceList(data(raw, 'sources')) : [],
     }
     if (!available) { coverage.sources.total = null; coverage.diagnostics.total = null }

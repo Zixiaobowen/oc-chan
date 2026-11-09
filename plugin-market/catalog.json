@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "plugins": [
+    {
+      "manifest": {
+        "id": "system",
+        "version": "1.0.0",
+        "apiVersion": 1,
+        "name": "系统监控",
+        "nameEn": "System Monitor",
+        "description": "采集本机 CPU、内存、磁盘、默认网络接口速率与进程排名。插件停用或卸载时取消采集并释放资源。",
+        "descriptionEn": "Collect local CPU, memory, disk, default network interface rates and process rankings. Disabling or uninstalling cancels collection and releases resources.",
+        "publisher": "OC Chan",
+        "section": "system",
+        "minAppVersion": "0.1.0",
+        "platforms": [
+          "darwin"
+        ],
+        "permissions": [
+          "system-metrics",
+          "process-ranking",
+          "read-default-network-interface"
+        ]
+      },
+      "package": "system-1.0.0.ocplugin",
+      "sha256": "e5fec3ca8f5711a27391034ace158e156f0d511b27d5cfd2fc4758dd49f2ee25",
+      "bytes": 15793
+    }
+  ]
+}

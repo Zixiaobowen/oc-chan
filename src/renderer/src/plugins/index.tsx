@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { builtinPlugins } from '../../../shared/plugin-catalog'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { monitorPlugins } from '../../../shared/plugin-catalog'
 import type { PluginSettings } from '../../../shared/settings'
 import { Empty } from '../components'
 import { useI18n } from '../i18n'
@@ -9,13 +9,15 @@ import ContributionBoundary from './ContributionBoundary'
 
 const verticalModules = import.meta.glob<RendererPluginModule>('../../../plugins/*/renderer/index.tsx')
 const builtinModules = import.meta.glob<RendererPluginModule>('./builtin/*.tsx')
-const entries: RendererEntry[] = builtinPlugins.map(plugin => {
+const entries: RendererEntry[] = monitorPlugins.map(plugin => {
   const builtin = builtinModules[`./builtin/${plugin.entry}.tsx`]
   const load = builtin ?? verticalModules[`../../../plugins/${plugin.entry}/renderer/index.tsx`]
   return { id: plugin.id, section: plugin.section, retainWhenDisabled: Boolean(builtin),
     load: load ?? (() => Promise.reject(new Error(`Missing renderer plugin: ${plugin.id}`))) }
 })
-export function useRendererPlugins(enabled: PluginSettings) {
+export function useRendererPlugins(enabled: PluginSettings, systemInstalled: boolean) {
+  // Installation controls renderer lifetime; collection can stop while its snapshot remains visible.
+  const available = useMemo(() => ({ ...enabled, system: systemInstalled }), [enabled, systemInstalled])
   const [registry] = useState(() => new RendererRegistry(entries))
   const state = useSyncExternalStore(registry.subscribe, registry.getSnapshot)
   const focused = useRef<HTMLElement | null>(null)
@@ -28,10 +30,10 @@ export function useRendererPlugins(enabled: PluginSettings) {
     if (focused.current && !focused.current.isConnected) {
       document.querySelector<HTMLElement>('.page-heading h1, .tray-customize > summary')?.focus({ preventScroll: true })
     }
-  }, [enabled])
-  useEffect(() => { registry.reconcile(enabled) }, [registry, enabled, state.errors])
+  }, [available, state.contributions])
+  useEffect(() => { registry.reconcile(available) }, [registry, available, state.errors])
   useEffect(() => () => registry.dispose(), [registry])
-  const contributions = state.contributions.filter(plugin => enabled[plugin.section] || plugin.retainWhenDisabled)
+  const contributions = state.contributions.filter(plugin => available[plugin.section] || plugin.retainWhenDisabled)
   return { contributions, errors: state.errors, retry: () => registry.retry() }
 }
 export type RendererSlot = 'Summary' | 'Overview' | 'OverviewAfter' | 'Device' | 'Footer' | 'TrayHeading' | 'TrayFooter'

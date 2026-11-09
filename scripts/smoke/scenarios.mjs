@@ -8,6 +8,7 @@ import { until } from '../performance/core.mjs'
 import { exerciseEmptyEvents, exerciseEvents } from './events-scenarios.mjs'
 import { exerciseNotifications } from './notification-scenarios.mjs'
 import { exerciseTopology } from './topology-scenarios.mjs'
+import { exerciseMarketplace, verifyMarketplaceRestart } from './marketplace-scenarios.mjs'
 
 const WAIT_MS = 8_000
 const RPC_MS = 5_000
@@ -198,9 +199,10 @@ async function historyPage(ui, start) {
   return ui.evaluate(`Array.from(document.querySelectorAll('.schedule-history-list .schedule-execution-id'), element => element.textContent)`)
 }
 
-export async function exerciseSmoke({ main, renderer, manifest, record, capture, fault, scenario = 'all' }) {
+export async function exerciseSmoke({ main, renderer, manifest, record, capture, fault, scenario = 'all', feed }) {
   assert.ok(fault == null || fault === 'fixture' || fault === 'ipc', 'unknown smoke fault')
   const ui = controls({ main, renderer, record, capture })
+  if (scenario === 'marketplace') return exerciseMarketplace({ ui, main, renderer, feed })
   let initial
   await ui.stage('sections-and-sources', async () => {
     await ui.dom('real preload APIs and visible DOM', `!!window.monitor && !!window.desktopSettings && !!${$('.app-shell')} && !document.hidden`)
@@ -489,6 +491,7 @@ export async function exerciseSmoke({ main, renderer, manifest, record, capture,
 
 export async function verifyRestart({ main, renderer, savedSettings, record, capture, scenario = 'all' }) {
   const ui = controls({ main, renderer, record, capture })
+  if (scenario === 'marketplace') return verifyMarketplaceRestart(ui)
   if (scenario === 'notifications') {
     await ui.stage('restart-notification-settings', async () => {
       await ui.dom('restarted real renderer is ready', `!!window.desktopSettings && !!${$('.app-shell')} && !document.hidden`)

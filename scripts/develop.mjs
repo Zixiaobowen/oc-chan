@@ -4,6 +4,7 @@ import { constants } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
+import { registerDevelopmentInstance } from './local-app-lifecycle.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const options = new Set(process.argv.slice(2))
@@ -104,6 +105,7 @@ async function main() {
   await mkdir(instances, { recursive: true })
   const instance = await mkdtemp(path.join(instances, 'instance-'))
   try {
+    await registerDevelopmentInstance({ root, instance })
     for (const name of ['user-data', 'session-data']) await mkdir(path.join(instance, name))
     const pluginDirectory = path.join(instance, 'resources/tern-navigation/plugin')
     await mkdir(pluginDirectory, { recursive: true })
@@ -122,12 +124,19 @@ async function main() {
       const settings = JSON.parse(initial.toString('utf8'))
       if (settings.showDock !== false || settings.preventSleep !== false) throw new Error('无头验收设置必须关闭 Dock 与阻止睡眠')
       await writeFile(path.join(instance, 'user-data/settings.json'), initial, { flag: 'wx', mode: 0o600 })
+      if (smoke?.pluginSeed !== undefined) {
+        if (smoke.marketplace !== true || typeof smoke.pluginSeed !== 'string' || !path.isAbsolute(smoke.pluginSeed)) throw new Error('无效 Smoke 插件种子')
+        const packageBytes = await readBoundedFile(smoke.pluginSeed, 2 * 1024 * 1024)
+        await mkdir(path.join(instance, 'user-data/plugins'), { mode: 0o700 })
+        await writeFile(path.join(instance, 'user-data/plugins/system.ocplugin'), packageBytes, { flag: 'wx', mode: 0o600 })
+      }
     }
     const env = { ...process.env, OC_CHAN_DEV_INSTANCE: instance, OC_CHAN_HEADLESS: windowed ? '0' : '1' }
     delete env.ELECTRON_RUN_AS_NODE
     console.log(`[oc-chan] ${windowed ? '原生窗口' : '无头'}开发实例：${instance}`)
     if (windowed) await run(['scripts/build-native.mjs'], env)
     else await run(['scripts/build-glass.mjs'], env)
+    await run(['scripts/build-plugin-market.mjs', path.join(instance, 'out/plugin-market')], env)
     await run([
       'node_modules/electron-vite/bin/electron-vite.js', 'dev',
       ...(smokeConfig ? ['--config', 'scripts/smoke/vite.config.mjs'] : process.env.OC_CHAN_PERFORMANCE_CONFIG ? ['--config', 'scripts/performance/vite.config.mjs'] : []),

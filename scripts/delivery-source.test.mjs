@@ -14,6 +14,7 @@ const initialFiles = {
   'src/main/index.ts': 'export const answer = 42\n',
   'scripts/build.mjs': 'console.log("build")\n',
   'resources/icon.txt': 'icon\n',
+  'src/plugins/system-monitor/main/index.ts': 'export const pluginVersion = "1.0.0"\n',
   'electron.vite.config.ts': 'export default {}\n',
   'package.json': '{"name":"delivery-fixture","version":"1.2.3"}\n',
   'package-lock.json': '{"name":"delivery-fixture","version":"1.2.3","lockfileVersion":3}\n',

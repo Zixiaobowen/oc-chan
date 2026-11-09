@@ -12,7 +12,7 @@ const sections = ['agents', 'schedules', 'system', 'events'] as const
 export interface InstallationEvidence {
   renderer: true
   ipc: true
-  collections: Record<typeof sections[number], 'ready' | 'disabled'>
+  collections: Record<typeof sections[number], 'ready' | 'disabled' | 'not-installed'>
   history: 'hermes' | 'unavailable' | 'disabled'
   historyEntries: number
 }
@@ -49,7 +49,7 @@ function validRequest(value: unknown): asserts value is InstallationRequest {
 function validEvidence(value: unknown): asserts value is InstallationEvidence {
   const item = value as InstallationEvidence | null
   requireThat(item && item.renderer === true && item.ipc === true && item.collections &&
-    sections.every(section => ['ready', 'disabled'].includes(item.collections[section])) &&
+    sections.every(section => ['ready', 'disabled'].includes(item.collections[section]) || section === 'system' && item.collections[section] === 'not-installed') &&
     ['hermes', 'unavailable', 'disabled'].includes(item.history) && Number.isSafeInteger(item.historyEntries) &&
     item.historyEntries >= 0 && item.historyEntries <= 25 && (item.history === 'hermes' || item.historyEntries === 0),
   'Renderer, IPC, collection or history readiness evidence is invalid')
@@ -183,8 +183,15 @@ export const INSTALLATION_PROBE = `(async () => {
   if (!document.querySelector('.app-shell')) return null;
   const settings = await window.desktopSettings.snapshot();
   const snapshot = await window.monitor.snapshot();
+  const marketplace = await window.pluginMarketplace.snapshot();
+  const systemPlugin = marketplace.items.find(item => item.manifest.id === 'system' && item.manifest.section === 'system');
+  if (!systemPlugin) throw new Error('System plugin catalog entry is unavailable');
   const collections = {};
   for (const section of ['agents', 'schedules', 'system', 'events']) {
+    if (section === 'system') {
+      if (systemPlugin.error && (!systemPlugin.installed || !systemPlugin.installedVersion)) throw new Error('System plugin failed: ' + systemPlugin.error);
+      if (!systemPlugin.installed) { collections[section] = 'not-installed'; continue; }
+    }
     if (!settings.settings.plugins[section]) { collections[section] = 'disabled'; continue; }
     const state = snapshot[section];
     if (!state || state.error) throw new Error('Collection failed: ' + section);

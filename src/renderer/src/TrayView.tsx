@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Activity from 'kubai-icons-react/icons/activity'
 import ArrowUpRight from 'kubai-icons-react/icons/arrow-up-right'
 import ChevronDown from 'kubai-icons-react/icons/chevron-down'
@@ -13,13 +13,20 @@ import ContributionBoundary from './plugins/ContributionBoundary'
 import './settings.css'
 import './tray.css'
 import type { NavigationTarget } from '../../shared/navigation'
+import { useSystemPlugin } from './marketplace'
+import SystemPluginNotice from './SystemPluginNotice'
+import { CollectionStatus } from './components'
 
 const panelStorageKey = 'oc-chan.tray-panels'
+const initial = createEmptySnapshot()
 export default function TrayView() {
   const { t } = useI18n()
   const { snapshot: { settings } } = useSettings()
-  const renderer = useRendererPlugins(settings.plugins)
-  const [snapshot, setSnapshot] = useState(createEmptySnapshot)
+  const { installed: systemInstalled, item: systemItem } = useSystemPlugin()
+  const plugins = useMemo(() => ({ ...settings.plugins, system: systemInstalled === true && Boolean(systemItem?.enabled) && settings.plugins.system }), [settings.plugins, systemInstalled, systemItem?.enabled])
+  const renderer = useRendererPlugins(plugins, systemInstalled === true)
+  const [storedSnapshot, setSnapshot] = useState(createEmptySnapshot)
+  const snapshot = systemInstalled === true ? storedSnapshot : { ...storedSnapshot, system: initial.system }
   const [selection, setSelection] = useState(() => parseTraySelection(null))
   const [visible, setVisible] = useState(!document.hidden)
   const [error, setError] = useState<string | null>(null)
@@ -38,20 +45,23 @@ export default function TrayView() {
     let active = true
     const received = new Set<MonitorSection>()
     const unsubscribe = api.subscribe((update: MonitorUpdate) => {
-      if (!active || document.hidden) return
+      if (!active || document.hidden || (update.section === 'system' && systemInstalled !== true)) return
       received.add(update.section)
       setSnapshot(previous => ({ ...previous, [update.section]: update.state }))
     })
     void api.snapshot().then(value => {
       if (!active || document.hidden) return
-      setSnapshot(previous => Object.fromEntries(monitorSections.map(section => [section, received.has(section) ? previous[section] : value[section]])) as MonitorSnapshot)
+      setSnapshot(previous => Object.fromEntries(monitorSections.map(section => [section, section === 'system' && systemInstalled !== true ? initial.system : received.has(section) ? previous[section] : value[section]])) as MonitorSnapshot)
       setError(null)
     }).catch(cause => { if (active) setError(String(cause)) })
     return () => { active = false; unsubscribe() }
-  }, [visible])
+  }, [visible, systemInstalled])
+  useEffect(() => {
+    if (systemInstalled === false) setSnapshot(previous => ({ ...previous, system: initial.system }))
+  }, [systemInstalled])
   const panels = renderer.contributions.flatMap(plugin => plugin.tray ?? [])
   const selected = panels.filter(panel => isTrayPanelSelected(selection, panel.id))
-  const sections = [...new Set(selected.flatMap(panel => panel.sections))].filter(section => settings.plugins[section])
+  const sections = [...new Set(selected.flatMap(panel => panel.sections))].filter(section => plugins[section])
   const sources = sections.map(section => snapshot[section])
   const collectionError = sources.find(state => state.error)?.error
   const problems = sources.flatMap(state => state.data?.sources.filter(source => source.state !== 'ok' && source.state !== 'empty' && source.state !== 'disabled') ?? [])
@@ -70,7 +80,7 @@ export default function TrayView() {
       setError(null)
     } catch (cause) { setError(String(cause)) }
   }
-  const context: RendererContext = { snapshot, plugins: settings.plugins, paused: false, visible,
+  const context: RendererContext = { snapshot, plugins, paused: false, visible,
     navigate: page => { void openMain({ kind: 'page', page }) }, openTarget: target => { void openMain(target) } }
   return <main className="tray-view">
     <div className="tray-top">
@@ -87,6 +97,8 @@ export default function TrayView() {
       {(error || collectionError) && <p className="setting-error" role="alert">{error || collectionError}{collectionError && t('；保留上次采样数据。', '; retaining the last sample.')}</p>}
       {Object.entries(renderer.errors).map(([id, message]) => <p key={id} className="setting-error" role="alert">{message} <button className="text-button" onClick={renderer.retry}>{t('重试', 'Retry')}</button></p>)}
       {preferenceError && <p className="setting-error" role="alert">{t('无法保存或读取显示偏好：', 'Could not save or read display preference: ')}{preferenceError}</p>}
+      {(systemInstalled !== true || systemItem?.error) && <SystemPluginNotice onOpen={() => void openMain({ kind: 'page', page: 'plugins' })} />}
+      {selected.some(panel => panel.sections.includes('system')) && <CollectionStatus enabled={plugins.system} collectedAt={snapshot.system.data?.collectedAt} label={t('系统监控', 'System monitor')} />}
       <div className="tray-metrics">{selected.map(panel => <ContributionBoundary key={panel.id}><panel.Component {...context} /></ContributionBoundary>)}</div>
       {selected.length === 0 && <p className="tray-note tray-empty">{t('尚未选择内容。展开“显示内容”，勾选你想同时查看的指标。', 'No metrics selected. Open “Show metrics” to choose what to display together.')}</p>}
       <PluginSlot contributions={renderer.contributions} slot="TrayFooter" context={context} />

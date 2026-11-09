@@ -1,12 +1,9 @@
-import type { CollectionServices } from '../../../main/plugins/contracts'
-import { throwIfAborted } from '../../../main/resource-budget'
+import type { PluginSdk } from '../../../main/marketplace/sdk'
 
 const MAX_OUTPUT_BYTES = 64 * 1024
 interface Counters { received: number; sent: number }
 interface Sample extends Counters { iface: string; at: number }
 type Command = (file: string, args: string[], signal?: AbortSignal) => Promise<string>
-const command = (services: CollectionServices): Command => async (file, args, signal) => (await services.command('system-network', file, args,
-  { timeout: 4000, maxBuffer: MAX_OUTPUT_BYTES, env: { ...process.env, LC_ALL: 'C' } }, signal)).stdout
 
 export function parseDefaultInterface(output: string): string {
   if (Buffer.byteLength(output) > MAX_OUTPUT_BYTES) throw new Error('默认路由输出超过限制')
@@ -41,8 +38,9 @@ export class NetworkReader {
   private previous?: Sample
   private readonly controller = new AbortController()
   private readonly run: Command
-  constructor(services: CollectionServices, run?: Command, private readonly now: () => number = () => performance.now()) {
-    this.run = run ?? command(services)
+  constructor(private readonly sdk: PluginSdk, run?: Command, private readonly now: () => number = () => performance.now()) {
+    this.run = run ?? (async (file, args, signal) => (await sdk.runBudgetedCommand('system-network', file, args,
+      { timeout: 4000, maxBuffer: MAX_OUTPUT_BYTES, env: { ...process.env, LC_ALL: 'C' } }, signal)).stdout)
   }
 
   dispose(): void {
@@ -51,6 +49,7 @@ export class NetworkReader {
   }
 
   async read(signal?: AbortSignal): Promise<{ iface: string; rxBytesPerSecond: number | null; txBytesPerSecond: number | null }> {
+    const { throwIfAborted } = this.sdk
     signal = signal ? AbortSignal.any([this.controller.signal, signal]) : this.controller.signal
     try {
       throwIfAborted(signal)

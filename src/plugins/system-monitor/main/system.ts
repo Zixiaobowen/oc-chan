@@ -2,8 +2,7 @@ import os from 'node:os'
 import { statfs } from 'node:fs/promises'
 import type { StatsFs } from 'node:fs'
 import { NetworkReader } from './network'
-import { isResourceAbort, isResourceCleanupFailure, resourceSourceStatus, settleResourceWork, throwIfAborted } from '../../../main/resource-budget'
-import type { CollectionServices } from '../../../main/plugins/contracts'
+import type { PluginSdk } from '../../../main/marketplace/sdk'
 import type { SourceStatus } from '../../../shared/types'
 import type { ProcessInfo, SystemSample, SystemSnapshot } from '../types'
 
@@ -52,10 +51,11 @@ export function parseMemory(vmOutput: string, swapOutput: string, total: number)
   return { total, active, app, wired, compressed, available: total - active, swapused }
 }
 
-async function readMemory(services: CollectionServices, signal?: AbortSignal) {
+async function readMemory(sdk: PluginSdk, signal?: AbortSignal) {
+  const { settleResourceWork, runBudgetedCommand } = sdk
   const [vm, swap] = await settleResourceWork([
-    services.command('system-memory', '/usr/bin/vm_stat', [], { timeout: 4000, maxBuffer: 1024 * 1024 }, signal),
-    services.command('system-memory', '/usr/sbin/sysctl', ['-n', 'vm.swapusage'], { timeout: 4000, maxBuffer: 1024 * 1024 }, signal)
+    runBudgetedCommand('system-memory', '/usr/bin/vm_stat', [], { timeout: 4000, maxBuffer: 1024 * 1024 }, signal),
+    runBudgetedCommand('system-memory', '/usr/sbin/sysctl', ['-n', 'vm.swapusage'], { timeout: 4000, maxBuffer: 1024 * 1024 }, signal)
   ])
   return parseMemory(vm.stdout, swap.stdout, os.totalmem())
 }
@@ -90,8 +90,8 @@ export function parseProcesses(output: string): { cpu: ProcessInfo[]; memory: Pr
   return { cpu, memory }
 }
 
-async function topProcesses(services: CollectionServices, signal?: AbortSignal) {
-  const { stdout } = await services.command('system-processes', '/bin/ps', ['-axo', 'pid=,pcpu=,rss=,comm='], {
+async function topProcesses(sdk: PluginSdk, signal?: AbortSignal) {
+  const { stdout } = await sdk.runBudgetedCommand('system-processes', '/bin/ps', ['-axo', 'pid=,pcpu=,rss=,comm='], {
     timeout: 4000, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, LC_ALL: 'C' }
   }, signal)
   return parseProcesses(stdout)
@@ -112,8 +112,8 @@ export class SystemCollector {
   private readonly controller = new AbortController()
   private readonly network: Pick<NetworkReader, 'read' | 'dispose'>
 
-  constructor(private readonly services: CollectionServices, private readonly options: SystemCollectorOptions = {}) {
-    this.network = options.network ?? new NetworkReader(services)
+  constructor(private readonly sdk: PluginSdk, private readonly options: SystemCollectorOptions = {}) {
+    this.network = options.network ?? new NetworkReader(sdk)
   }
 
   dispose(): void {
@@ -124,13 +124,14 @@ export class SystemCollector {
   }
 
   async collect(signal?: AbortSignal): Promise<SystemSnapshot> {
+    const { throwIfAborted, collectionResources, isResourceCleanupFailure, isResourceAbort, resourceSourceStatus } = this.sdk
     signal = signal ? AbortSignal.any([this.controller.signal, signal]) : this.controller.signal
     throwIfAborted(signal)
     const results = await Promise.allSettled([
-      this.options.memory ? this.options.memory(signal) : readMemory(this.services, signal),
-      this.options.disk ? this.options.disk(signal) : this.services.resources.run({ source: 'system-disk', kind: 'file', bytes: 0, signal }, () => statfs('/System/Volumes/Data')),
+      this.options.memory ? this.options.memory(signal) : readMemory(this.sdk, signal),
+      this.options.disk ? this.options.disk(signal) : collectionResources.run({ source: 'system-disk', kind: 'file', bytes: 0, signal }, () => statfs('/System/Volumes/Data')),
       this.network.read(signal),
-      this.options.processes ? this.options.processes(signal) : topProcesses(this.services, signal)
+      this.options.processes ? this.options.processes(signal) : topProcesses(this.sdk, signal)
     ])
     const failures = results.flatMap(result => result.status === 'rejected' && (isResourceCleanupFailure(result.reason) || signal.aborted && !isResourceAbort(result.reason)) ? [result.reason] : [])
     if (failures.length) throw new AggregateError(failures, '系统采集关闭失败 / System collection cleanup failed')
@@ -159,7 +160,7 @@ export class SystemCollector {
     const rx = network.status === 'fulfilled' ? network.value.rxBytesPerSecond : null
     const tx = network.status === 'fulfilled' ? network.value.txBytesPerSecond : null
     if (network.status === 'fulfilled') sources.push({ id: 'network-interface', label: '网络接口', state: 'ok', detail: `默认接口 ${network.value.iface}；仅统计此接口，避免虚拟网卡重复计数。首个采样周期速率尚不可用。` })
-    sources.push(resourceSourceStatus(this.services.resources.snapshot()))
+    sources.push(resourceSourceStatus(collectionResources.snapshot()))
     this.history.push({ at: now, cpuPercent, memoryPercent: mem.total ? mem.active / mem.total * 100 : 0, rxBytesPerSecond: rx, txBytesPerSecond: tx })
     if (this.history.length > 60) this.history.shift()
     const fs = disk.status === 'fulfilled' ? disk.value : null
