@@ -1,0 +1,247 @@
+{
+  "date": "2026-11-09",
+  "scope": {
+    "runtime": "real headless Electron / WebGL",
+    "synthetic": "fixed graph payloads use the production TopologyScene; standard smoke uses real IPC fixture plugin",
+    "measurements": "1100x620 CSS, DPR 2; Electron-reported Browser/GPU/Utility/Tab RSS sampled at 200 ms; excludes launcher/compiler and transient collector subprocesses",
+    "nativeWindow": false
+  },
+  "tests": {
+    "typecheck": "PASS",
+    "targetedNodeTests": {
+      "passed": 41,
+      "files": [
+        "agent-topology-3d-layout.test.ts",
+        "agent-topology.test.ts",
+        "view-state.test.ts"
+      ]
+    },
+    "smokeBefore": "/tmp/oc-chan-project-offices-before-20261109/result.json",
+    "smokeAfter": "/tmp/oc-chan-project-offices-after-focus-20261109/result.json",
+    "resolvedFailure": "Initial after-smoke lost selected employee label behind floor signs; employee labels now place first. Rerun passed."
+  },
+  "measurements": [
+    {
+      "version": "before",
+      "count": 128,
+      "projects": 4,
+      "tasks": 8,
+      "initMs": 54.900000005960464,
+      "updateMedianMs": 0.30000001192092896,
+      "renderMedianMs": 0.30000001192092896,
+      "renderP95Ms": 0.699999988079071,
+      "drawCalls": 13,
+      "triangles": 196316,
+      "gpuGeometries": 11,
+      "draws": 22,
+      "idleExtraDraws": 0,
+      "errors": [],
+      "domReleased": true,
+      "gpuReleased": true,
+      "sampledPeakElectronMiB": 748.28125,
+      "electronCpuSeconds": 0.27308999999999983,
+      "measurementSeconds": 0.42518295799999034,
+      "samples": 4
+    },
+    {
+      "version": "after",
+      "count": 128,
+      "projects": 4,
+      "tasks": 8,
+      "initMs": 55,
+      "updateMedianMs": 0.5,
+      "renderMedianMs": 0.5,
+      "renderP95Ms": 0.7000000178813934,
+      "drawCalls": 15,
+      "triangles": 206512,
+      "gpuGeometries": 12,
+      "draws": 22,
+      "idleExtraDraws": 0,
+      "errors": [],
+      "domReleased": true,
+      "gpuReleased": true,
+      "sampledPeakElectronMiB": 765.96875,
+      "electronCpuSeconds": 0.29341100000000075,
+      "measurementSeconds": 0.42449158299999545,
+      "samples": 4
+    },
+    {
+      "version": "before",
+      "count": 1200,
+      "projects": 4,
+      "tasks": 8,
+      "initMs": 40.69999998807907,
+      "updateMedianMs": 1.2000000178813934,
+      "renderMedianMs": 0.29999998211860657,
+      "renderP95Ms": 0.5,
+      "drawCalls": 13,
+      "triangles": 1795036,
+      "gpuGeometries": 11,
+      "draws": 22,
+      "idleExtraDraws": 0,
+      "errors": [],
+      "domReleased": true,
+      "gpuReleased": true,
+      "sampledPeakElectronMiB": 780.703125,
+      "electronCpuSeconds": 0.2775970000000001,
+      "measurementSeconds": 0.41309420799999497,
+      "samples": 4
+    },
+    {
+      "version": "after",
+      "count": 1200,
+      "projects": 4,
+      "tasks": 8,
+      "initMs": 46.30000001192093,
+      "updateMedianMs": 1.699999988079071,
+      "renderMedianMs": 0.4000000059604645,
+      "renderP95Ms": 0.7000000178813934,
+      "drawCalls": 15,
+      "triangles": 1809712,
+      "gpuGeometries": 12,
+      "draws": 22,
+      "idleExtraDraws": 0,
+      "errors": [],
+      "domReleased": true,
+      "gpuReleased": true,
+      "sampledPeakElectronMiB": 808.8125,
+      "electronCpuSeconds": 0.30886499999999906,
+      "measurementSeconds": 0.4162587910000002,
+      "samples": 4
+    }
+  ],
+  "stress": [
+    {
+      "version": "after",
+      "count": 1200,
+      "projects": 1200,
+      "tasks": 1200,
+      "initMs": 131.30000001192093,
+      "updateMedianMs": 3,
+      "renderMedianMs": 0.4000000059604645,
+      "renderP95Ms": 0.7000000178813934,
+      "drawCalls": 14,
+      "triangles": 4440000,
+      "gpuGeometries": 12,
+      "draws": 22,
+      "idleExtraDraws": 0,
+      "errors": [],
+      "domReleased": true,
+      "gpuReleased": true
+    },
+    {
+      "cycles": 30,
+      "allReleased": true,
+      "geometryCounts": [
+        12
+      ],
+      "drawCalls": [
+        15
+      ]
+    }
+  ],
+  "stressResources": {
+    "sampleCount": 65,
+    "sampledPeakElectronMiB": 795.5,
+    "initialElectronMiB": 747.265625,
+    "finalElectronMiB": 758.8125
+  },
+  "lifecycle": {
+    "dragZones": true,
+    "filterPreservedManualSeats": true,
+    "hiddenStopped": true,
+    "resumed": true,
+    "remountCameraDrift": 1.1368683772161603e-13,
+    "note": "Exact JSON equality was too strict for OrbitControls floating-point reconstruction."
+  },
+  "drag": [
+    {
+      "id": "agent-0000",
+      "position": {
+        "x": 50,
+        "y": 40,
+        "z": -60
+      },
+      "dragged": true
+    },
+    {
+      "id": "agent-0004",
+      "position": {
+        "x": 230,
+        "y": 40,
+        "z": 130
+      },
+      "dragged": true
+    }
+  ],
+  "responsive": [
+    {
+      "width": 1280,
+      "height": 860,
+      "scale": 1,
+      "horizontalOverflow": false,
+      "bad": [],
+      "errors": []
+    },
+    {
+      "width": 880,
+      "height": 640,
+      "scale": 1,
+      "horizontalOverflow": false,
+      "bad": [],
+      "errors": []
+    },
+    {
+      "width": 960,
+      "height": 760,
+      "scale": 1,
+      "horizontalOverflow": false,
+      "bad": [],
+      "errors": []
+    },
+    {
+      "width": 1728,
+      "height": 1080,
+      "scale": 1,
+      "horizontalOverflow": false,
+      "bad": [],
+      "errors": []
+    },
+    {
+      "width": 880,
+      "height": 640,
+      "scale": 2,
+      "horizontalOverflow": false,
+      "bad": [],
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "height": 860,
+      "scale": 2,
+      "horizontalOverflow": false,
+      "bad": [],
+      "errors": []
+    }
+  ],
+  "continuousResize": {
+    "widths": 11,
+    "taskPreserved": true
+  },
+  "sustained": {
+    "nodeCount": 1200,
+    "updatedWorkingNodes": 94,
+    "disposed": true,
+    "failed": false,
+    "gpuGeometries": 0,
+    "remainingDOM": 0,
+    "sampledPeakElectronMiB": 778.375,
+    "note": "The browser call timed out at 40 s; subsequent inspection confirmed the 20 s loop completed and disposed resources. Exact elapsed/update totals were not returned."
+  },
+  "limitations": [
+    "No visible macOS window/full-screen/physical split-screen/VoiceOver or native Tern activation verification",
+    "No 24-hour soak or complete transient-process-tree peak measurement",
+    "Before/after performance sampling is short and order-dependent; not a claimed performance improvement",
+    "20-second stress browser RPC timed out; completion and disposal confirmed afterward, exact elapsed and update count unavailable"
+  ]
+}

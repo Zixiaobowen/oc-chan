@@ -4,7 +4,6 @@ import type { AgentInfo } from '../../shared/types'
 import { projectAgentTopology, type TopologyGraph } from './agent-topology'
 import {
   buildOfficeLayout,
-  getAgentFloorId,
   MAX_3D_EDGES,
   MAX_3D_NODES,
   type OfficeLayout,
@@ -15,132 +14,231 @@ function agent(id: string, cwd?: string, parentId?: string): AgentInfo {
 }
 
 function assertCompleteLayout(graph: TopologyGraph, layout: OfficeLayout): void {
-  assert.deepEqual([...layout.positions.keys()].sort(), graph.nodes.map(node => node.agent.id).sort())
-  assert.deepEqual(layout.floors.flatMap(floor => floor.nodeIds).sort(), [...layout.positions.keys()].sort())
+  const ids = graph.nodes.map(node => node.agent.id).sort()
+  assert.deepEqual([...layout.positions.keys()].sort(), ids)
+  assert.deepEqual([...layout.floorByAgent.keys()].sort(), ids)
+  assert.deepEqual(layout.floors.flatMap(floor => floor.nodeIds).sort(), ids)
+  assert.deepEqual(layout.buildings.flatMap(building => building.floors), layout.floors)
   const occupied = new Set<string>()
-  for (const floor of layout.floors) {
-    assert.equal(floor.y, (floor.level - 1) * 240)
-    assert.ok(floor.width >= 520)
-    assert.ok(floor.depth >= 360)
-    for (const id of floor.nodeIds) {
-      const position = layout.positions.get(id)!
-      assert.ok(Object.values(position).every(Number.isFinite), `${id} has finite coordinates`)
-      assert.equal(position.y, floor.y + 40)
-      assert.ok(Math.abs(position.x) < floor.width / 2)
-      assert.ok(Math.abs(position.z) < floor.depth / 2)
-      const key = JSON.stringify(position)
-      assert.ok(!occupied.has(key), `${id} has a distinct position`)
-      occupied.add(key)
+  for (const building of layout.buildings) {
+    assert.ok(Object.values({ x: building.x, z: building.z, width: building.width, depth: building.depth }).every(Number.isFinite))
+    for (const [index, floor] of building.floors.entries()) {
+      assert.equal(floor.buildingId, building.id)
+      assert.equal(floor.cwd, building.cwd)
+      assert.equal(floor.x, building.x)
+      assert.equal(floor.z, building.z)
+      assert.equal(floor.level, index + 1)
+      assert.equal(floor.y, index * 240)
+      assert.equal(floor.width, building.width)
+      assert.equal(floor.depth, building.depth)
+      assert.ok(floor.width >= 760)
+      assert.ok(floor.depth >= 420)
+      assert.equal(floor.unresolved, floor.mainAgentId === null)
+      if (floor.mainAgentId !== null) assert.ok(floor.nodeIds.includes(floor.mainAgentId))
+      for (const id of floor.nodeIds) {
+        assert.equal(layout.floorByAgent.get(id), floor.id)
+        const position = layout.positions.get(id)!
+        assert.ok(Object.values(position).every(Number.isFinite), `${id} has finite coordinates`)
+        assert.equal(position.y, floor.y + 40)
+        assert.ok(Math.abs(position.x) < floor.width / 2)
+        assert.ok(Math.abs(position.z) < floor.depth / 2)
+        if (id === floor.mainAgentId) {
+          assert.equal(position.x, -floor.width / 2 + 160)
+          assert.equal(position.z, 0)
+        } else {
+          assert.ok(position.x >= -floor.width / 2 + 390, `${id} stays outside the private office`)
+        }
+        const key = JSON.stringify([position.x + floor.x, position.y, position.z + floor.z])
+        assert.ok(!occupied.has(key), `${id} has a distinct world position`)
+        occupied.add(key)
+      }
     }
   }
   assert.ok(new Set(layout.floors.map(floor => floor.width)).size <= 1)
   assert.ok(new Set(layout.floors.map(floor => floor.depth)).size <= 1)
+  for (let index = 0; index < layout.buildings.length; index += 1) {
+    const building = layout.buildings[index]
+    for (let otherIndex = index + 1; otherIndex < layout.buildings.length; otherIndex += 1) {
+      const other = layout.buildings[otherIndex]
+      assert.ok(Math.abs(building.x - other.x) >= (building.width + other.width) / 2 + 320
+        || Math.abs(building.z - other.z) >= (building.depth + other.depth) / 2 + 360,
+      `${building.id} and ${other.id} have separated building footprints`)
+    }
+  }
 }
 
 const noCollapse = new Set<string>()
 
-test('same cwd keeps every employee on one floor with non-overlapping centered workstations', () => {
+test('one project contains one floor per main task and cross-cwd descendants follow their task', () => {
   const graph = projectAgentTopology([
-    agent('d', '/work/project'), agent('b', '/work/project'),
-    agent('a', '/work/project'), agent('c', '/work/project', 'a'),
+    agent('task-b', '/work/project'), agent('task-a', '/work/project/'),
+    agent('child', '/another/project', 'task-a'), agent('grandchild', undefined, 'child'),
+    agent('task-c', '/work/project'),
+  ], 'all', 'all', '', noCollapse)
+  graph.nodes.find(node => node.agent.id === 'task-a')!.agent.summary = 'Implement search'
+  const layout = buildOfficeLayout(graph)
+  assert.equal(layout.buildings.length, 1)
+  assert.equal(layout.buildings[0].cwd, '/work/project')
+  assert.deepEqual(layout.floors.map(floor => floor.id), ['task:task-a', 'task:task-b', 'task:task-c'])
+  assert.deepEqual(layout.floors.map(floor => floor.mainAgentId), ['task-a', 'task-b', 'task-c'])
+  assert.equal(layout.floors[0].name, 'Implement search')
+  assert.equal(layout.floors[1].name, 'task-b')
+  assert.deepEqual(layout.floors[0].nodeIds, ['child', 'grandchild', 'task-a'])
+  assert.deepEqual(layout.floors.map(floor => floor.y), [0, 240, 480])
+  assertCompleteLayout(graph, layout)
+})
+
+test('full normalized project paths separate buildings even when basenames match', () => {
+  const graph = projectAgentTopology([
+    agent('b', '/work/b/project'), agent('nested', '/work/a/project/src'),
+    agent('a', '/work/a/project'), agent('slash', '/work/a/project///'), agent('root', '/'),
   ], 'all', 'all', '', noCollapse)
   const layout = buildOfficeLayout(graph)
-  assert.equal(layout.floors.length, 1)
-  assert.deepEqual(layout.floors[0].nodeIds, ['a', 'b', 'c', 'd'])
-  const positions = [...layout.positions.values()]
-  assert.equal(positions.reduce((sum, p) => sum + p.x, 0), 0)
-  assert.equal(positions.reduce((sum, p) => sum + p.z, 0), 0)
-  for (let i = 0; i < positions.length; i++) for (let j = i + 1; j < positions.length; j++) {
-    assert.ok(Math.hypot(positions[i].x - positions[j].x, positions[i].z - positions[j].z) >= 100)
+  assert.deepEqual(layout.buildings.map(building => building.cwd), [
+    '/', '/work/a/project', '/work/a/project/src', '/work/b/project',
+  ])
+  assert.equal(new Set(layout.buildings.map(building => building.id)).size, 4)
+  assert.deepEqual(layout.buildings[1].floors.map(floor => floor.id), ['task:a', 'task:slash'])
+  const minX = Math.min(...layout.buildings.map(building => building.x - building.width / 2))
+  const maxX = Math.max(...layout.buildings.map(building => building.x + building.width / 2))
+  const minZ = Math.min(...layout.buildings.map(building => building.z - building.depth / 2))
+  const maxZ = Math.max(...layout.buildings.map(building => building.z + building.depth / 2))
+  assert.equal(minX + maxX, 0)
+  assert.equal(minZ + maxZ, 0)
+  assertCompleteLayout(graph, layout)
+})
+
+test('unknown projects share the last building while known-root children retain their task', () => {
+  const graph = projectAgentTopology([
+    agent('missing'), agent('empty', ''), agent('blank', '  '),
+    agent('known', '/z/project'), agent('child', undefined, 'known'), agent('named-unknown', 'unknown'),
+  ], 'all', 'all', '', noCollapse)
+  const layout = buildOfficeLayout(graph)
+  const unknown = layout.buildings.at(-1)!
+  assert.equal(unknown.id, 'unknown')
+  assert.equal(unknown.cwd, undefined)
+  assert.deepEqual(unknown.floors.map(floor => floor.id), ['task:blank', 'task:empty', 'task:missing'])
+  assert.equal(layout.floorByAgent.get('child'), 'task:known')
+  assert.notEqual(layout.floors.find(floor => floor.id === 'task:named-unknown')!.buildingId, unknown.id)
+  assertCompleteLayout(graph, layout)
+})
+
+test('main occupies the private office and all collaborators occupy spaced open workstations', () => {
+  const graph = projectAgentTopology([
+    agent('main', '/work'),
+    ...Array.from({ length: 12 }, (_, index) => agent(`worker-${index}`, '/elsewhere', 'main')),
+  ], 'all', 'all', '', noCollapse)
+  const layout = buildOfficeLayout(graph)
+  const floor = layout.floors[0]
+  const main = layout.positions.get('main')!
+  assert.equal(main.x, -floor.width / 2 + 160)
+  assert.equal(main.z, 0)
+  const workers = floor.nodeIds.filter(id => id !== 'main').map(id => layout.positions.get(id)!)
+  assert.ok(workers.every(position => position.x > main.x + 260 / 2))
+  assert.equal(Math.min(...workers.map(position => position.z)) + Math.max(...workers.map(position => position.z)), 0)
+  for (let index = 0; index < workers.length; index += 1) {
+    for (let other = index + 1; other < workers.length; other += 1) {
+      assert.ok(Math.hypot(workers[index].x - workers[other].x, workers[index].z - workers[other].z) >= 140)
+    }
   }
   assertCompleteLayout(graph, layout)
 })
 
-test('full cwd separates equal basenames and nested paths without guessing project roots', () => {
-  const graph = projectAgentTopology([
-    agent('b', '/work/b/project'), agent('child', '/work/a/project/src', 'a'),
-    agent('a', '/work/a/project'), agent('slash', '/work/a/project/'),
-  ], 'all', 'all', '', noCollapse)
-  const layout = buildOfficeLayout(graph)
-  assert.deepEqual(layout.floors.map(floor => floor.cwd), [
-    '/work/a/project', '/work/a/project/', '/work/a/project/src', '/work/b/project',
-  ])
-  assert.equal(new Set(layout.floors.map(floor => floor.id)).size, 4)
-  assert.deepEqual(layout.floors.map(floor => floor.level), [1, 2, 3, 4])
-  assert.deepEqual(layout.floors.map(floor => floor.y), [0, 240, 480, 720])
-  assertCompleteLayout(graph, layout)
-})
-
-test('missing and empty cwd share an explicit unknown floor after known projects', () => {
-  const graph = projectAgentTopology([
-    agent('missing', undefined, 'known'), agent('empty', ''), agent('blank', '  '),
-    agent('known', '/z/project'), agent('named-unknown', 'unknown'),
-  ], 'all', 'all', '', noCollapse)
-  const layout = buildOfficeLayout(graph)
-  const unknown = layout.floors.at(-1)!
-  assert.equal(unknown.id, 'unknown')
-  assert.equal(unknown.cwd, undefined)
-  assert.deepEqual(unknown.nodeIds, ['blank', 'empty', 'missing'])
-  assert.notEqual(getAgentFloorId(agent('known', 'unknown')), unknown.id)
-  assert.equal(getAgentFloorId(agent('missing')), unknown.id)
-  assertCompleteLayout(graph, layout)
-})
-
-test('floor ordering and positions survive shuffled nodes and edges without mutating inputs', () => {
+test('ordering and placement survive shuffled graph entries without mutating inputs', () => {
   const graph = projectAgentTopology([
     agent('z', '/b'), agent('a', '/b', 'z'), agent('b', '/a', 'a'),
-    agent('c', '/a'), agent('unknown'),
+    agent('c', '/a'), agent('unknown'), agent('other', '/b/'),
   ], 'all', 'all', '', noCollapse)
   const original = structuredClone(graph)
   const layout = buildOfficeLayout(graph)
   const shuffled = { ...graph, nodes: graph.nodes.slice().reverse(), edges: graph.edges.slice().reverse() }
   const reordered = buildOfficeLayout(shuffled)
-  assert.deepEqual(reordered.floors, layout.floors)
+  assert.deepEqual(reordered, layout)
   assert.deepEqual([...reordered.positions], [...layout.positions])
+  assert.deepEqual([...reordered.floorByAgent], [...layout.floorByAgent])
   assert.deepEqual(graph, original)
   assertCompleteLayout(graph, layout)
 })
 
-test('cross-floor parent edges, cycles and self loops remain unchanged and do not move floors', () => {
+test('cycles, self loops, missing parents and subagent roots never receive a fabricated main office', () => {
   const graph = projectAgentTopology([
-    agent('a', '/a', 'c'), agent('b', '/b', 'a'), agent('c', '/c', 'b'),
-    agent('leaf', '/a', 'b'), agent('self', '/b', 'self'), agent('orphan', undefined, 'absent'),
+    { ...agent('a', '/a', 'c'), kind: 'main' }, agent('b', '/b', 'a'), agent('c', '/c', 'b'),
+    agent('leaf', '/leaf', 'b'), { ...agent('self', '/self', 'self'), kind: 'main' },
+    { ...agent('orphan', undefined, 'absent'), kind: 'main' },
+    { ...agent('unparented', '/work'), kind: 'subagent' },
   ], 'all', 'all', '', noCollapse)
   const original = structuredClone(graph)
   const layout = buildOfficeLayout(graph)
-  assert.equal(graph.edges.length, 5)
-  assert.deepEqual(graph, original)
-  assert.deepEqual(layout.floors.map(floor => floor.nodeIds), [['a', 'leaf'], ['b', 'self'], ['c'], ['orphan']])
-  assert.deepEqual(buildOfficeLayout({ ...graph, edges: [] }), layout)
+  assert.equal(layout.floors.length, 4)
+  assert.deepEqual(layout.floors.find(floor => floor.id === 'task:a')!.nodeIds, ['a', 'b', 'c', 'leaf'])
+  assert.ok(layout.floors.every(floor => floor.mainAgentId === null && floor.unresolved))
   assert.equal(layout.positions.has('absent'), false)
+  assert.deepEqual(graph, original)
   assertCompleteLayout(graph, layout)
 })
 
-test('1200 agents fit one floor and all floors share dimensions from maximum occupancy', () => {
+test('a cycle below a main root marks the whole task unresolved without changing its edges', () => {
+  const graph = projectAgentTopology([
+    agent('main', '/work'), agent('a', '/work', 'main'), agent('b', '/work', 'a'),
+  ], 'all', 'all', '', noCollapse)
+  graph.edges.push({ id: 'back', source: 'b', target: 'a' })
+  const original = structuredClone(graph)
+  const layout = buildOfficeLayout(graph)
+  assert.equal(layout.floors[0].id, 'task:main')
+  assert.equal(layout.floors[0].mainAgentId, null)
+  assert.equal(layout.floors[0].unresolved, true)
+  assert.deepEqual(graph, original)
+  assertCompleteLayout(graph, layout)
+})
+
+test('1200-agent wide and deep tasks fit one floor without recursive traversal', () => {
+  for (const shape of ['wide', 'deep']) {
+    const graph = projectAgentTopology(Array.from({ length: MAX_3D_NODES }, (_, index) => (
+      agent(`node-${index}`, index === 0 ? '/root' : `/child/${index}`,
+        index === 0 ? undefined : shape === 'deep' ? `node-${index - 1}` : 'node-0')
+    )), 'all', 'all', '', noCollapse)
+    const layout = buildOfficeLayout(graph)
+    assert.equal(layout.positions.size, 1200)
+    assert.equal(layout.buildings.length, 1)
+    assert.equal(layout.floors.length, 1)
+    assert.equal(layout.floors[0].mainAgentId, 'node-0')
+    assert.equal(layout.floors[0].cwd, '/root')
+    assert.ok(new Set([...layout.positions.values()].map(point => point.x)).size > 1)
+    assert.ok(new Set([...layout.positions.values()].map(point => point.z)).size > 1)
+    assertCompleteLayout(graph, layout)
+  }
+})
+
+test('1200 projects occupy distinct buildings with finite coordinates and shared dimensions', () => {
   const graph = projectAgentTopology(Array.from({ length: MAX_3D_NODES }, (_, index) => (
-    agent(`node-${index}`, '/large', index === 0 ? undefined : `node-${index - 1}`)
+    agent(`main-${index}`, `/project/${index}`)
   )), 'all', 'all', '', noCollapse)
   const layout = buildOfficeLayout(graph)
-  assert.equal(layout.positions.size, 1200)
-  assert.equal(layout.floors.length, 1)
-  assert.ok(new Set([...layout.positions.values()].map(point => point.x)).size > 1)
-  assert.ok(new Set([...layout.positions.values()].map(point => point.z)).size > 1)
+  assert.equal(layout.buildings.length, 1200)
+  assert.equal(layout.floors.length, 1200)
+  assert.ok(layout.floors.every(floor => floor.level === 1 && floor.y === 0))
   assertCompleteLayout(graph, layout)
-
-  const split = structuredClone(graph)
-  split.nodes[0].agent.cwd = '/small'
-  const splitLayout = buildOfficeLayout(split)
-  assert.equal(splitLayout.floors.length, 2)
-  assert.ok(splitLayout.floors[1].width > 520)
-  assert.ok(splitLayout.floors[1].depth > 360)
-  assertCompleteLayout(split, splitLayout)
 })
 
-test('2400 relationships are accepted without being rewritten or affecting office placement', () => {
-  const graph = projectAgentTopology(Array.from({ length: MAX_3D_NODES }, (_, i) => agent(`node-${i}`, `/work/${i % 2}`)), 'all', 'all', '', noCollapse)
+test('all buildings and floors share dimensions even with different task occupancies', () => {
+  const graph = projectAgentTopology([
+    agent('small', '/small'), agent('large', '/large'), agent('other-task', '/large'),
+    ...Array.from({ length: 80 }, (_, index) => agent(`child-${index}`, '/child', 'large')),
+  ], 'all', 'all', '', noCollapse)
+  const layout = buildOfficeLayout(graph)
+  assert.equal(layout.buildings.length, 2)
+  assert.equal(layout.floors.length, 3)
+  assert.ok(layout.floors.every(floor => floor.width > 760 && floor.depth > 420))
+  assertCompleteLayout(graph, layout)
+})
+
+test('2400 relationships are accepted and preserved with duplicate relationship evidence', () => {
+  const graph = projectAgentTopology(Array.from({ length: MAX_3D_NODES }, (_, index) => (
+    agent(`node-${index}`, '/work', index === 0 ? undefined : 'node-0')
+  )), 'all', 'all', '', noCollapse)
   const beforeEdges = buildOfficeLayout(graph)
-  graph.edges = Array.from({ length: MAX_3D_EDGES }, (_, i) => ({
-    id: `edge-${i}`, source: `node-${Math.floor(i / 2)}`, target: `node-${(Math.floor(i / 2) + 1 + i % 2) % MAX_3D_NODES}`,
+  graph.edges = Array.from({ length: MAX_3D_EDGES }, (_, index) => ({
+    id: `edge-${index}`, source: 'node-0', target: `node-${1 + index % (MAX_3D_NODES - 1)}`,
   }))
   const original = structuredClone(graph)
   const layout = buildOfficeLayout(graph)
@@ -148,6 +246,35 @@ test('2400 relationships are accepted without being rewritten or affecting offic
   assert.deepEqual(layout, beforeEdges)
   assert.deepEqual(graph, original)
   assertCompleteLayout(graph, layout)
+})
+
+test('filtering and collapsing preserve task and building identity for every visible agent', () => {
+  const agents = [
+    agent('main', '/project'), agent('child', '/different', 'main'), agent('grandchild', undefined, 'child'),
+    agent('second', '/project'), agent('other-project', '/other'),
+  ]
+  const full = buildOfficeLayout(projectAgentTopology(agents, 'all', 'all', '', noCollapse))
+  const projections = [
+    projectAgentTopology(agents, 'subagent', 'all', '', noCollapse),
+    projectAgentTopology(agents, 'all', 'all', 'grandchild', noCollapse),
+    projectAgentTopology(agents, 'all', 'all', '', new Set(['child'])),
+    projectAgentTopology(agents, 'all', 'all', '', new Set(['main'])),
+  ]
+  assert.deepEqual(projections[1].nodes.map(node => node.agent.id), ['child', 'grandchild', 'main'])
+  assert.equal(projections[2].nodes.some(node => node.agent.id === 'grandchild'), false)
+  assert.equal(projections[3].nodes.some(node => node.agent.id === 'child'), false)
+  for (const graph of projections) {
+    const layout = buildOfficeLayout(graph)
+    for (const node of graph.nodes) {
+      const id = layout.floorByAgent.get(node.agent.id)!
+      assert.equal(id, full.floorByAgent.get(node.agent.id))
+      const floor = layout.floors.find(candidate => candidate.id === id)!
+      const original = full.floors.find(candidate => candidate.id === id)!
+      assert.equal(floor.buildingId, original.buildingId)
+      assert.equal(floor.mainAgentId, original.mainAgentId)
+    }
+    assertCompleteLayout(graph, layout)
+  }
 })
 
 test('both budgets are checked before reading node or edge entries', () => {
@@ -172,18 +299,24 @@ test('both budgets are checked before reading node or edge entries', () => {
       return true
     })
   }
-  assert.deepEqual(buildOfficeLayout(empty), { floors: [], positions: new Map() })
+  assert.deepEqual(buildOfficeLayout(empty), { buildings: [], floors: [], positions: new Map(), floorByAgent: new Map() })
 })
 
-test('malformed graph shapes fail explicitly without inventing or dropping agents', () => {
+test('malformed graph shapes and entries fail explicitly', () => {
   const graph = projectAgentTopology([agent('root', '/work')], 'all', 'all', '', noCollapse)
   assert.throws(() => buildOfficeLayout({ ...graph, nodes: [graph.nodes[0], graph.nodes[0]] }), Error)
   assert.throws(() => buildOfficeLayout({
     ...graph, edges: [{ id: 'dangling', source: 'absent', target: 'root' }],
   }), Error)
-  assert.throws(() => buildOfficeLayout({ ...graph, nodes: null } as unknown as TopologyGraph), TypeError)
+  for (const invalid of [null, {}, { ...graph, nodes: null }, { ...graph, edges: null }, { ...graph, nodes: [null] }, { ...graph, edges: [null] }]) {
+    assert.throws(() => buildOfficeLayout(invalid as unknown as TopologyGraph), TypeError)
+  }
+  for (const fields of [{ id: '' }, { id: '  ' }, { cwd: 42 }, { parentId: 42 }]) {
+    assert.throws(() => buildOfficeLayout({
+      ...graph, nodes: [{ ...graph.nodes[0], agent: { ...graph.nodes[0].agent, ...fields } as AgentInfo }],
+    }), TypeError)
+  }
   assert.throws(() => buildOfficeLayout({
-    ...graph, nodes: [{ ...graph.nodes[0], agent: { ...graph.nodes[0].agent, id: '' } }],
+    ...graph, edges: [{ id: 'invalid', source: 42, target: 'root' } as unknown as TopologyGraph['edges'][number]],
   }), TypeError)
-  assert.throws(() => getAgentFloorId({ ...agent('bad'), cwd: 42 } as unknown as AgentInfo), TypeError)
 })
