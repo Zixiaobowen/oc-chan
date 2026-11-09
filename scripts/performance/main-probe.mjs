@@ -1,4 +1,4 @@
-import { builtinPlugins } from '../../src/shared/plugin-catalog'
+import { monitorPlugins } from '../../src/shared/plugin-catalog'
 import { app, ipcMain, BrowserWindow } from 'electron'
 import { ChildProcess } from 'node:child_process'
 import { AsyncResource } from 'node:async_hooks'
@@ -166,7 +166,7 @@ Monitor.prototype.start = async function () {
       async plugins(enabled) {
         if (typeof enabled !== 'boolean') throw new Error('Invalid plugin state')
         const statuses = monitor.pluginStatuses()
-        if (statuses.length !== builtinPlugins.length || builtinPlugins.some(expected => !statuses.some(actual => actual.id === expected.id && actual.section === expected.section))) throw new Error('Registered plugins do not match the trusted catalog')
+        if (statuses.length !== monitorPlugins.length || monitorPlugins.some(expected => !statuses.some(actual => actual.id === expected.id && actual.section === expected.section))) throw new Error('Registered plugins do not match the trusted catalog')
         for (const plugin of statuses) await monitor.setPluginEnabled(plugin.id, enabled)
         return monitor.diagnostics()
       },

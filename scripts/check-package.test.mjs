@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -62,6 +63,13 @@ async function fixture(t, arch = 'arm64') {
     await put(root, `resources/tern-navigation/plugin/${name}`, content)
     await put(app, plugin + name, content)
   }
+  const systemManifest = { id: 'system', version: '1.0.0', apiVersion: 1, name: '系统监控', nameEn: 'System monitor', description: '系统资源', descriptionEn: 'System resources', publisher: 'OC Chan', section: 'system', minAppVersion: '0.1.0', platforms: ['darwin'], permissions: ['system-read'] }
+  const systemPackage = JSON.stringify({ schema: 1, manifest: systemManifest, code: 'exports.createPlugin = sdk => ({ id: "system" });' })
+  const catalog = JSON.stringify({ schema: 1, plugins: [{ manifest: systemManifest, package: 'system-1.0.0.ocplugin', sha256: createHash('sha256').update(systemPackage).digest('hex'), bytes: Buffer.byteLength(systemPackage) }] })
+  for (const [name, content] of [['catalog.json', catalog], ['system-1.0.0.ocplugin', systemPackage]]) {
+    await put(root, `out/plugin-market/${name}`, content)
+    await put(app, `Contents/Resources/plugin-market/${name}`, content)
+  }
   await put(staging, 'package.json', JSON.stringify({ name: manifest.name, version: manifest.version, main: manifest.main, dependencies: manifest.dependencies }))
   await put(staging, 'out/main/index.js', 'require("node:os")\n')
   await put(staging, 'out/preload/index.js', 'module.exports = {}\n')
@@ -120,6 +128,17 @@ test('a shipped Electron distribution must preserve its license notices', darwin
   const f = await fixture(t)
   await rm(path.join(f.app, 'Contents/Resources/LICENSE.electron.txt'))
   await assert.rejects(f.inspect(), /Missing app runtime resource/)
+})
+
+test('packaging refuses tampered or extra independently installable plugins', darwinOnly, async t => {
+  const f = await fixture(t)
+  const packagePath = 'Contents/Resources/plugin-market/system-1.0.0.ocplugin'
+  const original = await readFile(path.join(f.app, packagePath))
+  await put(f.app, packagePath, Buffer.concat([original, Buffer.from(' ')]))
+  await assert.rejects(f.inspect(), /plugin integrity mismatch/)
+  await put(f.app, packagePath, original)
+  await put(f.app, 'Contents/Resources/plugin-market/unknown-1.0.0.ocplugin', original)
+  await assert.rejects(f.inspect(), /Unlisted plugin package/)
 })
 
 for (const name of ['out/main/index.test.js', 'out/renderer/assets/debug.log', 'out/renderer/.cache/data', 'out/main/index.d.ts', 'out/main/index.js.map']) {

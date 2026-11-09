@@ -3,6 +3,7 @@ import type { MonitorApi, MonitorUpdate, SourceHeartbeat } from '../shared/types
 import type { SettingsApi, SettingsSnapshot } from '../shared/settings'
 import type { UpdatesApi, UpdateSnapshot } from '../shared/updates'
 import type { StartupRecoveryApi } from '../shared/startup-recovery'
+import type { MarketplaceApi, MarketplaceSnapshot } from '../shared/marketplace'
 
 if (new URLSearchParams(location.search).get('view') === 'recovery') {
   const recovery: StartupRecoveryApi = {
@@ -87,4 +88,19 @@ const appUpdates: UpdatesApi = {
   }
 }
 contextBridge.exposeInMainWorld('appUpdates', appUpdates)
+
+const pluginMarketplace: MarketplaceApi = {
+  snapshot: () => ipcRenderer.invoke('plugins:snapshot'),
+  check: () => ipcRenderer.invoke('plugins:check'),
+  install: id => ipcRenderer.invoke('plugins:install', id),
+  update: id => ipcRenderer.invoke('plugins:update', id),
+  uninstall: id => ipcRenderer.invoke('plugins:uninstall', id),
+  cancel: () => ipcRenderer.invoke('plugins:cancel'),
+  subscribe: listener => {
+    const handler = (_event: Electron.IpcRendererEvent, snapshot: MarketplaceSnapshot) => listener(snapshot)
+    ipcRenderer.on('plugins:changed', handler)
+    return () => ipcRenderer.removeListener('plugins:changed', handler)
+  }
+}
+contextBridge.exposeInMainWorld('pluginMarketplace', pluginMarketplace)
 }

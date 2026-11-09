@@ -7,14 +7,19 @@ import { bytes, duration, Empty, Meter, NativeSelect, Sources, time } from '../.
 import { Chart } from './Chart'
 import { MemoryBreakdown, NetworkTraffic, ProcessRanking } from './SystemMetrics'
 import { useI18n } from '../../../renderer/src/i18n'
+import { useSystemPlugin } from '../../../renderer/src/marketplace'
+import SystemPluginNotice from '../../../renderer/src/SystemPluginNotice'
 
-export default function SystemView({ data, enabled, processOrder, onProcessOrderChange }: {
-  data: SystemSnapshot | null; enabled: boolean; processOrder: 'cpu' | 'memory'; onProcessOrderChange: (order: 'cpu' | 'memory') => void
+export default function SystemView({ data, enabled, processOrder, onProcessOrderChange, onOpenMarketplace }: {
+  data: SystemSnapshot | null; enabled: boolean; processOrder: 'cpu' | 'memory'; onProcessOrderChange: (order: 'cpu' | 'memory') => void; onOpenMarketplace: () => void
 }) {
   const { language, t } = useI18n()
+  const { installed, item } = useSystemPlugin()
+  if (!installed || (!data && item?.error)) return <div className="panel"><SystemPluginNotice onOpen={onOpenMarketplace} /></div>
   if (!data) return <div className="panel"><Empty title={enabled ? t('正在采样系统状态', 'Sampling system status') : t('系统采集已停用', 'System collection disabled')}>{enabled ? t('CPU、内存、磁盘和默认网络接口。', 'CPU, memory, disk and the default network interface.') : t('尚无快照。可在数据来源中开启系统采集。', 'No snapshot yet. Enable system collection in Data sources.')}</Empty></div>
   return <div className="system-view">
     <div className="machine-strip"><div><Cpu trigger="none" size={17} /><strong>{data.cpuModel}</strong><span>{t(`${data.cpuCores} 核心`, `${data.cpuCores} cores`)}</span></div><span>{t('已运行', 'Uptime')} {duration(data.uptimeSeconds, language)} · {time(data.collectedAt, language)}</span></div>
+    {item?.error && <div className="panel"><SystemPluginNotice onOpen={onOpenMarketplace} /></div>}
     <div className="system-grid">
       <section className="panel chart-panel">
         <div className="section-heading"><h2><Cpu trigger="none" size={18} />{t('CPU 使用率', 'CPU usage')}</h2><strong className="chart-value">{data.cpuPercent === null ? '—' : <>{data.cpuPercent.toFixed(1)}<small>%</small></>}</strong></div>

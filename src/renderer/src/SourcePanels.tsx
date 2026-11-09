@@ -9,6 +9,8 @@ import './settings.css'
 import { monitorSections } from '../../shared/plugin-catalog'
 import type { RendererContribution } from './plugins/types'
 import ContributionBoundary from './plugins/ContributionBoundary'
+import { useSystemPlugin } from './marketplace'
+import SystemPluginNotice from './SystemPluginNotice'
 
 interface SourceGroup {
   id: MonitorSection
@@ -27,11 +29,13 @@ function observation(section: MonitorSection, state: MonitorSnapshot[MonitorSect
 function SourceSection({ group, heartbeat }: { group: SourceGroup; heartbeat?: SourceHeartbeat }) {
   const { t, language } = useI18n()
   const { snapshot: { settings }, saving, error: saveError, update } = useSettings()
+  const { installed: systemInstalled, item: systemItem, pending: marketPending, snapshot: marketSnapshot } = useSystemPlugin()
+  const changingInstallation = group.id === 'system' && Boolean(marketPending || marketSnapshot?.operation)
   const enabled = settings.plugins[group.id]
   const Source = group.contribution?.Source
   const changing = useRef(false)
   async function toggle() {
-    if (saving || changing.current) return
+    if (saving || changingInstallation || changing.current || (group.id === 'system' && !systemInstalled)) return
     changing.current = true
     try { await update({ plugins: { [group.id]: !enabled } }) }
     finally { changing.current = false }
@@ -42,7 +46,7 @@ function SourceSection({ group, heartbeat }: { group: SourceGroup; heartbeat?: S
   const mounted = useRef(false)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   async function retry() {
-    if (!enabled || saving || request.current) return
+    if (!enabled || saving || changingInstallation || request.current) return
     request.current = true
     setPending(true)
     setError(null)
@@ -56,10 +60,14 @@ function SourceSection({ group, heartbeat }: { group: SourceGroup; heartbeat?: S
       if (mounted.current) setPending(false)
     }
   }
+  if (group.id === 'system' && !systemInstalled) return <section className="panel source-group" data-source-section="system">
+    <div className="section-heading"><h2>{group.title}</h2></div><SystemPluginNotice />
+  </section>
   return <section className="panel source-group" data-source-section={group.id}>
+    {group.id === 'system' && systemItem?.error && <SystemPluginNotice />}
     <div className="section-heading source-group-heading"><h2 id={`collection-${group.id}-label`}>{group.title}</h2>
       <div className="setting-toggle" aria-busy={saving}>
-        <button type="button" role="switch" className="setting-switch" aria-labelledby={`collection-${group.id}-label`} aria-describedby={`collection-${group.id}-help`} aria-checked={enabled} aria-disabled={saving} onClick={() => void toggle()}><span /></button>
+        <button type="button" role="switch" className="setting-switch" aria-labelledby={`collection-${group.id}-label`} aria-describedby={`collection-${group.id}-help`} aria-checked={enabled} aria-disabled={saving || changingInstallation} onClick={() => void toggle()}><span /></button>
         <span>{saving && changing.current ? t('正在保存…', 'Saving…') : enabled ? t('采集已开启', 'Collection enabled') : t('采集已停用', 'Collection disabled')}</span>
       </div>
     </div>
@@ -83,16 +91,24 @@ function SourceSection({ group, heartbeat }: { group: SourceGroup; heartbeat?: S
 }
 
 export default function SourcePanels({ groups, live }: { groups: SourceGroup[]; live: boolean }) {
+  const { installed: systemInstalled } = useSystemPlugin()
   const [heartbeats, setHeartbeats] = useState<Partial<Record<MonitorSection, SourceHeartbeat>>>({})
   const [error, setError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
+  useEffect(() => {
+    if (systemInstalled !== true) setHeartbeats(previous => {
+      const next = { ...previous }
+      delete next.system
+      return next
+    })
+  }, [systemInstalled])
   useEffect(() => {
     const api = window.monitor
     if (!live || !api) return
     let active = true
     const received = new Set<MonitorSection>()
     const accept = (heartbeat: SourceHeartbeat) => {
-      if (!active) return
+      if (!active || (heartbeat.section === 'system' && systemInstalled !== true)) return
       received.add(heartbeat.section)
       setHeartbeats(previous => ({ ...previous, [heartbeat.section]: heartbeat }))
     }
@@ -103,6 +119,7 @@ export default function SourcePanels({ groups, live }: { groups: SourceGroup[]; 
       setHeartbeats(previous => {
         const next = { ...previous }
         for (const section of monitorSections) {
+          if (section === 'system' && systemInstalled !== true) { delete next.system; continue }
           if (!received.has(section)) next[section] = observation(section, snapshot[section])
         }
         return next
@@ -110,10 +127,10 @@ export default function SourcePanels({ groups, live }: { groups: SourceGroup[]; 
       setError(null)
     }, failure => { if (active) setError(failure instanceof Error ? failure.message : String(failure)) })
     return () => { active = false; unsubscribeSources(); unsubscribeData() }
-  }, [live, attempt])
+  }, [live, attempt, systemInstalled])
   return <>
     <CollectorError error={error} onRetry={() => setAttempt(value => value + 1)} />
     <DiagnosticPanel />
-    {groups.map(group => <SourceSection key={group.id} group={group} heartbeat={heartbeats[group.id]} />)}
+    {groups.map(group => <SourceSection key={group.id === 'system' ? `system-${systemInstalled}` : group.id} group={group} heartbeat={heartbeats[group.id]} />)}
   </>
 }

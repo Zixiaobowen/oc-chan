@@ -54,7 +54,7 @@ test('dependency and public contract changes widen coverage explicitly', () => {
 })
 
 test('new behavior files must be mapped and deleted tests cannot remain in the manifest', () => {
-  validateTestCoverage(globSync(['src/**/*.test.ts', 'scripts/**/*.test.mjs'], { cwd: root }))
+  validateTestCoverage(globSync(['src/**/*.test.ts', 'plugins/**/*.test.ts', 'scripts/**/*.test.mjs'], { cwd: root }))
   assert.throws(() => validateTestCoverage([...allTests, 'src/main/new.test.ts']), /未映射/)
   assert.throws(() => validateTestCoverage(allTests.filter(file => file !== suites.views[0])), /缺失/)
   assert.throws(() => selectTests(['src/main/new-feature.ts']), /未配置测试映射/)

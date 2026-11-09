@@ -26,6 +26,10 @@ const trayControl = {
   name: 'performance-tray-control',
   transform(source, id) {
     if (id.split('?')[0] !== path.join(root, 'src/main/index.ts')) return null
+    if (!config.smoke?.marketplace) {
+      if ((source.match(/await marketplace\.initialize\(\)/g) ?? []).length !== 1) throw new Error('Expected one plugin marketplace initialization')
+      source = source.replace('await marketplace.initialize()', 'await marketplace.initialize(); await marketplace.install("system")')
+    }
     return { code: `${source}\nObject.defineProperty(globalThis, '__ocPerformanceTray', {value: {open: () => trayPanel.ensure().then(panel => panel.webContents.id), notifications: () => eventNotifications.snapshot()}});`, map: null }
   }
 }

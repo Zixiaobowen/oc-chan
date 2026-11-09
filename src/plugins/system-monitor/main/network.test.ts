@@ -1,9 +1,7 @@
-import { collectionResources } from '../../../main/resource-budget'
-import { runBudgetedCommand } from '../../../main/resource-io'
-const services = { resources: collectionResources, command: runBudgetedCommand }
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { NetworkReader, parseDefaultInterface, parseNetworkCounters } from './network'
+import { pluginSdk } from '../../../main/marketplace/sdk'
 
 const header = 'Name Mtu Network Address Ipkts Ierrs Ibytes Opkts Oerrs Obytes Coll Drop'
 const table = (iface: string, received: number, sent: number, address = 'aa:bb:cc:dd:ee:ff') => `${header}\n${iface} 1500 <Link#20> ${address} 12 0 ${received} 10 0 ${sent} 0 1\n`
@@ -27,7 +25,7 @@ test('missing, duplicate, unsafe and ambiguous counters fail instead of reportin
 
 test('rates need continuous counter evidence and recover explicitly after route changes and failures', async () => {
   let at = 0, iface = 'en0', received = 1000, sent = 100, failed = false
-  const reader = new NetworkReader(services, async file => {
+  const reader = new NetworkReader(pluginSdk, async file => {
     if (failed) throw new Error('network read failed')
     return file === '/sbin/route' ? `interface: ${iface}\n` : table(iface, received, sent)
   }, () => at)
@@ -54,7 +52,7 @@ test('rates need continuous counter evidence and recover explicitly after route 
 test('network instances do not share baselines and disposal rejects late IO before sampling', async () => {
   let at = 0, received = 100
   const run = async (file: string) => file === '/sbin/route' ? 'interface: en0\n' : table('en0', received, 10)
-  const first = new NetworkReader(services, run, () => at), second = new NetworkReader(services, run, () => at)
+  const first = new NetworkReader(pluginSdk, run, () => at), second = new NetworkReader(pluginSdk, run, () => at)
   assert.equal((await first.read()).rxBytesPerSecond, null)
   at = 1000; received = 300
   assert.equal((await first.read()).rxBytesPerSecond, 200)
@@ -67,7 +65,7 @@ test('network instances do not share baselines and disposal rejects late IO befo
   const counters = Promise.withResolvers<string>()
   const started = Promise.withResolvers<void>()
   let sampleReads = 0, signal: AbortSignal | undefined
-  const inFlight = new NetworkReader(services, async (file, _args, currentSignal) => {
+  const inFlight = new NetworkReader(pluginSdk, async (file, _args, currentSignal) => {
     signal = currentSignal
     if (file === '/sbin/route') return 'interface: en0\n'
     started.resolve()

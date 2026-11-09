@@ -5,6 +5,7 @@ import { setImmediate } from 'node:timers/promises'
 import { summarizeDiagnostic } from '../../shared/diagnostics'
 import { MAX_SOURCE_ID_LENGTH, type AgentSnapshot, type ScheduledJob, type ScheduleHistory } from '../../shared/types'
 import { collectionResources, resourceAbortError, ResourceCleanupError } from '../resource-budget'
+import { runBudgetedCommand } from '../resource-io'
 import type { AnyCollectionPlugin, CollectionPluginContext, CollectionPluginDefinition, PluginObserver, PluginPublication, PluginStatus } from './contracts'
 import { CollectionPluginRegistry } from './registry'
 
@@ -885,4 +886,229 @@ test('history disable waits for real reader release and a fresh generation canno
   assert.equal(fresh.offset, 50)
   assert.equal(factories, 2)
   await registry.close()
+})
+
+test('dynamic registration awaits collection before and after start, and removal permits a fresh instance', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] })
+  for (const started of [false, true]) {
+    const observer = observe()
+    const registry = new CollectionPluginRegistry([], observer.observer)
+    const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<AgentSnapshot>()
+    const contexts: CollectionPluginContext<'agents'>[] = []
+    let completed = false, factories = 0, stops = 0
+    if (started) registry.start()
+    const plugin = definition('dynamic', { create: context => {
+      contexts.push(context)
+      const generation = ++factories
+      return { collect: () => { entered.resolve(); return generation === 1 ? release.promise : Promise.resolve(snapshot) }, stop() { stops++ } }
+    } })
+    const registration = registry.register(plugin).then(() => { completed = true })
+    await entered.promise
+    assert.equal(completed, false)
+    await assert.rejects(registry.register(definition('other')), error => code(error) === 'OC_PLUGIN_BUSY')
+    await assert.rejects(registry.setEnabled('dynamic', false), error => code(error) === 'OC_PLUGIN_BUSY')
+    await assert.rejects(registry.unregister('dynamic'), error => code(error) === 'OC_PLUGIN_BUSY')
+    release.resolve(snapshot)
+    await registration
+    assert.equal(observer.snapshots.length, 1)
+    assert.equal(registry.diagnostics().timers, started ? 1 : 0)
+    await assert.rejects(registry.register(plugin), error => code(error) === 'OC_PLUGIN_DEFINITION')
+    await registry.unregister('dynamic')
+    assert.equal(stops, 1)
+    assert.deepEqual(registry.statuses(), [])
+    assert.equal(registry.diagnostics().timers, 0)
+    contexts[0].publish(snapshot)
+    assert.equal(observer.snapshots.length, 1)
+    await registry.register(plugin)
+    assert.equal(factories, 2)
+    contexts[0].publish(snapshot)
+    assert.equal(observer.snapshots.length, 2)
+    await registry.close()
+    assert.equal(stops, 2)
+  }
+})
+
+test('dynamic metadata and dependencies are checked before activation, including disabled consumers on removal', async () => {
+  let factories = 0
+  const registry = new CollectionPluginRegistry([], observe().observer)
+  const consumer = definition('consumer', { dependencies: ['base'], create: () => {
+    factories++
+    return { collect: async () => snapshot, stop() {} }
+  } })
+  await assert.rejects(registry.register(consumer), error => code(error) === 'OC_PLUGIN_DEPENDENCY')
+  await registry.register(definition('base'), false)
+  await assert.rejects(registry.register(consumer), error => code(error) === 'OC_PLUGIN_DEPENDENCY')
+  await registry.register(consumer, false)
+  assert.equal(factories, 0)
+  await assert.rejects(registry.unregister('base'), error => code(error) === 'OC_PLUGIN_DEPENDENCY')
+  await assert.rejects(registry.setEnabled('consumer', true), error => code(error) === 'OC_PLUGIN_DEPENDENCY')
+  await registry.setEnabled('base', true)
+  await registry.setEnabled('consumer', true)
+  assert.equal(factories, 1)
+  await registry.unregister('consumer')
+  await registry.unregister('base')
+  await registry.close()
+})
+
+test('registration failure rolls back cleanly, but failed rollback remains registered and diagnostic', async () => {
+  const collectionFailure = new Error('first collection failed'), cleanupFailure = new Error('cleanup failed')
+  for (const failCleanup of [false, true]) {
+    let stops = 0
+    const registry = new CollectionPluginRegistry([], observe().observer)
+    await assert.rejects(registry.register(definition('broken', { create: () => ({
+      collect: async () => { throw collectionFailure },
+      stop() { stops++; if (failCleanup) throw cleanupFailure }
+    }) })), error => failCleanup ? error instanceof AggregateError && error.errors.includes(collectionFailure) && error.errors.includes(cleanupFailure) : error === collectionFailure)
+    assert.equal(stops, 1)
+    assert.equal(registry.statuses().length, failCleanup ? 1 : 0)
+    if (failCleanup) {
+      assert.equal(registry.statuses()[0].phase, 'failed')
+      await assert.rejects(registry.unregister('broken'), error => error === cleanupFailure)
+      await assert.rejects(registry.close(), AggregateError)
+      assert.equal(stops, 1)
+    } else {
+      await registry.register(definition('broken'))
+      await registry.close()
+    }
+  }
+})
+
+test('unregister rejects new work immediately and drains collection and stop before deleting its entry', async () => {
+  const entered = Promise.withResolvers<void>(), collection = Promise.withResolvers<AgentSnapshot>()
+  const stopping = Promise.withResolvers<void>(), cleanup = Promise.withResolvers<void>()
+  const observer = observe()
+  let context!: CollectionPluginContext<'agents'>, finished = false
+  const registry = new CollectionPluginRegistry([definition('sample', { create: value => {
+    context = value
+    return { collect: () => { entered.resolve(); return collection.promise }, stop: async () => { stopping.resolve(); await cleanup.promise } }
+  } })], observer.observer)
+  const collected = assert.rejects(registry.collect('sample'), { name: 'AbortError' })
+  await entered.promise
+  const removal = registry.unregister('sample')
+  assert.equal(registry.unregister('sample'), removal)
+  const removed = removal.then(() => { finished = true })
+  assert.equal(context.signal.aborted, true)
+  await assert.rejects(registry.collect('sample'), error => code(error) === 'OC_PLUGIN_DISABLED')
+  await assert.rejects(registry.setEnabled('sample', true), error => code(error) === 'OC_PLUGIN_BUSY')
+  context.publish(snapshot)
+  collection.resolve(snapshot)
+  await stopping.promise
+  assert.equal(finished, false)
+  assert.equal(registry.statuses().length, 1)
+  cleanup.resolve()
+  await Promise.all([collected, removed])
+  assert.deepEqual(registry.statuses(), [])
+  assert.deepEqual(observer.snapshots, [])
+  await registry.close()
+})
+
+test('close supersedes dynamic registration and drains its rollback without leaking timers or instances', async () => {
+  for (const phase of ['queued', 'collecting'] as const) {
+    const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<AgentSnapshot>()
+    let factories = 0, stops = 0
+    const registry = new CollectionPluginRegistry([], observe().observer)
+    registry.start()
+    const registration = assert.rejects(registry.register(definition('dynamic', { create: () => {
+      factories++
+      return { collect: () => { entered.resolve(); return release.promise }, stop() { stops++ } }
+    } })), { name: 'AbortError' })
+    if (phase === 'collecting') await entered.promise
+    const closing = registry.close()
+    release.resolve(snapshot)
+    await Promise.all([registration, closing])
+    assert.equal(factories, phase === 'queued' ? 0 : 1)
+    assert.equal(stops, factories)
+    assert.deepEqual(registry.statuses(), [])
+    assert.equal(registry.diagnostics().pending, 0)
+    assert.equal(registry.diagnostics().timers, 0)
+    await assert.rejects(registry.register(definition()), error => code(error) === 'OC_PLUGIN_CLOSED')
+  }
+})
+
+test('registration cancellation owns the first collection only and detaches its signal after success or rollback', async () => {
+  const observer = observe()
+  const registry = new CollectionPluginRegistry([], observer.observer)
+  const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<AgentSnapshot>()
+  const operation = new AbortController()
+  let context!: CollectionPluginContext<'agents'>, stops = 0
+  const registration = assert.rejects(registry.register(definition('dynamic', { create: value => {
+    context = value
+    return { collect: () => { entered.resolve(); return release.promise }, stop() { stops++ } }
+  } }), true, operation.signal), { name: 'AbortError' })
+  await entered.promise
+  operation.abort()
+  assert.equal(context.signal.aborted, true)
+  release.resolve(snapshot)
+  await registration
+  assert.equal(stops, 1)
+  assert.deepEqual(registry.statuses(), [])
+  assert.deepEqual(observer.snapshots, [])
+  assert.equal(getEventListeners(operation.signal, 'abort').length, 0)
+  const next = new AbortController()
+  await registry.register(definition('dynamic'), true, next.signal)
+  assert.equal(getEventListeners(next.signal, 'abort').length, 0)
+  next.abort()
+  assert.equal(registry.statuses()[0].enabled, true)
+  await registry.collect('dynamic')
+  await registry.close()
+})
+
+test('close during unregister waits for its single cleanup and rejects further registration', async () => {
+  const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>()
+  let stops = 0, closed = false
+  const registry = new CollectionPluginRegistry([], observe().observer)
+  await registry.register(definition('dynamic', { create: () => ({
+    collect: async () => snapshot, stop: async () => { stops++; entered.resolve(); await release.promise }
+  }) }))
+  const removal = registry.unregister('dynamic')
+  await entered.promise
+  const closing = registry.close().then(() => { closed = true })
+  await assert.rejects(registry.register(definition('other')), error => code(error) === 'OC_PLUGIN_CLOSED')
+  assert.equal(closed, false)
+  release.resolve()
+  await Promise.all([removal, closing])
+  assert.equal(stops, 1)
+  assert.deepEqual(registry.statuses(), [])
+  assert.equal(registry.diagnostics().pending, 0)
+})
+
+test('cancelled asynchronous registration drains the returned instance without starting or collecting it', async () => {
+  const entered = Promise.withResolvers<void>(), factory = Promise.withResolvers<void>()
+  const stopping = Promise.withResolvers<void>(), cleanup = Promise.withResolvers<void>()
+  const operation = new AbortController(), observer = observe()
+  const registry = new CollectionPluginRegistry([], observer.observer)
+  let context!: CollectionPluginContext<'agents'>, starts = 0, collects = 0, stops = 0, completed = false
+  const registration = registry.register(definition('dynamic', { create: async value => {
+    context = value
+    assert.equal(value.resources, collectionResources)
+    assert.equal(value.command, runBudgetedCommand)
+    entered.resolve()
+    await factory.promise
+    value.publish(snapshot)
+    return { start() { starts++ }, collect: async () => { collects++; return snapshot },
+      stop: async () => { stops++; stopping.resolve(); await cleanup.promise } }
+  } }), true, operation.signal)
+  const cancelled = assert.rejects(registration, { name: 'AbortError' }).then(() => { completed = true })
+  await entered.promise
+  operation.abort()
+  assert.equal(context.signal.aborted, true)
+  factory.resolve()
+  await stopping.promise
+  assert.equal(completed, false)
+  assert.equal(registry.statuses().length, 1)
+  await assert.rejects(registry.register(definition('dynamic')), error => code(error) === 'OC_PLUGIN_BUSY')
+  assert.equal(starts, 0)
+  assert.equal(collects, 0)
+  assert.equal(observer.snapshots.length, 0)
+  cleanup.resolve()
+  await cancelled
+  assert.equal(stops, 1)
+  assert.deepEqual(registry.statuses(), [])
+  await registry.register(definition('dynamic'))
+  context.publish({ ...snapshot, collectedAt: 'retired factory' })
+  assert.equal(observer.snapshots.length, 1)
+  assert.equal(observer.snapshots[0].snapshot.collectedAt, snapshot.collectedAt)
+  await registry.close()
+  assert.equal(registry.diagnostics().pending, 0)
+  assert.equal(registry.diagnostics().timers, 0)
 })
