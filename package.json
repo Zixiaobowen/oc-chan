@@ -26,7 +26,9 @@
     "audit:dependencies": "node scripts/dependency-review.mjs",
     "hooks:install": "git config --local core.hooksPath .githooks",
     "install:local": "node scripts/install-local.mjs",
-    "test:install": "node --import tsx --test scripts/install-local.test.mjs src/main/installation-check.test.ts"
+    "cleanup:local": "node scripts/local-app-lifecycle.mjs",
+    "push:main": "node scripts/push-main.mjs",
+    "test:install": "node --import tsx --test scripts/install-local.test.mjs scripts/local-app-lifecycle.test.mjs scripts/push-main.test.mjs src/main/installation-check.test.ts"
   },
   "devDependencies": {
     "@dagrejs/dagre": "^3.1.3",
