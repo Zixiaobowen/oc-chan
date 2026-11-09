@@ -5,7 +5,6 @@ import { pathToFileURL } from 'node:url'
 import { release as osRelease } from 'node:os'
 import { version as appVersion } from '../../package.json'
 import { Monitor } from './monitor'
-import { createSystemPlugin } from './plugins/system'
 import { createAgentsPlugin } from './plugins/agents'
 import { createSchedulesPlugin } from './plugins/schedules'
 import { createEventsPlugin } from './plugins/events'
@@ -32,6 +31,8 @@ import { buildDiagnosticReport } from './diagnostic-report'
 import { applyWindowMaterial } from './liquid-glass'
 import { AppUpdatesPlugin } from './plugins/app-updates'
 import type { AppPlugin } from '../shared/plugins'
+import { PluginMarketplace } from './marketplace/manager'
+import type { MarketplaceSnapshot } from '../shared/marketplace'
 
 app.setName('OC Chan')
 const developmentInstance = app.isPackaged ? undefined : process.env.OC_CHAN_DEV_INSTANCE
@@ -71,7 +72,7 @@ const eventNotifications = new EventNotifications({
     }
   })
 })
-const monitor: Monitor = new Monitor({ plugins: [createAgentsPlugin(), createSchedulesPlugin(), createSystemPlugin(),
+const monitor: Monitor = new Monitor({ plugins: [createAgentsPlugin(), createSchedulesPlugin(),
   createEventsPlugin({ databasePath: () => path.join(app.getPath('userData'), 'events', 'events.sqlite'), notifications: eventNotifications, inputs: () => ({
     snapshot: monitor.state,
     enabled: Object.fromEntries(monitor.pluginStatuses().map(plugin => [plugin.section, plugin.enabled])) as PluginSettings
@@ -95,6 +96,7 @@ let tray: Tray | null = null
 let trayMenu: Menu | undefined
 let settings: SettingsStore | undefined
 let geometry: WindowGeometry | undefined
+let marketplace: PluginMarketplace | undefined
 let glassPreview: number | null = null
 let recoveryWindow: BrowserWindow | null = null
 let closeRecovery: (() => Promise<void>) | undefined
@@ -392,10 +394,19 @@ function recoverStartupSettings(filename: string, error: unknown): Promise<AppSe
   })
 }
 
+function broadcastMarketplace(snapshot: MarketplaceSnapshot): void {
+  if (quitting) return
+  for (const target of [window, trayPanel.window]) {
+    if (target && !target.isDestroyed()) target.webContents.send('plugins:changed', snapshot)
+  }
+}
+
 async function applyPlugins(value: PluginSettings): Promise<void> {
   for (const plugin of monitor.pluginStatuses()) {
     const enabled = value[plugin.section]
     if (plugin.enabled === enabled) continue
+    if (marketplace?.snapshot().operation?.id === plugin.id)
+      throw new Error('插件正在安装或卸载，请完成后再更改采集设置 / Finish the plugin operation before changing collection settings')
     try { await monitor.setPluginEnabled(plugin.id, enabled) }
     catch (error) { throw new DiagnosticError('settings-apply', error, undefined, plugin.section) }
   }
@@ -407,7 +418,12 @@ async function releaseResources(): Promise<void> {
   cancelEventQuery()
   if (diagnosticDialogOwner) cancelWindowDiagnostics(diagnosticDialogOwner)
   await drainShutdown({
-    monitor: async () => { await Promise.all([monitor.stop(), installationWork, ...plugins.map(plugin => plugin.stop())]) },
+    monitor: async () => {
+      const outcomes = await Promise.allSettled([marketplace?.close()])
+      outcomes.push(...await Promise.allSettled([monitor.stop(), installationWork, ...plugins.map(plugin => plugin.stop())]))
+      const failures = outcomes.filter(result => result.status === 'rejected').map(result => result.reason)
+      if (failures.length) throw new AggregateError(failures, 'Plugin shutdown failed')
+    },
     navigation: () => ternNavigation.close(),
     diagnostics: () => diagnostics.close(),
     settings: async () => {
@@ -467,8 +483,18 @@ else {
       for (const target of [window, trayPanel.window]) {
         if (target && !target.isDestroyed()) applyWindowMaterial(target, appearance)
       }
+      if (marketplace) broadcastMarketplace(marketplace.snapshot())
     })
     await applyPlugins(initial.plugins)
+    marketplace = new PluginMarketplace({
+      directory: path.join(app.getPath('userData'), 'plugins'),
+      bundledDirectory: app.isPackaged ? path.join(process.resourcesPath, 'plugin-market') : path.join(__dirname, '../plugin-market'),
+      appVersion,
+      monitor,
+      enabled: section => settings!.value.plugins[section],
+      changed: broadcastMarketplace
+    })
+    await marketplace.initialize()
     await desktop.apply(initial)
     updateMenus(initial)
     const protect = createIpcGuard({ mainWindow: () => window, trayWindow: () => trayPanel.window,
@@ -476,6 +502,12 @@ else {
     const handle = <K extends Exclude<IpcChannel, 'monitor:cancel-schedule-history' | 'monitor:cancel-events' | 'monitor:subscription'>>(
       channel: K, action: (...args: IpcArguments[K]) => unknown
     ) => ipcMain.handle(channel, protect(channel, action))
+    handle('plugins:snapshot', () => marketplace!.snapshot())
+    handle('plugins:check', () => marketplace!.check())
+    handle('plugins:install', async id => { await settings!.idle(); return marketplace!.install(id) })
+    handle('plugins:update', async id => { await settings!.idle(); return marketplace!.update(id) })
+    handle('plugins:uninstall', async id => { await settings!.idle(); return marketplace!.uninstall(id) })
+    handle('plugins:cancel', () => marketplace!.cancel())
     handle('settings:snapshot', async () => {
       await settings!.idle()
       return settingsSnapshot()

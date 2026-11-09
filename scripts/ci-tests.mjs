@@ -10,9 +10,10 @@ export const suites = {
   history: ['src/main/schedule-history.test.ts', 'src/main/collectors/hermes-history.test.ts'],
   events: ['src/main/events/store.test.ts', 'src/main/events/hermes.test.ts', 'src/main/events/collector.test.ts'],
   notifications: ['src/main/events/notifications.test.ts', 'src/main/events/notification-journal.test.ts', 'src/main/events/native-notifications.test.ts'],
-  system: ['src/main/collectors/system.test.ts', 'src/main/collectors/network.test.ts'],
+  system: ['plugins/system-monitor/system.test.ts', 'plugins/system-monitor/network.test.ts'],
   monitor: ['src/main/monitor.test.ts', 'src/main/shutdown.test.ts'],
   plugins: ['src/main/plugins/registry.test.ts', 'src/main/plugins/agents.test.ts', 'src/main/plugins/schedules.test.ts'],
+  marketplace: ['src/main/marketplace/manager.test.ts', 'src/main/marketplace/io.test.ts', 'scripts/build-plugin-market.test.mjs'],
   resources: ['src/main/resource-budget.test.ts', 'src/main/resource-io.test.ts', 'src/main/collection-limits.test.ts'],
   topology: ['src/renderer/src/agent-topology.test.ts', 'src/renderer/src/agent-topology-3d-layout.test.ts'],
   views: ['src/renderer/src/view-state.test.ts'],
@@ -21,14 +22,14 @@ export const suites = {
   settings: ['src/main/settings.test.ts', 'src/main/window-geometry.test.ts', 'src/main/startup-recovery.test.ts', 'src/main/login-items.test.ts'],
   diagnostics: ['src/shared/diagnostics.test.ts', 'src/main/diagnostic-report.test.ts', 'src/main/diagnostics.test.ts'],
   ipc: ['src/main/ipc-boundary.test.ts', 'src/main/monitor-subscriptions.test.ts', 'src/main/tray-window.test.ts'],
-  install: ['scripts/install-local.test.mjs', 'src/main/installation-check.test.ts'],
+  install: ['scripts/install-local.test.mjs', 'scripts/local-app-lifecycle.test.mjs', 'scripts/push-main.test.mjs', 'src/main/installation-check.test.ts'],
   updates: ['src/main/app-updates.test.ts', 'scripts/prepare-release.test.mjs'],
   packaging: ['scripts/check-package.test.mjs', 'scripts/dependency-review.test.mjs'],
   delivery: ['scripts/local-delivery.test.mjs', 'scripts/delivery-source.test.mjs', 'scripts/delivery-zip.test.mjs'],
   performance: ['scripts/performance/core.test.mjs', 'scripts/performance/measurement.test.mjs', 'scripts/performance/fixtures.test.mjs', 'scripts/performance/soak-scenario.test.mjs', 'scripts/performance/sampler.test.mjs'],
   ci: ['scripts/ci-tests.test.mjs']
 }
-const product = ['agents', 'schedules', 'history', 'events', 'notifications', 'system', 'monitor', 'plugins', 'resources', 'topology', 'views', 'navigation', 'tern', 'settings', 'diagnostics', 'ipc', 'updates']
+const product = ['agents', 'schedules', 'history', 'events', 'notifications', 'system', 'monitor', 'plugins', 'marketplace', 'resources', 'topology', 'views', 'navigation', 'tern', 'settings', 'diagnostics', 'ipc', 'updates']
 const all = Object.keys(suites)
 const rules = [
   [/^(package(?:-lock)?\.json|tsconfig\.json|electron\.vite\.config\.ts)$/, all, '依赖或构建契约变更'],
@@ -44,8 +45,10 @@ const rules = [
   [/^src\/main\/(?:collectors\/hermes-history|schedule-history)\.ts$/, ['history', 'plugins', 'monitor'], '执行历史及来源生命周期'],
   [/^src\/main\/events\/(?:notifications|notification-journal|notification-contracts|native-notifications)\.ts$|^src\/shared\/notifications\.ts$/, ['notifications', 'events', 'settings', 'ipc'], '本地通知、去重限流与偏好边界'],
   [/^src\/main\/events\/|^src\/shared\/events\.ts$/, ['events', 'plugins', 'monitor', 'ipc'], '本地事件采集、持久游标与有界查询'],
-  [/^src\/main\/collectors\/(?:system|network)\.ts$/, ['system', 'monitor'], '系统采集及直接调用方'],
+  [/^plugins\/system-monitor\//, ['system', 'monitor', 'plugins', 'packaging'], '独立系统监控插件及调用方'],
+  [/^plugin-market\//, ['marketplace', 'packaging'], '官方在线发布目录及独立插件包'],
   [/^src\/main\/plugins\/(?:app-updates|native-update|update-controller|update-source)\.ts$|^src\/shared\/(?:updates|plugins)\.ts$|^src\/renderer\/src\/(?:UpdateSettings|updates)\.tsx$|^scripts\/(?:dist|release-config|prepare-release|publish-release)\.mjs$/, ['updates', 'monitor', 'ipc', 'packaging'], '应用更新、原生交接与发布元数据'],
+  [/^src\/main\/marketplace\/|^src\/shared\/marketplace\.ts$|^src\/renderer\/src\/(?:MarketplaceView|SystemPluginNotice|marketplace)\.tsx$/, ['marketplace', 'monitor', 'plugins', 'ipc', 'install'], '可分发插件安装、更新、卸载及市场边界'],
   [/^src\/main\/plugins\//, ['plugins', 'monitor', 'agents', 'schedules', 'history', 'events', 'notifications', 'system', 'settings'], '采集插件契约与生命周期'],
   [/^src\/main\/monitor\.ts$/, ['monitor', 'plugins', 'agents', 'schedules', 'history', 'events', 'system'], '采集调度与历史入口'],
   [/^src\/main\/shutdown\.ts$/, ['monitor', 'history', 'notifications', 'tern', 'diagnostics'], '应用退出排空与诊断'],
@@ -64,11 +67,12 @@ const rules = [
   [/^src\/renderer\/src\/(?:SystemView|SystemMetrics)\.tsx$/, ['system'], '系统指标消费者'],
   [/^src\/renderer\/src\/(?:SettingsView|SettingsSaveError|StartupRecoveryView|LoginItemSetting|LiquidGlassSetting|NotificationSettings|TaskNotificationSubscription|ThemePicker|SidebarResizeHandle|settings)\.tsx$/, ['settings', 'notifications'], '偏好消费者'],
   [/^src\/renderer\/src\/(?:App|TrayView|components|main|i18n)\.tsx$/, ['topology', 'views', 'navigation', 'history', 'events', 'settings'], '跨视图入口'],
-  [/^scripts\/install-(?:local|validation)\.mjs$|^\.githooks\//, ['install', 'packaging'], '本机安装预检与事务'],
+  [/^scripts\/(?:install-(?:local|validation)|local-app-lifecycle|push-main)\.mjs$|^\.githooks\//, ['install', 'packaging'], '本机安装、调试资源归属与推送后清理'],
   [/^scripts\/performance\//, ['performance'], '测量工具'],
   [/^scripts\/smoke-renderer\.mjs$|^scripts\/smoke\//, ['performance', 'ci'], '真实Electron smoke及夹具入口'],
   [/^scripts\/develop\.mjs$/, ['performance', 'install'], '开发启动与打包入口'],
   [/^scripts\/build-(?:native|glass|notifications)\.mjs$/, ['packaging', 'install', 'delivery'], '原生产物与安装校验'],
+  [/^scripts\/build-plugin-market\.mjs$/, ['marketplace', 'system', 'packaging', 'delivery'], '独立插件包构建与交付'],
   [/^scripts\/smoke\.ts$/, ['agents', 'schedules', 'system', 'monitor'], '只读采集smoke调用方'],
   [/^scripts\/ci-tests\.mjs$|^\.github\/workflows\//, ['ci'], 'CI选择与执行门禁'],
   [/^scripts\/(?:check-package|dependency-review)\.mjs$|^scripts\/bundled-licenses\.ts$|^docs\/(?:package-baseline|dependency-review-policy)\.json$/, ['packaging', 'install'], '发布包内容、体积、许可证和公告门禁'],
@@ -103,7 +107,7 @@ export function selectTests(files, fullReason, removedFiles = []) {
     reasons.add(rule[2])
   }
   const rendererSmoke = files.some(file => !/\.test\.(?:ts|mjs)$/.test(file) &&
-    /^(?:src\/|scripts\/(?:smoke-renderer\.mjs$|smoke\/|develop\.mjs$|build-(?:native|glass|notifications)\.mjs$|performance\/)|(?:package(?:-lock)?\.json|tsconfig\.json|electron\.vite\.config\.ts)$|\.github\/workflows\/)/.test(file))
+    /^(?:src\/|plugins\/|plugin-market\/|scripts\/(?:smoke-renderer\.mjs$|smoke\/|develop\.mjs$|build-(?:native|glass|notifications|plugin-market)\.mjs$|performance\/)|(?:package(?:-lock)?\.json|tsconfig\.json|electron\.vite\.config\.ts)$|\.github\/workflows\/)/.test(file))
   return { tests: [...selected].sort(), reasons: [...reasons].sort(), rendererSmoke }
 }
 
@@ -157,7 +161,7 @@ function main() {
   const planOnly = args[0] === '--plan'
   if (planOnly) args.shift()
   if (args.some(arg => arg.startsWith('-'))) throw new Error('Usage: npm run test:ci -- [--plan] [changed/path ...]')
-  validateTestCoverage(globSync(['src/**/*.test.ts', 'scripts/**/*.test.mjs'], { cwd: root }))
+  validateTestCoverage(globSync(['src/**/*.test.ts', 'plugins/**/*.test.ts', 'scripts/**/*.test.mjs'], { cwd: root }))
   const range = args.length ? {} : changeRange(process.env)
   const changes = args.length || range.fullReason ? { files: args, removed: [] } : changedFiles(range.base)
   const plan = selectTests(changes.files, range.fullReason, changes.removed)

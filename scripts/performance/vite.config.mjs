@@ -16,7 +16,11 @@ const prepend = (target, probe) => ({
     if (target === 'src/main/index.ts') {
       const calls = source.match(/\bcreateAgentsPlugin\(\)/g)
       if (calls?.length !== 1) throw new Error('Expected one explicit Agent plugin factory in the application entry')
-      const instrumented = source.replace(/\bcreateAgentsPlugin\(\)/, 'createPerformanceAgentsPlugin()')
+      let instrumented = source.replace(/\bcreateAgentsPlugin\(\)/, 'createPerformanceAgentsPlugin()')
+      if (!config.smoke?.marketplace) {
+        if ((instrumented.match(/await marketplace\.initialize\(\)/g) ?? []).length !== 1) throw new Error('Expected one plugin marketplace initialization')
+        instrumented = instrumented.replace('await marketplace.initialize()', 'await marketplace.initialize(); await marketplace.install("system")')
+      }
       return { code: `import { createPerformanceAgentsPlugin } from ${JSON.stringify(path.join(root, 'scripts/performance', probe))};\n${instrumented}`, map: null }
     }
     return { code: `import ${JSON.stringify(path.join(root, 'scripts/performance', probe))};\n${source}`, map: null }

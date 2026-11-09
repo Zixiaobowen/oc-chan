@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { EvidenceLog, Protocol, readLines, until } from './performance/core.mjs'
 import { prepareFixtures } from './performance/fixtures.mjs'
 import { exerciseSmoke, verifyRestart } from './smoke/scenarios.mjs'
+import { createMarketFeed } from './smoke/marketplace-feed.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const exec = promisify(execFile)
@@ -21,13 +22,13 @@ const options = { fault: null }
 for (let index = 2; index < process.argv.length; index += 2) {
   const key = process.argv[index]
   if (!['--fault', '--out', '--scenario'].includes(key) || !process.argv[index + 1] || Object.hasOwn(options, key))
-    throw new Error('Usage: node scripts/smoke-renderer.mjs [--scenario all|notifications|topology] [--fault fixture|ipc] [--out NEW_DIRECTORY]')
+    throw new Error('Usage: node scripts/smoke-renderer.mjs [--scenario all|notifications|topology|marketplace] [--fault fixture|ipc] [--out NEW_DIRECTORY]')
   options[key] = process.argv[index + 1]
 }
 options.fault = options['--fault'] ?? null
 if (options.fault !== null && !['fixture', 'ipc'].includes(options.fault)) throw new Error('Unknown smoke fault')
 options.scenario = options['--scenario'] ?? 'all'
-if (!['all', 'notifications', 'topology'].includes(options.scenario) || options.fault && options.scenario !== 'all') throw new Error('Unknown smoke scenario or incompatible fault')
+if (!['all', 'notifications', 'topology', 'marketplace'].includes(options.scenario) || options.fault && options.scenario !== 'all') throw new Error('Unknown smoke scenario or incompatible fault')
 if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('Renderer smoke currently requires macOS arm64')
 if (typeof WebSocket !== 'function') throw new Error('Renderer smoke requires Node with the built-in WebSocket API')
 const output = options['--out'] ? path.resolve(options['--out']) : await mkdtemp(path.join(os.tmpdir(), 'oc-chan-smoke-evidence-'))
@@ -43,7 +44,7 @@ const result = { schema: 1, startedAt: new Date().toISOString(), complete: false
 result.scope.scenario = options.scenario
 const abort = new AbortController()
 let current, workDirectory, recordCount = 0, screenshots = 0, screenshotBytes = 0
-let activeWork
+let activeWork, marketFeed
 const fail = error => { if (!abort.signal.aborted) abort.abort(error instanceof Error ? error : new Error(String(error))) }
 const errorText = error => String(error?.stack ?? error).slice(0, 16384)
 function record(name, details) {
@@ -155,11 +156,12 @@ class Instance {
     this.evidence = { label, cleanup: {} }
     result.runs.push(this.evidence)
   }
-  async start(manifest, settingsSeed) {
+  async start(manifest, settingsSeed, pluginSeed) {
     this.exitReport = path.join(output, `${this.label}-exit.json`)
     const filename = path.join(workDirectory, `${this.label}-config.json`)
     await writeFile(filename, JSON.stringify({ level: 'L1', seed: 20261104, fixture: manifest,
-      smoke: { exitReport: this.exitReport, ...(settingsSeed ? { settingsSeed } : {}) } }), { flag: 'wx', mode: 0o600 })
+      smoke: { exitReport: this.exitReport, ...(settingsSeed ? { settingsSeed } : {}),
+        ...(options.scenario === 'marketplace' ? { marketplace: true, marketplaceFeed: marketFeed.url, pluginSeed } : {}) } }), { flag: 'wx', mode: 0o600 })
     this.launcher = spawn(process.execPath, ['scripts/develop.mjs', '--inspect'], {
       cwd: root, env: { ...process.env, OC_CHAN_SMOKE_CONFIG: filename, OC_CHAN_PERFORMANCE_CONFIG: filename },
       stdio: ['ignore', 'pipe', 'pipe']
@@ -182,7 +184,7 @@ class Instance {
         this.instance = directory
       }
       if (group) {
-        if (this.groups.size >= 2) throw new Error('Unexpected development process restart')
+        if (this.groups.size >= 3) throw new Error('Unexpected development process restart')
         this.groups.add(Number(group[1]))
       }
       if (inspector) { if (this.inspectorUrl) throw new Error('Main process restarted during smoke'); this.inspectorUrl = inspector[1] }
@@ -211,7 +213,10 @@ class Instance {
     const nativeViewport = await this.main.evaluate('globalThis.__ocSmokeControl.setViewportSize(1280, 860)')
     record('native-viewport', nativeViewport)
     await this.renderer.call('Emulation.setDeviceMetricsOverride', { width: 1280, height: 860, deviceScaleFactor: 1, mobile: false })
-    await until(() => this.renderer.evaluate('Boolean(window.__ocPerfState?.ready && window.monitor && window.desktopSettings)'), { timeout: 60000, signal: abort.signal })
+    const ready = options.scenario === 'marketplace'
+      ? 'Boolean(window.monitor && window.desktopSettings && window.pluginMarketplace && document.querySelector(".app-shell"))'
+      : 'Boolean(window.__ocPerfState?.ready && window.monitor && window.desktopSettings)'
+    await until(() => this.renderer.evaluate(ready), { timeout: 60000, signal: abort.signal })
     await this.hidden('startup')
     this.evidence.instance = this.instance
     this.evidence.processGroups = [...this.groups]
@@ -302,11 +307,12 @@ try {
   const manifest = await stage('prepare-fixtures', 60000, () => prepareFixtures(fixtureRoot, { seed: 20261104 }))
   record('fixture-scope', { seed: manifest.seed, syntheticAgents: 32, sessions: manifest.sessions.length,
     hermesJobs: manifest.hermesJobIds.length, historyRows: manifest.historyRows, plistCount: manifest.plistCount })
+  if (options.scenario === 'marketplace') marketFeed = await stage('prepare-marketplace-feed', 30000, () => createMarketFeed(workDirectory))
   current = new Instance('first')
   await stage('first-startup', limits.startupMs, () => current.start(manifest))
   await capture('startup')
   const exercised = await stage('exercise-smoke', limits.scenarioMs, () => exerciseSmoke({
-    main: current.main, renderer: current.renderer, manifest, record, capture, fault: options.fault, scenario: options.scenario
+    main: current.main, renderer: current.renderer, manifest, record, capture, fault: options.fault, scenario: options.scenario, feed: marketFeed
   }))
   if (options.fault) throw new Error(`Injected ${options.fault} fault did not fail its required assertion`)
   const savedBytes = await stage('read-real-settings', 10000, async () => {
@@ -322,15 +328,23 @@ try {
     return bytes
   })
   const firstProfile = current.instance
+  let pluginSeed
+  if (options.scenario === 'marketplace') {
+    pluginSeed = path.join(output, 'saved-system.ocplugin')
+    const bytes = await boundedFile(path.join(current.instance, 'user-data/plugins/system.ocplugin'), 2 * 1024 * 1024)
+    await writeFile(pluginSeed, bytes, { flag: 'wx', mode: 0o600 })
+    record('actual-plugin-saved', { bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') })
+  }
   await stage('first-normal-exit', 30000, () => current.quit())
   current = new Instance('restart')
-  await stage('restart-startup', limits.startupMs, () => current.start(manifest, path.join(output, 'saved-settings.json')))
+  await stage('restart-startup', limits.startupMs, () => current.start(manifest, path.join(output, 'saved-settings.json'), pluginSeed))
   assert.notEqual(current.instance, firstProfile, 'Restart must use an independent profile')
   const restartedBytes = await boundedFile(path.join(current.instance, 'user-data/settings.json'), limits.settingsBytes)
   assert.ok(savedBytes.equals(restartedBytes), 'Restart did not read the exact saved settings bytes')
   record('restart-seed-identical', { bytes: restartedBytes.length, sha256: createHash('sha256').update(restartedBytes).digest('hex') })
   await stage('verify-restart', limits.restartMs, () => verifyRestart({ main: current.main, renderer: current.renderer,
     savedSettings: JSON.parse(savedBytes.toString('utf8')), record, capture, scenario: options.scenario }))
+  if (options.scenario === 'marketplace') assert.ok(await absent(path.join(current.instance, 'user-data/plugins/system.ocplugin')), 'Uninstall left the executable package on disk')
   await stage('restart-normal-exit', 30000, () => current.quit())
   result.complete = true
 } catch (error) {
@@ -344,6 +358,9 @@ try {
   clearTimeout(totalTimer)
   if (current) {
     try { await current.cleanup() } catch (error) { result.complete = false; rememberError('instance-cleanup', error) }
+  }
+  if (marketFeed) {
+    try { await marketFeed.close() } catch (error) { result.complete = false; rememberError('marketplace-feed-cleanup', error) }
   }
   let settled = !activeWork
   if (activeWork) {

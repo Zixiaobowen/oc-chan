@@ -3,13 +3,18 @@ import type { SystemSnapshot } from '../../shared/types'
 import { bytes, Chart, duration, Empty, Meter, NativeSelect, Sources, time } from './components'
 import { MemoryBreakdown, NetworkTraffic, ProcessRanking } from './SystemMetrics'
 import { useI18n } from './i18n'
+import { useSystemPlugin } from './marketplace'
+import SystemPluginNotice from './SystemPluginNotice'
 
-export default function SystemView({ data, enabled, processOrder, onProcessOrderChange }: {
-  data: SystemSnapshot | null; enabled: boolean; processOrder: 'cpu' | 'memory'; onProcessOrderChange: (order: 'cpu' | 'memory') => void
+export default function SystemView({ data, enabled, processOrder, onProcessOrderChange, onOpenMarketplace }: {
+  data: SystemSnapshot | null; enabled: boolean; processOrder: 'cpu' | 'memory'; onProcessOrderChange: (order: 'cpu' | 'memory') => void; onOpenMarketplace: () => void
 }) {
   const { language, t } = useI18n()
+  const { installed, item } = useSystemPlugin()
+  if (!installed || (!data && item?.error)) return <div className="panel"><SystemPluginNotice onOpen={onOpenMarketplace} /></div>
   if (!data) return <div className="panel"><Empty title={enabled ? t('正在采样系统状态', 'Sampling system status') : t('系统采集已停用', 'System collection disabled')}>{enabled ? t('CPU、内存、磁盘和默认网络接口。', 'CPU, memory, disk and the default network interface.') : t('尚无快照。可在数据来源中开启系统采集。', 'No snapshot yet. Enable system collection in Data sources.')}</Empty></div>
   return <div className="system-view">
+    {item?.error && <div className="panel"><SystemPluginNotice onOpen={onOpenMarketplace} /></div>}
     <div className="machine-strip"><div><Cpu size={17} /><strong>{data.cpuModel}</strong><span>{t(`${data.cpuCores} 核心`, `${data.cpuCores} cores`)}</span></div><span>{t('已运行', 'Uptime')} {duration(data.uptimeSeconds, language)} · {time(data.collectedAt, language)}</span></div>
     <div className="system-grid">
       <section className="panel chart-panel">

@@ -8,6 +8,8 @@ import { useSettings } from './settings'
 import './settings.css'
 import './tray.css'
 import { agentTarget, scheduleTarget, type NavigationTarget } from '../../shared/navigation'
+import { useSystemPlugin } from './marketplace'
+import SystemPluginNotice from './SystemPluginNotice'
 
 const panels = ['overview', 'cpu', 'memory', 'disk', 'network'] as const
 type TrayPanel = typeof panels[number]
@@ -66,6 +68,8 @@ function MetricSection({ data, panel, enabled }: { data: SystemSnapshot | null; 
 export default function TrayView() {
   const { t, language } = useI18n()
   const { snapshot: { settings } } = useSettings()
+  const { installed: systemInstalled, item: systemItem } = useSystemPlugin()
+  const systemReady = systemInstalled === true && (!systemItem?.error || systemItem.enabled)
   const [snapshot, setSnapshot] = useState(empty)
   const [selectedPanels, setSelectedPanels] = useState<TrayPanel[]>([...panels])
   const [visible, setVisible] = useState(!document.hidden)
@@ -108,10 +112,13 @@ export default function TrayView() {
     }).catch(cause => { if (active) setError(String(cause)) })
     return () => { active = false; unsubscribe() }
   }, [visible])
-  const system = snapshot.system.data
+  useEffect(() => {
+    if (systemInstalled === false) setSnapshot(previous => ({ ...previous, system: empty.system }))
+  }, [systemInstalled])
+  const system = systemReady ? snapshot.system.data : null
   const agents = snapshot.agents.data
   const jobs = snapshot.schedules.data?.jobs.filter(job => job.kind === 'calendar' || job.kind === 'interval')
-  const sections = (['agents', 'schedules', 'system'] as const).filter(section => settings.plugins[section] && (selectedPanels.includes('overview') || section === 'system'))
+  const sections = (['agents', 'schedules', 'system'] as const).filter(section => settings.plugins[section] && (section !== 'system' || systemReady) && (selectedPanels.includes('overview') || section === 'system'))
   const sources = sections.map(section => snapshot[section])
   const collectionError = sources.find(state => state.error)?.error
   const problems = sources.flatMap(state => state.data?.sources.filter(source => source.state !== 'ok' && source.state !== 'empty' && source.state !== 'disabled') ?? [])
@@ -153,10 +160,10 @@ export default function TrayView() {
           <button className="text-button" onClick={() => void openMain({ kind: 'page', page: 'schedules' })}>{t('全部任务', 'All tasks')}</button>
         </details>
       </>}
-      {selectedPanels.some(panel => panel !== 'overview') && <CollectionStatus enabled={settings.plugins.system} collectedAt={system?.collectedAt} label={t('系统监控', 'System monitor')} />}
-      <div className="tray-metrics">{panels.filter((panel): panel is Exclude<TrayPanel, 'overview'> => panel !== 'overview' && selectedPanels.includes(panel)).map(panel => <MetricSection key={panel} data={system} panel={panel} enabled={settings.plugins.system} />)}</div>
+      {selectedPanels.some(panel => panel !== 'overview') && (systemReady ? <CollectionStatus enabled={settings.plugins.system} collectedAt={system?.collectedAt} label={t('系统监控', 'System monitor')} /> : <SystemPluginNotice onOpen={() => void openMain({ kind: 'page', page: 'plugins' })} />)}
+      {systemReady && <div className="tray-metrics">{panels.filter((panel): panel is Exclude<TrayPanel, 'overview'> => panel !== 'overview' && selectedPanels.includes(panel)).map(panel => <MetricSection key={panel} data={system} panel={panel} enabled={settings.plugins.system} />)}</div>}
       {selectedPanels.length === 0 && <p className="tray-note tray-empty">{t('尚未选择内容。展开“显示内容”，勾选你想同时查看的指标。', 'No metrics selected. Open “Show metrics” to choose what to display together.')}</p>}
-      <p className="tray-sample">{t('最近系统采样', 'Last system sample')} {system ? time(system.collectedAt, language) : settings.plugins.system ? t('等待采样', 'Waiting for samples') : t('尚无采样', 'No sample')}</p>
+      {systemReady && <p className="tray-sample">{t('最近系统采样', 'Last system sample')} {system ? time(system.collectedAt, language) : settings.plugins.system ? t('等待采样', 'Waiting for samples') : t('尚无采样', 'No sample')}</p>}
       {problems.length > 0 && <details className="tray-warning"><summary>{t(`${problems.length} 个来源存在限制`, `${problems.length} sources have limitations`)}</summary>{sections.flatMap(section => (snapshot[section].data?.sources ?? []).filter(source => source.state !== 'ok' && source.state !== 'empty' && source.state !== 'disabled').map(source => <div key={`${section}-${source.id}`}><p>{source.detail}</p><button className="text-button" onClick={() => void openMain({ kind: 'source', section, id: source.id })}>{t('查看来源', 'View source')}<ArrowUpRight size={14} aria-hidden="true" /></button></div>))}</details>}
     </div>
     <button className="button secondary tray-open" onClick={() => void openMain()}>{t('打开主界面', 'Open main window')}<ArrowUpRight size={15} /></button>

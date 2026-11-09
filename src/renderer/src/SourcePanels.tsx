@@ -6,6 +6,8 @@ import DiagnosticPanel from './DiagnosticPanel'
 import { useSettings } from './settings'
 import SettingsSaveError from './SettingsSaveError'
 import './settings.css'
+import { useSystemPlugin } from './marketplace'
+import SystemPluginNotice from './SystemPluginNotice'
 
 interface SourceGroup {
   id: MonitorSection
@@ -22,10 +24,11 @@ function observation(section: MonitorSection, state: MonitorSnapshot[MonitorSect
 function SourceSection({ group, heartbeat }: { group: SourceGroup; heartbeat?: SourceHeartbeat }) {
   const { t, language } = useI18n()
   const { snapshot: { settings }, saving, error: saveError, update } = useSettings()
+  const { installed: systemInstalled, item: systemItem } = useSystemPlugin()
   const enabled = settings.plugins[group.id]
   const changing = useRef(false)
   async function toggle() {
-    if (saving || changing.current) return
+    if (saving || changing.current || (group.id === 'system' && !systemInstalled)) return
     changing.current = true
     try { await update({ plugins: { [group.id]: !enabled } }) }
     finally { changing.current = false }
@@ -50,7 +53,11 @@ function SourceSection({ group, heartbeat }: { group: SourceGroup; heartbeat?: S
       if (mounted.current) setPending(false)
     }
   }
+  if (group.id === 'system' && !systemInstalled) return <section className="panel source-group" data-source-section="system">
+    <div className="section-heading"><h2>{group.title}</h2></div><SystemPluginNotice />
+  </section>
   return <section className="panel source-group" data-source-section={group.id}>
+    {group.id === 'system' && systemItem?.error && <SystemPluginNotice />}
     <div className="section-heading source-group-heading"><h2 id={`collection-${group.id}-label`}>{group.title}</h2>
       <div className="setting-toggle" aria-busy={saving}>
         <button type="button" role="switch" className="setting-switch" aria-labelledby={`collection-${group.id}-label`} aria-describedby={`collection-${group.id}-help`} aria-checked={enabled} aria-disabled={saving} onClick={() => void toggle()}><span /></button>

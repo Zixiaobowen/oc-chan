@@ -3,7 +3,8 @@ import { getEventListeners } from 'node:events'
 import { chmod, link, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import test, { type TestContext } from 'node:test'
-import { createInstallationCheck, readInstallationJson, runInstallationCheck, verifyInstallationResult, type InstallationEvidence } from './installation-check.mjs'
+import { runInNewContext } from 'node:vm'
+import { createInstallationCheck, readInstallationJson, runInstallationCheck, verifyInstallationResult, INSTALLATION_PROBE, type InstallationEvidence } from './installation-check.mjs'
 
 const version = '0.1.0'
 const evidence: InstallationEvidence = { renderer: true, ipc: true, collections: { agents: 'ready', schedules: 'ready', system: 'ready', events: 'disabled' }, history: 'hermes', historyEntries: 2 }
@@ -97,4 +98,31 @@ test('a published result cannot be replaced by a subsequent check', async t => {
   const original = await readFile(filename)
   await assert.rejects(runInstallationCheck(check.filename, options), /already published/)
   assert.deepEqual(await readFile(filename), original)
+})
+
+test('installation readiness distinguishes an uninstalled system plugin from an installed plugin still starting', async () => {
+  const system = { data: null as object | null, error: null as string | null }
+  const plugin = { manifest: { id: 'system', section: 'system' }, installed: false, installedVersion: null as string | null, error: null as string | null }
+  const context = {
+    document: { querySelector: () => ({}) },
+    window: {
+      desktopSettings: { snapshot: async () => ({ settings: { plugins: { agents: true, schedules: false, system: true, events: true } } }) },
+      monitor: { snapshot: async () => ({ agents: { data: {} }, schedules: { data: null }, system, events: { data: {} } }) },
+      pluginMarketplace: { snapshot: async () => ({ items: [plugin] }) }
+    }
+  }
+  const uninstalled = await runInNewContext(INSTALLATION_PROBE, context)
+  assert.equal(uninstalled.collections.system, 'not-installed')
+  assert.equal(uninstalled.collections.agents, 'ready')
+  plugin.installedVersion = '1.0.0'
+  plugin.installed = true
+  assert.equal(await runInNewContext(INSTALLATION_PROBE, context), null)
+  system.error = 'plugin startup failed'
+  await assert.rejects(runInNewContext(INSTALLATION_PROBE, context), /Collection failed: system/)
+  system.error = null
+  system.data = {}
+  assert.equal((await runInNewContext(INSTALLATION_PROBE, context)).collections.system, 'ready')
+  plugin.installedVersion = null
+  plugin.error = 'invalid installed package'
+  await assert.rejects(runInNewContext(INSTALLATION_PROBE, context), /System plugin failed/)
 })

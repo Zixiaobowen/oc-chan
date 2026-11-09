@@ -5,9 +5,10 @@ import SettingsProvider from './settings'
 import TrayView from './TrayView'
 import StartupRecoveryView from './StartupRecoveryView'
 import UpdatesProvider from './updates'
+import MarketplaceProvider from './marketplace'
 import './styles.css'
 
 const view = new URLSearchParams(location.search).get('view')
 createRoot(document.getElementById('root')!).render(<React.StrictMode>{view === 'recovery'
   ? <StartupRecoveryView />
-  : <SettingsProvider>{view === 'tray' ? <TrayView /> : <UpdatesProvider><App /></UpdatesProvider>}</SettingsProvider>}</React.StrictMode>)
+  : <SettingsProvider><MarketplaceProvider>{view === 'tray' ? <TrayView /> : <UpdatesProvider><App /></UpdatesProvider>}</MarketplaceProvider></SettingsProvider>}</React.StrictMode>)

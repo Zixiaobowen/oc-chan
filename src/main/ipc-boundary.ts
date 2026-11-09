@@ -29,6 +29,12 @@ export interface IpcArguments {
   'diagnostics:copy': [id: string]
   'diagnostics:save': [id: string]
   'diagnostics:cancel': []
+  'plugins:snapshot': []
+  'plugins:check': []
+  'plugins:install': [id: string]
+  'plugins:update': [id: string]
+  'plugins:uninstall': [id: string]
+  'plugins:cancel': []
 }
 export type IpcChannel = keyof IpcArguments
 export type IpcEvent = IpcMainEvent | IpcMainInvokeEvent
@@ -69,7 +75,13 @@ const channels: Record<IpcChannel, { mainOnly: boolean; min: number; max: number
   'diagnostics:generate': { mainOnly: true, min: 0, max: 0 },
   'diagnostics:copy': { mainOnly: true, min: 1, max: 1 },
   'diagnostics:save': { mainOnly: true, min: 1, max: 1 },
-  'diagnostics:cancel': { mainOnly: true, min: 0, max: 0 }
+  'diagnostics:cancel': { mainOnly: true, min: 0, max: 0 },
+  'plugins:snapshot': { mainOnly: false, min: 0, max: 0 },
+  'plugins:check': { mainOnly: true, min: 0, max: 0 },
+  'plugins:install': { mainOnly: true, min: 1, max: 1 },
+  'plugins:update': { mainOnly: true, min: 1, max: 1 },
+  'plugins:uninstall': { mainOnly: true, min: 1, max: 1 },
+  'plugins:cancel': { mainOnly: true, min: 0, max: 0 }
 }
 
 export class IpcBoundaryError extends Error {
@@ -136,6 +148,12 @@ function validateArguments(channel: IpcChannel, args: unknown[]): void {
     case 'diagnostics:copy':
     case 'diagnostics:save':
       if (typeof value !== 'string' || value.length !== 36 || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value))
+        throw new IpcBoundaryError('arguments')
+      break
+    case 'plugins:install':
+    case 'plugins:update':
+    case 'plugins:uninstall':
+      if (typeof value !== 'string' || value.length > 64 || !/^[a-z][a-z0-9-]*$/.test(value))
         throw new IpcBoundaryError('arguments')
       break
   }

@@ -48,7 +48,9 @@ const valid: { [K in IpcChannel]: IpcArguments[K] } = {
   'monitor:events': [{ sourceId: 'hermes-events', type: 'execution-failed', before: 50, upper: 100 }],
   'monitor:cancel-events': [],
   'diagnostics:generate': [], 'diagnostics:cancel': [],
-  'diagnostics:copy': ['01234567-89ab-4def-8123-456789abcdef'], 'diagnostics:save': ['01234567-89ab-4def-8123-456789abcdef']
+  'diagnostics:copy': ['01234567-89ab-4def-8123-456789abcdef'], 'diagnostics:save': ['01234567-89ab-4def-8123-456789abcdef'],
+  'plugins:snapshot': [], 'plugins:check': [], 'plugins:install': ['system'],
+  'plugins:update': ['system'], 'plugins:uninstall': ['system'], 'plugins:cancel': []
 }
 const rejected = (category: IpcBoundaryError['category']) => (error: unknown) => error instanceof IpcBoundaryError && error.category === category
 
@@ -85,7 +87,8 @@ test('a tray document cannot write settings, read or cancel history, retry tools
   for (const channel of ['settings:update', 'settings:preview-glass', 'settings:retry-geometry', 'settings:update-login-item', 'monitor:schedule-history', 'monitor:cancel-schedule-history',
     'monitor:retry-source', 'monitor:focus-agent-in-tern', 'monitor:navigation', 'monitor:acknowledge-navigation', 'monitor:events', 'monitor:cancel-events',
     'settings:request-notification-permission',
-    'diagnostics:generate', 'diagnostics:copy', 'diagnostics:save', 'diagnostics:cancel'] as const) {
+    'diagnostics:generate', 'diagnostics:copy', 'diagnostics:save', 'diagnostics:cancel',
+    'plugins:check', 'plugins:install', 'plugins:update', 'plugins:uninstall', 'plugins:cancel'] as const) {
     let effects = 0
     assert.throws(() => current.protect(channel, () => { effects++ })(current.trayEvent, ...valid[channel]), rejected('capability'))
     assert.equal(effects, 0)
@@ -104,6 +107,10 @@ test('invalid argument shapes, arity, IDs and numeric bounds never reach a data 
     invalid.push(['settings:preview-glass', [intensity]])
   for (const channel of ['monitor:retry-source', 'monitor:focus-agent-in-tern', 'monitor:schedule-history'] as const) {
     for (const value of [null, {}, [], NaN, '', 'S01_PRIVATE_INPUT\0', 'id\nvalue', 'x'.repeat(513)]) invalid.push([channel, [value]])
+  }
+  for (const channel of ['plugins:install', 'plugins:update', 'plugins:uninstall'] as const) {
+    for (const value of [null, {}, [], 1, '', '../system', 'System', 'system/plugin', 'x'.repeat(65), 'system\0'])
+      invalid.push([channel, [value]])
   }
   invalid.push(['monitor:retry-source', ['x'.repeat(129)]], ['monitor:schedule-history', ['x'.repeat(257)]],
     ['monitor:schedule-history', ['hermes-job:']], ['monitor:schedule-history', [`hermes-job:${'x'.repeat(129)}`]])

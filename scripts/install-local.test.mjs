@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import { pushedCommit, replaceBundle } from './install-local.mjs'
+import { deliveryCleanupRoot, pushedCommit, replaceBundle } from './install-local.mjs'
 import { acquireInstallLock, checkInstallSpace, checkInstallTarget, installationJson } from './install-validation.mjs'
 
 const sha = 'a'.repeat(40)
@@ -167,4 +168,52 @@ test('oversized or symlinked source manifests are rejected before JSON parsing',
   const link = path.join(f.dir, 'link.json')
   symlinkSync(file, link)
   await assert.rejects(installationJson(link), { code: 'ELOOP' })
+})
+
+function deliveryRepository(t) {
+  const f = fixture(t, false)
+  const root = path.join(realpathSync(f.dir), 'workspace')
+  mkdirSync(root)
+  const git = (cwd, ...args) => execFileSync('git', args, {
+    cwd, encoding: 'utf8', timeout: 10_000, maxBuffer: 1024 * 1024,
+    env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' },
+    stdio: ['ignore', 'pipe', 'pipe']
+  }).trim()
+  git(root, 'init', '-b', 'main')
+  git(root, '-c', 'user.name=OC Chan test', '-c', 'user.email=oc-chan-test@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '-m', 'initial')
+  return { ...f, root, git }
+}
+
+test('delivery cleanup resolves the actual registered worktree containing release artifacts', t => {
+  const { dir, root, git } = deliveryRepository(t)
+  const worktree = path.join(realpathSync(dir), 'delivery worktree')
+  git(root, 'worktree', 'add', '-b', 'delivery', worktree)
+  const application = path.join(worktree, 'release/local-delivery/mac-arm64/OC Chan.app')
+  mkdirSync(application, { recursive: true })
+  assert.equal(deliveryCleanupRoot({ root, application }), worktree)
+  assert.equal(existsSync(application), true)
+})
+
+test('external deliveries and symlink escapes are rejected without deleting their applications', t => {
+  const { dir, root } = deliveryRepository(t)
+  const outside = path.join(dir, 'external/OC Chan.app')
+  mkdirSync(outside, { recursive: true })
+  mkdirSync(path.join(root, 'release'))
+  const escape = path.join(root, 'release/OC Chan.app')
+  symlinkSync(outside, escape)
+  for (const application of [outside, escape]) {
+    assert.throws(() => deliveryCleanupRoot({ root, application }), /不属于本仓库.*已保留来源/)
+    assert.equal(existsSync(application), true)
+  }
+})
+
+test('delivery cleanup refuses an unrelated repository release tree', t => {
+  const { dir, root, git } = deliveryRepository(t)
+  const foreign = path.join(dir, 'foreign')
+  mkdirSync(foreign)
+  git(foreign, 'init', '-b', 'main')
+  const application = path.join(foreign, 'release/mac-arm64/OC Chan.app')
+  mkdirSync(application, { recursive: true })
+  assert.throws(() => deliveryCleanupRoot({ root, application }), /不属于本仓库/)
+  assert.equal(existsSync(application), true)
 })
