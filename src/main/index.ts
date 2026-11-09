@@ -5,10 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { release as osRelease } from 'node:os'
 import { version as appVersion } from '../../package.json'
 import { Monitor } from './monitor'
-import { createSystemPlugin } from './plugins/system'
-import { createAgentsPlugin } from './plugins/agents'
-import { createSchedulesPlugin } from './plugins/schedules'
-import { createEventsPlugin } from './plugins/events'
+import { createBuiltinCollectionPlugins } from './plugins/catalog'
 import { EventNotifications } from './events/notifications'
 import { createNativeNotificationAdapter } from './events/native-notifications'
 import { TernNavigation } from './tern-navigation'
@@ -71,11 +68,11 @@ const eventNotifications = new EventNotifications({
     }
   })
 })
-const monitor: Monitor = new Monitor({ plugins: [createAgentsPlugin(), createSchedulesPlugin(), createSystemPlugin(),
-  createEventsPlugin({ databasePath: () => path.join(app.getPath('userData'), 'events', 'events.sqlite'), notifications: eventNotifications, inputs: () => ({
+const monitor: Monitor = new Monitor({ plugins: createBuiltinCollectionPlugins(
+  { databasePath: () => path.join(app.getPath('userData'), 'events', 'events.sqlite'), notifications: eventNotifications, inputs: () => ({
     snapshot: monitor.state,
     enabled: Object.fromEntries(monitor.pluginStatuses().map(plugin => [plugin.section, plugin.enabled])) as PluginSettings
-  }) })] })
+  }) }) })
 const subscriptions = new MonitorSubscriptions(headless)
 const pendingNavigation = new PendingNavigation()
 const desktop = new DesktopSettings(headless, () => eventNotifications.snapshot())

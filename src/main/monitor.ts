@@ -1,3 +1,4 @@
+import { createEmptySnapshot, monitorSections } from '../shared/plugin-catalog'
 import { EventEmitter } from 'node:events'
 import { isDeepStrictEqual } from 'node:util'
 import type { MonitorSection, MonitorSnapshot, MonitorUpdate, ScheduleHistory, SourceHeartbeat, SourceStatus } from '../shared/types'
@@ -27,12 +28,7 @@ function sameSourceContent(before: SourceStatus[], after: SourceStatus[]): boole
 }
 
 export class Monitor extends EventEmitter {
-  state: MonitorSnapshot = {
-    agents: { data: null, error: null, refreshing: false },
-    schedules: { data: null, error: null, refreshing: false },
-    system: { data: null, error: null, refreshing: false },
-    events: { data: null, error: null, refreshing: false }
-  }
+  state: MonitorSnapshot = createEmptySnapshot()
   private readonly pending = new Map<MonitorSection, Promise<void>>()
   private stopped = false
   private stopping?: Promise<void>
@@ -104,7 +100,7 @@ export class Monitor extends EventEmitter {
       this.sourceRetries.clear()
       this.collectionErrors.clear()
       this.removeAllListeners()
-      this.state = { agents: { data: null, error: null, refreshing: false }, schedules: { data: null, error: null, refreshing: false }, system: { data: null, error: null, refreshing: false }, events: { data: null, error: null, refreshing: false } }
+      this.state = createEmptySnapshot()
       if (shutdown.status === 'rejected') completion.reject(shutdown.reason)
       else completion.resolve()
     })
@@ -160,7 +156,7 @@ export class Monitor extends EventEmitter {
     if (existing) return existing.work
     const owner = this.plugins.statuses().find(plugin => this.plugins.supportsSource(plugin.id, sourceId))
     if (!owner) {
-      const section = (['agents', 'schedules', 'system', 'events'] as const).find(key =>
+      const section = monitorSections.find(key =>
         this.state[key].data?.sources.some(source => source.id === sourceId && source.retry === 'section'))
       if (!section) return Promise.reject(Object.assign(new Error('此来源不支持重试 / Source does not support retry'), { code: 'OC_PLUGIN_CAPABILITY' }))
       return this.refresh(section)

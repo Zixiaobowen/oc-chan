@@ -1,3 +1,4 @@
+import { monitorSections } from '../shared/plugin-catalog'
 import { randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import { mkdir, open, rename, unlink } from 'node:fs/promises'
@@ -80,7 +81,7 @@ function validatePlugins(value: unknown): Partial<PluginSettings> {
 }
 
 function equalPlugins(a: PluginSettings, b: PluginSettings): boolean {
-  return a.agents === b.agents && a.schedules === b.schedules && a.system === b.system && a.events === b.events
+  return monitorSections.every(section => a[section] === b[section])
 }
 
 function validateNotifications(value: unknown): NotificationSettings {

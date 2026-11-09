@@ -2,10 +2,11 @@ import Cpu from 'kubai-icons-react/icons/cpu'
 import HardDrive from 'kubai-icons-react/icons/hard-drive'
 import MemoryStick from 'kubai-icons-react/icons/memory-stick'
 import Network from 'kubai-icons-react/icons/network'
-import type { SystemSnapshot } from '../../shared/types'
-import { bytes, Chart, duration, Empty, Meter, NativeSelect, Sources, time } from './components'
+import type { SystemSnapshot } from '../types'
+import { bytes, duration, Empty, Meter, NativeSelect, Sources, time } from '../../../renderer/src/components'
+import { Chart } from './Chart'
 import { MemoryBreakdown, NetworkTraffic, ProcessRanking } from './SystemMetrics'
-import { useI18n } from './i18n'
+import { useI18n } from '../../../renderer/src/i18n'
 
 export default function SystemView({ data, enabled, processOrder, onProcessOrderChange }: {
   data: SystemSnapshot | null; enabled: boolean; processOrder: 'cpu' | 'memory'; onProcessOrderChange: (order: 'cpu' | 'memory') => void

@@ -1,3 +1,4 @@
+import { monitorSections } from '../../shared/plugin-catalog'
 import path from 'node:path'
 import { runBudgetedCommand } from '../resource-io'
 import { isResourceAbort, isResourceCleanupFailure } from '../resource-budget'
@@ -54,7 +55,7 @@ function validateMetadata(kind: 'checkpoint' | 'event', input: unknown): void {
     if (typeof value !== 'string' || value.length !== 24 || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString() !== value) bad()
   }
   function integer(value: unknown): void { if (!Number.isSafeInteger(value) || (value as number) < 0) bad() }
-  function one(value: unknown, allowed: string[]): void { if (!allowed.includes(value as string)) bad() }
+  function one(value: unknown, allowed: readonly string[]): void { if (!allowed.includes(value as string)) bad() }
   function array(value: unknown, max: number): unknown[] { if (!Array.isArray(value) || value.length > max) bad(); return value }
   if (kind === 'event') {
     const event = object(input, ['id', 'sourceId', 'entityId', 'type', 'occurredAt', 'observedAt', 'resultCode', 'target'])
@@ -66,7 +67,7 @@ function validateMetadata(kind: 'checkpoint' | 'event', input: unknown): void {
       const targetKind = event.target.kind
       const target = object(event.target, targetKind === 'source' ? ['kind', 'id', 'section'] : ['kind', 'id', 'identity'])
       one(target.kind, ['source', 'schedule', 'agent']); text(target.id, 256)
-      if (target.kind === 'source') one(target.section, ['agents', 'schedules', 'system', 'events'])
+      if (target.kind === 'source') one(target.section, monitorSections)
       else text(target.identity, 1536)
     }
     return
@@ -88,7 +89,7 @@ function validateMetadata(kind: 'checkpoint' | 'event', input: unknown): void {
   }
   for (const value of array(checkpoint.sources, 64)) {
     const source = object(value, ['id', 'section', 'state', 'observedAt', 'unavailableSince', 'announced', 'generation'])
-    text(source.id, 128); one(source.section, ['agents', 'schedules', 'system', 'events'])
+    text(source.id, 128); one(source.section, monitorSections)
     one(source.state, ['ok', 'empty', 'partial', 'error', 'unsupported', 'disabled'])
     instant(source.observedAt); instant(source.unavailableSince, true); integer(source.generation)
     if (typeof source.announced !== 'boolean') bad()

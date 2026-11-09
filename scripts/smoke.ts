@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
 import { collectAgents } from '../src/main/collectors/agents'
 import { ScheduleCollector } from '../src/main/collectors/schedules'
-import { SystemCollector } from '../src/main/collectors/system'
+import { SystemCollector } from '../src/plugins/system-monitor/main/system'
+import { collectionResources } from '../src/main/resource-budget'
+import { runBudgetedCommand } from '../src/main/resource-io'
 
 async function main() {
-  const systemCollector = new SystemCollector()
+  const systemCollector = new SystemCollector({ resources: collectionResources, command: runBudgetedCommand })
   const [agents, schedules, system] = await Promise.all([
     collectAgents(), new ScheduleCollector().collect(), systemCollector.collect().finally(() => systemCollector.dispose())
   ])

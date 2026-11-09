@@ -1,3 +1,4 @@
+import { runBudgetedCommand } from '../resource-io'
 import assert from 'node:assert/strict'
 import { getEventListeners } from 'node:events'
 import test from 'node:test'
@@ -36,7 +37,7 @@ test('schedule factories are lazy and route retry and collection signals through
   assert.equal(readers, 0)
   assert.deepEqual(definition.retrySources, ['launchctl:gui/502', 'launchctl:user/502', 'launchctl:system'])
   const lifetime = new AbortController(), operation = new AbortController()
-  const plugin = definition.create({ signal: lifetime.signal, resources: collectionResources, publish() {} })
+  const plugin = await definition.create({ signal: lifetime.signal, resources: collectionResources, command: runBudgetedCommand, publish() {} })
   assert.equal(lifetimeSignal, lifetime.signal)
   assert.equal(await plugin.collect(operation.signal), snapshot)
   assert.equal(await plugin.collect(operation.signal, 'launchctl:gui/502'), snapshot)
@@ -62,7 +63,7 @@ test('100 schedule lifetimes cancel history immediately, await provider release 
     const definition = createSchedulesPlugin({ createCollector: () => ({ ...collector(), dispose: () => { disposed++ } }),
       createHistory: () => { created++; return history } })
     const lifetime = new AbortController()
-    const plugin = definition.create({ signal: lifetime.signal, resources: collectionResources, publish() {} })
+    const plugin = await definition.create({ signal: lifetime.signal, resources: collectionResources, command: runBudgetedCommand, publish() {} })
     const request = assert.rejects(plugin.history!.read(job), { name: 'AbortError' })
     assert.equal(active, 1)
     lifetime.abort()
@@ -90,8 +91,8 @@ test('a synchronous collector disposal failure still closes and drains history a
   const collectorFailure = new Error('collector cleanup failed')
   const historyFailure = new Error('history release failed')
   const lifetime = new AbortController()
-  const plugin = createSchedulesPlugin({ createCollector: () => ({ ...collector(), dispose() { throw collectorFailure } }),
-    createHistory: () => history }).create({ signal: lifetime.signal, resources: collectionResources, publish() {} })
+  const plugin = await createSchedulesPlugin({ createCollector: () => ({ ...collector(), dispose() { throw collectorFailure } }),
+    createHistory: () => history }).create({ signal: lifetime.signal, resources: collectionResources, command: runBudgetedCommand, publish() {} })
   const request = assert.rejects(plugin.history!.read(job), { name: 'AbortError' })
   let stopped = false
   const stopping = assert.rejects(Promise.resolve(plugin.stop()).finally(() => { stopped = true }), error => {
@@ -114,9 +115,9 @@ test('a synchronous history close failure does not skip asynchronous collector d
   class FailingHistory extends ScheduleHistoryReader {
     override close(): Promise<void> { throw failure }
   }
-  const plugin = createSchedulesPlugin({ createCollector: () => ({ ...collector(), async dispose() { await release.promise; disposed = true } }),
+  const plugin = await createSchedulesPlugin({ createCollector: () => ({ ...collector(), async dispose() { await release.promise; disposed = true } }),
     createHistory: () => new FailingHistory({ providers: [] }) }).create({ signal: new AbortController().signal,
-    resources: collectionResources, publish() {} })
+    resources: collectionResources, command: runBudgetedCommand, publish() {} })
   let stopped = false
   const stopping = assert.rejects(Promise.resolve(plugin.stop()).finally(() => { stopped = true }), error => error === failure)
   await setImmediate()

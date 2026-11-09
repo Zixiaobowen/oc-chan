@@ -1,3 +1,4 @@
+import { isMonitorSection } from '../shared/plugin-catalog'
 import type { BrowserWindow, IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import type { PermissionSettingsTarget, SettingsPatch } from '../shared/settings'
 import type { MonitorSection } from '../shared/types'
@@ -116,7 +117,7 @@ function validateArguments(channel: IpcChannel, args: unknown[]): void {
       if (typeof value !== 'boolean' || typeof args[1] !== 'boolean') throw new IpcBoundaryError('arguments')
       break
     case 'monitor:refresh':
-      if (value !== undefined && value !== 'agents' && value !== 'schedules' && value !== 'system' && value !== 'events') throw new IpcBoundaryError('arguments')
+      if (value !== undefined && !isMonitorSection(value)) throw new IpcBoundaryError('arguments')
       break
     case 'monitor:retry-source':
       if (!text(value, MAX_SOURCE_ID_LENGTH)) throw new IpcBoundaryError('arguments')

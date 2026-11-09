@@ -1,3 +1,6 @@
+import { collectionResources } from '../../../main/resource-budget'
+import { runBudgetedCommand } from '../../../main/resource-io'
+const services = { resources: collectionResources, command: runBudgetedCommand }
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { parseMemory, parseProcesses, SystemCollector, type CpuTimes, type SystemMemory } from './system'
@@ -68,11 +71,11 @@ test('两个进程排名在相同指标下保持原始顺序，并限制为十�
 
 function collector(cpu: () => CpuTimes, memory = async () => parseMemory(vm(4096), 'used = 0M', 1024 ** 3)) {
   let networkSample = 0
-  return new SystemCollector({
+  return new SystemCollector(services, {
     cpu, memory,
     disk: async () => ({ type: 0, bsize: 4096, frsize: 4096, blocks: 100, bfree: 40, bavail: 30, files: 100, ffree: 50 }),
     processes: async () => parseProcesses(Array.from({ length: 25 }, (_, i) => `${i + 1} ${i} ${100 - i} /bin/process-${i}`).join('\n')),
-    network: new NetworkReader(async file => file === '/sbin/route' ? 'interface: en0\n'
+    network: new NetworkReader(services, async file => file === '/sbin/route' ? 'interface: en0\n'
       : `Name Mtu Network Address Ipkts Ierrs Ibytes Opkts Oerrs Obytes\nen0 1500 <Link#1> aa 1 0 ${++networkSample * 100} 1 0 ${networkSample * 50}\n`, () => networkSample * 1000),
   })
 }
@@ -131,12 +134,12 @@ test('IO 期间 dispose 取消采集，晚到结果不得写入 CPU 与历史', 
   system.dispose()
   await assert.rejects(system.collect(), { name: 'AbortError' })
   assert.equal(cpuReads, 0)
-  const inFlight = new SystemCollector({
+  const inFlight = new SystemCollector(services, {
     cpu: () => { cpuReads++; return { total: 100, idle: 50 } },
     memory: signal => { observedSignal = signal; return pending.promise },
     disk: async () => ({ type: 0, bsize: 4096, frsize: 4096, blocks: 100, bfree: 40, bavail: 30, files: 100, ffree: 50 }),
     processes: async () => ({ cpu: [], memory: [] }),
-    network: new NetworkReader(async file => file === '/sbin/route' ? 'interface: en0\n' : ''),
+    network: new NetworkReader(services, async file => file === '/sbin/route' ? 'interface: en0\n' : ''),
   })
   const work = inFlight.collect()
   const rejected = assert.rejects(work, { name: 'AbortError' })
@@ -164,5 +167,28 @@ test('持续采样仅保留最近六十条历史和 CPU、RSS 各十条排名', 
     }
     assert.equal(first.history.length, 1)
     assert.equal(first.history[0].cpuPercent, null)
+  } finally { system.dispose() }
+})
+
+test('默认采集路径全部使用宿主注入的预算命令服务', async () => {
+  const commands: string[] = []
+  const system = new SystemCollector({ resources: collectionResources, command: async (source, file) => {
+    commands.push(source)
+    const output: Record<string, string> = {
+      '/usr/bin/vm_stat': vm(4096),
+      '/usr/sbin/sysctl': 'used = 0M',
+      '/bin/ps': '42 1.0 1024 /bin/probe',
+      '/sbin/route': 'interface: en0\n',
+      '/usr/sbin/netstat': 'Name Mtu Network Address Ipkts Ierrs Ibytes Opkts Oerrs Obytes\nen0 1500 <Link#1> aa 1 0 100 1 0 50\n'
+    }
+    assert.ok(Object.hasOwn(output, file), `未声明的命令 ${file}`)
+    return { stdout: output[file], stderr: '' }
+  } }, { disk: async () => ({ type: 0, bsize: 4096, frsize: 4096, blocks: 100, bfree: 40, bavail: 30, files: 100, ffree: 50 }) })
+  try {
+    const result = await system.collect()
+    assert.deepEqual(commands.sort(), ['system-memory', 'system-memory', 'system-network', 'system-network', 'system-processes'])
+    assert.equal(result.processes[0].pid, 42)
+    assert.equal(result.networkInterface, 'en0')
+    assert.equal(result.rxBytesPerSecond, null)
   } finally { system.dispose() }
 })

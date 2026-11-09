@@ -347,8 +347,7 @@ export class ResourceBudget {
 
 export const collectionResources = new ResourceBudget()
 
-export function resourceSourceStatus(): SourceStatus {
-  const resources = collectionResources.snapshot()
+export function resourceSourceStatus(resources = collectionResources.snapshot()): SourceStatus {
   const { current, peak, rejected, queueTimeouts, maxWaitMs, maxExecutionMs } = resources.global
   const mib = (bytes: number) => (bytes / 1024 ** 2).toFixed(2)
   return {

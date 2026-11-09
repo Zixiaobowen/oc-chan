@@ -1,8 +1,8 @@
-import type { ProcessInfo, SystemSnapshot } from '../../shared/types'
+import type { ProcessInfo, SystemSnapshot } from '../types'
 import ArrowDown from 'kubai-icons-react/icons/arrow-down'
 import ArrowUp from 'kubai-icons-react/icons/arrow-up'
-import { bytes } from './components'
-import { useI18n } from './i18n'
+import { bytes } from '../../../renderer/src/components'
+import { useI18n } from '../../../renderer/src/i18n'
 import './system-metrics.css'
 
 export function MemoryBreakdown({ data }: { data: SystemSnapshot }) {
