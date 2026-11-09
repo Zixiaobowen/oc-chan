@@ -1,10 +1,10 @@
 # OC Chan 单一正式安装与调试资源清理
 
 - 日期：2026-11-09
-- 原开发目录：`/Users/zixiaobowen/myProjects/oc-chan`；合并准备在独立工作区 `/Users/zixiaobowen/myProjects/oc-chan-single-app-20261109`，保留原目录并行插件市场开发。
-- Branch：`chore/single-oc-chan-20261109`；已接入远端 `main` 的 `3118aea`，保留 Kubai 图标、README 重写和系统监控插件拆分。
-- 当前目标：本机长期只保留 `/Applications/OC Chan.app`；对应任务合并并实际推送 GitHub 后，回收其临时应用和有归属的开发实例。
-- 用户随后明确授权“合并到main并push”。本节以下为实现阶段证据，合并与远端结果见文末交付记录。
+- Repo／main 工作区：`/Users/zixiaobowen/myProjects/oc-chan-single-app-20261109`。原目录 `/Users/zixiaobowen/myProjects/oc-chan` 与旧主线工作区均保留并行插件市场任务。
+- Branch：`main`；功能提交 `28b7ad4`，合并交付提交 `398e32d` 已实际推送 GitHub main。
+- 当前目标已完成：本机正式应用保留 `/Applications/OC Chan.app`；对应任务合并并实际推送 GitHub 后，回收其临时应用和有归属的开发实例。
+- 用户明确授权“合并到main并push”。本次没有重新安装正式应用、发布版本或部署；各阶段证据与最终回执见文末。
 
 ## 已完成
 
@@ -85,13 +85,13 @@ NSWorkspace 的已安装应用 URL 列表会漏掉临时目录中确实登记的
 ## 下一步
 
 1. 后续修改继续保护并行插件市场任务、原有未提交交接文件及当前正式安装。
-2. 合并后通过 `npm run push:main` 推送并读取真实回执；当前克隆没有启用自动安装 hook，本次不修改 hook 配置或重新安装桌面应用。
+2. 今后从 main 使用 `npm run push:main`，读取推送确认与清理回执；自动安装 hook 当前未启用，不因推送擅自启用。
 3. 如通过网页或其他客户端推送，先核对对应任务已合入远端，再到对应工作区预览与执行清理。
 4. 遇到未知实例或活动 bundle 时先调查启动身份与任务归属，不扩大为全仓或按进程名删除。
 
 恢复提示：
 
-> 继续 OC Chan 单一正式安装任务。读取 docs/codex-handoffs/2026-11-09-single-oc-chan.md 和文末最新交付记录。清理功能在独立工作区 chore/single-oc-chan-20261109 集成到远端主线 3118aea，用户已明确要求合并到 main 并 push。原目录是并行插件市场开发，禁止覆盖或全量暂存；主线工作区在 oc-chan-main-integration-20261106，保留其两份未提交旧交接文档。当前未启用自动安装 hook，不应为推送擅自启用。
+> OC Chan 单一正式安装任务已完成。读取 docs/codex-handoffs/2026-11-09-single-oc-chan.md 文末回执：功能提交 28b7ad4、合并交付提交 398e32d 已推送 GitHub main，定向测试和真实无头 Electron 验收通过。main 位于 oc-chan-single-app-20261109；原目录及 oc-chan-main-integration-20261106 均有并行插件市场任务，禁止覆盖其文件、索引和分支。不重新执行已通过且仍适用的检查，不擅自重新安装正式应用或启用自动安装 hook。按用户新的任务继续。
 
 ## 2026-11-09 合并准备与集成验证
 
@@ -112,5 +112,14 @@ NSWorkspace 的已安装应用 URL 列表会漏掉临时目录中确实登记的
 - 合并后的安装、安装就绪、CI 选择、交付源、交付包和包检查定向测试 156/156 通过。清理生命周期 17/17 已通过且代码未再变化；push-main 相关用例包含在前述 68 项通过记录中。未运行全仓库测试。
 - 最终真实无头 Electron 验收：约 2268ms 得到 agents/schedules/events/system 四域真实数据，四域 error 均为 null；清理入口有意终止后退出 143，临时实例已删除，无退出报错。记录在 `/tmp/oc-chan-merge-exit-20261109-lGXId6/final-main.json` 和 `final-main.log`。
 - `oc-chan-main-integration-20261106` 已被并行插件市场任务切到 `integrate/plugin-marketplace-20261109` 并处于冲突处理期间，禁止操作其分支、索引和文件。本轮在独立 `oc-chan-single-app-20261109` 工作区完成本地 main 快进与 push；不安装正式应用。
-- 恢复入口：以此最新段落为准。推送回执应核对本轮最终消息与 `git ls-remote origin refs/heads/main`；不得继续使用上文旧主线工作区执行 merge 或 cleanup。
+- 此段是推送前验证快照；实际推送回执见下节。不得继续使用上文旧主线工作区执行 merge 或 cleanup。
+
+## 最终推送回执
+
+- 第一次推送被 Git 以 non-fast-forward 拒绝，且清理入口未执行。原因是远端并行新增纯文档提交 `49496a6`；已核实仅三份交接文档变化，合入后没有重复运行仍适用的测试。
+- 第二次 `npm run push:main` 成功：Git 回执 `49496a6..398e32d main -> main`；入口再次查询并验证 GitHub main 包含本次提交后才开始清理。
+- 当前 main 工作区 `oc-chan-single-app-20261109` 清理成功；本任务真实开发实例、子进程及其临时目录均已退出或删除。
+- `oc-chan` 因 HEAD 尚未合入远端而保留；`oc-chan-main-integration-20261106`、`oc-chan-update-main-20261109`、`oc-chan-update-mechanism-20261108` 因推送前已合入、不是本次新增任务而保留。没有删除 worktree、分支、个人配置或并行开发资料。
+- 本轮没有执行安装器、发布器或部署命令。npm 输出本机既有 `home` / `3005/` 配置警告，推送及清理命令退出码为 0。
+- 本节为实际推送后追加的文档回执；不改变已经验证的产品代码。
 
