@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
+import { parse } from 'semver'
 
 export const INSTALL_CHECK_ARGUMENT = '--oc-chan-install-check='
 const MAX_BYTES = 8192
@@ -40,9 +41,11 @@ function requireThat(value: unknown, message: string): asserts value {
 }
 function validRequest(value: unknown): asserts value is InstallationRequest {
   const item = value as InstallationRequest | null
+  const version = typeof item?.version === 'string' ? parse(item.version) : null
+  const canonicalVersion = version && `${version.version}${version.build.length ? `+${version.build.join('.')}` : ''}`
   requireThat(item && item.schema === 1 && typeof item.nonce === 'string' && /^[a-f0-9]{64}$/.test(item.nonce) &&
     typeof item.executable === 'string' && path.isAbsolute(item.executable) && item.executable.length <= 4096 && !/[\x00-\x1f\x7f]/.test(item.executable) &&
-    typeof item.version === 'string' && /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(item.version) &&
+    version && canonicalVersion === item.version &&
     Number.isSafeInteger(item.issuedAt) && item.issuedAt <= Date.now() && Date.now() - item.issuedAt <= MAX_AGE_MS,
   'Invalid or expired installation request')
 }
@@ -63,7 +66,7 @@ async function privateDirectory(directory: string): Promise<void> {
 export async function readInstallationJson(filename: string): Promise<unknown> {
   requireThat(['request.json', 'result.json'].includes(path.basename(filename)), 'Invalid installation check filename')
   await privateDirectory(path.dirname(filename))
-  const file = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW)
+  const file = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
   try {
     const info = await file.stat()
     requireThat(info.isFile() && info.nlink === 1 && info.uid === process.getuid!() && (info.mode & 0o777) === 0o600 && info.size > 0 && info.size <= MAX_BYTES, 'Invalid installation check file')

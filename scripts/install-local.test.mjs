@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { deliveryCleanupRoot, pushedCommit, replaceBundle } from './install-local.mjs'
-import { acquireInstallLock, checkInstallSpace, checkInstallTarget, installationJson } from './install-validation.mjs'
+import { acquireInstallLock, checkInstallSpace, checkInstallTarget, installationJson, verifyDeliveryForInstall } from './install-validation.mjs'
 
 const sha = 'a'.repeat(40)
 const other = 'b'.repeat(40)
@@ -216,4 +216,22 @@ test('delivery cleanup refuses an unrelated repository release tree', t => {
   mkdirSync(application, { recursive: true })
   assert.throws(() => deliveryCleanupRoot({ root, application }), /不属于本仓库/)
   assert.equal(existsSync(application), true)
+})
+
+test('FIFO metadata fails promptly without leaving the lock owner blocked', t => {
+  const f = fixture(t, false)
+  const lock = path.join(f.dir, '.metadata-lock')
+  acquireInstallLock(lock, { pid: 123 })()
+  const file = path.join(f.dir, 'fifo.json')
+  execFileSync('mkfifo', [file])
+  const code = `import { installationJson } from ${JSON.stringify(new URL('./install-validation.mjs', import.meta.url).href)}; await installationJson(process.argv[1])`
+  assert.throws(() => execFileSync(process.execPath, ['--input-type=module', '-e', code, file], { timeout: 3000, encoding: 'utf8', stdio: 'pipe' }),
+    error => error.status === 1 && /bounded regular file/.test(error.stderr))
+  assert.deepEqual(JSON.parse(readFileSync(path.join(lock, 'owner.json'), 'utf8')), { pid: 123 })
+})
+
+test('old delivery schemas require regeneration before any package processing', async t => {
+  const f = fixture(t, false)
+  writeFileSync(path.join(f.dir, 'delivery.json'), JSON.stringify({ schema: 1 }))
+  await assert.rejects(verifyDeliveryForInstall(f.dir), /Unsupported delivery schema/)
 })
