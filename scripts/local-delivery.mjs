@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { constants, createReadStream, createWriteStream } from 'node:fs'
+import { constants, createWriteStream } from 'node:fs'
 import { chmod, lstat, mkdir, mkdtemp, open, realpath, rm, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
@@ -8,7 +8,8 @@ import { Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
 import { inspectPackage } from './check-package.mjs'
-import { captureDeliverySource } from './delivery-source.mjs'
+import { captureDeliverySource, createDeliveryValidationSource, VALIDATION_SOURCE_DIRECTORY } from './delivery-source.mjs'
+import { releaseInfo } from './release-config.mjs'
 import { verifyDeliveryZip } from './delivery-zip.mjs'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
@@ -56,7 +57,7 @@ async function command(file, args, { cwd = ROOT, timeout = 30000, signal, allowF
 export async function artifactDigest(filename) {
   const before = await lstat(filename)
   requireThat(before.isFile() && before.nlink === 1 && before.size > 0 && before.size <= MAX_ARTIFACT, `Artifact must be a bounded regular file: ${filename}`)
-  const handle = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW)
+  const handle = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
   try {
     requireThat(sameFile(before, await handle.stat()), 'Artifact changed before reading')
     const sha = createHash('sha256'); let bytes = 0
@@ -88,13 +89,18 @@ async function snapshotSource(root, directory, source) {
     const sourceFile = path.join(root, entry.path), target = path.join(directory, entry.path)
     await mkdir(path.dirname(target), { recursive: true, mode: 0o700 })
     const digest = createHash('sha256'); let bytes = 0
-    await pipeline(createReadStream(sourceFile, { flags: constants.O_RDONLY | constants.O_NOFOLLOW, highWaterMark: 64 * 1024 }),
-      new Transform({ transform(chunk, _encoding, callback) {
-        bytes += chunk.length
-        if (bytes > entry.bytes) { callback(new Error(`Source grew during snapshot: ${entry.path}`)); return }
-        digest.update(chunk); callback(null, chunk)
-      } }), createWriteStream(target, { flags: 'wx', mode: 0o600 }))
-    requireThat(bytes === entry.bytes && digest.digest('hex') === entry.sha256, `Source changed during snapshot: ${entry.path}`)
+    const handle = await open(sourceFile, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+    try {
+      const info = await handle.stat()
+      requireThat(info.isFile() && info.nlink === 1 && info.size === entry.bytes, `Source must remain a bounded regular file: ${entry.path}`)
+      await pipeline(handle.createReadStream({ autoClose: false, highWaterMark: 64 * 1024 }),
+        new Transform({ transform(chunk, _encoding, callback) {
+          bytes += chunk.length
+          if (bytes > entry.bytes) { callback(new Error(`Source grew during snapshot: ${entry.path}`)); return }
+          digest.update(chunk); callback(null, chunk)
+        } }), createWriteStream(target, { flags: 'wx', mode: 0o600 }))
+      requireThat(bytes === entry.bytes && digest.digest('hex') === entry.sha256, `Source changed during snapshot: ${entry.path}`)
+    } finally { await handle.close() }
     await chmod(target, entry.mode)
   }
 }
@@ -122,7 +128,7 @@ export async function signatureStatus(app, signal) {
     verified: true, authorities, teamIdentifier: !team || team === 'not set' ? null : team }
 }
 
-async function verifyDmg(filename, expected, root, signal) {
+async function verifyDmg(filename, expected, sources, signal) {
   await command('/usr/bin/hdiutil', ['verify', filename], { signal, timeout: 120000 })
   const temporary = await mkdtemp(path.join(tmpdir(), 'oc-chan-delivery-mount-'))
   const mount = path.join(temporary, 'image')
@@ -130,7 +136,7 @@ async function verifyDmg(filename, expected, root, signal) {
   try {
     await command('/usr/sbin/diskutil', ['image', 'attach', '--readOnly', '--nobrowse', '--mountPoint', mount, filename], { signal, timeout: 120000 })
     attached = true
-    const inspected = await inspectPackage({ app: path.join(mount, 'OC Chan.app'), arch: 'arm64', root })
+    const inspected = await inspectPackage({ app: path.join(mount, 'OC Chan.app'), arch: 'arm64', sources })
     requireThat(JSON.stringify(inspected.entries) === JSON.stringify(expected.entries), 'DMG application differs from the directory package')
     result = { checksum: 'verified', application: 'matches-directory-package', readOnly: true }
   } catch (error) { failure = error }
@@ -168,25 +174,27 @@ export async function createLocalDelivery({ root = ROOT, out }) {
   let snapshot, failure, receipt
   try {
     const source = await captureDeliverySource(root)
+    releaseInfo(source.version)
     snapshot = await mkdtemp(path.join(tmpdir(), 'oc-chan-delivery-source-'))
     await snapshotSource(root, snapshot, source)
+    const sources = await createDeliveryValidationSource(snapshot, path.join(destination, VALIDATION_SOURCE_DIRECTORY), source)
     console.log(`Building local arm64 delivery ${source.version}; workspace source ${source.digest}`)
     const install = await command('npm', ['ci', '--no-audit', '--no-fund'], { cwd: snapshot, signal: controller.signal, timeout: 600000 })
     await writeFile(path.join(destination, 'dependency-install.log'), install.stdout + install.stderr, { flag: 'wx', mode: 0o600 })
-    const build = await command('npm', ['run', 'dist', '--', `--config.directories.output=${destination}`], { cwd: snapshot, signal: controller.signal, timeout: 900000 })
+    const build = await command('npm', ['run', 'dist', '--', '--out', destination], { cwd: snapshot, signal: controller.signal, timeout: 900000 })
     await writeFile(path.join(destination, 'build.log'), build.stdout + build.stderr, { flag: 'wx', mode: 0o600 })
     await command('npm', ['run', 'audit:dependencies', '--', '--output', path.join(destination, 'dependency-review-arm64.json')], {
       cwd: snapshot, signal: controller.signal, timeout: 120000
     })
     const app = path.join(destination, 'mac-arm64', 'OC Chan.app')
-    const inventory = await inspectPackage({ app, arch: 'arm64', artifactsDir: destination, root: snapshot })
+    const inventory = await inspectPackage({ app, arch: 'arm64', artifactsDir: destination, sources })
     const identity = await appIdentity(app, source.version, controller.signal)
     const signature = await signatureStatus(app, controller.signal)
     console.log('Checking ZIP members and read-only DMG contents')
     const zip = inventory.artifacts.find(entry => entry.name.endsWith('.zip'))
     const dmg = inventory.artifacts.find(entry => entry.name.endsWith('.dmg'))
     const zipResult = await verifyDeliveryZip(path.join(destination, zip.name), inventory.entries.filter(entry => entry.kind !== 'asar'))
-    const dmgResult = await verifyDmg(path.join(destination, dmg.name), inventory, snapshot, controller.signal)
+    const dmgResult = await verifyDmg(path.join(destination, dmg.name), inventory, sources, controller.signal)
     await verifyArtifactDigests(destination, source.version, inventory.artifacts)
     const after = await captureDeliverySource(root)
     requireThat(JSON.stringify(after) === JSON.stringify(source), 'Workspace source changed during build; no delivery receipt was generated')
@@ -194,8 +202,8 @@ export async function createLocalDelivery({ root = ROOT, out }) {
     const sourceFile = await metadata(path.join(destination, 'source-manifest.json'), source)
     const packageFile = await metadata(path.join(destination, 'package-manifest-arm64.json'), inventory)
     const dependencyFile = await artifactDigest(path.join(destination, 'dependency-review-arm64.json'))
-    receipt = { schema: 1, createdAt: new Date().toISOString(), scope: 'local-development-only', version: source.version, architecture: 'arm64',
-      source: { commit: source.commit, branch: source.branch, tag: source.tag, workspace: source.workspace, digest: source.digest, manifest: sourceFile, ciRun: null },
+    receipt = { schema: 2, createdAt: new Date().toISOString(), scope: 'local-development-only', version: source.version, architecture: 'arm64',
+      source: { commit: source.commit, branch: source.branch, tag: source.tag, workspace: source.workspace, digest: source.digest, manifest: sourceFile, validationPath: VALIDATION_SOURCE_DIRECTORY, ciRun: null },
       application: { path: 'mac-arm64/OC Chan.app', ...identity, signature, notarization: 'not-requested', gatekeeper: 'not-assessed', installed: false },
       artifacts: inventory.artifacts, packageManifest: packageFile, dependencyReview: dependencyFile,
       validation: { packageBudget: inventory.budget.status, dependencies: 'verified', zip: zipResult, dmg: dmgResult },

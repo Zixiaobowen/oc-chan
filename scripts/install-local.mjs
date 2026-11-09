@@ -148,7 +148,7 @@ async function main() {
   }
   if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('本期本机安装仅支持 macOS arm64')
   if (args[0] === '--check-delivery') {
-    const verified = await verifyDeliveryForInstall(deliveryDirectory, root)
+    const verified = await verifyDeliveryForInstall(deliveryDirectory)
     console.log(JSON.stringify({ verified: true, architecture: 'arm64', version: verified.version, application: verified.bundle, source: verified.source, signature: verified.signature, installed: false }))
     return
   }
@@ -159,7 +159,7 @@ async function main() {
   try {
     writeOwner()
     let buildRoot = root, prepared, sourceEvidence
-    if (deliveryDirectory) prepared = await verifyDeliveryForInstall(deliveryDirectory, root)
+    if (deliveryDirectory) prepared = await verifyDeliveryForInstall(deliveryDirectory)
     else {
       if (commit) {
         const resolved = run('git', ['rev-parse', '--verify', `${commit}^{commit}`], { capture: true })
@@ -182,9 +182,9 @@ async function main() {
       const bundle = path.join(buildRoot, 'release/mac-arm64/OC Chan.app')
       const { inventory, signature } = await verifyInstallBundle(bundle, { root: buildRoot, version })
       if (!commit && JSON.stringify(await captureDeliverySource(root)) !== JSON.stringify(sourceEvidence)) throw new Error('构建期间源码发生变化，拒绝安装')
-      prepared = { bundle, inventory, signature, version, source: sourceEvidence }
+      prepared = { bundle, inventory, signature, version, source: sourceEvidence, root: buildRoot }
     }
-    const staged = await stageInstallBundle(prepared.bundle, destination, { ...prepared, root: buildRoot })
+    const staged = await stageInstallBundle(prepared.bundle, destination, prepared)
     staging = staged.directory
     check = await createInstallationCheck(staged.executable, prepared.version)
     console.log('[oc-chan] 来源、内容、架构、签名、磁盘和权限预检通过，退出旧应用并替换安装')

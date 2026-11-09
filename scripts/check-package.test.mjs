@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import * as asar from '@electron/asar'
-import { enforceBudget, inspectPackage } from './check-package.mjs'
+import { enforceBudget, inspectPackage, readPackageSources } from './check-package.mjs'
+import { createDeliveryValidationSource, readDeliveryValidationSource } from './delivery-source.mjs'
 
 const darwinOnly = { skip: process.platform !== 'darwin' ? 'Executable architecture checks require macOS /usr/bin/lipo' : false }
 const helper = 'Contents/Resources/tern-navigation/present-window'
@@ -319,4 +321,33 @@ test('dependency growth, absent architecture, and missing distribution limits fa
   const invalid = baselineFor(measured)
   delete invalid.architectures.arm64.limits.dmgBytes
   assert.throws(() => enforceBudget(measured, invalid), /baseline limit: dmgBytes/)
+})
+
+test('historical delivery sources drive package checks after workspace version, plugin and budget upgrades', darwinOnly, async t => {
+  const f = await fixture(t)
+  const original = await f.inspect()
+  await put(f.root, 'docs/package-baseline.json', JSON.stringify(baselineFor(original)))
+  const hash = bytes => createHash('sha256').update(bytes).digest('hex')
+  const files = Object.entries(await readPackageSources(f.root)).map(([name, bytes]) => ({ path: name, bytes: bytes.length, mode: 0o600, sha256: hash(bytes) }))
+  const source = { version: f.manifest.version, files, digest: hash(JSON.stringify(files)) }
+  const directory = path.join(f.root, 'validation-source')
+  await createDeliveryValidationSource(f.root, directory, source)
+  f.manifest.version = '2.0.0'
+  f.lock.version = f.lock.packages[''].version = '2.0.0'
+  await put(f.root, 'package.json', JSON.stringify(f.manifest))
+  await put(f.root, 'package-lock.json', JSON.stringify(f.lock))
+  await put(f.root, 'resources/tern-navigation/plugin/window.luau', 'return { upgraded = true }\n')
+  await put(f.root, 'docs/package-baseline.json', '{}')
+  await assert.rejects(f.inspect(), /differs from source/)
+  const inspectDelivery = async () => inspectPackage({ app: f.app, arch: 'arm64', sources: await readDeliveryValidationSource(directory, source) })
+  const historical = await inspectDelivery()
+  assert.deepEqual(historical.entries, original.entries)
+  assert.deepEqual(historical.source, original.source)
+  assert.equal(historical.budget.status, 'passed')
+  await put(f.app, plugin + 'window.luau', 'return { tampered = true }\n')
+  await assert.rejects(inspectDelivery(), /differs from source/)
+  await put(f.app, plugin + 'window.luau', 'return {}\n')
+  await put(f.staging, 'package.json', JSON.stringify({ name: f.manifest.name, version: '2.0.0', main: f.manifest.main }))
+  await f.repack()
+  await assert.rejects(inspectDelivery(), /version|manifest/i)
 })

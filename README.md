@@ -20,7 +20,7 @@
 
 ## 安装与运行
 
-当前可从源码构建，或在仓库的 **Actions → Build macOS** 中查找成功构建的 Artifacts。构建产物名为 `oc-chan-macos-arm64-<运行编号>`；下载 Actions 产物通常需要登录 GitHub，并受产物保留期限制。
+当前可从源码构建，或在仓库的 **Actions → Build macOS → Run workflow** 手动构建后下载 Artifacts。安装包产物名为 `oc-chan-macos-arm64-<运行编号>`，手动构建保留3天；日常主线与PR仅上传校验报告。下载 Actions 产物通常需要登录 GitHub。公开发布页为 [OC Chan Releases](https://github.com/Zixiaobowen/oc-chan/releases)，现有 `v0.1.0` 尚不包含自动更新元数据。
 
 正式 Developer ID 签名、公证和公开 Release 分发尚未完成验证。普通构建使用 ad-hoc 签名，不能视为已通过 Apple 公证的正式安装包；macOS 可能阻止打开。请保留系统提示用于反馈，不要关闭系统安全防护。
 
