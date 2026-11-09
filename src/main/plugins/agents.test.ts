@@ -1,3 +1,4 @@
+import { runBudgetedCommand } from '../resource-io'
 import assert from 'node:assert/strict'
 import { getEventListeners } from 'node:events'
 import { watch } from 'node:fs'
@@ -20,7 +21,7 @@ test('agent factories are lazy and each instance starts with a fresh discovery b
   for (let cycle = 1; cycle <= 2; cycle++) {
     const lifetime = new AbortController()
     const updates: { data: AgentSnapshot; incremental?: boolean }[] = []
-    const plugin = definition.create({ signal: lifetime.signal, resources: collectionResources,
+    const plugin = await definition.create({ signal: lifetime.signal, resources: collectionResources, command: runBudgetedCommand,
       publish: (data, incremental) => updates.push({ data, incremental }) })
     assert.equal(discoveries, cycle - 1)
     const data = await plugin.collect(new AbortController().signal)
@@ -39,13 +40,13 @@ test('collection cancellation reaches discovery without disabling subsequent col
   const operation = new AbortController()
   let observed: AbortSignal | undefined
   let attempts = 0
-  const plugin = createAgentsPlugin({ discover: signal => {
+  const plugin = await createAgentsPlugin({ discover: signal => {
     if (++attempts > 1) return Promise.resolve({ snapshot, sessions: [] })
     observed = signal
     const { promise, reject } = Promise.withResolvers<AgentDiscovery>()
     signal!.addEventListener('abort', () => reject(resourceAbortError()), { once: true })
     return promise
-  } }).create({ signal: lifetime.signal, resources: collectionResources, publish() {} })
+  } }).create({ signal: lifetime.signal, resources: collectionResources, command: runBudgetedCommand, publish() {} })
   const collecting = assert.rejects(plugin.collect(operation.signal), { name: 'AbortError' })
   operation.abort()
   assert.equal(observed?.aborted, true)
@@ -61,8 +62,8 @@ test('stop drains late discovery and preserves cleanup failures without publishi
   const gate = Promise.withResolvers<AgentDiscovery>()
   let published = 0
   const failure = new Error('discovery release failed')
-  const plugin = createAgentsPlugin({ discover: () => gate.promise }).create({ signal: new AbortController().signal,
-    resources: collectionResources, publish: () => { published++ } })
+  const plugin = await createAgentsPlugin({ discover: () => gate.promise }).create({ signal: new AbortController().signal,
+    resources: collectionResources, command: runBudgetedCommand, publish: () => { published++ } })
   const collecting = assert.rejects(plugin.collect(new AbortController().signal), error => error === failure)
   let stopped = false
   const stopping = assert.rejects(Promise.resolve(plugin.stop()).finally(() => { stopped = true }), error => {
@@ -96,7 +97,7 @@ test('100 plugin lifetimes close real file watchers, cancel timers and discard a
   })
   for (let cycle = 0; cycle < 100; cycle++) {
     const lifetime = new AbortController()
-    const plugin = definition.create({ signal: lifetime.signal, resources: collectionResources,
+    const plugin = await definition.create({ signal: lifetime.signal, resources: collectionResources, command: runBudgetedCommand,
       publish: () => { publications++ } })
     try {
       const data = await plugin.collect(lifetime.signal)

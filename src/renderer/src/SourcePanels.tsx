@@ -1,15 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import type { MonitorSection, MonitorSnapshot, SourceHeartbeat, SourceStatus } from '../../shared/types'
-import { CollectionStatus, CollectorError, Empty, Sources, time } from './components'
+import { CollectionStatus, CollectorError, Empty, time } from './components'
 import { useI18n } from './i18n'
 import DiagnosticPanel from './DiagnosticPanel'
 import { useSettings } from './settings'
 import SettingsSaveError from './SettingsSaveError'
 import './settings.css'
+import { monitorSections } from '../../shared/plugin-catalog'
+import type { RendererContribution } from './plugins/types'
+import ContributionBoundary from './plugins/ContributionBoundary'
 
 interface SourceGroup {
   id: MonitorSection
   title: string
+  description: string
+  contribution?: RendererContribution
   sources: SourceStatus[]
   state: MonitorSnapshot[MonitorSection]
 }
@@ -23,6 +28,7 @@ function SourceSection({ group, heartbeat }: { group: SourceGroup; heartbeat?: S
   const { t, language } = useI18n()
   const { snapshot: { settings }, saving, error: saveError, update } = useSettings()
   const enabled = settings.plugins[group.id]
+  const Source = group.contribution?.Source
   const changing = useRef(false)
   async function toggle() {
     if (saving || changing.current) return
@@ -57,7 +63,7 @@ function SourceSection({ group, heartbeat }: { group: SourceGroup; heartbeat?: S
         <span>{saving && changing.current ? t('正在保存…', 'Saving…') : enabled ? t('采集已开启', 'Collection enabled') : t('采集已停用', 'Collection disabled')}</span>
       </div>
     </div>
-    <p className="source-collection-help" id={`collection-${group.id}-help`}>{t('仅控制 OC Chan 的采集；不会停止 Agent 或真实任务。', 'Controls OC Chan collection only; agents and actual tasks keep running.')}{group.id === 'schedules' && t(' 执行历史也依赖此开关。', ' Execution history also depends on this switch.')}</p>
+    <p className="source-collection-help" id={`collection-${group.id}-help`}>{group.description} {t('仅控制 OC Chan 的采集；不会停止 Agent 或真实任务。', 'Controls OC Chan collection only; agents and actual tasks keep running.')}</p>
     {saveError?.patch.plugins && Object.hasOwn(saveError.patch.plugins, group.id) && <SettingsSaveError settingLabel={group.title} />}
     <CollectionStatus enabled={enabled} collectedAt={group.state.data?.collectedAt} />
     {enabled && (group.state.error || error) && <div className="source-section-error" role="alert">
@@ -65,8 +71,8 @@ function SourceSection({ group, heartbeat }: { group: SourceGroup; heartbeat?: S
       <p>{t('保留上次数据；重试只采集此分区。', 'Previous data is retained. Retry collects only this section.')}</p>
       <button className="button secondary" aria-disabled={pending || saving} aria-busy={pending} onClick={() => void retry()}>{pending ? t('正在重试', 'Retrying') : t('重试此分区', 'Retry section')}</button>
     </div>}
-    {group.sources.length ? <Sources sources={group.sources} observations={heartbeat?.sources} enabled={enabled} />
-      : <Empty title={!enabled ? t('采集已停用 · 尚无数据', 'Collection disabled · No data') : group.state.error ? t('尚无成功数据', 'No successful data yet') : group.state.data ? t('此分区没有来源', 'No sources in this section') : t('尚未完成采集', 'Collection not yet complete')}>
+    {Source && group.sources.length ? <ContributionBoundary key={group.contribution?.id}><Source sources={group.sources} observations={heartbeat?.sources} enabled={enabled} /></ContributionBoundary>
+      : <Empty title={!enabled ? t('插件已停用', 'Plugin disabled') : group.state.error ? t('尚无成功数据', 'No successful data yet') : group.state.data ? t('此分区没有来源', 'No sources in this section') : t('尚未完成采集', 'Collection not yet complete')}>
         {t('读取失败与空结果分别报告；不会把缺失数据计为零。', 'Read failures and empty results are reported separately; missing data is never counted as zero.')}
       </Empty>}
     <div className="panel-footer source-section-times" aria-live="off">
@@ -96,7 +102,7 @@ export default function SourcePanels({ groups, live }: { groups: SourceGroup[]; 
       if (!active) return
       setHeartbeats(previous => {
         const next = { ...previous }
-        for (const section of ['agents', 'schedules', 'system', 'events'] as const) {
+        for (const section of monitorSections) {
           if (!received.has(section)) next[section] = observation(section, snapshot[section])
         }
         return next

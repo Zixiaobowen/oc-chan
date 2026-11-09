@@ -1,3 +1,4 @@
+import { builtinPlugins, monitorSections } from '../shared/plugin-catalog'
 import { types } from 'node:util'
 import {
   DIAGNOSTIC_REPORT_MAX_BYTES, DIAGNOSTIC_REPORT_MAX_DIAGNOSTICS,
@@ -11,16 +12,16 @@ import type { MonitorSnapshot, SourceStatus } from '../shared/types'
 const sourceIds: Record<string, true> = {
   processes: true, 'omp-ownership': true, 'tern-state': true, 'omp-socket': true, 'agent-activity': true,
   'omp-cron': true, 'hermes-cron': true, 'hermes-runtime': true, 'hermes-metadata-errors': true,
-  crontab: true, 'schedule-semantics': true, system: true, 'system-0': true, 'system-1': true,
-  'system-2': true, 'system-3': true, 'network-interface': true, 'collection-resources': true, 'schedule-limits': true,
+  crontab: true, 'schedule-semantics': true, 'collection-resources': true, 'schedule-limits': true,
+  ...Object.fromEntries(builtinPlugins.flatMap(plugin => (plugin.diagnostics?.sourceIds ?? []).map(id => [id, true as const]))),
   'event-store': true, 'hermes-events': true, 'source-events': true,
 }
 const resourceIds: Record<string, true> = {
   'agent-activity': true, 'agent-metadata': true, 'agent-processes': true, 'agent-ownership': true,
   'agent-collab': true, 'agent-tern': true, 'schedule-files': true, 'schedule-plist': true,
   'schedule-commands': true, 'schedule-metadata': true, 'hermes-history': true,
-  'hermes-executions': true, 'hermes-processes': true, 'system-memory': true,
-  'system-disk': true, 'system-network': true, 'system-processes': true, 'tern-navigation': true,
+  'hermes-executions': true, 'hermes-processes': true, 'tern-navigation': true,
+  ...Object.fromEntries(builtinPlugins.flatMap(plugin => (plugin.diagnostics?.resourceIds ?? []).map(id => [id, true as const]))),
   'diagnostic-export': true,
   'event-store': true, 'hermes-events': true,
 }
@@ -33,7 +34,7 @@ const usageKeys = ['commands', 'files', 'sockets', 'stdoutBytes', 'stderrBytes',
 const limitKeys = ['commands', 'files', 'sockets', 'commandBytes', 'fileBytes', 'socketBytes', 'queued', 'queuedPerSource', 'sources', 'queueTimeoutMs'] as const
 const statisticKeys = ['admitted', 'completed', 'failed', 'cancelled', 'rejected', 'queueTimeouts',
   'totalWaitMs', 'maxWaitMs', 'totalExecutionMs', 'maxExecutionMs'] as const
-const sections = ['agents', 'schedules', 'system', 'events'] as const
+const sections = monitorSections
 const scope = {
   included: ['application-version-and-platform', 'source-capability-status-and-controlled-diagnostics', 'resource-budget-counts', 'collection-times-and-array-totals'],
   excluded: ['usernames', 'paths', 'uids', 'titles', 'content', 'commands', 'environment', 'stderr', 'raw-errors'],
@@ -205,7 +206,7 @@ export function buildDiagnosticReport(snapshot: MonitorSnapshot, resources: Reso
       collectedAt: available ? timestamp(data(raw, 'collectedAt')) : null,
       totals: section === 'agents' ? { agents: total('agents') } : section === 'schedules' ? { jobs: total('jobs') }
         : section === 'events' ? { events: available ? number(data(data(raw, 'retention'), 'count')) : null }
-          : { processes: total('processes'), memoryProcesses: total('memoryProcesses'), history: total('history') },
+          : Object.fromEntries((builtinPlugins.find(plugin => plugin.section === section)?.diagnostics?.totals ?? []).map(key => [key, total(key)])),
       sources: available ? sourceList(data(raw, 'sources')) : [],
     }
     if (!available) { coverage.sources.total = null; coverage.diagnostics.total = null }

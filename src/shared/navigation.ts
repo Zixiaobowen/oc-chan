@@ -1,6 +1,7 @@
+import { builtinPlugins, isMonitorSection } from './plugin-catalog'
 import { MAX_AGENT_ID_LENGTH, MAX_SCHEDULE_ID_LENGTH, MAX_SOURCE_ID_LENGTH, type AgentInfo, type MonitorSection, type ScheduledJob } from './types'
 
-export type AppPage = 'overview' | 'agents' | 'schedules' | 'events' | 'system' | 'sources' | 'settings'
+export type AppPage = 'overview' | MonitorSection | 'sources' | 'settings'
 export type NavigationTarget =
   | { kind: 'page'; page: AppPage }
   | { kind: 'agent'; id: string; identity: string }
@@ -28,11 +29,11 @@ export function parseNavigationTarget(value: unknown): NavigationTarget {
   const keys = Object.keys(target)
   const only = (...allowed: string[]) => keys.length === allowed.length && keys.every(key => allowed.includes(key))
   const text = (field: unknown, max: number): field is string => typeof field === 'string' && field.length > 0 && field.length <= max && !/[\u0000-\u001f\u007f]/.test(field)
-  if (target.kind === 'page' && only('kind', 'page') && ['overview', 'agents', 'schedules', 'events', 'system', 'sources', 'settings'].includes(target.page as string))
+  if (target.kind === 'page' && only('kind', 'page') && (['overview', 'sources', 'settings'].includes(target.page as string) || builtinPlugins.some(plugin => plugin.page.id === target.page)))
     return { kind: 'page', page: target.page as AppPage }
   if ((target.kind === 'agent' || target.kind === 'schedule') && only('kind', 'id', 'identity') && text(target.id, target.kind === 'agent' ? MAX_AGENT_ID_LENGTH : MAX_SCHEDULE_ID_LENGTH) && text(target.identity, 16384))
     return { kind: target.kind, id: target.id, identity: target.identity }
-  if (target.kind === 'source' && only('kind', 'id', 'section') && text(target.id, MAX_SOURCE_ID_LENGTH) && ['agents', 'schedules', 'system', 'events'].includes(target.section as string))
+  if (target.kind === 'source' && only('kind', 'id', 'section') && text(target.id, MAX_SOURCE_ID_LENGTH) && isMonitorSection(target.section))
     return { kind: 'source', id: target.id, section: target.section as MonitorSection }
   throw new Error('导航目标无效 / Invalid navigation target')
 }

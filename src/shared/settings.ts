@@ -1,3 +1,4 @@
+import { monitorSections } from './plugin-catalog'
 import type { ThemeId } from './themes'
 import type { NavigationTarget } from './navigation'
 import type { MonitorSection } from './types'
@@ -42,7 +43,7 @@ export const DEFAULT_SETTINGS: Readonly<AppSettings> = {
   language: 'system', textSize: 'default',
   uiFont: 'system', codeFont: 'system', trayClick: 'tray',
   showDock: true, preventSleep: false, sidebarWidth: 214, windowBounds: null,
-  plugins: Object.freeze({ agents: true, schedules: true, system: true, events: true }),
+  plugins: Object.freeze(Object.fromEntries(monitorSections.map(section => [section, true])) as PluginSettings),
   notifications: DEFAULT_NOTIFICATIONS
 }
 

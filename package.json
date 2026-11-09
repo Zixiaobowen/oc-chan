@@ -14,7 +14,7 @@
     "build:app": "npm run typecheck && electron-vite build",
     "build": "npm run build:app && npm run build:native",
     "start": "electron out/main/index.js",
-    "test": "tsx --test src/main/*.test.ts src/main/collectors/*.test.ts src/main/plugins/*.test.ts src/main/events/*.test.ts src/renderer/src/*.test.ts src/shared/*.test.ts",
+    "test": "tsx --test src/main/*.test.ts src/main/collectors/*.test.ts src/main/plugins/*.test.ts src/main/events/*.test.ts src/plugins/*/main/*.test.ts src/renderer/src/*.test.ts src/shared/*.test.ts",
     "test:ci": "node scripts/ci-tests.mjs",
     "smoke": "tsx scripts/smoke.ts",
     "smoke:renderer": "node scripts/smoke-renderer.mjs",

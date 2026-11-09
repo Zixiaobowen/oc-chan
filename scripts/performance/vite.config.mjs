@@ -13,10 +13,10 @@ const prepend = (target, probe) => ({
   enforce: 'pre',
   transform(source, id) {
     if (id.split('?')[0] !== path.join(root, target)) return null
-    if (target === 'src/main/index.ts') {
-      const calls = source.match(/\bcreateAgentsPlugin\(\)/g)
-      if (calls?.length !== 1) throw new Error('Expected one explicit Agent plugin factory in the application entry')
-      const instrumented = source.replace(/\bcreateAgentsPlugin\(\)/, 'createPerformanceAgentsPlugin()')
+    if (target === 'src/main/plugins/catalog.ts') {
+      const calls = source.match(/\(await import\('\.\/agents'\)\)\.createAgentsPlugin\(\)/g)
+      if (calls?.length !== 1) throw new Error('Expected one lazy Agent plugin factory in the trusted collection catalog')
+      const instrumented = source.replace(/\(await import\('\.\/agents'\)\)\.createAgentsPlugin\(\)/, 'createPerformanceAgentsPlugin()')
       return { code: `import { createPerformanceAgentsPlugin } from ${JSON.stringify(path.join(root, 'scripts/performance', probe))};\n${instrumented}`, map: null }
     }
     return { code: `import ${JSON.stringify(path.join(root, 'scripts/performance', probe))};\n${source}`, map: null }
@@ -34,7 +34,7 @@ export default {
   ...base,
   main: {
     ...base.main,
-    plugins: [prepend('src/main/index.ts', 'main-probe.mjs'), trayControl, ...base.main.plugins, ...(fixtures ? [fixtures] : [])]
+    plugins: [prepend('src/main/plugins/catalog.ts', 'main-probe.mjs'), trayControl, ...base.main.plugins, ...(fixtures ? [fixtures] : [])]
   },
   preload: { ...base.preload, plugins: [prepend('src/preload/index.ts', 'preload-probe.mjs'), ...base.preload.plugins] },
   renderer: { ...base.renderer, plugins: [prepend('src/renderer/src/main.tsx', 'renderer-probe.mjs'), ...base.renderer.plugins] }

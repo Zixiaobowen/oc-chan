@@ -1,11 +1,11 @@
-import { runBudgetedCommand } from '../resource-io'
-import { throwIfAborted } from '../resource-budget'
+import type { CollectionServices } from '../../../main/plugins/contracts'
+import { throwIfAborted } from '../../../main/resource-budget'
 
 const MAX_OUTPUT_BYTES = 64 * 1024
 interface Counters { received: number; sent: number }
 interface Sample extends Counters { iface: string; at: number }
 type Command = (file: string, args: string[], signal?: AbortSignal) => Promise<string>
-const command: Command = async (file, args, signal) => (await runBudgetedCommand('system-network', file, args,
+const command = (services: CollectionServices): Command => async (file, args, signal) => (await services.command('system-network', file, args,
   { timeout: 4000, maxBuffer: MAX_OUTPUT_BYTES, env: { ...process.env, LC_ALL: 'C' } }, signal)).stdout
 
 export function parseDefaultInterface(output: string): string {
@@ -40,7 +40,10 @@ export function parseNetworkCounters(output: string, iface: string): Counters {
 export class NetworkReader {
   private previous?: Sample
   private readonly controller = new AbortController()
-  constructor(private readonly run: Command = command, private readonly now: () => number = () => performance.now()) {}
+  private readonly run: Command
+  constructor(services: CollectionServices, run?: Command, private readonly now: () => number = () => performance.now()) {
+    this.run = run ?? command(services)
+  }
 
   dispose(): void {
     this.controller.abort()

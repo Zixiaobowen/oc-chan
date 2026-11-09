@@ -5,7 +5,7 @@ import Database from 'kubai-icons-react/icons/database'
 import Sync from 'kubai-icons-react/icons/sync'
 import Search from 'kubai-icons-react/icons/search'
 import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react'
-import type { AgentInfo, SourceCapabilityId, SourceDiagnostic, SourceObservation, SourceStatus, SystemSample } from '../../shared/types'
+import type { AgentInfo, SourceCapabilityId, SourceDiagnostic, SourceObservation, SourceStatus } from '../../shared/types'
 import { AGENT_ACTIVITY_WINDOW_MS } from '../../shared/types'
 import { sourceCapabilities } from '../../shared/source-capabilities'
 import './sources.css'
@@ -129,7 +129,6 @@ const sourceLabels: Record<string, string> = {
   'Codex 主代理与子代理': 'Codex main agents and subagents',
   'OMP 本地 socket': 'OMP local socket', 'Tern 主代理状态': 'Tern main agent status',
   '近期调用元数据': 'Recent call metadata', '会话事件订阅': 'Session event subscription',
-  '系统指标': 'System metrics', '内存': 'Memory', '磁盘': 'Disk', '网络': 'Network', '进程': 'Processes', '网络接口': 'Network interface',
   '系统调度': 'System schedules', 'OMP 任务元数据': 'OMP task metadata', 'Hermes 任务元数据': 'Hermes task metadata',
   'Hermes 执行状态': 'Hermes execution status',
   '采集资源额度': 'Collection resource limits', '调度资源边界': 'Schedule resource limits',
@@ -141,7 +140,6 @@ const sourceDetails: Record<string, string> = {
   '当前未识别到活跃 CLI 进程；没有扫描保存的历史会话。': 'No active CLI processes identified. Saved historical sessions are not scanned.',
   '未启用 Collab host；当前版本不公开进程内 AgentRegistry 查询 socket。': 'Collab host is not enabled. This version does not expose an in-process AgentRegistry query socket.',
   '未发现 Tern 宿主进程；保留 CLI 进程活性状态。': 'No Tern host process found. CLI process liveness is retained.',
-  'CPU 首次或计数不连续时为未知，后续按增量采样；内存使用量为活跃内存（含 wired / compressed），不含可回收缓存。进程 CPU 以单核 100% 计。': 'CPU is unknown on the first sample or after counter discontinuity; subsequent samples use increments. Memory usage is active memory (including wired / compressed), excluding reclaimable cache. Process CPU is measured as 100% per core.',
   '当前采集器仅支持 macOS launchd 与用户 crontab': 'This collector supports macOS launchd and user crontab only.',
   '未配置任务元数据': 'No task metadata configured', '目录不存在': 'Directory does not exist', '当前用户未配置 crontab': 'No crontab configured for the current user',
   'LaunchAgents 状态仅对应当前用户；LaunchDaemons 对应 system。启动 / 常驻服务与定时任务分列。Hermes 调度器与内部任务分别列出。launchd / cron 不提供可靠下次执行时间，不做推算；Hermes 仅显示元数据中带时区且未过期的计划时间，不保证实际执行。': 'LaunchAgents status applies to the current user; LaunchDaemons applies to system. Startup and persistent services are separate from scheduled tasks. The Hermes scheduler and its internal tasks are listed separately. launchd / cron do not provide reliable next-run times, so none are inferred. Hermes shows only future metadata timestamps with a timezone; execution is not guaranteed.'
@@ -176,7 +174,6 @@ function sourceDetail(source: SourceStatus): string {
   switch (source.id) {
     case 'schedule-limits': return value
       .replace(/^目录条目 (\d+)\/(\d+)（所有用户与系统目录合计，含非 plist）；任务 (\d+)\/(\d+)；缓存 (\d+)\/(\d+) 项，投影 (\d+)\/(\d+) 字节（含键与固定元数据估算）；任务投影最多 (\d+) 字节。字节额度不代表 JS heap 或 RSS。$/, 'Directory entries $1/$2 across user and system directories, including non-plist entries; jobs $3/$4; cache $5/$6 entries, $7/$8 projected bytes including keys and fixed metadata estimates; job projections capped at $9 bytes. These byte budgets do not measure JS heap or RSS.')
-    case 'network-interface': return value.replace(/^默认接口 (.*)；仅统计此接口，避免虚拟网卡重复计数。首个采样周期速率尚不可用。$/, 'Default interface $1; only this interface is counted to avoid duplicate virtual-interface traffic. Rates are unavailable during the first sampling interval.')
     case 'omp-socket': return value.replace(/^读取 (\d+) 个活跃 host；(\d+) 个读取失败。socket 仅提供主会话元数据，不公开子代理 roster。(本轮限制最多 32 个 host。)?$/, (_, active: string, failed: string, limited: string | undefined) => `Read ${active} active hosts; ${failed} failed. The socket exposes only main-session metadata, not the subagent roster.${limited ? ' Limited to 32 hosts per pass.' : ''}`)
     case 'tern-state': return value
       .replace(/^枚举 (\d+) 个 Tern 窗口，读取 (\d+) 个，按精确 session 关联 (\d+) 个主代理 working\/idle；不提供子代理生命周期。/, 'Discovered $1 Tern windows, read $2 and matched $3 main agents by exact session for working/idle status. Subagent lifecycle is unavailable.')
@@ -299,29 +296,6 @@ export function Sources({ sources, compact = false, observations, enabled = true
   return <div className="source-list">{sources.map(source => <SourceRow key={source.id} source={source} observation={byId?.get(source.id)} enabled={enabled} />)}</div>
 }
 
-export function Chart({ samples, field, label }: { samples: SystemSample[]; field: 'cpuPercent' | 'memoryPercent'; label: string }) {
-  const { t } = useI18n()
-  const width = 600, height = 125
-  const start = samples[0]?.at ?? 0
-  const end = samples.at(-1)?.at ?? start
-  let line = '', area = '', segmentStart: number | null = null, segmentEnd = 0
-  for (const sample of samples) {
-    const value = sample[field]
-    if (value === null) {
-      if (segmentStart !== null) area += `L${segmentEnd},${height} Z `
-      segmentStart = null
-      continue
-    }
-    const x = end > start ? (sample.at - start) / (end - start) * width : width
-    const y = height - Math.max(0, Math.min(100, value)) / 100 * height
-    line += `${segmentStart === null ? 'M' : 'L'}${x},${y} `
-    area += segmentStart === null ? `M${x},${height} L${x},${y} ` : `L${x},${y} `
-    segmentStart = segmentStart ?? x
-    segmentEnd = x
-  }
-  if (segmentStart !== null) area += `L${segmentEnd},${height} Z`
-  return <div className={`chart chart-${field}`}><div className="chart-axis"><span>100%</span><span>50%</span><span>0%</span></div><svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-label={t(`${label}，最近 ${samples.length} 次采样`, `${label}, last ${samples.length} samples`)}><path d={`M0,0 H${width} M0,${height / 2} H${width} M0,${height} H${width}`} className="chart-grid" />{samples.length > 1 && <><path d={area} className="chart-area" /><path d={line} className="chart-line" /></>}</svg><div className="chart-time"><span>{samples.length > 1 ? t(`${Math.round((end - start) / 1000)} 秒前`, `${Math.round((end - start) / 1000)} seconds ago`) : t('收集趋势中', 'Collecting trend data')}</span><span>{t('现在', 'Now')}</span></div></div>
-}
 
 export function Meter({ label, value, detail, tone = 'green' }: { label: string; value: number | null; detail: string; tone?: string }) {
   return <div className={`meter meter-${tone}`}><div className="meter-title"><span>{label}</span><strong>{value === null ? '—' : `${value.toFixed(1)}%`}</strong></div><div className="meter-track" role="meter" aria-label={label} aria-valuenow={value ?? undefined} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${Math.min(100, Math.max(0, value ?? 0))}%` }} /></div><p>{detail}</p></div>

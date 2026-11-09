@@ -32,7 +32,7 @@ test('registration rejects invalid metadata and dependency graphs without constr
   const valid = definition('valid', { create: () => { constructed++; return { collect: async () => snapshot, stop() {} } } })
   const invalidFields: Record<string, unknown>[] = [
     { id: '' }, { id: 'A' }, { id: '1name' }, { id: '-name' }, { id: 'has_space' }, { id: '非ascii' }, { id: `a${'b'.repeat(64)}` },
-    { id: 12 }, { section: 'other' }, { create: undefined }, { capabilities: undefined }, { capabilities: 'read' },
+    { id: 12 }, { section: 'INVALID SECTION' }, { create: undefined }, { capabilities: undefined }, { capabilities: 'read' },
     { capabilities: ['same', 'same'] }, { capabilities: ['Read'] }, { capabilities: ['a'.repeat(65)] },
     { capabilities: Array.from({ length: 17 }, (_, index) => `cap-${index}`) },
     { dependencies: null }, { dependencies: 'valid' }, { dependencies: ['valid', 'valid'] }, { dependencies: ['BAD'] },

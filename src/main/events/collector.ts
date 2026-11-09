@@ -1,3 +1,4 @@
+import { monitorSections } from '../../shared/plugin-catalog'
 import { createHash } from 'node:crypto'
 import { EVENT_BATCH_LIMIT, EVENT_RETENTION_MS, type EventCoverage, type EventPage, type EventQuery, type EventSnapshot, type LocalEvent } from '../../shared/events'
 import { scheduleTarget } from '../../shared/navigation'
@@ -12,7 +13,7 @@ const SOURCE_LIMIT = 64
 const SOURCE_EVENT_BATCH = 16
 export const SOURCE_UNAVAILABLE_MS = 60_000
 export const SOURCE_OBSERVATION_GAP_MS = 120_000
-const watchedSections = ['agents', 'schedules', 'system'] as const
+const watchedSections = monitorSections.filter(section => section !== 'events')
 export interface EventObservation { id: string; section: MonitorSection; state: SourceState; observedAt: string }
 export interface EventInputs { snapshot: MonitorSnapshot; enabled: Readonly<Record<MonitorSection, boolean>> }
 const eventId = (...parts: string[]): string => createHash('sha256').update(JSON.stringify(parts)).digest('hex')

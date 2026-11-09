@@ -10,6 +10,7 @@ import { HISTORY_PAGE_SIZE, type ScheduledJob } from '../../shared/types'
 import { ScheduleHistoryReader } from '../schedule-history'
 import { HermesHistoryProvider } from './hermes-history'
 import { collectionResources } from '../resource-budget'
+import { runBudgetedCommand } from '../resource-io'
 import { createSchedulesPlugin } from '../plugins/schedules'
 
 const exec = promisify(execFile)
@@ -261,7 +262,7 @@ test('schedule plugin cancellation drains an actual SQLite helper before a repla
     SELECT printf('plugin-%04d',x),'daily','completed','2026-11-01T00:00:00Z' FROM n;`)
   const definition = createSchedulesPlugin({ createHistory: () => new ScheduleHistoryReader({ providers: [new HermesHistoryProvider(file)] }) })
   const lifetime = new AbortController()
-  const plugin = definition.create({ signal: lifetime.signal, resources: collectionResources, publish() {} })
+  const plugin = await definition.create({ signal: lifetime.signal, resources: collectionResources, command: runBudgetedCommand, publish() {} })
   t.after(() => plugin.stop())
   const request = assert.rejects(plugin.history!.read(job), { name: 'AbortError' })
   await setImmediate()
@@ -270,7 +271,7 @@ test('schedule plugin cancellation drains an actual SQLite helper before a repla
   await Promise.all([request, plugin.stop()])
   assert.equal(Object.values(collectionResources.snapshot().global.current).every(value => value === 0), true)
   await assert.rejects(plugin.history!.read(job), { name: 'AbortError' })
-  const replacement = definition.create({ signal: new AbortController().signal, resources: collectionResources, publish() {} })
+  const replacement = await definition.create({ signal: new AbortController().signal, resources: collectionResources, command: runBudgetedCommand, publish() {} })
   try { assert.equal((await replacement.history!.read(job)).entries.length, HISTORY_PAGE_SIZE) }
   finally { await replacement.stop() }
 })

@@ -1,6 +1,7 @@
 import { DiagnosticError } from '../../shared/diagnostics'
 import { MAX_SOURCE_ID_LENGTH, type MonitorSection, type ScheduledJob, type ScheduleHistory } from '../../shared/types'
 import { collectionResources, isResourceAbort, isResourceCleanupFailure, resourceAbortError, throwIfAborted } from '../resource-budget'
+import { runBudgetedCommand } from '../resource-io'
 import type { EventPage, EventQuery } from '../../shared/events'
 import {
   MAX_COLLECTION_PLUGINS,
@@ -30,6 +31,7 @@ interface Entry {
   collectionError: string | null
   historyRevision: number
   stopping?: Promise<void>
+  removing?: boolean
   transition?: { enabled: boolean; work: Promise<void> }
   timer?: NodeJS.Timeout
   deadline?: NodeJS.Timeout
@@ -83,7 +85,7 @@ function definitions(input: readonly AnyCollectionPlugin[]): CollectionPluginDef
     if (!value || !validName(value.id)) throw new Error('Invalid collection plugin id')
     const { id, section, intervalMs, timeoutMs, create } = value
     if (ids.has(id)) throw pluginError(id, 'OC_PLUGIN_DEFINITION', 'duplicate id')
-    if (!['agents', 'schedules', 'system', 'events'].includes(section) || typeof create !== 'function') {
+    if (!validName(section) || typeof create !== 'function') {
       throw pluginError(id, 'OC_PLUGIN_DEFINITION', 'invalid section or factory')
     }
     for (const [field, duration] of [['intervalMs', intervalMs], ['timeoutMs', timeoutMs]] as const) {
@@ -149,6 +151,38 @@ export class CollectionPluginRegistry {
       this.closing = Promise.resolve()
       for (const entry of this.order) { entry.enabled = false; entry.phase = 'disabled' }
     } else this.parentSignal?.addEventListener('abort', this.onAbort, { once: true })
+  }
+
+  /** A registration owns its slot until cancellation, drain and cleanup all succeed. */
+  register(definition: AnyCollectionPlugin): () => Promise<void> {
+    if (this.closed) throw pluginError(definition.id, 'OC_PLUGIN_CLOSED', 'registry is closed')
+    const registered = definitions([...this.order.map(entry => entry.definition as AnyCollectionPlugin), definition])
+    const sorted = topologicalOrder(registered)
+    const normalized = registered[registered.length - 1]
+    for (const id of normalized.dependencies!) {
+      if (this.entries.get(id)?.removing) throw pluginError(normalized.id, 'OC_PLUGIN_DEPENDENCY', `dependency ${id} is being removed`)
+    }
+    const entry: Entry = { definition: normalized, enabled: true, phase: 'idle', generation: 0,
+      error: null, retries: new Map(), collectionError: null, historyRevision: 0 }
+    this.entries.set(normalized.id, entry)
+    this.order.splice(0, this.order.length, ...sorted.map(item => this.entries.get(item.id)!))
+    if (this.started) { this.schedule(entry); this.collectAutomatically(entry) }
+    let removal: Promise<void> | undefined
+    return () => {
+      if (removal) return removal
+      if (this.closed) return this.close()
+      const consumer = this.order.find(candidate => candidate.definition.dependencies!.includes(normalized.id))
+      if (consumer) return Promise.reject(pluginError(normalized.id, 'OC_PLUGIN_DEPENDENCY', `registered dependency of ${consumer.definition.id}`))
+      entry.removing = true
+      entry.enabled = false
+      this.cancel(entry)
+      removal = this.stopEntry(entry).then(() => {
+        this.entries.delete(normalized.id)
+        const index = this.order.indexOf(entry)
+        if (index >= 0) this.order.splice(index, 1)
+      })
+      return removal
+    }
   }
 
   start(): void {
@@ -258,6 +292,7 @@ export class CollectionPluginRegistry {
     const entry = this.entries.get(id)
     if (!entry) return Promise.reject(pluginError(id, 'OC_PLUGIN_UNKNOWN', 'unknown plugin'))
     if (this.closed) return this.reject(entry, pluginError(id, 'OC_PLUGIN_CLOSED', 'registry is closed'))
+    if (entry.removing) return this.reject(entry, pluginError(id, 'OC_PLUGIN_BUSY', 'plugin is being removed'))
     if (typeof enabled !== 'boolean') return this.reject(entry, pluginError(id, 'OC_PLUGIN_DEFINITION', 'enabled must be boolean'))
     if (entry.transition) {
       return entry.transition.enabled === enabled ? entry.transition.work
@@ -294,11 +329,12 @@ export class CollectionPluginRegistry {
     this.closed = true
     this.started = false
     this.parentSignal?.removeEventListener('abort', this.onAbort)
+    const closingEntries = [...this.order].reverse()
     this.closing = Promise.resolve().then(async () => {
       const failures: unknown[] = []
-      for (let index = this.order.length - 1; index >= 0; index--) {
-        try { await this.stopEntry(this.order[index]) }
-        catch (error) { failures.push(new DiagnosticError('shutdown', error, undefined, this.order[index].definition.section)) }
+      for (const entry of closingEntries) {
+        try { await this.stopEntry(entry) }
+        catch (error) { failures.push(new DiagnosticError('shutdown', error, undefined, entry.definition.section)) }
       }
       if (failures.length) throw new AggregateError(failures, 'Collection plugin shutdown failed')
     })
@@ -354,6 +390,7 @@ export class CollectionPluginRegistry {
 
   private unavailable(entry: Entry): Error | undefined {
     if (this.closed) return pluginError(entry.definition.id, 'OC_PLUGIN_CLOSED', 'registry is closed')
+    if (entry.removing) return pluginError(entry.definition.id, 'OC_PLUGIN_BUSY', 'plugin is being removed')
     if (!entry.enabled) return pluginError(entry.definition.id, 'OC_PLUGIN_DISABLED', 'plugin is disabled')
     if (entry.stopping) return pluginError(entry.definition.id, 'OC_PLUGIN_BUSY', 'plugin is stopping')
     return undefined
@@ -392,7 +429,7 @@ export class CollectionPluginRegistry {
         this.assertAvailable(entry)
       }
       this.assertAvailable(entry)
-      const instance = entry.definition.create({ signal: controller.signal, resources: collectionResources,
+      const instance = await entry.definition.create({ signal: controller.signal, resources: collectionResources, command: runBudgetedCommand,
         publish: (snapshot, incremental) => this.publish(entry, controller, snapshot, undefined, incremental) })
       entry.instance = instance
       if (!instance || typeof instance.collect !== 'function' || typeof instance.stop !== 'function' ||
