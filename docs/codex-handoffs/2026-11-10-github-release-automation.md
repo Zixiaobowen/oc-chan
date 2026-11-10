@@ -1,6 +1,6 @@
 # GitHub Actions 与自动预览发布
 
-- 仓库：`/Users/zixiaobowen/myProjects/oc-chan`；最终隔离工作区：`/private/tmp/oc-release-fix-20261110`，分支 `fix/actions-release-20261110`，基于 `175664a89e002be1185b27a5c678061545bb291a`。
+- 仓库：`/Users/zixiaobowen/myProjects/oc-chan`；最终隔离工作区：`/private/tmp/oc-release-fix-20261110`，当前分支`main`；修复分支`fix/actions-release-20261110`已快进合入，起点为`175664a89e002be1185b27a5c678061545bb291a`。
 - 用户目标：代码推送后自动构建，将 macOS DMG/ZIP 自动上传 GitHub Releases。
 
 ## 已确认与修改
@@ -27,9 +27,9 @@
 - 已提交并推送 `f3a6213fdd5573a778dc98bcaf4b6b5f9f9864bd`；现场GitHub ref读取一致。[Build macOS #56](https://github.com/Zixiaobowen/oc-chan/actions/runs/42843573848) 的macOS构建、真实WKWebView、依赖审计及安装包检查通过；发布job在读取附件目录时失败，未创建预览Release。
 - `npm run push:main` 的GitHub推送和当前工作区清理成功；随后因外部删除旧工作区但登记仍在，清理该旧路径报ENOENT，整体命令exit1。未删除失效登记或其他分支；这不表示GitHub推送失败。
 - HTML回执通过Tern原生WKWebView读取，实际1280 CSS px宽页与462 CSS px分栏截图已检查；浅色主题计算色值和链接键盘焦点正常，事件记录为空。原生viewport请求虽返回成功但未改变停放页实际尺寸，不能宣称360px验收通过；问题已报工具QA。
-- 浏览器helper接管返回no_window，而绑定当前TERN_PANE的`tern browser`可正常访问；改用原生CLI完成检查。最终仍须更新、显示当前回执并释放接管，不使用外部Chrome。
+- 浏览器helper接管返回no_window，而绑定当前TERN_PANE的`tern browser`可正常访问；改用原生CLI完成检查。最终回执已更新并释放接管，详见后文；没有使用外部Chrome。
 - 云端真实无头Tauri/WKWebView验收完成：`oc-chan-renderer-smoke-56`（artifact 13779545096），`complete=true`、`errors=[]`、`fault=null`；2026-11-10 15:27:28Z至15:39:03Z。生产Rust采集、IPC与真实React渲染已运行；报告确认fixture进程和目录、保留实例清理完成。证据下载到`/private/tmp/oc-release-smoke-56-u1ApVO/result.json`。不包含可见原生窗口或OS通知投递验收。
-- 稳定Latest核对基线：`v0.1.0`，Release ID `434182593`，发布时间`2026-11-04T16:41:41Z`。预览公开后须再次比对。
+- 稳定Latest基线：`v0.1.0`，Release ID `434182593`，发布时间`2026-11-04T16:41:41Z`。#58预览公开后的现场API比对确认ID与tag均未变化。
 - #56发布失败根因：download-artifact v8对单个pattern匹配将文件直接展开到`artifacts`，而CLI读取`artifacts/oc-chan-macos-arm64-56/latest.json`。实际下载日志与ENOENT明确证实。工作流现改为exact name并显式指定对应子目录，去掉不适用的merge-multiple；不添加路径兼容或降级逻辑。
 - 路径修复经actionlint通过；下载真实#56分发artifact到显式命名目录后，原prepare-release CLI成功生成且仅生成DMG、ZIP、SHA256SUMS，`shasum -a 256 -c SHA256SUMS.txt`两项OK。证据目录`/private/tmp/oc-release-dist-56-4xFILX`。未重复运行未修改的101项发布测试。
 - 后续修复`ad5fe2e5fa825b8ad11346d75cd087249e9c336f`已推送main并经GitHub ref确认；[Build macOS #57](https://github.com/Zixiaobowen/oc-chan/actions/runs/42848991728) 在真实WKWebView验收失败，Release未运行。原文：`OC_PLUGIN_PROTOCOL: Host IO exceeds negotiated reassembly reservation`，来自`Driver.exchange` (`scripts/smoke/main-probe.mjs:109`)；不能因#56通过就归为随机抖动。后续已定位并修复下述顺序竞态。
@@ -41,6 +41,13 @@
 - `npm run smoke:renderer -- --scenario marketplace --out /private/tmp/oc-release-io-fixed-marketplace-20261111`通过，complete=true、errors=[]。真实无头Tauri/WKWebView、Rust插件安装/更新/回退/卸载与重启路径已执行；退出documents、requests及全部全局资源归零，测试实例、driver、fixture进程和目录已清理。
 - 独立ReviewIoTerminal只读复核未发现阻塞问题；检查了8并发、4MiB准入、成功/失败/取消终态顺序、三处排空、进程/写队列/panic错误路径。该复核不替代真实Actions回执。
 - 本次提交前重新审阅中文README；顺序修复不改变用户操作、插件协议格式、支持范围或发布条件，中英文README均无需增补。协议内部完成约束已更新。
+- 竞态修复提交`49d8e536fb91f9f1631d883c1eeb3a80ce73f4a2`已通过`npm run push:main`推送并由GitHub ref再次核对。[Build macOS #58](https://github.com/Zixiaobowen/oc-chan/actions/runs/42857885722)绑定同一完整SHA，构建、真实WKWebView、安装包/依赖审计及发布全部成功。当前工作区临时应用清理成功；入口仍因旧登记`oc-chan-release-automation-20261110`已被外部删除而exit1，没有清理该登记或其他任务。
+- 最终回执继续复用Tern块`51024211476499`；现场发现它位于其他标签，已用`tern move 51024211476499 right-of 9723805958155 --json`显式绑定当前`TERN_PANE`右侧，`inspect`确认同一Row左右叶分别为会话和回执。helper仍报no_window，CLI正常，已报工具QA；没有打开Chrome或新浏览器块。
+- 最终回执已刷新为发布成功，下载/Release/Actions链接核对正确；原生暗色截图`/private/tmp/oc-release-receipt-58-bW6agR/native-final.png`已检查，同一WebKit内隔离srcdoc视口约360/480/1280 CSS px布局通过，没有超出1px取整差的整页横向溢出。窄尺寸为iframe视口，不冒称调整了真实Tern窗口。已release接管，driven=false、rightSplit=true；用户当前位于其他标签，回到本会话即可看到右侧回执。
+- 公开交付：[preview-58-49d8e53](https://github.com/Zixiaobowen/oc-chan/releases/tag/preview-58-49d8e53)，Release ID `440665967`，draft=false、prerelease=true，tag和target_commitish均指向完整提交`49d8e536fb91f9f1631d883c1eeb3a80ce73f4a2`。仅有DMG、ZIP、SHA256SUMS，无latest.json。
+- 匿名下载验收通过：`/private/tmp/oc-release-public-58-aXBrgj/receipt.json`，2026-11-10 17:16:16Z；curl禁用个人配置且未传登录凭据，三附件均可下载，两个安装包的字节数和公开清单SHA256一致。DMG SHA256=`bfe752f20cbacd778ae6866d26888e2b2729e657b3a5261031d7a50e35a3d808`；ZIP SHA256=`05f0768089eba2d44ca6823acce3f613b021c91274c1c80c90420c81df05fba4`。一次性核验脚本已移除，安装包和回执保留。
+- #58云端原始证据：`/private/tmp/oc-release-smoke-58-UzOPVe/result.json`，scenario=all、complete=true、errors=[]、fault=null；16:51:54Z至17:05:26Z。首次、重启、恢复三个实例的documents/requests及资源current均为0；fixture进程与目录、driver、保留实例全部清理。无头验收不包含可见原生窗口与OS通知投递。
+- 最终证据提交前再次阅读中文README；本次只归档已验证结果，中英文使用说明无需变化。没有在本地追加全仓测试或重新运行已适用的通过项。
 
 ## 工作区变化与限制
 
@@ -50,14 +57,15 @@ GitHub官方Create Release规则：若目标提交的workflow内容相对当前�
 
 没有Developer ID密钥，正式签名、公证和应用内稳定升级未验收。本轮不安装/替换正式应用、不启动可见开发窗口、不删除源码worktree、个人数据、其他会话资源或旧Release。
 
-## 后续动作
+## 后续使用与未验收项
 
-1. 提交并推送竞态修复，观察完整main自动发布。
-2. 核对预览Release状态、完整标签SHA、三附件、公开下载SHA256及稳定Latest未变。
-3. 更新最终交接与HTML回执，显示当前Tern右侧并释放接管；保留分栏和所有交付证据。
+1. 后续产品代码推送main，查看Build macOS结果与对应preview Release；下载DMG或ZIP并核对公开SHA256清单。
+2. 如需正式稳定发布，配置Apple签名、公证Secrets并推送与包版本一致的v标签；本轮未验收这一路径或正式应用升级。
+3. 若继续长时资源验收，先处理现有压力发生器负载落后，再建立完整前后对照；不要将本轮短时测量当作长期OOM证明。
+4. 已被外部移除的旧工作区仍有登记；需另获明确授权后处理登记，不删除其他会话的工作区、分支或个人数据。
 
 ## 恢复提示
 
-继续OC Chan的GitHub Actions与Release修复。最终隔离目录/private/tmp/oc-release-fix-20261110。用户要求main自动构建发布，预览三附件不进稳定更新；签名标签保留。先读现场状态和此handoff，再收齐子代理结果与针对性验证，不能将mock测试通过宣称为真实发布成功。原主目录有另一任务feat/worktree-garden，禁止切其分支、删除其资源或暂存无关文件。
+本轮OC Chan的GitHub Actions与自动预览Release修复已完成。隔离工作区/private/tmp/oc-release-fix-20261110，当前main；产品提交49d8e536fb91f9f1631d883c1eeb3a80ce73f4a2，Actions 42857885722全部成功，preview-58-49d8e53已公开且匿名下载校验通过，稳定Latest仍为v0.1.0。先读此handoff与新任务要求再继续，不重复已通过的检查。正式签名、安装升级及完整压力对照未验收。原主目录属于另一任务feat/worktree-garden，不切换其分支，不删除其资源或暂存无关文件。
 
 来源：[GitHub Releases](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)；[官方draft查询实现](https://github.com/cli/cli/blob/trunk/pkg/cmd/release/shared/fetch.go)；[Create Release权限规则](https://docs.github.com/en/rest/releases/releases#create-a-release)。核对日期：2026-11-10。
