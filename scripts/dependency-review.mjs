@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
-import { closeSync, fstatSync, mkdirSync, openSync, readSync, realpathSync, writeFileSync } from 'node:fs'
+import { mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { assertCargoSource, cargoInventory, queryCargoAudit, queryCargoMetadata, readBounded, RUST_ROOTS, RUST_TARGET } from './rust-dependencies.mjs'
+export { readBounded } from './rust-dependencies.mjs'
 
 const rootDirectory = fileURLToPath(new URL('..', import.meta.url))
 export const limits = Object.freeze({ metadataBytes: 16 * 1024 * 1024, packages: 20000, auditBytes: 4 * 1024 * 1024, auditEdges: 100000, auditTimeoutMs: 90000 })
@@ -10,22 +12,6 @@ const object = value => value !== null && typeof value === 'object' && !Array.is
 const digest = value => createHash('sha256').update(value).digest('hex')
 const canonical = value => JSON.stringify(Array.isArray(value) ? value.map(item => JSON.parse(canonical(item))) : object(value) ? Object.fromEntries(Object.keys(value).sort().map(key => [key, JSON.parse(canonical(value[key]))])) : value)
 
-export function readBounded(file, limit = limits.metadataBytes) {
-  const fd = openSync(file, 'r')
-  try {
-    const stat = fstatSync(fd)
-    if (!stat.isFile() || stat.size > limit) throw new Error(`File exceeds metadata budget or is not regular: ${file}`)
-    const buffer = Buffer.alloc(stat.size + 1)
-    let length = 0
-    while (length < buffer.length) {
-      const count = readSync(fd, buffer, length, buffer.length - length, null)
-      if (!count) break
-      length += count
-    }
-    if (length > stat.size) throw new Error(`File grew while reading: ${file}`)
-    return buffer.subarray(0, length)
-  } finally { closeSync(fd) }
-}
 
 export function assertManifestLock(manifest, lock) {
   if (!object(manifest) || !object(lock) || lock.lockfileVersion !== 3 || !object(lock.packages) || !object(lock.packages[''])) throw new Error('Expected package manifest and npm lockfileVersion 3 root metadata')
@@ -74,15 +60,12 @@ export function assertManifestLock(manifest, lock) {
   }
 }
 
-export function validatePolicy(policy, lockSha256) {
-  if (!object(policy) || policy.schema !== 1 || !/^[a-f0-9]{64}$/.test(policy.lockSha256 ?? '') || policy.lockSha256 !== lockSha256) throw new Error('Dependency review policy lockSha256 does not match exact lock bytes')
-  if (!Array.isArray(policy.allowedLicenses) || !policy.allowedLicenses.length || policy.allowedLicenses.some(item => typeof item !== 'string' || !item.trim()) || policy.allowedLicenses.length > 256) throw new Error('Invalid allowed license policy')
-  if (!Array.isArray(policy.advisories) || policy.advisories.length > 256 || typeof policy.dependencyChangeReason !== 'string' || !policy.dependencyChangeReason.trim()) throw new Error('Missing dependency change rationale or advisory policy')
-  const ids = new Set()
-  for (const advisory of policy.advisories) {
-    if (!object(advisory) || typeof advisory.id !== 'string' || !advisory.id || advisory.scope !== 'build-only' || typeof advisory.reason !== 'string' || !advisory.reason.trim() || typeof advisory.reviewedAt !== 'string' || !Number.isFinite(Date.parse(advisory.reviewedAt)) || ids.has(advisory.id)) throw new Error('Invalid or duplicate reviewed advisory')
-    ids.add(advisory.id)
-  }
+export function validatePolicy(policy, lockSha256, cargoLockSha256) {
+  if (!object(policy) || policy.schema !== 2 || !/^[a-f0-9]{64}$/.test(policy.lockSha256 ?? '') || policy.lockSha256 !== lockSha256) throw new Error('Dependency review policy lockSha256 does not match exact npm lock bytes')
+  if (!/^[a-f0-9]{64}$/.test(policy.cargoLockSha256 ?? '') || policy.cargoLockSha256 !== cargoLockSha256) throw new Error('Dependency review policy cargoLockSha256 does not match exact Cargo.lock bytes')
+  for (const field of ['allowedLicenses', 'allowedCargoLicenses']) if (!Array.isArray(policy[field]) || !policy[field].length || policy[field].length > 256 || policy[field].some(item => typeof item !== 'string' || !item.trim() || item.length > 256) || new Set(policy[field]).size !== policy[field].length) throw new Error(`Invalid allowed license policy: ${field}`)
+  if (!Array.isArray(policy.advisories) || policy.advisories.length !== 0) throw new Error('Advisory exemptions are not permitted')
+  if (typeof policy.dependencyChangeReason !== 'string' || !policy.dependencyChangeReason.trim()) throw new Error('Missing dependency change rationale')
 }
 
 export function licenseInventory(lock, bundled) {
@@ -133,9 +116,8 @@ export function queryAudit(root) {
   return { audit: parseAuditResult(result), stderr: result.stderr ?? '', exitCode: result.status }
 }
 
-export function reviewFindings(audit, inventory, policy) {
+export function reviewFindings(audit, inventory) {
   const byPath = new Map(inventory.map(entry => [entry.path, entry]))
-  const allowed = new Map(policy.advisories.map(entry => [entry.id, entry]))
   const vulnerabilities = audit.vulnerabilities
   const memo = new Map()
   let traversed = 0
@@ -181,46 +163,51 @@ export function reviewFindings(audit, inventory, policy) {
       const entry = byPath.get(location)
       return entry ? { path: location, version: entry.version, classification: entry.classification, bundled: entry.bundled } : { path: location, classification: 'unknown' }
     })
-    const advisories = origins(name).map(advisory => ({ ...advisory, review: allowed.get(advisory.id) ?? null }))
+    const advisories = origins(name)
     const buildOnly = nodes.every(node => node.classification === 'build' && !node.bundled)
-    const reviewed = buildOnly && advisories.every(advisory => advisory.review?.scope === 'build-only')
-    return { name, severity: finding.severity, range: finding.range, nodes, advisories, decision: reviewed ? 'reviewed-build-only' : 'rejected', reason: !buildOnly ? 'Runtime, bundled, or unknown affected package' : !reviewed ? 'New or unreviewed advisory' : 'Exact lock and build-only reachability acknowledged; vulnerability remains present' }
+    return { name, severity: finding.severity, range: finding.range, nodes, advisories, decision: 'rejected', reason: buildOnly ? 'Build dependency vulnerability requires remediation' : 'Runtime, bundled, or unknown affected package' }
   })
 }
 
 export function reviewDependencies({ root = rootDirectory, policy: policyPath = path.join(root, 'docs/dependency-review-policy.json'), bundledManifest = path.join(root, 'out/renderer/bundled-dependencies.json') } = {}) {
-  const report = { schema: 1, generatedAt: new Date().toISOString(), status: 'unverified', source: {}, licenses: [], findings: [], errors: [] }
+  const report = { schema: 2, generatedAt: new Date().toISOString(), status: 'unverified', source: {}, licenses: [], findings: [], cargo: { status: 'unverified', target: RUST_TARGET, roots: [...RUST_ROOTS], licenses: [], findings: [] }, errors: [] }
   try {
-    const packageBytes = readBounded(path.join(root, 'package.json'))
-    const lockBytes = readBounded(path.join(root, 'package-lock.json'))
-    const policyBytes = readBounded(policyPath)
-    const bundleBytes = readBounded(bundledManifest)
-    const mainBundleBytes = readBounded(path.join(root, 'out/main/bundled-dependencies.json'))
-    report.source = { packageHash: digest(packageBytes), lockHash: digest(lockBytes), policyHash: digest(policyBytes), bundledManifestHash: digest(bundleBytes), mainBundledManifestHash: digest(mainBundleBytes) }
-    const manifest = JSON.parse(packageBytes.toString('utf8'))
-    const lock = JSON.parse(lockBytes.toString('utf8'))
-    assertManifestLock(manifest, lock)
-    const policy = JSON.parse(policyBytes.toString('utf8'))
-    validatePolicy(policy, report.source.lockHash)
+    const packageBytes = readBounded(path.join(root, 'package.json')), lockBytes = readBounded(path.join(root, 'package-lock.json'))
+    const cargoLockBytes = readBounded(path.join(root, 'Cargo.lock')), policyBytes = readBounded(policyPath), bundleBytes = readBounded(bundledManifest)
+    report.source = { packageHash: digest(packageBytes), lockHash: digest(lockBytes), cargoLockHash: digest(cargoLockBytes), policyHash: digest(policyBytes), bundledManifestHash: digest(bundleBytes) }
+    const manifest = JSON.parse(packageBytes.toString('utf8')), lock = JSON.parse(lockBytes.toString('utf8')), policy = JSON.parse(policyBytes.toString('utf8'))
+    assertManifestLock(manifest, lock); validatePolicy(policy, report.source.lockHash, report.source.cargoLockHash)
     report.dependencyChangeReason = policy.dependencyChangeReason
-    const rendererInventory = licenseInventory(lock, JSON.parse(bundleBytes.toString('utf8')))
-    const mainInventory = new Map(licenseInventory(lock, JSON.parse(mainBundleBytes.toString('utf8'))).map(entry => [entry.path, entry]))
-    report.licenses = rendererInventory.map(entry => {
-      const main = mainInventory.get(entry.path)
-      return main.bundled ? { ...entry, classification: main.classification, bundled: true, renderedBytes: (entry.renderedBytes ?? 0) + main.renderedBytes } : entry
-    })
-    const allowed = new Set(policy.allowedLicenses)
-    const licenseErrors = report.licenses.filter(entry => !allowed.has(entry.license)).map(entry => `Unreviewed license ${entry.license}: ${entry.path}@${entry.version}`)
-    const result = queryAudit(root)
-    report.audit = { status: 'verified', command: 'npm audit --json --package-lock-only --ignore-scripts --include=dev --include=optional --include=peer', exitCode: result.exitCode, stderr: result.stderr, raw: result.audit }
-    report.findings = reviewFindings(result.audit, report.licenses, policy)
-    report.errors.push(...licenseErrors)
-    for (const finding of report.findings) if (finding.decision === 'rejected') report.errors.push(`${finding.name}: ${finding.reason}`)
-    if (digest(readBounded(path.join(root, 'package-lock.json'))) !== report.source.lockHash || digest(readBounded(path.join(root, 'package.json'))) !== report.source.packageHash) throw new Error('Manifest/lock changed during dependency review')
-    report.status = report.errors.length ? 'rejected' : 'verified'
+    report.licenses = licenseInventory(lock, JSON.parse(bundleBytes.toString('utf8')))
+    const allowed = new Set(policy.allowedLicenses), cargoAllowed = new Set(policy.allowedCargoLicenses)
+    report.errors.push(...report.licenses.filter(entry => !allowed.has(entry.license)).map(entry => `Unreviewed npm license ${entry.license}: ${entry.path}@${entry.version}`))
+    let complete = true, graph
+    try {
+      graph = queryCargoMetadata(root); report.cargo.source = graph.source; report.cargo.licenses = cargoInventory(graph)
+      if (graph.source.lockSha256 !== report.source.cargoLockHash) throw new Error('Cargo metadata used different lock bytes')
+      report.errors.push(...report.cargo.licenses.filter(entry => !cargoAllowed.has(entry.license)).map(entry => `Unreviewed Cargo license ${entry.license}: ${entry.name}@${entry.version}`))
+    } catch (error) { complete = false; report.cargo.error = error.message; report.errors.push(error.message) }
+    try {
+      const result = queryAudit(root)
+      report.audit = { status: 'verified', command: 'npm audit --json --package-lock-only --ignore-scripts --include=dev --include=optional --include=peer', exitCode: result.exitCode, stderr: result.stderr, raw: result.audit }
+      report.findings = reviewFindings(result.audit, report.licenses)
+      report.errors.push(...report.findings.map(finding => `${finding.name}: ${finding.reason}`))
+    } catch (error) { complete = false; report.audit = { status: 'unverified', error: error.message }; report.errors.push(error.message) }
+    try {
+      const result = queryCargoAudit(root); report.cargo.audit = { status: 'verified', ...result }
+      const classifications = new Map(report.cargo.licenses.map(item => [`${item.name}@${item.version}`, item.classification]))
+      report.cargo.findings = result.raw.vulnerabilities.list.map(item => ({ id: item.advisory.id, name: item.package.name, version: item.package.version, classification: classifications.get(`${item.package.name}@${item.package.version}`) ?? 'lockfile-only', decision: 'rejected', advisory: item.advisory, versions: item.versions }))
+      report.errors.push(...report.cargo.findings.map(item => `${item.id}: ${item.name}@${item.version}`))
+      report.cargo.warnings = result.raw.warnings
+      if (graph) report.cargo.status = report.cargo.findings.length || report.cargo.licenses.some(item => !cargoAllowed.has(item.license)) ? 'rejected' : 'verified'
+    } catch (error) { complete = false; report.cargo.audit = { status: 'unverified', error: error.message }; report.errors.push(error.message) }
+    if (graph) assertCargoSource(root, graph.source)
+    if (digest(readBounded(path.join(root, 'package-lock.json'))) !== report.source.lockHash || digest(readBounded(path.join(root, 'Cargo.lock'))) !== report.source.cargoLockHash || digest(readBounded(path.join(root, 'package.json'))) !== report.source.packageHash || digest(readBounded(policyPath)) !== report.source.policyHash || digest(readBounded(bundledManifest)) !== report.source.bundledManifestHash) throw new Error('Dependency evidence changed during review')
+    report.status = !complete ? 'unverified' : report.errors.length ? 'rejected' : 'verified'
   } catch (error) {
     report.errors.push(error.message)
     if (!report.audit) report.audit = { status: 'unverified', error: error.message }
+    if (!report.cargo.audit) report.cargo.audit = { status: 'unverified', error: error.message }
   }
   return report
 }
@@ -237,7 +224,7 @@ export function parseArgs(args, root = rootDirectory) {
   }
   const output = options.output
   if (!output.endsWith('.json') || output.split(path.sep).includes('node_modules')) throw new Error('Report output must be a JSON file outside node_modules')
-  const protectedPaths = ['package.json', 'package-lock.json', 'npm-shrinkwrap.json'].map(file => path.join(root, file)).concat(options.policy, options.bundledManifest)
+  const protectedPaths = ['package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'Cargo.toml', 'Cargo.lock'].map(file => path.join(root, file)).concat(options.policy, options.bundledManifest)
   let outputReal = output
   try { outputReal = realpathSync(output) } catch (error) { if (error.code !== 'ENOENT') throw error }
   for (const file of protectedPaths) {

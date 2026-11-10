@@ -3,6 +3,7 @@ import type { SettingsPatch, SettingsSnapshot, SettingsUpdateFailure } from '../
 import { THEMES, type ThemeId } from '../../shared/themes'
 import { summarizeDiagnostic } from '../../shared/diagnostics'
 import { LanguageProvider } from './i18n'
+import { isDesktopDocumentVisible } from './desktop-visibility'
 
 export const UI_FONTS = {
   system: '-apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif',
@@ -127,7 +128,7 @@ export default function SettingsProvider({ children }: { children: ReactNode }) 
   }, [glassPreview, glassPreviewError, snapshot?.settings.glassIntensity, snapshot?.liquidGlass.available, snapshot?.liquidGlass.reducedTransparency, snapshot?.liquidGlass.increasedContrast])
   useEffect(() => {
     const cancel = () => previewGlass(null)
-    const onVisibility = () => { if (document.hidden) cancel() }
+    const onVisibility = () => { if (!isDesktopDocumentVisible()) cancel() }
     window.addEventListener('blur', cancel)
     document.addEventListener('visibilitychange', onVisibility)
     return () => {
@@ -148,7 +149,7 @@ export default function SettingsProvider({ children }: { children: ReactNode }) 
   }, [appearance, displayedTheme, colors])
   useEffect(() => {
     const clearPreview = () => previewTheme(null)
-    const onVisibility = () => { if (document.hidden) clearPreview() }
+    const onVisibility = () => { if (!isDesktopDocumentVisible()) clearPreview() }
     window.addEventListener('blur', clearPreview)
     document.addEventListener('visibilitychange', onVisibility)
     return () => {

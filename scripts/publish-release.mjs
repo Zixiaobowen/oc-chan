@@ -30,16 +30,16 @@ const repository = JSON.parse(gh(['api', `repos/${releaseRepository}`]))
 if (repository.private !== false) throw new Error('Update release repository must be public')
 // The public repository has no source tags. GitHub creates this release's tag on
 // its own default branch; initialize that repository before the first release.
-gh(['release', 'create', tag, '--draft', '--title', `OC Chan ${tag}`, '--notes', `OC Chan ${tag}\n\nmacOS installers and signed application update packages for Apple Silicon.`, '--latest=false', ...(info.prerelease ? ['--prerelease'] : [])])
+gh(['release', 'create', tag, '--draft', '--title', `OC Chan ${tag}`, '--notes', `OC Chan ${tag}\n\nmacOS installers and signed application update packages for Apple Silicon.`, '--latest=false'])
 // No --clobber: collisions fail, and any failure after creation leaves a draft.
 gh(['release', 'upload', tag, ...names.map(name => join(directory, name))])
 const { databaseId } = JSON.parse(gh(['release', 'view', tag, '--json', 'databaseId']))
 const release = JSON.parse(gh(['api', `repos/${releaseRepository}/releases/${databaseId}`]))
-if (release.draft !== true || release.prerelease !== info.prerelease || release.assets.length !== expected.size) throw new Error('Draft release state or asset count mismatch')
+if (release.draft !== true || release.prerelease !== false || release.assets.length !== expected.size) throw new Error('Draft release state or asset count mismatch')
 for (const asset of release.assets) {
   if (expected.get(asset.name) !== asset.size || asset.state !== 'uploaded') throw new Error(`Incomplete release upload: ${asset.name}`)
   expected.delete(asset.name)
 }
 if (expected.size) throw new Error('Draft release is missing assets')
-gh(['release', 'edit', tag, '--draft=false', `--prerelease=${info.prerelease}`, `--latest=${!info.prerelease}`])
+gh(['release', 'edit', tag, '--draft=false', '--prerelease=false', '--latest=true'])
 console.log(`Published ${releaseRepository} ${tag}`)

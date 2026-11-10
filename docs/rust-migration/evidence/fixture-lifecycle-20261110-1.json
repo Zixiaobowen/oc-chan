@@ -1,0 +1,27 @@
+{
+  "verifiedAt": "2026-11-09T21:10:59.552Z",
+  "passed": true,
+  "fixtureProcesses": 4,
+  "sessions": 32,
+  "observedParents": [
+    [
+      44983,
+      1
+    ],
+    [
+      44985,
+      1
+    ],
+    [
+      44987,
+      1
+    ],
+    [
+      44989,
+      1
+    ]
+  ],
+  "stdinEofDrained": true,
+  "actualPidsExited": true,
+  "fixtureDirectoryRemoved": true
+}

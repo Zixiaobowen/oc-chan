@@ -30,6 +30,7 @@ import { agentProjectDirectory, layoutAgentTopology, orderedTopologyBranches, ty
 import AgentContextMenu, { type AgentMenuAnchor } from './AgentContextMenu'
 import { useI18n } from './i18n'
 import { useSettings } from './settings'
+import { isDesktopDocumentVisible, scheduleDesktopUpdate, type DesktopUpdate } from './desktop-visibility'
 import { MAX_SAVED_TOPOLOGY_NODES, saveTopologyPosition, type CanvasViewport, type TopologyMemory } from './view-state'
 import './agent-topology.css'
 
@@ -221,7 +222,7 @@ function TopologyCanvas({ graph, pageIndex, selectedId, onSelect, onToggleCollap
   const appliedDimensions = useRef(new Map<string, TopologyNodeSize>())
   const measuredWidth = useRef<number | null>(null)
   const pendingDimensions = useRef(new Map<string, AgentDimensionChange>())
-  const measurementFrame = useRef<number | null>(null)
+  const measurementFrame = useRef<DesktopUpdate | null>(null)
   const layoutKey = useRef<string | null>(null)
   const hadNodes = useRef(memory.viewport !== null)
   const lastSelectedId = useRef(selectedId)
@@ -232,10 +233,10 @@ function TopologyCanvas({ graph, pageIndex, selectedId, onSelect, onToggleCollap
   const { getNode, getViewport, setViewport } = useReactFlow<AgentFlowNode>()
 
   const scheduleMeasurements = useCallback(() => {
-    if (measurementFrame.current !== null || document.hidden || !pendingDimensions.current.size) return
-    measurementFrame.current = requestAnimationFrame(() => {
+    if (measurementFrame.current !== null || !isDesktopDocumentVisible() || !pendingDimensions.current.size) return
+    measurementFrame.current = scheduleDesktopUpdate(() => {
       measurementFrame.current = null
-      if (!mounted.current || document.hidden) return
+      if (!mounted.current || !isDesktopDocumentVisible()) return
       const changes = [...pendingDimensions.current.values()]
       pendingDimensions.current.clear()
       let next = applyNodeChanges(changes, nodesRef.current)
@@ -255,7 +256,7 @@ function TopologyCanvas({ graph, pageIndex, selectedId, onSelect, onToggleCollap
     mounted.current = true
     return () => {
       mounted.current = false
-      if (measurementFrame.current !== null) cancelAnimationFrame(measurementFrame.current)
+      measurementFrame.current?.cancel()
       measurementFrame.current = null
       pendingDimensions.current.clear()
     }
@@ -267,8 +268,8 @@ function TopologyCanvas({ graph, pageIndex, selectedId, onSelect, onToggleCollap
 
   useEffect(() => {
     function saveWhenHidden() {
-      if (!document.hidden) { scheduleMeasurements(); return }
-      if (measurementFrame.current !== null) cancelAnimationFrame(measurementFrame.current)
+      if (isDesktopDocumentVisible()) { scheduleMeasurements(); return }
+      measurementFrame.current?.cancel()
       measurementFrame.current = null
       saveViewport(getViewport())
       setMenu(null)
@@ -403,10 +404,22 @@ function TopologyCanvas({ graph, pageIndex, selectedId, onSelect, onToggleCollap
     if (!initialized || nodes !== nodesRef.current || pendingDimensions.current.size) return
     // React Flow synchronizes its visible DOM from these nodes in a passive effect.
     // Restore focus after that commit so its keyboard panning sees current positions.
-    const frame = requestAnimationFrame(() => {
-      if (nodes === nodesRef.current && !pendingDimensions.current.size) onNodesReady()
-    })
-    return () => cancelAnimationFrame(frame)
+    let update: DesktopUpdate | null = null
+    const scheduleReady = () => {
+      update?.cancel()
+      update = null
+      if (!isDesktopDocumentVisible()) return
+      update = scheduleDesktopUpdate(() => {
+        update = null
+        if (isDesktopDocumentVisible() && nodes === nodesRef.current && !pendingDimensions.current.size) onNodesReady()
+      })
+    }
+    scheduleReady()
+    document.addEventListener('visibilitychange', scheduleReady)
+    return () => {
+      update?.cancel()
+      document.removeEventListener('visibilitychange', scheduleReady)
+    }
   }, [initialized, nodes, onNodesReady])
 
   useLayoutEffect(() => {

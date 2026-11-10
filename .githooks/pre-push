@@ -1,3 +1,0 @@
-#!/bin/sh
-set -eu
-exec node scripts/install-local.mjs --pre-push "$@"

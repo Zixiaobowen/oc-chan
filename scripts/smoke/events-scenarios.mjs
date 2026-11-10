@@ -19,36 +19,32 @@ async function page(ui, count = 50) {
 async function source(ui, renderer, value) {
   await ui.click($('#event-source-filter'))
   // Headless macOS has no active application menu to handle Command-A.
-  await renderer.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, modifiers: 4, commands: ['selectAll'] }, RPC_MS)
-  await renderer.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, modifiers: 4 }, RPC_MS)
+  await renderer.selectAll()
   await ui.dom('source text is fully selected before replacement', `(() => { const input = ${$('#event-source-filter')}; return input.selectionStart === 0 && input.selectionEnd === input.value.length; })()`)
   await ui.key('Backspace', 'Backspace', 8)
-  if (value) await renderer.call('Input.insertText', { text: value }, RPC_MS)
-  await ui.dom('exact source draft entered through CDP', `${$('#event-source-filter')}?.value === ${JSON.stringify(value)}`)
+  if (value) await renderer.text(value)
+  await ui.dom('exact source draft entered through AppKit text input', `${$('#event-source-filter')}?.value === ${JSON.stringify(value)}`)
 }
 
-// Tab still exercises real focus. macOS native popup input requires a visible window;
-// select options with DOM automation, then verify React state and the real IPC query.
+// Native popup and Tab navigation require a visible window. Use explicit DOM
+// focus and option selection here, then verify React state and the real IPC query.
 async function select(ui, id, value) {
-  await ui.click($('#event-source-filter'))
-  await ui.key('Tab', 'Tab', 9)
-  if (id === 'event-range-filter') await ui.key('Tab', 'Tab', 9)
-  assert.equal(await ui.evaluate('document.activeElement?.id'), id)
   await ui.evaluate(`(() => {
     const element = ${$(`#${id}`)}, value = ${JSON.stringify(value)};
     if (!(element instanceof HTMLSelectElement) || !Array.from(element.options).some(option => option.value === value))
       throw new Error('Requested event filter option is unavailable');
+    element.focus({ preventScroll: true });
+    if (document.activeElement !== element) throw new Error('Event filter did not take DOM focus');
     element.value = value;
     element.dispatchEvent(new Event('input', {bubbles:true}));
     element.dispatchEvent(new Event('change', {bubbles:true}));
     return true;
   })()`)
-  await ui.key('Tab', 'Tab', 9)
   await ui.dom('select draft selected through DOM automation', `${$(`#${id}`)}?.value === ${JSON.stringify(value)}`)
 }
 
 async function queryForRows(ui, main) {
-  const info = await main.evaluate('globalThis.__ocSmokeControl.info()', RPC_MS)
+  const info = await main.host('info')
   const query = info.eventQueries.recent.at(-1)
   assert.ok(query && info.eventQueries.active === 0, 'a completed real event IPC request must exist')
   const result = await ui.evaluate(`window.monitor.events(${JSON.stringify(query)})`)
@@ -70,9 +66,14 @@ export async function exerciseEmptyEvents(ui) {
 export async function exerciseEvents({ ui, main, renderer, capture, appendExecution, lockHistory, lockEvents }) {
   let seed, first, second
   await ui.stage('events-5000-bounded-pagination', async () => {
-    seed = await main.evaluate('globalThis.__ocSmokeControl.seedEvents()', 90_000)
-    assert.equal(seed.count, 5000)
-    assert.equal(seed.batches, 50)
+    let written = 0
+    for (let start = 0; start < 5000; start += 100) {
+      seed = await main.host('seed-events', { start, count: 100, final: start === 4900 })
+      assert.equal(seed.batchSize, 100)
+      written += seed.batchSize
+      assert.equal(seed.count, written, 'native seed cumulative count must match committed batches')
+    }
+    assert.equal(written, 5000)
     assert.ok(seed.retention.count >= 5003, 'F04 records must survive the F05 seed')
     assert.ok(seed.retention.diskBytes <= 20 * 1024 * 1024)
     await ui.navigate('事件', 'Events')
@@ -190,21 +191,21 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     const original = await page(ui)
     let failure
     try {
-      await main.evaluate('globalThis.__ocSmokeControl.faultEvents(true)', RPC_MS)
+      await main.host('fault-command', { targetCommand: 'monitor_events', enabled: true })
       await ui.click(action('next'))
-      await ui.dom('actual missing events IPC handler is visible', `${$(ROOT)}?.getAttribute('aria-busy') === 'false' && ${$('.event-error')}?.textContent.includes('monitor:events')`)
+      await ui.dom('real native events rejection is visible', `${$(ROOT)}?.getAttribute('aria-busy') === 'false' && ${$('.event-error')}?.textContent.includes('OC_ACCEPTANCE_REJECTION')`)
       assert.deepEqual(await ui.evaluate(idsExpression), original, 'failed page request must preserve successful rows')
       await capture('events-real-ipc-failure')
-      await main.evaluate('globalThis.__ocSmokeControl.faultEvents(false)', RPC_MS)
+      await main.host('fault-command', { targetCommand: 'monitor_events', enabled: false })
       await ui.click(action('retry'))
       const recovered = await page(ui)
       assert.notDeepEqual(recovered, original, 'retry must complete the failed next-page request')
       await ui.click(action('previous'))
       assert.deepEqual(await page(ui), original)
-      await main.evaluate('globalThis.__ocSmokeControl.faultEvents(true)', RPC_MS)
+      await main.host('fault-command', { targetCommand: 'monitor_events', enabled: true })
       await ui.click(action('next'))
-      await ui.dom('second next-page failure retains its error', `${$(ROOT)}?.getAttribute('aria-busy') === 'false' && ${$('.event-error')}?.textContent.includes('monitor:events')`)
-      await main.evaluate('globalThis.__ocSmokeControl.faultEvents(false)', RPC_MS)
+      await ui.dom('second next-page failure retains its error', `${$(ROOT)}?.getAttribute('aria-busy') === 'false' && ${$('.event-error')}?.textContent.includes('OC_ACCEPTANCE_REJECTION')`)
+      await main.host('fault-command', { targetCommand: 'monitor_events', enabled: false })
       await ui.navigate('本机概览', 'Overview')
       await ui.navigate('事件', 'Events')
       assert.deepEqual(await page(ui), original, 'reactivation must refresh the last successful page instead of replaying failed next')
@@ -214,7 +215,7 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
       assert.deepEqual(await page(ui), original)
     } catch (error) { failure = error; throw error }
     finally {
-      try { await main.evaluate('globalThis.__ocSmokeControl.faultEvents(false)', RPC_MS) }
+      try { await main.host('fault-command', { targetCommand: 'monitor_events', enabled: false }) }
       catch (error) { throw new AggregateError([failure, error].filter(Boolean), 'Events IPC handler restoration failed') }
     }
     await ui.click($('#event-source-filter'))
@@ -229,40 +230,43 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     const release = await lockEvents()
     let cancellationFailure, pending, cancelled, pauseDispatchMs
     try {
-      pending = renderer.evaluate('window.monitor.events().then(() => ({rejected:false}), error => ({rejected:true,error:String(error)}))', RPC_MS)
-        .then(value => ({ value }), error => ({ protocolError: error }))
+      pending = await renderer.evaluate('(() => { if (window.__ocAcceptancePending) throw new Error("Pending request already exists"); window.__ocAcceptancePending = window.monitor.events().then(() => ({rejected:false}), error => ({rejected:true,error:String(error)})); return true; })()', RPC_MS)
       await ui.expect('event store admits the real query before cancellation', async () => (await ui.info()).eventQueries.active === 1, 2_000)
-      await ui.evaluate('window.monitor.cancelEvents(); true')
-      const outcome = await pending
-      if (outcome.protocolError) throw outcome.protocolError
-      cancelled = outcome.value
+      await ui.evaluate('window.monitor.cancelEvents().then(() => true)')
+      cancelled = await renderer.evaluate('window.__ocAcceptancePending', RPC_MS)
       assert.equal(cancelled.rejected, true, 'actual event request must reject when cancelled')
       await ui.expect('real events IPC cancellation drains', async () => {
         const info = await ui.info()
         return info.eventQueries.active === 0 && info.eventQueries.cancelled > before.cancelled
       }, 2_000)
-      const afterDirect = (await ui.info()).eventQueries.cancelled
+      const afterDirectInfo = await ui.info()
+      const afterDirect = afterDirectInfo.eventQueries.cancelled
+      const afterDirectResources = afterDirectInfo.resources.sources.find(item => item.source === 'events')
+      assert.ok(afterDirectResources, 'real event resource accounting must exist')
       const began = performance.now()
       await ui.click(action('refresh'))
       await ui.expect('UI refresh admits a real events query', async () => (await ui.info()).eventQueries.active === 1, 2_000)
       // Its header position is stable during list reads. Avoid scrolling/assertion round trips
       // after admission: SQLite deliberately rejects a lock after only 500 ms.
-      await renderer.call('Input.dispatchMouseEvent', { type: 'mousePressed', ...pausePoint, button: 'left', clickCount: 1 }, RPC_MS)
-      await renderer.call('Input.dispatchMouseEvent', { type: 'mouseReleased', ...pausePoint, button: 'left', clickCount: 1 }, RPC_MS)
+      await renderer.mouse('down', pausePoint.x, pausePoint.y)
+      await renderer.mouse('up', pausePoint.x, pausePoint.y)
       pauseDispatchMs = performance.now() - began
       await ui.dom('real pause click freezes display', `${$('.page-actions button[aria-pressed]')}?.getAttribute('aria-pressed') === 'true'`)
       await ui.expect('UI pause cancels and drains its real event query', async () => {
         const info = await ui.info()
-        return info.eventQueries.active === 0 && info.eventQueries.cancelled > afterDirect &&
-          info.resources.sources.filter(item => item.source === 'event-store').every(item => Object.values(item.current).every(value => value === 0))
+        const events = info.resources.sources.find(item => item.source === 'events')
+        assert.ok(events, 'real event resource accounting must exist')
+        // Pausing the view leaves background event collection running in this
+        // resource bucket. The cancelled query must finish and release its lease.
+        return info.eventQueries.active === 0 && info.eventQueries.cancelled > afterDirect && events.cancelled > afterDirectResources.cancelled
       }, 2_000)
       assert.deepEqual(await ui.evaluate(idsExpression), original, 'UI cancellation must preserve its successful page')
     } catch (error) { cancellationFailure = error; throw error }
     finally {
-      const cleanup = await Promise.allSettled([ui.evaluate('window.monitor.cancelEvents(); true'), release()])
+      const cleanup = await Promise.allSettled([ui.evaluate('window.monitor.cancelEvents().then(() => true)'), release()])
       if (pending) {
-        const outcome = await pending
-        if (outcome.protocolError) cleanup.push({ status: 'rejected', reason: outcome.protocolError })
+        try { await renderer.evaluate('window.__ocAcceptancePending.then(() => {delete window.__ocAcceptancePending; return true;})', RPC_MS) }
+        catch (error) { cleanup.push({ status: 'rejected', reason: error }) }
       }
       const errors = cleanup.filter(result => result.status === 'rejected').map(result => result.reason)
       if (errors.length) throw new AggregateError([cancellationFailure, ...errors].filter(Boolean), 'Event cancellation/lock cleanup failed')
@@ -271,7 +275,7 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     await ui.dom('resuming events allows requests again', `${action('refresh')}?.getAttribute('aria-disabled') === 'false'`)
     await ui.click(action('refresh'))
     assert.deepEqual(await page(ui), original, 'UI must successfully query again after pause cancellation and lock release')
-    return { channel: 'monitor:events', restored: true, cancellation: cancelled, uiCancellationRecovered: true, pauseDispatchMs }
+    return { channel: 'monitor_events', restored: true, cancellation: cancelled, uiCancellationRecovered: true, pauseDispatchMs }
   })
 
   await ui.stage('events-pause-disable-and-coverage', async () => {
@@ -293,7 +297,9 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     assert.equal(await ui.evaluate('window.monitor.events().then(() => false, () => true)'), true)
     await ui.expect('disabled events release all resources', async () => {
       const info = await ui.info()
-      return info.eventQueries.active === 0 && info.resources.sources.filter(item => ['event-store', 'hermes-events'].includes(item.source)).every(item => Object.values(item.current).every(value => value === 0))
+      const events = info.resources.sources.find(item => item.source === 'events')
+      assert.ok(events, 'real event resource accounting must exist')
+      return info.eventQueries.active === 0 && Object.values(events.current).every(value => value === 0)
     })
     await ui.navigate('数据来源', 'Data sources')
     await ui.click($('[data-source-section="events"] [role="switch"]'))
@@ -331,7 +337,7 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     let failure
     try {
       for (const [width, height, scale] of [[1280, 860, 1], [880, 640, 1], [880, 640, 2]]) {
-        await renderer.call('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false }, RPC_MS)
+        await renderer.resize(width, height)
         await ui.evaluate(`document.documentElement.style.setProperty('--font-scale', ${JSON.stringify(String(scale))})`)
         await ui.frames()
         await ui.click($('#event-source-filter'))
@@ -357,7 +363,7 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     finally {
       const errors = []
       try { await ui.evaluate(`document.documentElement.style.setProperty('--font-scale', ${JSON.stringify(originalScale)})`) } catch (error) { errors.push(error) }
-      try { await renderer.call('Emulation.setDeviceMetricsOverride', { ...originalMetrics, mobile: false }, RPC_MS) } catch (error) { errors.push(error) }
+      try { await renderer.resize(originalMetrics.width, originalMetrics.height) } catch (error) { errors.push(error) }
       if (errors.length) throw new AggregateError([failure, ...errors].filter(Boolean), 'Event viewport/scale restoration failed')
     }
     return { results, nativeWindowAcceptance: false }

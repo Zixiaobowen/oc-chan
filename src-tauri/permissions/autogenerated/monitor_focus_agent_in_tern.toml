@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-monitor-focus-agent-in-tern"
+description = "Enables the monitor_focus_agent_in_tern command without any pre-configured scope."
+commands.allow = ["monitor_focus_agent_in_tern"]
+
+[[permission]]
+identifier = "deny-monitor-focus-agent-in-tern"
+description = "Denies the monitor_focus_agent_in_tern command without any pre-configured scope."
+commands.deny = ["monitor_focus_agent_in_tern"]

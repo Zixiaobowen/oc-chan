@@ -1,0 +1,23 @@
+[package]
+name = "oc-installer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+default = []
+acceptance = []
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+sha2.workspace = true
+semver.workspace = true
+uuid.workspace = true
+libc.workspace = true
+plist.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

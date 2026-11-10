@@ -6,4 +6,5 @@ import type { MarketplaceApi } from '../../shared/marketplace'
 
 declare global {
   interface Window { monitor?: MonitorApi; desktopSettings?: SettingsApi; startupRecovery?: StartupRecoveryApi; appUpdates?: UpdatesApi; pluginMarketplace?: MarketplaceApi }
+  interface Window { readonly __OC_DESKTOP_DOCUMENT__?: string }
 }

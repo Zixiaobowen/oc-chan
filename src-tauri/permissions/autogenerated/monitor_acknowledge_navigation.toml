@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-monitor-acknowledge-navigation"
+description = "Enables the monitor_acknowledge_navigation command without any pre-configured scope."
+commands.allow = ["monitor_acknowledge_navigation"]
+
+[[permission]]
+identifier = "deny-monitor-acknowledge-navigation"
+description = "Denies the monitor_acknowledge_navigation command without any pre-configured scope."
+commands.deny = ["monitor_acknowledge_navigation"]

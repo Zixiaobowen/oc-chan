@@ -5,6 +5,8 @@ import { agentTarget, scheduleTarget, type NavigationTarget } from '../../shared
 import type { MonitorSnapshot } from '../../shared/types'
 import { NativeSelect } from './components'
 import { useI18n } from './i18n'
+import { reportDesktopFailure } from './desktop-api'
+import { isDesktopDocumentVisible } from './desktop-visibility'
 import './events.css'
 
 type EventRange = 'all' | '1h' | '24h' | '7d'
@@ -121,7 +123,7 @@ export default function EventsView({ snapshot, enabled, active, view, onViewChan
   onNavigate: (target: NavigationTarget) => void
 }) {
   const { t, language } = useI18n()
-  const [visible, setVisible] = useState(document.visibilityState !== 'hidden')
+  const [visible, setVisible] = useState(isDesktopDocumentVisible)
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error' | 'inactive'>('loading')
   const viewRef = useRef(view)
   viewRef.current = view
@@ -131,11 +133,11 @@ export default function EventsView({ snapshot, enabled, active, view, onViewChan
 
   useLayoutEffect(() => {
     const onVisibility = () => {
-      if (document.visibilityState === 'hidden') {
+      if (!isDesktopDocumentVisible()) {
         generation.current += 1
-        window.monitor?.cancelEvents()
+        void window.monitor?.cancelEvents().catch(reportDesktopFailure)
       }
-      setVisible(document.visibilityState !== 'hidden')
+      setVisible(isDesktopDocumentVisible())
     }
     document.addEventListener('visibilitychange', onVisibility)
     return () => document.removeEventListener('visibilitychange', onVisibility)
@@ -144,10 +146,10 @@ export default function EventsView({ snapshot, enabled, active, view, onViewChan
   useLayoutEffect(() => {
     const token = ++generation.current
     const monitor = window.monitor
-    monitor?.cancelEvents()
+    void monitor?.cancelEvents().catch(reportDesktopFailure)
     if (!canRead) {
       setPhase('inactive')
-      return () => { generation.current += 1; monitor?.cancelEvents() }
+      return () => { generation.current += 1; void monitor?.cancelEvents().catch(reportDesktopFailure) }
     }
     const current = viewRef.current
     // Activation restores the successful page; only a new explicit request changes its cursor.
@@ -176,13 +178,13 @@ export default function EventsView({ snapshot, enabled, active, view, onViewChan
         page, history: request.history, pageNumber: request.pageNumber, request: null, error: null, readAt: new Date().toISOString() }))
       setPhase('ready')
     }, fail)
-    return () => { generation.current += 1; monitor.cancelEvents() }
+    return () => { generation.current += 1; void monitor.cancelEvents().catch(reportDesktopFailure) }
   }, [canRead, view.requestId, onViewChange])
 
   function requestPage(request: EventRequest) {
     if (!canRead) return
     generation.current += 1
-    window.monitor?.cancelEvents()
+    void window.monitor?.cancelEvents().catch(reportDesktopFailure)
     setPhase('loading')
     onViewChange(previous => ({ ...previous, request, requestId: previous.requestId + 1, error: null }))
   }

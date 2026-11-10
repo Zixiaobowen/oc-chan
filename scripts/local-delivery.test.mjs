@@ -44,6 +44,6 @@ test('artifact paths cannot escape through links and oversized files are rejecte
   await assert.rejects(artifactDigest(value.paths[0]), /bounded regular file/)
   const large = path.join(value.root, 'large.zip')
   const handle = await open(large, 'wx')
-  try { await handle.truncate(1024 ** 3 + 1) } finally { await handle.close() }
+  try { await handle.truncate(512 * 1024 ** 2 + 1) } finally { await handle.close() }
   await assert.rejects(artifactDigest(large), /bounded regular file/)
 })

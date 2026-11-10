@@ -179,3 +179,28 @@ export function createEntranceGeometry(width: number, depth: number): BufferGeom
   }
   return merge(parts)
 }
+
+/** Open-roof private office, centred on its main agent; footprint 260 × 300. */
+export function createMainOfficeGeometry(): BufferGeometry {
+  const parts: BufferGeometry[] = []
+  box(parts, 260, 2, 300, 0, 1, 0, palette.trim)
+  for (const x of [-130, 130]) {
+    for (const z of [-150, 150]) box(parts, 5, 146, 5, x, 75, z, palette.metal)
+    box(parts, 5, 5, 300, x, 147, 0, palette.metal)
+    box(parts, 5, 18, 300, x, 11, 0, palette.limestone)
+    const pane = new PlaneGeometry(295, 124).rotateY(Math.PI / 2).translate(x, 81, 0)
+    parts.push(paint(pane, palette.glass, 0.24))
+  }
+  box(parts, 260, 5, 5, 0, 147, -150, palette.metal)
+  box(parts, 260, 18, 5, 0, 11, -150, palette.limestone)
+  parts.push(paint(new PlaneGeometry(255, 124).translate(0, 81, -150), palette.glassShade, 0.28))
+  // A real opening in the front partition keeps the office entrance legible.
+  box(parts, 170, 5, 5, -45, 147, 150, palette.metal)
+  box(parts, 170, 18, 5, -45, 11, 150, palette.limestone)
+  box(parts, 5, 146, 5, 40, 75, 150, palette.metal)
+  parts.push(paint(new PlaneGeometry(165, 124).translate(-45, 81, 150), palette.glass, 0.24))
+  box(parts, 104, 52, 4, 0, 98, -146, palette.limestone)
+  box(parts, 62, 3, 2, -10, 108, -143, palette.trim)
+  box(parts, 42, 3, 2, -20, 97, -143, palette.trim)
+  return merge(parts)
+}

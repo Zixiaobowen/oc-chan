@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEven
 import { useI18n } from './i18n'
 import { DEFAULT_SETTINGS, MIN_SIDEBAR_WIDTH as MIN_WIDTH, MAX_SIDEBAR_WIDTH as MAX_WIDTH } from '../../shared/settings'
 import { useSettings } from './settings'
+import { isDesktopDocumentVisible, scheduleDesktopUpdate, type DesktopUpdate } from './desktop-visibility'
 
 const DEFAULT_WIDTH = DEFAULT_SETTINGS.sidebarWidth
 const MIN_WORKSPACE_WIDTH = 560
@@ -18,7 +19,7 @@ export default function SidebarResizeHandle({ compact }: { compact: boolean }) {
   const maximum = useRef(MAX_WIDTH)
   const currentWidth = useRef(settings.sidebarWidth)
   const drag = useRef<Drag | null>(null)
-  const frame = useRef<number | null>(null)
+  const frame = useRef<DesktopUpdate | null>(null)
   const [size, setSize] = useState({ width: settings.sidebarWidth, max: MAX_WIDTH })
   const keyboardTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const keyboardWidth = useRef<number | null>(null)
@@ -43,7 +44,7 @@ export default function SidebarResizeHandle({ compact }: { compact: boolean }) {
     const active = drag.current
     if (!active) return
     drag.current = null
-    if (frame.current !== null) cancelAnimationFrame(frame.current)
+    frame.current?.cancel()
     frame.current = null
     if (cancel) {
       preferredWidth.current = active.previousWidth
@@ -68,7 +69,7 @@ export default function SidebarResizeHandle({ compact }: { compact: boolean }) {
       applyWidth()
     }
     const interrupt = () => { finishDrag(true); saveKeyboardWidth() }
-    const visibility = () => { if (document.hidden) interrupt() }
+    const visibility = () => { if (!isDesktopDocumentVisible()) interrupt() }
     const observer = new ResizeObserver(resize)
     resize()
     observer.observe(shell)
@@ -81,7 +82,8 @@ export default function SidebarResizeHandle({ compact }: { compact: boolean }) {
       window.removeEventListener('pagehide', saveKeyboardWidth)
       window.removeEventListener('blur', interrupt)
       document.removeEventListener('visibilitychange', visibility)
-      if (frame.current !== null) cancelAnimationFrame(frame.current)
+      frame.current?.cancel()
+      frame.current = null
       shell.removeAttribute('data-sidebar-resizing')
     }
   }, [])
@@ -104,9 +106,9 @@ export default function SidebarResizeHandle({ compact }: { compact: boolean }) {
     const active = drag.current
     if (!active || active.pointerId !== event.pointerId) return
     preferredWidth.current = Math.max(MIN_WIDTH, Math.min(maximum.current, Math.round(active.startWidth + event.clientX - active.startX)))
-    if (frame.current === null) frame.current = requestAnimationFrame(() => {
+    if (frame.current === null) frame.current = scheduleDesktopUpdate(() => {
       frame.current = null
-      applyWidth()
+      if (isDesktopDocumentVisible()) applyWidth()
     })
   }
 
