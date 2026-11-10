@@ -4,6 +4,8 @@
 
 当前实现补充：Agent 页默认使用按需加载的 Three.js 项目建筑群，一栋建筑对应根 Agent 的完整工作目录（忽略尾斜杠），每个真实父子分支对应一层任务；主 Agent 使用独立办公室，子 Agent 使用开放共享工位，跨 cwd 子代理跟随主任务。缺父、循环或未确认主 Agent 的分支明确标为待归属，不虚构办公室或关系。2D 父子关系视图仍可主动选择。两种渲染器共用 `TopologyGraph`，关系只来自采集证据。3D 不引入常驻模拟，资源预算在布局分配前检查；视图卸载必须释放 GPU、监听器和观察器。开发验收使用 `npm run dev` 的独立无头 Tauri / WKWebView 实例；只有用户要求原生窗口交互时使用 `npm run dev:window`。
 
+3D 建筑群采用井字街区地块，入口朝向道路；项目位置在当前窗口会话内保持稳定。地景通过有界共享几何与实例化网格绘制，不参与员工拾取，不增加常驻动画；修改建筑朝向时须同步核对世界坐标、拖动坐标与标签定位。
+
 后台采用 `crates/oc-core/` 的 Rust 核心，Tauri 宿主在 `src-tauri/`，SQLite/HTTP 等可中断工作由受统一预算约束的 `oc-data-worker` 子进程执行。系统监控由 `plugins/system-monitor/` 通过公开 `oc-plugin-sdk` 独立构建为带签名封装的 `.ocplugin`，首次运行不自动安装。核心保留生命周期、目录与包校验；禁止恢复 Electron/Node 生产后台、旧 CJS 插件或兼容导出。官方插件与内置插件使用同一全局资源预算；受信任原生代码不是沙箱。市场专项验收使用 `npm run smoke:renderer -- --scenario marketplace`。
 
 ## 1. 插件式架构

@@ -44,6 +44,49 @@ export interface OfficeLayout {
   floorByAgent: Map<string, string>
 }
 
+// A street is separated from every facade by a walkable setback; entrances
+// project 86 units, so the 120-unit pavement keeps steps off the carriageway.
+export const STREET_WIDTH = 160
+export const STREET_SETBACK = 120
+
+export function officeStreetGrid(width: number, depth: number) {
+  return {
+    pitchX: width + STREET_SETBACK * 2 + STREET_WIDTH,
+    pitchZ: depth + STREET_SETBACK * 2 + STREET_WIDTH,
+  }
+}
+
+/** An outward square spiral keeps existing parcels fixed as projects arrive. */
+export function officeStreetCell(index: number): { column: number; row: number } {
+  if (index === 0) return { column: 0, row: 0 }
+  const ring = Math.ceil((Math.sqrt(index + 1) - 1) / 2)
+  const side = ring * 2
+  const offset = (side + 1) ** 2 - 1 - index
+  if (offset < side) return { column: ring - offset, row: -ring }
+  if (offset < side * 2) return { column: -ring, row: -ring + offset - side }
+  if (offset < side * 3) return { column: -ring + offset - side * 2, row: ring }
+  return { column: ring, row: ring - (offset - side * 3) }
+}
+
+/** Also used after manual seats enlarge the shared building envelope. */
+export function placeOfficeBuildings(buildings: OfficeBuilding[], width: number, depth: number, slots?: ReadonlyMap<string, number>): void {
+  const grid = officeStreetGrid(width, depth)
+  for (let index = 0; index < buildings.length; index++) {
+    const building = buildings[index]
+    const cell = officeStreetCell(slots?.get(building.id) ?? index)
+    building.x = cell.column * grid.pitchX
+    building.z = cell.row * grid.pitchZ
+    building.width = width
+    building.depth = depth
+    for (const floor of building.floors) {
+      floor.x = building.x
+      floor.z = building.z
+      floor.width = width
+      floor.depth = depth
+    }
+  }
+}
+
 /** Each relationship branch occupies a floor in its root's project building. */
 export function buildOfficeLayout(graph: TopologyGraph): OfficeLayout {
   if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) {
@@ -139,17 +182,12 @@ export function buildOfficeLayout(graph: TopologyGraph): OfficeLayout {
   const maximumRows = maximumColumns === 0 ? 0 : Math.ceil(maximumSharedOccupancy / maximumColumns)
   const width = Math.max(760, 530 + (maximumColumns - 1) * 140)
   const depth = Math.max(420, 280 + (maximumRows - 1) * 140)
-  const buildingColumns = Math.ceil(Math.sqrt(buildings.length))
-  const buildingRows = buildingColumns === 0 ? 0 : Math.ceil(buildings.length / buildingColumns)
+  placeOfficeBuildings(buildings, width, depth)
   const floors: OfficeFloor[] = []
   const positions = new Map<string, Point3D>()
   const floorByAgent = new Map<string, string>()
   for (let index = 0; index < buildings.length; index += 1) {
     const building = buildings[index]
-    building.x = (index % buildingColumns - (buildingColumns - 1) / 2) * (width + 320)
-    building.z = (Math.floor(index / buildingColumns) - (buildingRows - 1) / 2) * (depth + 360)
-    building.width = width
-    building.depth = depth
     building.floors.sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0)
     for (let level = 0; level < building.floors.length; level += 1) {
       const floor = building.floors[level]

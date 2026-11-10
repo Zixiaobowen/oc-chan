@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { Color, Matrix4, Vector3 } from 'three'
+import { OfficeDistrict } from './agent-office-district'
 import type { AgentInfo } from '../../shared/types'
 import { projectAgentTopology, type TopologyGraph } from './agent-topology'
 import {
   buildOfficeLayout,
+  officeStreetCell,
+  placeOfficeBuildings,
   MAX_3D_EDGES,
   MAX_3D_NODES,
   type OfficeLayout,
@@ -99,12 +103,6 @@ test('full normalized project paths separate buildings even when basenames match
   ])
   assert.equal(new Set(layout.buildings.map(building => building.id)).size, 4)
   assert.deepEqual(layout.buildings[1].floors.map(floor => floor.id), ['task:a', 'task:slash'])
-  const minX = Math.min(...layout.buildings.map(building => building.x - building.width / 2))
-  const maxX = Math.max(...layout.buildings.map(building => building.x + building.width / 2))
-  const minZ = Math.min(...layout.buildings.map(building => building.z - building.depth / 2))
-  const maxZ = Math.max(...layout.buildings.map(building => building.z + building.depth / 2))
-  assert.equal(minX + maxX, 0)
-  assert.equal(minZ + maxZ, 0)
   assertCompleteLayout(graph, layout)
 })
 
@@ -158,6 +156,63 @@ test('ordering and placement survive shuffled graph entries without mutating inp
   assert.deepEqual([...reordered.floorByAgent], [...layout.floorByAgent])
   assert.deepEqual(graph, original)
   assertCompleteLayout(graph, layout)
+})
+
+test('retained project parcels survive additions, reordering and expanded buildings', () => {
+  const graph = projectAgentTopology([agent('b', '/b'), agent('c', '/c')], 'all', 'all', '', noCollapse)
+  const before = buildOfficeLayout(graph)
+  const slots = new Map(before.buildings.map((building, index) => [building.id, index]))
+  const after = buildOfficeLayout(projectAgentTopology([agent('a', '/a'), ...graph.nodes.map(node => node.agent)], 'all', 'all', '', noCollapse))
+  slots.set('cwd:/a', 2)
+  placeOfficeBuildings(after.buildings, before.buildings[0].width, before.buildings[0].depth, slots)
+  for (const building of before.buildings) {
+    const retained = after.buildings.find(item => item.id === building.id)!
+    assert.deepEqual([retained.x, retained.z], [building.x, building.z])
+  }
+  placeOfficeBuildings(after.buildings, 2800, 1800, slots)
+  for (const building of after.buildings) for (const floor of building.floors) {
+    assert.deepEqual([floor.x, floor.z, floor.width, floor.depth], [building.x, building.z, 2800, 1800])
+  }
+  const cells = Array.from({ length: MAX_3D_NODES }, (_, index) => officeStreetCell(index))
+  assert.equal(new Set(cells.map(cell => `${cell.column}:${cell.row}`)).size, MAX_3D_NODES)
+  assert.ok(cells.every(cell => Number.isInteger(cell.column) && Number.isInteger(cell.row)))
+})
+
+test('district roads avoid every footprint after expansion and scenery storage stays bounded', () => {
+  const layout = buildOfficeLayout(projectAgentTopology(Array.from({ length: MAX_3D_NODES }, (_, index) => agent(`main-${index}`, `/project/${index}`)), 'all', 'all', '', noCollapse))
+  const district = new OfficeDistrict()
+  const geometries = district.meshes.map(mesh => mesh.geometry)
+  const capacities = district.meshes.map(mesh => mesh.instanceMatrix.count)
+  const matrix = new Matrix4()
+  const position = new Vector3()
+  const scale = new Vector3()
+  try {
+    for (const [width, depth] of [[760, 420], [2800, 1800]]) {
+      placeOfficeBuildings(layout.buildings, width, depth)
+      district.update(layout.buildings, new Color('#eeeeee'))
+      for (let index = 0; index < district.paving.count; index++) {
+        district.paving.getMatrixAt(index, matrix)
+        position.setFromMatrixPosition(matrix)
+        scale.setFromMatrixScale(matrix)
+        if (position.y !== -14) continue
+        for (const building of layout.buildings) {
+          assert.ok(Math.abs(position.x - building.x) >= (scale.x + building.width) / 2
+            || Math.abs(position.z - building.z) >= (scale.z + building.depth) / 2,
+          `road stays outside ${building.id}`)
+        }
+      }
+      assert.ok(district.meshes.every((mesh, index) => mesh.count <= capacities[index] && mesh.geometry === geometries[index]))
+    }
+    district.update([], new Color('#111111'))
+    assert.ok(district.meshes.every(mesh => mesh.count === 0))
+    assert.deepEqual(district.meshes.map(mesh => mesh.instanceMatrix.count), capacities)
+  } finally {
+    for (const mesh of district.meshes) {
+      mesh.dispose()
+      mesh.geometry.dispose()
+      mesh.material.dispose()
+    }
+  }
 })
 
 test('cycles, self loops, missing parents and subagent roots never receive a fabricated main office', () => {

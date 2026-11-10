@@ -6,9 +6,10 @@ import {
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import type { TopologyGraph, TopologyNode } from './agent-topology'
-import { buildOfficeLayout, MAX_3D_EDGES, MAX_3D_NODES, type OfficeBuilding, type OfficeFloor, type Point3D } from './agent-topology-3d-layout'
+import { buildOfficeLayout, officeStreetGrid, placeOfficeBuildings, STREET_SETBACK, STREET_WIDTH, MAX_3D_EDGES, MAX_3D_NODES, type OfficeBuilding, type OfficeFloor, type Point3D } from './agent-topology-3d-layout'
 import { createEmployeeGeometry, createWorkstationGeometry } from './agent-office-employee'
 import { createEntranceGeometry, createFacadeGeometry, createFloorFrameGeometry, createMainOfficeGeometry, createRoofGeometry } from './agent-office-building'
+import { OfficeDistrict } from './agent-office-district'
 import { isDesktopDocumentVisible, isHeadlessDesktop, scheduleDesktopUpdate, type DesktopUpdate } from './desktop-visibility'
 
 export interface Topology3DSession {
@@ -16,6 +17,8 @@ export interface Topology3DSession {
   positions: Map<string, Point3D>
   floorByAgent: Map<string, string>
   floorId: string | null
+  buildingSlots?: Map<string, number>
+  projectByAgent?: Map<string, string>
   camera?: { position: [number, number, number]; target: [number, number, number] }
 }
 interface Callbacks {
@@ -69,7 +72,8 @@ export class TopologyScene {
   private readonly mutedRoofs = mutedMesh(this.roof)
   private readonly mutedEntrances = mutedMesh(this.entrance)
   private readonly mutedArrows = mutedMesh(this.arrows)
-  private readonly meshes = [this.nodes, this.markers, this.desks, this.decks, this.frames, this.facades, this.roof, this.entrance, this.offices, this.arrows, this.mutedNodes, this.mutedMarkers, this.mutedDesks, this.mutedDecks, this.mutedFrames, this.mutedFacades, this.mutedOffices, this.mutedRoofs, this.mutedEntrances, this.mutedArrows]
+  private readonly district = new OfficeDistrict()
+  private readonly meshes = [this.nodes, this.markers, this.desks, this.decks, this.frames, this.facades, this.roof, this.entrance, this.offices, this.arrows, this.mutedNodes, this.mutedMarkers, this.mutedDesks, this.mutedDecks, this.mutedFrames, this.mutedFacades, this.mutedRoofs, this.mutedEntrances, this.mutedOffices, this.mutedArrows, ...this.district.meshes]
   private readonly nodeSlots: string[] = []
   private readonly mutedNodeSlots: string[] = []
   private readonly floorSlots: string[] = []
@@ -128,9 +132,9 @@ export class TopologyScene {
       lines.geometry.setAttribute('color', this.edgeColors)
       lines.geometry.setDrawRange(0, 0)
     }
-    const light = new DirectionalLight(0xffffff, 1.6)
-    light.position.set(1, 2, 3)
-    this.scene.add(this.lines, this.mutedLines, light, new HemisphereLight(0xffffff, 0x53677d, 1.5))
+    const light = new DirectionalLight(0xfff2d9, 1.35)
+    light.position.set(-1, 3, 2)
+    this.scene.add(this.lines, this.mutedLines, light, new HemisphereLight(0xf3f5ee, 0x737763, 1.65))
     this.controls = new OrbitControls(this.camera, canvas)
     this.controls.enableDamping = false
     this.controls.minDistance = 60
@@ -271,18 +275,29 @@ export class TopologyScene {
       width = Math.max(width, p.x + 270)
       depth = Math.max(depth, (Math.abs(p.z) + 90) * 2)
     }
-    for (const building of this.buildings) {
-      building.x *= (width + 320) / (baseWidth + 320)
-      building.z *= (depth + 360) / (baseDepth + 360)
-      building.width = width
-      building.depth = depth
-      for (const floor of building.floors) {
-        floor.width = width
-        floor.depth = depth
-        floor.x = building.x
-        floor.z = building.z
-      }
+    const projects = this.session.projectByAgent ??= new Map<string, string>()
+    for (const id of projects.keys()) if (!liveIds.has(id)) projects.delete(id)
+    // Visible evidence wins when retained hidden agents fill the session budget.
+    const additions = graph.nodes.reduce((count, node) => count + Number(!projects.has(node.agent.id)), 0)
+    let excess = projects.size + additions - MAX_3D_NODES
+    for (const id of projects.keys()) {
+      if (excess <= 0) break
+      if (!this.byId.has(id)) { projects.delete(id); excess-- }
     }
+    for (const floor of this.floors) for (const id of floor.nodeIds) projects.set(id, floor.buildingId)
+    const slots = this.session.buildingSlots ??= new Map<string, number>()
+    const retainedProjects = new Set(projects.values())
+    for (const id of slots.keys()) if (!retainedProjects.has(id)) slots.delete(id)
+    const usedSlots = new Set(slots.values())
+    let nextSlot = 0
+    for (const building of this.buildings) {
+      if (slots.has(building.id)) continue
+      while (usedSlots.has(nextSlot)) nextSlot++
+      if (nextSlot >= MAX_3D_NODES) throw new RangeError('Office parcel budget exceeded')
+      slots.set(building.id, nextSlot)
+      usedSlots.add(nextSlot)
+    }
+    placeOfficeBuildings(this.buildings, width, depth, slots)
     const style = getComputedStyle(this.host)
     this.colors.ground.set(style.getPropertyValue('--ground').trim())
     this.colors.surface.set(style.getPropertyValue('--surface').trim())
@@ -294,6 +309,7 @@ export class TopologyScene {
     this.colors.context.set(style.getPropertyValue('--muted').trim())
     this.renderer.domElement.setAttribute('aria-label', t('项目建筑群，每层一个任务，主 Agent 独立办公室、子 Agent 共享工位。方向键平移，Shift 加方向键旋转，F 显示全部项目。', 'Project buildings, one task per floor, main agents in private offices and subagents at shared desks. Arrow keys pan, Shift plus arrows orbit, F fits all projects.'))
     this.syncGeometry()
+    this.district.update(this.buildings, this.colors.ground)
     if (!this.session.camera && graph.nodes.length) this.fit()
     this.invalidate()
   }
@@ -346,7 +362,9 @@ export class TopologyScene {
 
   private syncGeometry(): void {
     if (!this.graph) return
-    for (const mesh of this.meshes) mesh.count = 0
+    for (const mesh of this.meshes) {
+      if (mesh !== this.district.paving && mesh !== this.district.crowns) mesh.count = 0
+    }
     this.nodeSlots.length = this.mutedNodeSlots.length = this.floorSlots.length = this.mutedFloorSlots.length = 0
     this.transform.quaternion.identity()
     if (this.floors.length) this.updateBuildingGeometry(this.floors[0].width, this.floors[0].depth)
@@ -378,14 +396,17 @@ export class TopologyScene {
     }
     this.roof.material.opacity = this.session.floorId === null ? 1 : 0.05
     this.roof.material.depthWrite = this.session.floorId === null
+    const streetGrid = officeStreetGrid(this.buildingWidth, this.buildingDepth)
     for (const building of this.buildings) {
       const muted = this.session.floorId !== null && !building.floors.some(floor => floor.id === this.session.floorId)
       const roof = muted ? this.mutedRoofs : this.roof
       const entrance = muted ? this.mutedEntrances : this.entrance
+      this.transform.rotation.set(0, 0, 0)
       this.transform.position.set(building.x, building.floors.length * 240, building.z)
       this.transform.scale.setScalar(1)
       this.transform.updateMatrix()
       roof.setMatrixAt(roof.count++, this.transform.matrix)
+      this.transform.rotation.y = Math.round(building.z / streetGrid.pitchZ) % 2 === 0 ? 0 : Math.PI
       this.transform.position.set(building.x, 0, building.z)
       this.transform.updateMatrix()
       entrance.setMatrixAt(entrance.count++, this.transform.matrix)
@@ -461,6 +482,7 @@ export class TopologyScene {
       ;(muted ? this.mutedLines : this.lines).geometry.setDrawRange(startVertex, vertex - startVertex)
     }
     for (const mesh of this.meshes) {
+      if (mesh === this.district.paving || mesh === this.district.crowns) continue
       mesh.instanceMatrix.needsUpdate = true
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
       mesh.computeBoundingSphere()
@@ -568,7 +590,7 @@ export class TopologyScene {
       if (document.activeElement === label) this.renderer.domElement.focus({ preventScroll: true })
       label.hidden = true
     }
-    const floorCandidates = this.floors.map(floor => {
+    const floorCandidates = this.floors.filter(floor => floor.id === this.session.floorId).map(floor => {
       this.point.set(floor.x - floor.width / 2, floor.y, floor.z + floor.depth / 2).project(this.camera)
       return { floor, x: (this.point.x + 1) * this.width / 2, y: (1 - this.point.y) * this.height / 2, depth: this.point.z }
     }).filter(p => p.depth > -1 && p.depth < 1 && p.x > -100 && p.x < this.width && p.y > 0 && p.y < this.height)
@@ -631,12 +653,13 @@ export class TopologyScene {
     const bounds = new Box3()
     for (const floor of this.floors) {
       if (ids && !floor.nodeIds.some(id => ids.has(id))) continue
-      bounds.expandByPoint(this.point.set(floor.x - floor.width / 2 - 20, floor.y - 8, floor.z - floor.depth / 2 - 20))
-      bounds.expandByPoint(this.point.set(floor.x + floor.width / 2 + 20, floor.y + (ids ? 160 : 330), floor.z + floor.depth / 2 + 90))
+      const margin = ids ? 20 : STREET_SETBACK + STREET_WIDTH + 50
+      bounds.expandByPoint(this.point.set(floor.x - floor.width / 2 - margin, ids ? floor.y - 8 : -48, floor.z - floor.depth / 2 - margin))
+      bounds.expandByPoint(this.point.set(floor.x + floor.width / 2 + margin, floor.y + (ids ? 160 : 330), floor.z + floor.depth / 2 + margin))
     }
     if (bounds.isEmpty()) return
     bounds.getCenter(this.controls.target)
-    this.direction.set(front ? 0 : 0.6, front ? 0 : 0.45, 1).normalize()
+    this.direction.set(front ? 0 : 0.65, front ? 0 : 0.85, 1).normalize()
     const right = new Vector3().crossVectors(this.up, this.direction).normalize()
     const viewUp = new Vector3().crossVectors(this.direction, right)
     const vertical = Math.tan(this.camera.fov * Math.PI / 360) * 0.94
@@ -675,6 +698,8 @@ export class TopologyScene {
     const graph = this.graph
     this.session.positions.clear()
     this.session.floorByAgent.clear()
+    this.session.buildingSlots?.clear()
+    this.session.projectByAgent?.clear()
     this.update(graph, this.selected, new Set(this.byId.keys()), this.t, this.evidenceCurrent)
     this.fit()
   }
