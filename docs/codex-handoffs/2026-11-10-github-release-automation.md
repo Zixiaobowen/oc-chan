@@ -24,6 +24,13 @@
 - `npm run test:release`：修复真实draft API后101/101通过。包含stable/preview草稿读取、来源绑定、篡改与超限、权限与GraphQL错误、附件不完整、重复发布及Latest保持。
 - 真实只读GraphQL查询不存在Release返回`data.repository.release=null`且exit0。
 - 本地不跑全仓测试；云端按现有CI映射做定向测试及真实WKWebView、打包、审计。
+- 已提交并推送 `f3a6213fdd5573a778dc98bcaf4b6b5f9f9864bd`；现场GitHub ref读取一致。[Build macOS #56](https://github.com/Zixiaobowen/oc-chan/actions/runs/42843573848) 的macOS构建、真实WKWebView、依赖审计及安装包检查通过；发布job在读取附件目录时失败，未创建预览Release。
+- `npm run push:main` 的GitHub推送和当前工作区清理成功；随后因外部删除旧工作区但登记仍在，清理该旧路径报ENOENT，整体命令exit1。未删除失效登记或其他分支；这不表示GitHub推送失败。
+- HTML回执通过Tern原生WKWebView读取，实际1280 CSS px宽页与462 CSS px分栏截图已检查；浅色主题计算色值和链接键盘焦点正常，事件记录为空。原生viewport请求虽返回成功但未改变停放页实际尺寸，不能宣称360px验收通过；问题已报工具QA。
+- 浏览器helper接管返回no_window，而绑定当前TERN_PANE的`tern browser`可正常访问；改用原生CLI完成检查。最终仍须更新、显示当前回执并释放接管，不使用外部Chrome。
+- 云端真实无头Tauri/WKWebView验收完成：`oc-chan-renderer-smoke-56`（artifact 13779545096），`complete=true`、`errors=[]`、`fault=null`；2026-11-10 15:27:28Z至15:39:03Z。生产Rust采集、IPC与真实React渲染已运行；报告确认fixture进程和目录、保留实例清理完成。证据下载到`/private/tmp/oc-release-smoke-56-u1ApVO/result.json`。不包含可见原生窗口或OS通知投递验收。
+- 稳定Latest核对基线：`v0.1.0`，Release ID `434182593`，发布时间`2026-11-04T16:41:41Z`。预览公开后须再次比对。
+- #56发布失败根因：download-artifact v8对单个pattern匹配将文件直接展开到`artifacts`，而CLI读取`artifacts/oc-chan-macos-arm64-56/latest.json`。实际下载日志与ENOENT明确证实。工作流现改为exact name并显式指定对应子目录，去掉不适用的merge-multiple；不添加路径兼容或降级逻辑。
 
 ## 工作区变化与限制
 
@@ -35,10 +42,9 @@ GitHub官方Create Release规则：若目标提交的workflow内容相对当前�
 
 ## 后续动作
 
-1. 提交本轮明确文件，保持他人工作区分支和未提交内容。
-2. 将修复送入main，通过仓库入口推送并观察对应GitHub Actions。
-3. 核对预览Release状态、完整标签SHA、三附件、下载SHA256及稳定Latest未变。
-4. 写回实际回执，生成HTML证据页并显示在当前Tern会话右侧；释放浏览器接管，不关闭用户分栏。
+1. 用真实#56分发artifact验收明确下载目录，校验修改后的workflow；提交推送该路径修复，观察新的完整main流水线。
+2. 核对预览Release状态、完整标签SHA、三附件、下载SHA256及稳定Latest未变。
+3. 写回实际回执，更新当前Tern右侧HTML证据页；释放浏览器接管，不关闭用户分栏。
 
 ## 恢复提示
 
