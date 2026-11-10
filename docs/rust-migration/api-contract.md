@@ -1,6 +1,6 @@
 # 桌面 API 与异步订阅契约
 
-这是全量迁移的实施清单，覆盖原有42个公开方法及内部订阅协议。主窗记为M、托盘T、恢复窗R。授权来自宿主登记的真实WebView身份，不能由前端传label决定；所有命令均拒绝非法参数、未知键、失效窗口和退出阶段。恢复态只能R调用恢复三项。
+这是全量迁移的实施清单，覆盖44个公开方法及内部订阅协议。主窗记为M、托盘T、恢复窗R。授权来自宿主登记的真实WebView身份，不能由前端传label决定；所有命令均拒绝非法参数、未知键、失效窗口和退出阶段。恢复态只能R调用恢复三项。
 
 ## 命令与事件
 
@@ -29,11 +29,13 @@
 |desktopSettings.retryGeometry|M|SettingsUpdateResult；只保存宿主当前正常几何|同设置事务|
 |desktopSettings.updateLoginItem(enabled)|M|LoginItemUpdateResult含actual state/rollbackFailed|headless/开发拒绝；写后读回|
 |desktopSettings.requestNotificationPermission|M|NotificationState；仅显式请求|30s调用等待；系统pending直到真实回调释放|
+|desktopSettings.accessibilityState|M|AccessibilityState；只读AXIsProcessTrusted、不弹授权；headless返回unknown|有界原生主线程调用|
+|desktopSettings.openPermissionSettings(target)|M|void；仅accessibility/notifications固定设置页；headless拒绝|显式操作；失败传播|
 |desktopSettings.showMainWindow(target?)|M/T|void；严格导航目标；headless拒绝|单主窗/导航槽|
 |desktopSettings.subscribe(listener)|M/T|同步退订；SettingsSnapshot|本组件listener|
 |appUpdates.snapshot|M|UpdateSnapshot|只读|
-|appUpdates.check|M|UpdateSnapshot；禁用不发网络；30s|单operation|
-|appUpdates.download|M|UpdateSnapshot；流式摘要/大小校验；15min|单operation；取消删除part并释放|
+|appUpdates.check|M|UpdateSnapshot；development/unsigned允许手动查询并报告失败，platform不发网络；30s|单operation；仅完整更新资格启动自动调度|
+|appUpdates.download|M|UpdateSnapshot；development/unsigned/platform均拒绝；流式摘要/大小校验；15min|单operation；取消删除part并释放|
 |appUpdates.cancel|M|UpdateSnapshot；取消下载后保留available|等下载与文件关闭|
 |appUpdates.install|M|UpdateSnapshot；只能已下载且验证通过，120s|排空业务后移交可信安装助手；不await自身形成死锁|
 |appUpdates.openReleaseNotes|M|void；固定受限发布URL；headless拒绝|系统外部打开|

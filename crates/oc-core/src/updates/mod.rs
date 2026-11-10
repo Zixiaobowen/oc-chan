@@ -54,8 +54,8 @@ enum Outcome { Checked(Option<Candidate>), Downloaded, Prepared }
 impl UpdateController {
     pub async fn new(config: UpdateConfig, io: BoundedIo) -> Result<Arc<Self>> {
         if config.current_version.len() > 64 || semver::Version::parse(&config.current_version).is_err() { return Err(Error::invalid("current application version")); }
-        let disabled = if config.development || cfg!(debug_assertions) { Some(DisabledReason::Development) }
-            else if !cfg!(all(target_os = "macos", target_arch = "aarch64")) { Some(DisabledReason::Platform) }
+        let disabled = if !cfg!(all(target_os = "macos", target_arch = "aarch64")) { Some(DisabledReason::Platform) }
+            else if config.development || cfg!(debug_assertions) { Some(DisabledReason::Development) }
             else {
                 match work::verify_host(&io, config.host_bundle.clone(), &io.cancellation()).await {
                     Ok(version) if version == config.current_version => None,
@@ -67,7 +67,7 @@ impl UpdateController {
         Self::construct(config, io, disabled)
     }
     fn construct(config: UpdateConfig, io: BoundedIo, disabled: Option<DisabledReason>) -> Result<Arc<Self>> {
-        let snapshot = UpdateSnapshot { revision: 0, phase: if disabled.is_some() { UpdatePhase::Disabled } else { UpdatePhase::Idle },
+        let snapshot = UpdateSnapshot { revision: 0, phase: if disabled == Some(DisabledReason::Platform) { UpdatePhase::Disabled } else { UpdatePhase::Idle },
             current_version: config.current_version.clone(), available_version: None, checked_at: None,
             progress: None, disabled_reason: disabled, error: None };
         let (changed, _) = watch::channel(snapshot.clone()); let (deadline, _) = watch::channel(Instant::now() + STARTUP_CHECK);
@@ -106,7 +106,10 @@ impl UpdateController {
     fn admit(&self, kind: Kind, scheduled: Option<Instant>) -> Result<Admission> {
         let mut state = self.state.lock().expect("update state poisoned");
         if state.closed { return Err(Error::new("OC_UPDATE_CLOSED", "更新控制器已关闭 / Updates are closed")); }
-        if state.snapshot.disabled_reason.is_some() { return Ok(Admission::Unchanged(state.snapshot.clone())); }
+        if state.snapshot.disabled_reason.is_some() {
+            if kind != Kind::Check { return Err(Error::new("OC_UPDATE_DISABLED", "当前应用不允许下载或安装更新 / This application cannot download or install updates")); }
+            if state.snapshot.disabled_reason == Some(DisabledReason::Platform) || scheduled.is_some() { return Ok(Admission::Unchanged(state.snapshot.clone())); }
+        }
         if scheduled.is_some_and(|expected| expected != *self.deadline.borrow()) { return Ok(Admission::Unchanged(state.snapshot.clone())); }
         if kind == Kind::Check { self.deadline.send_replace(Instant::now() + CHECK_INTERVAL); }
         if kind == Kind::Check && state.handing_off { return Ok(Admission::Unchanged(state.snapshot.clone())); }
@@ -211,7 +214,7 @@ impl UpdateController {
         let mut state = self.state.lock().expect("update state poisoned");
         if let Some(active) = &state.active { active.cancel.cancel(); state.external_failure = Some(error.clone()); }
         state.handing_off = false; state.snapshot.progress = None;
-        state.snapshot.phase = if state.snapshot.disabled_reason.is_some() { UpdatePhase::Disabled } else { UpdatePhase::Error };
+        state.snapshot.phase = if state.snapshot.disabled_reason == Some(DisabledReason::Platform) { UpdatePhase::Disabled } else { UpdatePhase::Error };
         state.snapshot.error = Some(public_error(&error)); self.publish(&mut state);
     }
     async fn clean_stage(&self) -> Result<()> {

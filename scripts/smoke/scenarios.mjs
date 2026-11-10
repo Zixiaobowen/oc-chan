@@ -570,6 +570,15 @@ async function exerciseBoundaries({ ui, main, renderer, record }) {
     failures.push(await denied(renderer, 'monitor_snapshot', initial.owner, {}, JSON.stringify('00000000-0000-4000-8000-000000000000')))
     failures.push(await denied(renderer, 'settings_update', initial.owner, { impossibleSetting: true }))
     failures.push(await denied(renderer, 'settings_update', initial.owner, { oversized: 'x'.repeat(128 * 1024 + 1) }))
+    const accessibility = await renderer.evaluate('window.desktopSettings.accessibilityState()')
+    assert.equal(accessibility.availability, 'headless')
+    assert.equal(accessibility.status, 'unknown')
+    for (const target of ['accessibility', 'notifications']) {
+      const outcome = await denied(renderer, 'settings_open_permission_settings', initial.owner, { target })
+      assert.match(outcome.error, /OC_HEADLESS/)
+      failures.push(outcome)
+    }
+    failures.push(await denied(renderer, 'settings_open_permission_settings', initial.owner, { target: 'invalid' }))
     const unknown = await renderer.evaluate('window.__TAURI_INTERNALS__.invoke("oc_unlisted_acceptance_command",{}).then(()=>false,()=>true)')
     assert.equal(unknown, true)
     const owners = [initial.owner]
@@ -596,6 +605,8 @@ async function exerciseBoundaries({ ui, main, renderer, record }) {
     assert.notEqual(trayState.owner, owners.at(-1))
     failures.push(await denied(tray, 'monitor_snapshot', owners.at(-1)))
     failures.push(await denied(tray, 'settings_update', trayState.owner, { patch: { appearance: 'dark' } }))
+    failures.push(await denied(tray, 'settings_accessibility_state', trayState.owner))
+    failures.push(await denied(tray, 'settings_open_permission_settings', trayState.owner, { target: 'accessibility' }))
     failures.push(await denied(renderer, 'recovery_snapshot', owners.at(-1)))
     for (const view of [renderer, tray]) {
       const native = await view.inspect()

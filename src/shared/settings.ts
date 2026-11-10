@@ -1,3 +1,4 @@
+import { monitorSections } from './plugin-catalog'
 import type { ThemeId } from './themes'
 import type { NavigationTarget } from './navigation'
 import type { MonitorSection } from './types'
@@ -42,7 +43,7 @@ export const DEFAULT_SETTINGS: Readonly<AppSettings> = {
   language: 'system', textSize: 'default',
   uiFont: 'system', codeFont: 'system', trayClick: 'tray',
   showDock: true, preventSleep: false, sidebarWidth: 214, windowBounds: null,
-  plugins: Object.freeze({ agents: true, schedules: true, system: true, events: true }),
+  plugins: Object.freeze(Object.fromEntries(monitorSections.map(section => [section, true])) as PluginSettings),
   notifications: DEFAULT_NOTIFICATIONS
 }
 
@@ -80,6 +81,13 @@ export type SettingsUpdateResult =
   | { ok: true; snapshot: SettingsSnapshot }
   | { ok: false; error: SettingsUpdateFailure }
 
+export type PermissionSettingsTarget = 'accessibility' | 'notifications'
+export interface AccessibilityState {
+  availability: 'available' | 'headless' | 'unsupported'
+  status: 'authorized' | 'not-authorized' | 'unknown'
+  details: string | null
+}
+
 export interface SettingsApi {
   snapshot(): Promise<SettingsSnapshot>
   retryGeometry(): Promise<SettingsUpdateResult>
@@ -87,6 +95,8 @@ export interface SettingsApi {
   previewGlass(intensity: number | null): Promise<void>
   updateLoginItem(enabled: boolean): Promise<LoginItemUpdateResult>
   requestNotificationPermission(): Promise<NotificationState>
+  accessibilityState(): Promise<AccessibilityState>
+  openPermissionSettings(target: PermissionSettingsTarget): Promise<void>
   subscribe(listener: (snapshot: SettingsSnapshot) => void): () => void
   showMainWindow(target?: NavigationTarget): Promise<void>
 }

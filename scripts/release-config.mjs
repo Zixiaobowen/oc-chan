@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 
-export const releaseRepository = 'Zixiaobowen/oc-chan-releases'
-export const signingSecrets = ['APPLE_CERTIFICATE', 'APPLE_CERTIFICATE_PASSWORD', 'APPLE_SIGNING_IDENTITY', 'APPLE_ID', 'APPLE_PASSWORD', 'APPLE_TEAM_ID', 'UPDATE_RELEASE_TOKEN']
+export const releaseRepository = 'Zixiaobowen/oc-chan'
+export const signingSecrets = ['APPLE_CERTIFICATE', 'APPLE_CERTIFICATE_PASSWORD', 'APPLE_SIGNING_IDENTITY', 'APPLE_ID', 'APPLE_PASSWORD', 'APPLE_TEAM_ID']
 export function releaseInfo(version) {
   if (typeof version !== 'string' || version.length > 64 || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version) || version.split('.').some(part => BigInt(part) > 18446744073709551615n)) throw new Error(`Invalid strict stable release version: ${version}`)
   return { version, tag: `v${version}`, metadataName: 'latest.json' }

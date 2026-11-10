@@ -44,7 +44,8 @@ function fixture(t) {
   mkdirSync(path.join(root, 'docs'))
   writeFileSync(path.join(root, 'docs/handoff.md'), 'initial\n')
   mkdirSync(path.join(root, 'scripts'))
-  for (const filename of ['push-main.mjs', 'local-app-lifecycle.mjs']) {
+  // Copy the lifecycle's real transitive imports; cleanup must execute production code.
+  for (const filename of ['push-main.mjs', 'local-app-lifecycle.mjs', 'local-install-readiness.mjs', 'build-app.mjs', 'build-plugin-market-rust.mjs', 'rust-dependencies.mjs']) {
     copyFileSync(new URL(`./${filename}`, import.meta.url), path.join(root, 'scripts', filename))
   }
   const initial = commit(root, 'initial')
@@ -56,12 +57,15 @@ async function realPush(root) {
 }
 
 function application(root) {
-  const app = path.join(root, 'release/mac-arm64/OC Chan.app')
+  const app = path.join(root, 'release/tauri/cargo/aarch64-apple-darwin/release/bundle/macos/OC Chan.app')
   mkdirSync(path.join(app, 'Contents/MacOS'), { recursive: true })
-  writeFileSync(path.join(app, 'Contents/Info.plist'), '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>local.oc-chan.desktop</string><key>CFBundleExecutable</key><string>OC Chan</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>')
-  copyFileSync('/bin/sleep', path.join(app, 'Contents/MacOS/OC Chan'))
-  const retained = ['release/archive.zip', 'release/archive.dmg', 'release/delivery.json', 'release/evidence.log']
-  for (const name of retained) writeFileSync(path.join(root, name), name)
+  writeFileSync(path.join(app, 'Contents/Info.plist'), '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>local.oc-chan.desktop</string><key>CFBundleExecutable</key><string>oc-chan</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>')
+  copyFileSync('/bin/sleep', path.join(app, 'Contents/MacOS/oc-chan'))
+  const retained = ['release/archive.zip', 'release/archive.dmg', 'release/delivery.json', 'release/evidence.log', 'release/tauri/cargo/aarch64-apple-darwin/release/deps/retained.rlib']
+  for (const name of retained) {
+    mkdirSync(path.dirname(path.join(root, name)), { recursive: true })
+    writeFileSync(path.join(root, name), name)
+  }
   return { app, assertRetained: () => {
     for (const name of retained) assert.equal(readFileSync(path.join(root, name), 'utf8'), name)
     assert.equal(existsSync(path.join(root, 'product.js')), true)

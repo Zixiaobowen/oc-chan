@@ -58,3 +58,17 @@ buildId：`add4d512-c253-4c87-96d4-40730cdc4a54`。产物位于 `release/tauri/a
 5. 处理五个失败目录前重新取得真实归属、退出和清理依据；需要越过现有保护时另行明确授权，不自动删除源码worktree。
 
 恢复提示：进入 `/Users/zixiaobowen/myProjects/oc-chan-rust-migration-20261109` 的 `feat/rust-tauri-migration-20261109`。方案、评审、实现及本地工程验收已结束；用户已追加授权commit并push当前分支，先以本地Git及GitHub分支核对发布状态。最终证据是full-verify-18、stress-7、soak-3、comparisons-final及release-5。不得重跑已适用检查、恢复旧Electron兼容路径或将无头结果当原生可见/正式安装验收。保留原工作区、正式应用、五个拒绝清理目录、全部失败原始证据和源码基准，不把旧任务交接改动纳入提交。根据用户新增目标继续，不依赖旧Eval变量，也不自动合并main、发布或部署。
+
+## 2026-11-10 main整合补充（尚待主代理验证）
+
+本轮用户已授权合并main及推送，不授权发布、安装或自动清理。隔离目录为`/Users/zvf003/ZStack/oc-chan-rust-merge-20261110`，分支`integrate/rust-tauri-20261110`。以迁移`df3bbad`合并`origin/main=629db1f`；原工作区保持原样。
+
+- 保留Rust/Tauri打包、安装、schema2更新与原生插件实现；撤销Git目录重命名对Rust插件的误搬移，唯一包源码和manifest位于`plugins/system-monitor/`。main新增的renderer插件贡献保留，Electron主进程、preload、旧市场包与Electron smoke入口删除。
+- 保留main项目建筑/任务楼层拓扑、Kubai图标、公开发布源、可选系统监控贡献；App/Tray合并插件卸载快照清理与WKWebView无头可见性调度。CI加入renderer registry/tray selection与发布行为测试。
+- 更新源统一为`Zixiaobowen/oc-chan`，同步Rust URL、HTTP白名单、发布脚本及文档。保留main草稿验证、Latest防降级和公开后回读，改为Rust稳定版本及`latest.json`，发布job使用`github.token`和串行锁。此次没有执行发布。
+- 修复安装器codesign内联requirement缺少`=`；修复本地交付调用不存在的`package:dist`为实际`dist`入口，并同步受管输出目录示例。保留main源码快照的非阻塞打开和文件身份检查。
+- npm锁仅作Kubai切换并重新绑定依赖policy；旧依赖审计不代表当前锁通过。未运行测试、构建、格式化或任何安装。主代理需执行类型检查、相关frontend/发布/交付/安装用例、Rust更新/安装器定向检查、真实marketplace/topology烟测及依赖审计。真实本地交付入口为`npm run delivery:local -- --out release/tauri/merge-delivery-20261110`，之后`npm run install:local -- --check-delivery release/tauri/merge-delivery-20261110`仅核验、不安装。
+
+main新增的Electron CDP托盘烟测与Electron构建器进程测试不适用于新宿主，已移除其执行入口；原生开发生命周期测试保留。可见托盘和正式签名更新仍不能以无头或ad-hoc测试替代。
+
+整合类型检查暴露main新增设置API缺口后，补齐`accessibilityState`/`openPermissionSettings`到Tauri命令表（仅main窗口）、严格target枚举、宿主和原生AppKit桥。普通实例以`AXIsProcessTrusted()`只读查询、不弹授权框；固定辅助功能/通知系统设置URL，打开失败传播错误。无头实例返回headless/unknown并明确拒绝打开系统设置；原生acceptance边界也拒绝外部设置操作。同步原生release notes两层固定源白名单。新增代码尚待主代理类型检查、宿主编译与无头边界验收，未执行可见系统设置交互。

@@ -24,7 +24,7 @@ fn main() {
     println!("cargo:rustc-link-search=native={}", runtime.parent().unwrap().display());
     println!("cargo:rustc-link-lib=static=clang_rt.osx");
     println!("cargo:rerun-if-changed={}", runtime.display());
-    for framework in ["AppKit", "Foundation", "IOKit", "ServiceManagement", "UserNotifications", "Carbon"] {
+    for framework in ["AppKit", "ApplicationServices", "Foundation", "IOKit", "ServiceManagement", "UserNotifications", "Carbon"] {
         println!("cargo:rustc-link-lib=framework={framework}");
     }
     for source in ["oc_native.mm", "oc_native.h", "oc_notifications.inc", "oc_exports.inc"] {

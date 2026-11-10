@@ -9,7 +9,7 @@ fn metadata() -> serde_json::Value {
 fn strict_metadata_selects_upgrade_and_validates_even_old_releases() {
     let bytes = serde_json::to_vec(&metadata()).unwrap(); let candidate = parse_metadata(&bytes, "0.1.0").unwrap().unwrap();
     assert_eq!(candidate.version, "0.2.0"); assert_eq!(candidate.asset.size, 17);
-    assert_eq!(candidate.url(), "https://github.com/Zixiaobowen/oc-chan-releases/releases/download/v0.2.0/OC-Chan-0.2.0-mac-arm64.zip");
+    assert_eq!(candidate.url(), "https://github.com/Zixiaobowen/oc-chan/releases/download/v0.2.0/OC-Chan-0.2.0-mac-arm64.zip");
     assert!(parse_metadata(&bytes, "0.2.0").unwrap().is_none());
     let mut invalid = metadata(); invalid["assets"][0]["size"] = json!(0);
     assert!(parse_metadata(&serde_json::to_vec(&invalid).unwrap(), "9.0.0").is_err());

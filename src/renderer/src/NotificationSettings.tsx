@@ -58,7 +58,7 @@ function timeMinute(value: string): number | null {
 }
 
 export default function NotificationSettings({ sources = [] }: { sources?: SourceStatus[] }) {
-  const { snapshot: { settings, notifications }, saving, error, update } = useSettings()
+  const { snapshot: { settings, notifications, platform }, saving, error, update } = useSettings()
   const preferences = settings.notifications
   const { t } = useI18n()
   const [start, setStart] = useState(() => timeText(preferences.quiet.startMinute))
@@ -66,11 +66,27 @@ export default function NotificationSettings({ sources = [] }: { sources?: Sourc
   const [timeError, setTimeError] = useState(false)
   const [requesting, setRequesting] = useState(false)
   const [permissionError, setPermissionError] = useState<string | null>(null)
+  const [openingSettings, setOpeningSettings] = useState(false)
+  const [settingsError, setSettingsError] = useState<string | null>(null)
+  const [permissionSettingsAvailability, setPermissionSettingsAvailability] = useState<'available' | 'headless' | 'unsupported' | 'unknown'>('unknown')
   const permissionPending = useRef(false)
   const mounted = useRef(true)
   const tasksRef = useRef<HTMLDivElement>(null)
   const removal = useRef<{ index: number; trigger: Element | null } | null>(null)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+  useEffect(() => {
+    let active = true
+    if (!window.desktopSettings) {
+      setSettingsError('Desktop settings are unavailable')
+      return
+    }
+    void window.desktopSettings.accessibilityState().then(state => {
+      if (active) setPermissionSettingsAvailability(state.availability)
+    }).catch(cause => {
+      if (active) setSettingsError(summarizeDiagnostic(cause, 'settings-connection', 'settings').details)
+    })
+    return () => { active = false }
+  }, [])
   useEffect(() => {
     setStart(timeText(preferences.quiet.startMinute))
     setEnd(timeText(preferences.quiet.endMinute))
@@ -89,7 +105,7 @@ export default function NotificationSettings({ sources = [] }: { sources?: Sourc
   const sourceOptions = new Map<string, SourceStatus | undefined>(sources.map(source => [source.id, source]))
   for (const id of preferences.sourceIds) if (!sourceOptions.has(id)) sourceOptions.set(id, undefined)
   const timeChanged = start !== timeText(preferences.quiet.startMinute) || end !== timeText(preferences.quiet.endMinute)
-  const permissionDisabled = saving || requesting || !preferences.enabled || !settings.plugins.events || notifications.permission === 'unsupported'
+  const permissionDisabled = saving || requesting || openingSettings || !preferences.enabled || !settings.plugins.events || notifications.permission === 'unsupported'
   async function requestPermission() {
     if (permissionPending.current || permissionDisabled) return
     permissionPending.current = true
@@ -105,6 +121,21 @@ export default function NotificationSettings({ sources = [] }: { sources?: Sourc
       if (mounted.current) setRequesting(false)
     }
   }
+  async function openSettings() {
+    if (permissionPending.current || permissionSettingsAvailability !== 'available') return
+    permissionPending.current = true
+    setOpeningSettings(true)
+    setSettingsError(null)
+    try {
+      if (!window.desktopSettings) throw new Error('Desktop settings are unavailable')
+      await window.desktopSettings.openPermissionSettings('notifications')
+    } catch (cause) {
+      if (mounted.current) setSettingsError(summarizeDiagnostic(cause, 'settings-connection', 'settings').details)
+    } finally {
+      permissionPending.current = false
+      if (mounted.current) setOpeningSettings(false)
+    }
+  }
   return <section id="setting-notifications" className="setting-row notification-settings" aria-labelledby="setting-notifications-label">
     <h2 id="setting-notifications-label">{t('本机通知', 'Local notifications')}</h2>
     <div className="setting-control">
@@ -118,7 +149,10 @@ export default function NotificationSettings({ sources = [] }: { sources?: Sourc
       <p className="setting-help">{t('系统权限：', 'System permission: ')}{t(...permissionLabels[notifications.permission])}</p>
       <div className="notification-actions">
         <button type="button" className="button secondary" aria-disabled={permissionDisabled} onClick={() => { void requestPermission() }}>{requesting ? t('正在请求…', 'Requesting…') : t('请求或重新检查权限', 'Request or recheck permission')}</button>
+        <button type="button" className="button secondary" disabled={permissionSettingsAvailability !== 'available'} aria-disabled={requesting || openingSettings || permissionSettingsAvailability !== 'available'} onClick={() => { void openSettings() }}>{openingSettings ? t('正在打开…', 'Opening…') : t('打开系统通知设置', 'Open Notification settings')}</button>
       </div>
+      {(platform !== 'darwin' || permissionSettingsAvailability === 'headless') && <p className="setting-help">{t('当前环境不能打开 macOS 系统通知设置。', 'This environment cannot open macOS Notification settings.')}</p>}
+      {settingsError && <div className="notification-error" role="alert"><p>{t('系统设置入口不可用或打开失败。请重试，或手动打开系统设置 → 通知。', 'System Settings is unavailable or failed to open. Retry or open System Settings → Notifications manually.')}</p><SettingsDiagnosticDetails details={settingsError} /></div>}
       {(!preferences.enabled || !settings.plugins.events) && <p className="setting-help">{t('开启本地通知和事件采集后可请求权限。', 'Enable local notifications and event collection before requesting permission.')}</p>}
       {notifications.permission === 'denied' && <p className="setting-help">{t('请在 macOS「系统设置 → 通知 → OC Chan」允许通知，再重新检查权限。', 'Allow OC Chan in macOS System Settings → Notifications, then recheck permission.')}</p>}
       {permissionError && <div className="notification-error" role="alert"><p>{t('权限请求未得到确认。请使用上方按钮重试。', 'The permission request was not confirmed. Retry using the button above.')}</p><SettingsDiagnosticDetails details={permissionError} /></div>}

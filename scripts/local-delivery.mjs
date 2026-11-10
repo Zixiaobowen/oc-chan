@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { constants, createReadStream, createWriteStream } from 'node:fs'
+import { constants, createWriteStream } from 'node:fs'
 import { chmod, copyFile, cp, lstat, mkdir, mkdtemp, open, realpath, rm, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
@@ -57,7 +57,7 @@ export async function command(file, args, { cwd = ROOT, timeout = 30000, signal,
 export async function artifactDigest(filename) {
   const before = await lstat(filename)
   requireThat(before.isFile() && before.nlink === 1 && before.size > 0 && before.size <= MAX_ARTIFACT, `Artifact must be a bounded regular file: ${filename}`)
-  const handle = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW)
+  const handle = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
   try {
     requireThat(sameFile(before, await handle.stat()), 'Artifact changed before reading')
     const sha = createHash('sha256'); let bytes = 0
@@ -89,13 +89,18 @@ async function snapshotSource(root, directory, source) {
     const sourceFile = path.join(root, entry.path), target = path.join(directory, entry.path)
     await mkdir(path.dirname(target), { recursive: true, mode: 0o700 })
     const digest = createHash('sha256'); let bytes = 0
-    await pipeline(createReadStream(sourceFile, { flags: constants.O_RDONLY | constants.O_NOFOLLOW, highWaterMark: 64 * 1024 }),
-      new Transform({ transform(chunk, _encoding, callback) {
-        bytes += chunk.length
-        if (bytes > entry.bytes) { callback(new Error(`Source grew during snapshot: ${entry.path}`)); return }
-        digest.update(chunk); callback(null, chunk)
-      } }), createWriteStream(target, { flags: 'wx', mode: 0o600 }))
-    requireThat(bytes === entry.bytes && digest.digest('hex') === entry.sha256, `Source changed during snapshot: ${entry.path}`)
+    const handle = await open(sourceFile, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+    try {
+      const info = await handle.stat()
+      requireThat(info.isFile() && info.nlink === 1 && info.size === entry.bytes, `Source must remain a bounded regular file: ${entry.path}`)
+      await pipeline(handle.createReadStream({ autoClose: false, highWaterMark: 64 * 1024 }),
+        new Transform({ transform(chunk, _encoding, callback) {
+          bytes += chunk.length
+          if (bytes > entry.bytes) { callback(new Error(`Source grew during snapshot: ${entry.path}`)); return }
+          digest.update(chunk); callback(null, chunk)
+        } }), createWriteStream(target, { flags: 'wx', mode: 0o600 }))
+      requireThat(bytes === entry.bytes && digest.digest('hex') === entry.sha256, `Source changed during snapshot: ${entry.path}`)
+    } finally { await handle.close() }
     await chmod(target, entry.mode)
   }
 }
@@ -177,7 +182,7 @@ export async function createLocalDelivery({ root = ROOT, out }) {
     console.log(`Building local Rust arm64 delivery ${source.version}; source ${source.digest}`)
     const install = await command('npm', ['ci', '--no-audit', '--no-fund'], { cwd: snapshot, signal: controller.signal, timeout: 600000 })
     await writeFile(path.join(destination, 'dependency-install.log'), install.stdout + install.stderr, { flag: 'wx', mode: 0o600 })
-    const build = await command('npm', ['run', 'package:dist'], { cwd: snapshot, signal: controller.signal, timeout: 900000 })
+    const build = await command('npm', ['run', 'dist'], { cwd: snapshot, signal: controller.signal, timeout: 900000 })
     await writeFile(path.join(destination, 'build.log'), build.stdout + build.stderr, { flag: 'wx', mode: 0o600 })
     await command('npm', ['run', 'audit:dependencies', '--', '--output', path.join(destination, 'dependency-review-arm64.json')], { cwd: snapshot, signal: controller.signal, timeout: 120000 })
     const buildRecord = await boundedJson(path.join(snapshot, 'release/tauri/build.json'))

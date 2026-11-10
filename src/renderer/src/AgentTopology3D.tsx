@@ -1,5 +1,12 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertCircle, ArrowUpRight, ChevronDown, Focus, Maximize, Minus, Plus, RotateCcw } from 'lucide-react'
+import CircleAlert from 'kubai-icons-react/icons/circle-alert'
+import ArrowUpRight from 'kubai-icons-react/icons/arrow-up-right'
+import ChevronDown from 'kubai-icons-react/icons/chevron-down'
+import Focus from 'kubai-icons-react/icons/focus'
+import Maximize from 'kubai-icons-react/icons/maximize'
+import ZoomOut from 'kubai-icons-react/icons/zoom-out'
+import ZoomIn from 'kubai-icons-react/icons/zoom-in'
+import RotateCcw from 'kubai-icons-react/icons/rotate-ccw'
 import type { TopologyGraph } from './agent-topology'
 import type { Topology3DSession, TopologyScene } from './agent-topology-scene'
 import { buildOfficeLayout, MAX_3D_EDGES, MAX_3D_NODES } from './agent-topology-3d-layout'
@@ -165,8 +172,8 @@ export default memo(function AgentTopology3D({ graph, selectedId, onSelect, onTo
     <div className="topology-3d-viewport">
       <div ref={host} className="topology-3d-scene" />
       {(overBudget || displayError || loading) && <div className="topology-3d-message" role={displayError || overBudget ? 'alert' : 'status'}>
-        {overBudget ? <><AlertCircle size={22} /><strong>{t('当前关系图超出 3D 显示预算', 'This graph exceeds the 3D display budget')}</strong><p>{t(`当前 ${graph.nodes.length} 位员工、${graph.edges.length} 条关系；上限 ${MAX_3D_NODES} / ${MAX_3D_EDGES}。请用上方搜索或筛选缩小范围，数据未被截断。`, `Current: ${graph.nodes.length} employees, ${graph.edges.length} relationships; limits: ${MAX_3D_NODES} / ${MAX_3D_EDGES}. Narrow the search or filters above. No data was truncated.`)}</p></>
-          : displayError ? <><AlertCircle size={22} /><strong>{t('3D 视图不可用', '3D view unavailable')}</strong><p>{displayError}</p><button className="button secondary" onClick={() => setAttempt(value => value + 1)}>{t('重试 3D', 'Retry 3D')}</button></>
+        {overBudget ? <><CircleAlert trigger="none" size={22} /><strong>{t('当前关系图超出 3D 显示预算', 'This graph exceeds the 3D display budget')}</strong><p>{t(`当前 ${graph.nodes.length} 位员工、${graph.edges.length} 条关系；上限 ${MAX_3D_NODES} / ${MAX_3D_EDGES}。请用上方搜索或筛选缩小范围，数据未被截断。`, `Current: ${graph.nodes.length} employees, ${graph.edges.length} relationships; limits: ${MAX_3D_NODES} / ${MAX_3D_EDGES}. Narrow the search or filters above. No data was truncated.`)}</p></>
+          : displayError ? <><CircleAlert trigger="none" size={22} /><strong>{t('3D 视图不可用', '3D view unavailable')}</strong><p>{displayError}</p><button className="button secondary" onClick={() => setAttempt(value => value + 1)}>{t('重试 3D', 'Retry 3D')}</button></>
           : t('正在加载 3D 视图…', 'Loading 3D view…')}
       </div>}
     </div>
@@ -175,17 +182,17 @@ export default memo(function AgentTopology3D({ graph, selectedId, onSelect, onTo
         if (!selectedFloorId) return
         try { scene.current?.focusFloor(selectedFloorId) }
         catch (error) { setFailure(error instanceof Error ? error.message : String(error)) }
-      }}><Focus size={15} />{t('聚焦楼层', 'Focus floor')}</button>
+      }}><Focus trigger="none" size={15} />{t('聚焦楼层', 'Focus floor')}</button>
       <button type="button" disabled={selectedFloorId === null} onClick={() => selectFloor(null)}>{t('显示全部楼层', 'Show all floors')}</button>
-      <button type="button" disabled={sceneUnavailable || !graph.nodes.length} aria-label={t('缩小 3D 视图', 'Zoom out in 3D')} onClick={() => scene.current?.zoom(1.25)}><Minus size={16} /></button>
-      <button type="button" disabled={sceneUnavailable || !graph.nodes.length} aria-label={t('放大 3D 视图', 'Zoom in in 3D')} onClick={() => scene.current?.zoom(0.8)}><Plus size={16} /></button>
-      <button type="button" disabled={sceneUnavailable || !graph.nodes.length} onClick={() => scene.current?.fit()}><Maximize size={15} />{t('适应全部', 'Fit all')}</button>
-      <button type="button" disabled={sceneUnavailable || !graph.nodes.length} onClick={() => scene.current?.fit(true)}><Focus size={15} />{t('正视图', 'Front view')}</button>
-      <button type="button" disabled={sceneUnavailable || !graph.nodes.length} onClick={() => scene.current?.reset()}><RotateCcw size={15} />{t('重新布局', 'Reset layout')}</button>
+      <button type="button" disabled={sceneUnavailable || !graph.nodes.length} aria-label={t('缩小 3D 视图', 'Zoom out in 3D')} onClick={() => scene.current?.zoom(1.25)}><ZoomOut trigger="none" size={16} /></button>
+      <button type="button" disabled={sceneUnavailable || !graph.nodes.length} aria-label={t('放大 3D 视图', 'Zoom in in 3D')} onClick={() => scene.current?.zoom(0.8)}><ZoomIn trigger="none" size={16} /></button>
+      <button type="button" disabled={sceneUnavailable || !graph.nodes.length} onClick={() => scene.current?.fit()}><Maximize trigger="none" size={15} />{t('适应全部', 'Fit all')}</button>
+      <button type="button" disabled={sceneUnavailable || !graph.nodes.length} onClick={() => scene.current?.fit(true)}><Focus trigger="none" size={15} />{t('正视图', 'Front view')}</button>
+      <button type="button" disabled={sceneUnavailable || !graph.nodes.length} onClick={() => scene.current?.reset()}><RotateCcw trigger="none" size={15} />{t('重新布局', 'Reset layout')}</button>
       {selected && <>
-        <button type="button" disabled={sceneUnavailable} onClick={() => selectEmployee(selected.agent.id, true)}><Focus size={15} />{t('聚焦选中员工', 'Focus selected employee')}</button>
-        {selected.descendantCount > 0 && <button type="button" disabled={filtering} aria-expanded={!selected.collapsed} title={filtering ? t('筛选期间保持展开', 'Branches stay expanded while filtering') : undefined} onClick={() => onToggleCollapse(selected.agent.id)}><ChevronDown size={15} />{selected.collapsed ? t('展开分支', 'Expand branch') : t('收起分支', 'Collapse branch')} ({selected.descendantCount})</button>}
-        {selected.agent.runtime === 'OMP' && <button type="button" disabled={navigating} onClick={() => { void navigate(selected.agent.id) }}><ArrowUpRight size={15} />{navigating ? t('正在跳转…', 'Navigating…') : t('前往 Tern', 'Go to Tern')}</button>}
+        <button type="button" disabled={sceneUnavailable} onClick={() => selectEmployee(selected.agent.id, true)}><Focus trigger="none" size={15} />{t('聚焦选中员工', 'Focus selected employee')}</button>
+        {selected.descendantCount > 0 && <button type="button" disabled={filtering} aria-expanded={!selected.collapsed} title={filtering ? t('筛选期间保持展开', 'Branches stay expanded while filtering') : undefined} onClick={() => onToggleCollapse(selected.agent.id)}><ChevronDown trigger="none" size={15} />{selected.collapsed ? t('展开分支', 'Expand branch') : t('收起分支', 'Collapse branch')} ({selected.descendantCount})</button>}
+        {selected.agent.runtime === 'OMP' && <button type="button" disabled={navigating} onClick={() => { void navigate(selected.agent.id) }}><ArrowUpRight trigger="none" size={15} />{navigating ? t('正在跳转…', 'Navigating…') : t('前往 Tern', 'Go to Tern')}</button>}
       </>}
     </div>
     <p className="topology-3d-note">{t('一栋楼对应一个项目，一层对应一个主会话任务。主 Agent 使用独立办公室，子 Agent 使用开放工位；父链缺失或异常时标为待归属。选层淡化其他任务；拖动员工调整本层工位，箭头指向子 Agent。完整项目路径可在楼层菜单提示中查看。', 'Each building is a project; each floor is a main-session task. Main agents have private offices and subagents use shared desks. Missing or invalid parent chains are marked unassigned. Selecting a floor dims other tasks; drag employees within their floor. Arrows point to subagents. Floor menu tooltips show full project paths.')}</p>

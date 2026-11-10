@@ -1,5 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
+import ChevronLeft from 'kubai-icons-react/icons/chevron-left'
+import ChevronRight from 'kubai-icons-react/icons/chevron-right'
+import Sync from 'kubai-icons-react/icons/sync'
 import { EVENT_MAX_RECORDS, EVENT_PAGE_SIZE, EVENT_TYPES, type EventCoverage, type EventPage, type EventQuery, type LocalEvent, type LocalEventType } from '../../shared/events'
 import { agentTarget, scheduleTarget, type NavigationTarget } from '../../shared/navigation'
 import type { MonitorSnapshot } from '../../shared/types'
@@ -237,7 +239,7 @@ export default function EventsView({ snapshot, enabled, active, view, onViewChan
   }, [snapshot, page, view.draft.sourceId, view.applied.sourceId])
   const limitedCoverage = coverage?.filter(item => item.state !== 'observing' || item.lastGap).length ?? 0
 
-  return <section className="events-view" aria-label={t('事件', 'Events')} aria-busy={busy}>
+  return <section className="events-view" aria-label={t('事件', 'Events')} aria-busy={busy} data-event-request-id={view.requestId}>
     <form className="event-filters" onSubmit={event => { event.preventDefault(); if (!unavailable) apply(view.draft, 'apply') }}>
       <div className="event-filter event-filter-source">
         <label htmlFor="event-source-filter">{t('来源 ID', 'Source ID')}</label>
@@ -294,7 +296,7 @@ export default function EventsView({ snapshot, enabled, active, view, onViewChan
       <div className="event-list-actions">
         <button type="button" className="button secondary" data-event-action="refresh" aria-disabled={unavailable} onClick={() => {
           if (!unavailable) requestPage({ query: view.query, filters: view.applied, history: view.history, pageNumber: view.pageNumber, reason: 'refresh' })
-        }}><RefreshCw size={14} aria-hidden="true" />{t('刷新本页', 'Refresh page')}</button>
+        }}><Sync trigger="none" size={14} aria-hidden="true" />{t('刷新本页', 'Refresh page')}</button>
         <button type="button" className="button secondary" data-event-action="latest" aria-disabled={unavailable} onClick={() => { if (!unavailable) apply(view.applied, 'latest') }}>{t('查看最新', 'View latest')}</button>
       </div>
     </div>
@@ -317,9 +319,9 @@ export default function EventsView({ snapshot, enabled, active, view, onViewChan
       </li>)}
     </ol>}
     <nav className="event-pagination" aria-label={t('事件分页', 'Event pages')}>
-      <button type="button" className="button secondary" data-event-action="previous" aria-disabled={unavailable || !view.history.length} onClick={() => { if (!unavailable) previousPage() }}><ChevronLeft size={15} aria-hidden="true" />{t('上一页', 'Previous')}</button>
+      <button type="button" className="button secondary" data-event-action="previous" aria-disabled={unavailable || !view.history.length} onClick={() => { if (!unavailable) previousPage() }}><ChevronLeft trigger="none" size={15} aria-hidden="true" />{t('上一页', 'Previous')}</button>
       <span>{t(`每页最多 ${EVENT_PAGE_SIZE} 条`, `Up to ${EVENT_PAGE_SIZE} per page`)}</span>
-      <button type="button" className="button secondary" data-event-action="next" aria-disabled={unavailable || !page || page.next === null} onClick={() => { if (!unavailable) nextPage() }}>{t('下一页', 'Next')}<ChevronRight size={15} aria-hidden="true" /></button>
+      <button type="button" className="button secondary" data-event-action="next" aria-disabled={unavailable || !page || page.next === null} onClick={() => { if (!unavailable) nextPage() }}>{t('下一页', 'Next')}<ChevronRight trigger="none" size={15} aria-hidden="true" /></button>
     </nav>
     {view.pageNumber > view.history.length + 1 && <p className="event-history-limit">{t(`只保留最近 ${MAX_CURSOR_HISTORY} 个返回游标；更早的页面请用“查看最新”重新进入。`, `Only the last ${MAX_CURSOR_HISTORY} return cursors are retained; use “View latest” to revisit earlier pages.`)}</p>}
 

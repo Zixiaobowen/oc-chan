@@ -87,6 +87,23 @@ export async function exerciseMarketplace({ ui, main, renderer, feed, thorough =
     assert.ok(state.system.cpuCores > 0 && state.system.memoryTotal > 0)
     return { version: state.item.installedVersion, realCollectorMetrics: state.system, requests: feed.requests() }
   })
+  await ui.stage('marketplace-disabled-retains-installed-snapshot', async () => {
+    await ui.navigate('本机概览', 'Overview')
+    await ui.dom('installed system contribution has real data', `${$('.health-panel')} && ${$('.uptime-number')}?.textContent !== '—'`)
+    await ui.evaluate('window.desktopSettings.update({plugins:{system:false}})')
+    await ui.expect('disabled plugin drains its collector', async () => {
+      const info = await ui.info(), plugin = info.plugins.find(plugin => plugin.id === 'system')
+      return plugin?.enabled === false && info.resources.global.current.pluginProcesses === 0
+    })
+    const current = await ui.evaluate(item)
+    assert.equal(current.installed, true)
+    assert.equal(current.enabled, false)
+    await ui.dom('disabling collection retains its rendered snapshot', `${$('.health-panel')} && ${$('.uptime-number')}?.textContent !== '—'`)
+    await ui.evaluate('window.desktopSettings.update({plugins:{system:true}})')
+    await ready(ui, '1.1.0')
+    return { installedContributionRetained: true, collectorStopped: true, collectionResumed: true }
+  })
+  await ui.navigate('插件市场', 'Plugin marketplace')
   await ui.stage('marketplace-rejects-failed-activation', async () => {
     await feed.setMode('broken', main)
     await ui.click($('[data-marketplace-action="check"]'))

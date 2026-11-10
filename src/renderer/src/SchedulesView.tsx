@@ -1,5 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { CalendarClock, Search, X } from 'lucide-react'
+import CalendarClock from 'kubai-icons-react/icons/calendar-clock'
+import Search from 'kubai-icons-react/icons/search'
+import CircleX from 'kubai-icons-react/icons/circle-x'
 import type { ScheduledJob, ScheduleSnapshot } from '../../shared/types'
 import { Badge, CollectionStatus, Empty, NativeSelect, Sources, time } from './components'
 import { useI18n } from './i18n'
@@ -91,7 +93,7 @@ export function ScheduleTable({ jobs, onSelect, selectedId, memory }: { jobs: Sc
       const trigger = event.currentTarget.querySelector('button')
       if (trigger) onSelect(job, trigger)
     }}>
-      <td><button className="entity-button" aria-expanded={selectedId === undefined ? undefined : selectedId === job.id} aria-controls={selectedId === job.id ? 'schedule-task-details' : undefined} onClick={event => { event.stopPropagation(); onSelect(job, event.currentTarget) }}><span className="schedule-avatar"><CalendarClock size={17} aria-hidden="true" /></span><span className="entity-text"><strong title={job.name}>{job.name}</strong><small title={jobSource(job.source, language)}>{jobSource(job.source, language)}</small></span></button></td>
+      <td><button className="entity-button" aria-expanded={selectedId === undefined ? undefined : selectedId === job.id} aria-controls={selectedId === job.id ? 'schedule-task-details' : undefined} onClick={event => { event.stopPropagation(); onSelect(job, event.currentTarget) }}><span className="schedule-avatar"><CalendarClock trigger="none" size={17} aria-hidden="true" /></span><span className="entity-text"><strong title={job.name}>{job.name}</strong><small title={jobSource(job.source, language)}>{jobSource(job.source, language)}</small></span></button></td>
       <td className="schedule-value">{scheduleText(job.schedule, language)}</td>
       <td><span className="muted">{job.scope === 'user' ? t('用户', 'User') : t('系统', 'System')}</span></td>
       <td><Badge state={job.state} /></td>
@@ -339,7 +341,7 @@ export default memo(function SchedulesView({ data, enabled, error, intent, onCon
             <option value="unknown">{t('状态未知', 'Unknown')}</option>
           </NativeSelect>
         </label>
-        <label className="search-field"><Search size={16} aria-hidden="true" /><input ref={searchRef} aria-label={t('搜索定时任务', 'Search scheduled tasks')} maxLength={MAX_VIEW_QUERY_LENGTH} value={query} onChange={event => updateView({ query: event.target.value })} placeholder={t('搜索任务或执行计划', 'Search tasks or schedules')} /></label>
+        <label className="search-field"><Search trigger="none" size={16} aria-hidden="true" /><input ref={searchRef} aria-label={t('搜索定时任务', 'Search scheduled tasks')} maxLength={MAX_VIEW_QUERY_LENGTH} value={query} onChange={event => updateView({ query: event.target.value })} placeholder={t('搜索任务或执行计划', 'Search tasks or schedules')} /></label>
       </div>
     </div>
     {scope === 'personal' && <p id="schedule-personal-help" className="footnote">{t('按任务元数据、个人命名及主目录脚本识别个人配置，排除苹果任务、应用更新器和调度器自身。无法确认归属的任务可在“所有范围”查看。', 'Personal configuration is identified from task metadata, personal naming and scripts in your home directory. Apple tasks, app updaters and schedulers themselves are excluded. Tasks with uncertain ownership remain under All scopes.')}</p>}
@@ -356,7 +358,7 @@ export default memo(function SchedulesView({ data, enabled, error, intent, onCon
     <aside ref={drawerRef} id="schedule-task-details" data-job-id={selectedId} className="schedule-drawer" data-open={open} data-motion-paused={documentHidden} inert={!open} aria-hidden={!open} aria-labelledby="schedule-drawer-title" role="dialog" aria-modal="false">
       <header className="schedule-drawer-header">
         <h2 id="schedule-drawer-title">{t('任务详情', 'Task details')}</h2>
-        <button ref={closeRef} className="icon-button" aria-label={t('关闭任务详情', 'Close task details')} title={t('关闭任务详情 (Esc)', 'Close task details (Esc)')} onClick={closeDetails}><X size={18} aria-hidden="true" /></button>
+        <button ref={closeRef} className="icon-button" aria-label={t('关闭任务详情', 'Close task details')} title={t('关闭任务详情 (Esc)', 'Close task details (Esc)')} onClick={closeDetails}><CircleX trigger="none" size={18} aria-hidden="true" /></button>
       </header>
       <div ref={scrollRef} className="schedule-drawer-scroll" onScroll={() => { if (open && selected) saveDetailScroll() }} onWheel={beginDetailInteraction} onTouchStart={beginDetailInteraction} onPointerDown={beginDetailInteraction} onKeyDownCapture={event => {
         if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) beginDetailInteraction()

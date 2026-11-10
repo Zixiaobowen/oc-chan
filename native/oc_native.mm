@@ -1,5 +1,6 @@
 #import "oc_native.h"
 #import <AppKit/AppKit.h>
+#import <ApplicationServices/ApplicationServices.h>
 #import <ServiceManagement/ServiceManagement.h>
 #import <UserNotifications/UserNotifications.h>
 #import <IOKit/pwr_mgt/IOPMLib.h>

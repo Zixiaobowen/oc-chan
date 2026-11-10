@@ -119,48 +119,6 @@ export interface ScheduleHistory {
   collectedAt: string
 }
 
-export interface ProcessInfo {
-  pid: number
-  name: string
-  cpuPercent: number
-  memoryBytes: number
-}
-
-export interface SystemSample {
-  at: number
-  cpuPercent: number | null
-  memoryPercent: number
-  rxBytesPerSecond: number | null
-  txBytesPerSecond: number | null
-}
-
-export interface SystemSnapshot {
-  collectedAt: string
-  hostname: string
-  platform: string
-  osVersion: string
-  cpuModel: string
-  cpuCores: number
-  uptimeSeconds: number
-  cpuPercent: number | null
-  memoryTotal: number
-  memoryUsed: number
-  memoryAvailable: number
-  memoryApp: number
-  memoryWired: number
-  memoryCompressed: number
-  swapUsed: number
-  diskTotal: number | null
-  diskUsed: number | null
-  diskAvailable: number | null
-  rxBytesPerSecond: number | null
-  txBytesPerSecond: number | null
-  networkInterface: string | null
-  processes: ProcessInfo[]
-  memoryProcesses: ProcessInfo[]
-  history: SystemSample[]
-  sources: SourceStatus[]
-}
 
 export interface CollectorState<T> {
   data: T | null
@@ -170,14 +128,14 @@ export interface CollectorState<T> {
   lastSuccessAt?: string
 }
 
-export interface MonitorSnapshot {
-  agents: CollectorState<AgentSnapshot>
-  schedules: CollectorState<ScheduleSnapshot>
-  system: CollectorState<SystemSnapshot>
-  events: CollectorState<EventSnapshot>
+/** Plugins augment this interface with their typed snapshot payload. */
+export interface CollectionSnapshots {
+  agents: AgentSnapshot
+  schedules: ScheduleSnapshot
+  events: EventSnapshot
 }
-
-export type MonitorSection = 'agents' | 'schedules' | 'system' | 'events'
+export type MonitorSnapshot = { [K in keyof CollectionSnapshots]: CollectorState<CollectionSnapshots[K]> }
+export type MonitorSection = keyof CollectionSnapshots
 export type MonitorUpdate = { [K in MonitorSection]: { section: K; state: MonitorSnapshot[K] } }[MonitorSection]
 
 export interface SourceHeartbeat {
@@ -187,7 +145,7 @@ export interface SourceHeartbeat {
   sources: SourceObservation[]
 }
 
-export const SAMPLING_INTERVALS = { system: 2000, schedules: 30000, events: 30000 } as const
+export const SAMPLING_INTERVALS = { schedules: 30000, events: 30000 } as const
 export const AGENT_DISCOVERY_INTERVAL_MS = 2000
 export const AGENT_ACTIVITY_WINDOW_MS = 6000
 

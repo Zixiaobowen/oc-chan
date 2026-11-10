@@ -6,11 +6,11 @@ import { fileURLToPath } from 'node:url'
 const root = fileURLToPath(new URL('..', import.meta.url))
 export const suites = {
   topology: ['src/renderer/src/agent-topology.test.ts', 'src/renderer/src/agent-topology-3d-layout.test.ts'],
-  views: ['src/renderer/src/view-state.test.ts'],
+  views: ['src/renderer/src/view-state.test.ts', 'src/renderer/src/plugin-registry.test.ts', 'src/renderer/src/tray-selection.test.ts'],
   navigation: ['src/shared/navigation.test.ts'],
   diagnostics: ['src/shared/diagnostics.test.ts'],
   install: ['scripts/install-local.test.mjs', 'scripts/local-app-lifecycle.test.mjs', 'scripts/local-install-readiness.test.mjs', 'scripts/push-main.test.mjs', 'scripts/develop.test.mjs'],
-  updates: ['scripts/prepare-release.test.mjs'],
+  updates: ['scripts/prepare-release.test.mjs', 'scripts/publish-release.test.mjs'],
   packaging: ['scripts/build-app.test.mjs', 'scripts/check-package.test.mjs', 'scripts/dependency-review.test.mjs', 'scripts/rust-dependencies.test.mjs'],
   marketplace: ['scripts/build-plugin-market-rust.test.mjs'],
   delivery: ['scripts/local-delivery.test.mjs', 'scripts/delivery-source.test.mjs', 'scripts/delivery-zip.test.mjs'],
@@ -50,6 +50,7 @@ const rules = [
   [/^native\//, ['install', 'packaging'], ['native', 'host'], '原生窗口、权限、材质和输入桥接'],
   [/^src\/renderer\/src\/(?:AgentTopology|agent-topology|agent-office|AgentsView)/, ['topology', 'views'], ['navigation'], '拓扑交互及定位'],
   [/^src\/renderer\//, ['topology', 'views'], [], '渲染与视图状态'],
+  [/^src\/plugins\//, ['views', 'marketplace'], ['system', 'plugins'], '插件界面贡献与原生插件契约'],
   [/^src\/shared\//, ['diagnostics', 'views', 'navigation'], ['core', 'host'], '前后端DTO契约'],
   [/^scripts\/(?:install-(?:local|validation)|local-install-(?:readiness|process)|local-app-lifecycle|push-main|develop)\.(?:mjs|m)$|^\.githooks\//, ['install', 'delivery'], ['installer'], '本机安装、真实就绪与实例归属'],
   [/^scripts\/(?:prepare-release|publish-release|release-config|dist)\.mjs$/, ['updates', 'packaging'], ['updates'], 'schema2发布与打包'],

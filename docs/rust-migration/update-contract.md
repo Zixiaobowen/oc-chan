@@ -4,9 +4,9 @@ Rust更新控制器替换Electron/Squirrel。该实现不发布资产、不替�
 
 ## 发布源与下载
 
-固定仓库`Zixiaobowen/oc-chan-releases`；新元数据`latest.json`，schema2、严格稳定semver、最多8资产，每资产固定arm64目标、匹配文件名、实际大小及SHA512。未知字段拒绝。元数据≤64KiB；下载≤512MiB；仅HTTPS的github.com/release-assets.githubusercontent.com/objects.githubusercontent.com，最多5次跳转，禁止credentials、用户输入源和生产测试地址。
+固定仓库`Zixiaobowen/oc-chan`；新元数据`latest.json`，schema2、严格稳定semver、最多8资产，每资产固定arm64目标、匹配文件名、实际大小及SHA512。未知字段拒绝。元数据≤64KiB；下载≤512MiB；仅HTTPS的github.com/release-assets.githubusercontent.com/objects.githubusercontent.com，最多5次跳转，禁止credentials、用户输入源和生产测试地址。
 
-check30s、download15min、install120s；启动30s和每6h只检查，手动检查调整下一次截止；不自动下载、安装。开发/未Developer ID签名禁用，禁用状态不发网络。一个operation，revision单调，旧回调不能覆盖新状态。
+check30s、download15min、install120s；仅完整更新资格启动30s和每6h自动检查。开发/未Developer ID签名保留disabledReason，但初始phase为idle，允许显式手动检查、查看结果和错误重试，禁止下载和安装；不支持的平台phase为disabled且不发网络。手动检查调整下一次截止；不自动下载、安装。一个operation，revision单调，旧回调不能覆盖新状态。
 
 下载前磁盘可用≥size×5+256MiB；独占0600 part文件，流式写入并逐块检查声明/总上限，SHA512一致且fsync/close后rename提交。250ms节流进度。cancel等网络reader、文件和清理结束后回available；清理失败显示error。普通退出丢弃暂存且不安装。
 

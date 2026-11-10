@@ -16,7 +16,7 @@ const CHUNK: usize = 16 * 1024;
 const METADATA_LIMIT: usize = 256 * 1024;
 const MARKET_DISK: u64 = 32 * 1024 * 1024;
 const MARKET_BASE: &str = "https://raw.githubusercontent.com/Zixiaobowen/oc-chan/main/plugin-market/";
-const RELEASE_BASE: &str = "https://github.com/Zixiaobowen/oc-chan-releases/releases/";
+const RELEASE_BASE: &str = "https://github.com/Zixiaobowen/oc-chan/releases/";
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum HttpPurpose {
@@ -120,7 +120,7 @@ fn validate_url(purpose: HttpPurpose, url: &reqwest::Url, redirected: bool) -> R
         HttpPurpose::Update => {
             if redirected {
                 if !matches!(url.host_str(), Some("github.com" | "release-assets.githubusercontent.com" | "objects.githubusercontent.com")) { return Err(Error::invalid("update redirect host")); }
-                if url.host_str() == Some("github.com") && !url.path().starts_with("/Zixiaobowen/oc-chan-releases/releases/") { return Err(Error::invalid("update redirect repository")); }
+                if url.host_str() == Some("github.com") && !url.path().starts_with("/Zixiaobowen/oc-chan/releases/") { return Err(Error::invalid("update redirect repository")); }
             } else {
                 if url.query().is_some() { return Err(Error::invalid("update initial query")); }
                 let suffix = url.as_str().strip_prefix(RELEASE_BASE).ok_or_else(|| Error::invalid("official update repository"))?;

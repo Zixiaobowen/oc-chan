@@ -332,6 +332,27 @@ fn gated_process_cannot_exec_before_durable_identity_and_drop_reaps_it() {
     assert!(ProcessIdentity::inspect(pid).unwrap().is_none());
 }
 
+#[cfg(target_os = "macos")]
+#[test]
+fn stop_exact_reaps_zombie_before_declaring_process_group_absent() {
+    let executable = fs::canonicalize("/bin/sleep").unwrap();
+    let process = GatedLaunch::create(&executable, &["30".into()]).unwrap().release().unwrap();
+    assert_eq!(unsafe { libc::kill(process.pid, libc::SIGKILL) }, 0);
+    // WNOWAIT observes termination without reaping: keep the zombie's group
+    // present deterministically, rather than depending on the SIGTERM race.
+    let mut status = std::mem::MaybeUninit::<libc::siginfo_t>::uninit();
+    assert_eq!(unsafe { libc::waitid(libc::P_PID, process.pid as _, status.as_mut_ptr(),
+        libc::WEXITED | libc::WNOWAIT) }, 0);
+    assert!(ProcessIdentity::inspect(process.pid).unwrap().is_none());
+    assert!(crate::process::group_exists(process.pid).unwrap());
+    stop_exact(&process, &ProcessIdentity::current().unwrap().executable,
+        Instant::now() + Duration::from_secs(5)).unwrap();
+    assert!(!crate::process::group_exists(process.pid).unwrap());
+    let mut status = 0;
+    assert_eq!(unsafe { libc::waitpid(process.pid, &mut status, libc::WNOHANG) }, -1);
+    assert_eq!(std::io::Error::last_os_error().raw_os_error(), Some(libc::ECHILD));
+}
+
 #[test]
 fn bundle_symlink_escape_and_insufficient_space_are_rejected() {
     let fixture = Fixture::create();

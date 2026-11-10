@@ -1,17 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import type { MonitorSection, MonitorSnapshot, SourceHeartbeat, SourceStatus } from '../../shared/types'
-import { CollectionStatus, CollectorError, Empty, Sources, time } from './components'
+import { CollectionStatus, CollectorError, Empty, time } from './components'
 import { useI18n } from './i18n'
 import DiagnosticPanel from './DiagnosticPanel'
 import { useSettings } from './settings'
 import SettingsSaveError from './SettingsSaveError'
 import './settings.css'
+import { monitorSections } from '../../shared/plugin-catalog'
+import type { RendererContribution } from './plugins/types'
+import ContributionBoundary from './plugins/ContributionBoundary'
 import { useSystemPlugin } from './marketplace'
 import SystemPluginNotice from './SystemPluginNotice'
 
 interface SourceGroup {
   id: MonitorSection
   title: string
+  description: string
+  contribution?: RendererContribution
   sources: SourceStatus[]
   state: MonitorSnapshot[MonitorSection]
 }
@@ -24,11 +29,13 @@ function observation(section: MonitorSection, state: MonitorSnapshot[MonitorSect
 function SourceSection({ group, heartbeat }: { group: SourceGroup; heartbeat?: SourceHeartbeat }) {
   const { t, language } = useI18n()
   const { snapshot: { settings }, saving, error: saveError, update } = useSettings()
-  const { installed: systemInstalled, item: systemItem } = useSystemPlugin()
+  const { installed: systemInstalled, item: systemItem, pending: marketPending, snapshot: marketSnapshot } = useSystemPlugin()
+  const changingInstallation = group.id === 'system' && Boolean(marketPending || marketSnapshot?.operation)
   const enabled = settings.plugins[group.id]
+  const Source = group.contribution?.Source
   const changing = useRef(false)
   async function toggle() {
-    if (saving || changing.current || (group.id === 'system' && !systemInstalled)) return
+    if (saving || changingInstallation || changing.current || (group.id === 'system' && !systemInstalled)) return
     changing.current = true
     try { await update({ plugins: { [group.id]: !enabled } }) }
     finally { changing.current = false }
@@ -39,7 +46,7 @@ function SourceSection({ group, heartbeat }: { group: SourceGroup; heartbeat?: S
   const mounted = useRef(false)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   async function retry() {
-    if (!enabled || saving || request.current) return
+    if (!enabled || saving || changingInstallation || request.current) return
     request.current = true
     setPending(true)
     setError(null)
@@ -60,11 +67,11 @@ function SourceSection({ group, heartbeat }: { group: SourceGroup; heartbeat?: S
     {group.id === 'system' && systemItem?.error && <SystemPluginNotice />}
     <div className="section-heading source-group-heading"><h2 id={`collection-${group.id}-label`}>{group.title}</h2>
       <div className="setting-toggle" aria-busy={saving}>
-        <button type="button" role="switch" className="setting-switch" aria-labelledby={`collection-${group.id}-label`} aria-describedby={`collection-${group.id}-help`} aria-checked={enabled} aria-disabled={saving} onClick={() => void toggle()}><span /></button>
+        <button type="button" role="switch" className="setting-switch" aria-labelledby={`collection-${group.id}-label`} aria-describedby={`collection-${group.id}-help`} aria-checked={enabled} aria-disabled={saving || changingInstallation} onClick={() => void toggle()}><span /></button>
         <span>{saving && changing.current ? t('正在保存…', 'Saving…') : enabled ? t('采集已开启', 'Collection enabled') : t('采集已停用', 'Collection disabled')}</span>
       </div>
     </div>
-    <p className="source-collection-help" id={`collection-${group.id}-help`}>{t('仅控制 OC Chan 的采集；不会停止 Agent 或真实任务。', 'Controls OC Chan collection only; agents and actual tasks keep running.')}{group.id === 'schedules' && t(' 执行历史也依赖此开关。', ' Execution history also depends on this switch.')}</p>
+    <p className="source-collection-help" id={`collection-${group.id}-help`}>{group.description} {t('仅控制 OC Chan 的采集；不会停止 Agent 或真实任务。', 'Controls OC Chan collection only; agents and actual tasks keep running.')}</p>
     {saveError?.patch.plugins && Object.hasOwn(saveError.patch.plugins, group.id) && <SettingsSaveError settingLabel={group.title} />}
     <CollectionStatus enabled={enabled} collectedAt={group.state.data?.collectedAt} />
     {enabled && (group.state.error || error) && <div className="source-section-error" role="alert">
@@ -72,8 +79,8 @@ function SourceSection({ group, heartbeat }: { group: SourceGroup; heartbeat?: S
       <p>{t('保留上次数据；重试只采集此分区。', 'Previous data is retained. Retry collects only this section.')}</p>
       <button className="button secondary" aria-disabled={pending || saving} aria-busy={pending} onClick={() => void retry()}>{pending ? t('正在重试', 'Retrying') : t('重试此分区', 'Retry section')}</button>
     </div>}
-    {group.sources.length ? <Sources sources={group.sources} observations={heartbeat?.sources} enabled={enabled} />
-      : <Empty title={!enabled ? t('采集已停用 · 尚无数据', 'Collection disabled · No data') : group.state.error ? t('尚无成功数据', 'No successful data yet') : group.state.data ? t('此分区没有来源', 'No sources in this section') : t('尚未完成采集', 'Collection not yet complete')}>
+    {Source && group.sources.length ? <ContributionBoundary key={group.contribution?.id}><Source sources={group.sources} observations={heartbeat?.sources} enabled={enabled} /></ContributionBoundary>
+      : <Empty title={!enabled ? t('插件已停用', 'Plugin disabled') : group.state.error ? t('尚无成功数据', 'No successful data yet') : group.state.data ? t('此分区没有来源', 'No sources in this section') : t('尚未完成采集', 'Collection not yet complete')}>
         {t('读取失败与空结果分别报告；不会把缺失数据计为零。', 'Read failures and empty results are reported separately; missing data is never counted as zero.')}
       </Empty>}
     <div className="panel-footer source-section-times" aria-live="off">
@@ -84,16 +91,24 @@ function SourceSection({ group, heartbeat }: { group: SourceGroup; heartbeat?: S
 }
 
 export default function SourcePanels({ groups, live }: { groups: SourceGroup[]; live: boolean }) {
+  const { installed: systemInstalled } = useSystemPlugin()
   const [heartbeats, setHeartbeats] = useState<Partial<Record<MonitorSection, SourceHeartbeat>>>({})
   const [error, setError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
+  useEffect(() => {
+    if (systemInstalled !== true) setHeartbeats(previous => {
+      const next = { ...previous }
+      delete next.system
+      return next
+    })
+  }, [systemInstalled])
   useEffect(() => {
     const api = window.monitor
     if (!live || !api) return
     let active = true
     const received = new Set<MonitorSection>()
     const accept = (heartbeat: SourceHeartbeat) => {
-      if (!active) return
+      if (!active || (heartbeat.section === 'system' && systemInstalled !== true)) return
       received.add(heartbeat.section)
       setHeartbeats(previous => ({ ...previous, [heartbeat.section]: heartbeat }))
     }
@@ -103,7 +118,8 @@ export default function SourcePanels({ groups, live }: { groups: SourceGroup[]; 
       if (!active) return
       setHeartbeats(previous => {
         const next = { ...previous }
-        for (const section of ['agents', 'schedules', 'system', 'events'] as const) {
+        for (const section of monitorSections) {
+          if (section === 'system' && systemInstalled !== true) { delete next.system; continue }
           if (!received.has(section)) next[section] = observation(section, snapshot[section])
         }
         return next
@@ -111,10 +127,10 @@ export default function SourcePanels({ groups, live }: { groups: SourceGroup[]; 
       setError(null)
     }, failure => { if (active) setError(failure instanceof Error ? failure.message : String(failure)) })
     return () => { active = false; unsubscribeSources(); unsubscribeData() }
-  }, [live, attempt])
+  }, [live, attempt, systemInstalled])
   return <>
     <CollectorError error={error} onRetry={() => setAttempt(value => value + 1)} />
     <DiagnosticPanel />
-    {groups.map(group => <SourceSection key={group.id} group={group} heartbeat={heartbeats[group.id]} />)}
+    {groups.map(group => <SourceSection key={group.id === 'system' ? `system-${systemInstalled}` : group.id} group={group} heartbeat={heartbeats[group.id]} />)}
   </>
 }

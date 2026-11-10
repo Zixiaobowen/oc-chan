@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::{sync::{Arc, Mutex}, time::{Duration, Instant}};
 use tokio_util::sync::CancellationToken;
 
-pub const RELEASES_URL: &str = "https://github.com/Zixiaobowen/oc-chan-releases/releases";
-pub const METADATA_URL: &str = "https://github.com/Zixiaobowen/oc-chan-releases/releases/latest/download/latest.json";
+pub const RELEASES_URL: &str = "https://github.com/Zixiaobowen/oc-chan/releases";
+pub const METADATA_URL: &str = "https://github.com/Zixiaobowen/oc-chan/releases/latest/download/latest.json";
 pub const MAX_METADATA_BYTES: usize = 64 * 1024;
 pub const MAX_UPDATE_BYTES: u64 = 512 * 1024 * 1024;
 pub const TARGET: &str = concat!("darwin", "-aarch64");
