@@ -115,8 +115,8 @@ try {
   ` });
   inputObservation.point = point;
   inputObservation.beforeDOM = await observeInput();
-  await call('mouse', { input: { kind: 'down', ...point } });
-  await call('mouse', { input: { kind: 'up', ...point } });
+  await call('mouse', { input: { kind: 'down', ...point, button: 'left' } });
+  await call('mouse', { input: { kind: 'up', ...point, button: 'left' } });
   // AppKit dispatch acknowledges enqueueing, not WebProcess DOM focus. Observe
   // focus before text insertion; never synthesize focus or retry mouse events.
   const focusDeadline = Date.now() + 1000;

@@ -163,6 +163,9 @@ extern "C" void oc_wk_request(void *pointer, const char *operation, const char *
       if (!strcmp(operation, "mouse")) {
         double x = [input[@"x"] doubleValue], y = [input[@"y"] doubleValue];
         NSString *kind = input[@"kind"];
+        NSString *button = input[@"button"];
+        if (![button isEqual:@"left"] && ![button isEqual:@"right"]) { finish(cb, ctx, nil, @"unsupported mouse button: expected left or right"); return; }
+        BOOL right = [button isEqual:@"right"];
         NSEdgeInsets insets;
         if (@available(macOS 26.0, *)) { insets = webview.obscuredContentInsets; }
         else { finish(cb, ctx, nil, @"native mouse acceptance requires macOS 26 public viewport insets"); return; }
@@ -180,18 +183,22 @@ extern "C" void oc_wk_request(void *pointer, const char *operation, const char *
         NSView *target = [webview hitTest:[webview convertPoint:local toView:webview.superview]];
         if (!target) { finish(cb, ctx, nil, @"no native hit target"); return; }
         NSEventType type;
-        if ([kind isEqual:@"down"]) type = NSEventTypeLeftMouseDown;
-        else if ([kind isEqual:@"up"]) type = NSEventTypeLeftMouseUp;
-        else if ([kind isEqual:@"drag"]) type = NSEventTypeLeftMouseDragged;
+        if ([kind isEqual:@"down"]) type = right ? NSEventTypeRightMouseDown : NSEventTypeLeftMouseDown;
+        else if ([kind isEqual:@"up"]) type = right ? NSEventTypeRightMouseUp : NSEventTypeLeftMouseUp;
+        else if ([kind isEqual:@"drag"]) type = right ? NSEventTypeRightMouseDragged : NSEventTypeLeftMouseDragged;
         else if ([kind isEqual:@"move"]) type = NSEventTypeMouseMoved;
         else { finish(cb, ctx, nil, @"unknown mouse kind"); return; }
         // NSWindow normally establishes the responder before mouseDown. Direct
         // dispatch must do the same without making the hidden window key/active.
-        if (type == NSEventTypeLeftMouseDown && ![window makeFirstResponder:webview]) { finish(cb, ctx, nil, @"cannot focus native mouse responder"); return; }
-        NSEvent *event = [NSEvent mouseEventWithType:type location:[webview convertPoint:local toView:nil] modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber context:nil eventNumber:0 clickCount:1 pressure:type == NSEventTypeLeftMouseDown ? 1 : 0];
+        BOOL down = type == NSEventTypeLeftMouseDown || type == NSEventTypeRightMouseDown;
+        if (down && ![window makeFirstResponder:webview]) { finish(cb, ctx, nil, @"cannot focus native mouse responder"); return; }
+        NSEvent *event = [NSEvent mouseEventWithType:type location:[webview convertPoint:local toView:nil] modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber context:nil eventNumber:0 clickCount:1 pressure:down ? 1 : 0];
         if (type == NSEventTypeLeftMouseDown) [target mouseDown:event];
         else if (type == NSEventTypeLeftMouseUp) [target mouseUp:event];
         else if (type == NSEventTypeLeftMouseDragged) [target mouseDragged:event];
+        else if (type == NSEventTypeRightMouseDown) [target rightMouseDown:event];
+        else if (type == NSEventTypeRightMouseUp) [target rightMouseUp:event];
+        else if (type == NSEventTypeRightMouseDragged) [target rightMouseDragged:event];
         else [target mouseMoved:event];
       } else {
         NSResponder *target = window.firstResponder;
@@ -211,10 +218,10 @@ extern "C" void oc_wk_request(void *pointer, const char *operation, const char *
           [(id<NSTextInputClient>)target insertText:text replacementRange:NSMakeRange(NSNotFound, 0)];
         } else {
           NSString *key = input[@"key"];
-          NSDictionary *codes = @{ @"Escape": @53, @"Tab": @48, @"Backspace": @51, @"Enter": @36, @"ArrowLeft": @123, @"ArrowRight": @124, @"ArrowDown": @125, @"ArrowUp": @126, @" ": @49, @"a": @0 };
+          NSDictionary *codes = @{ @"Escape": @53, @"Tab": @48, @"Backspace": @51, @"Enter": @36, @"F10": @109, @"ArrowLeft": @123, @"ArrowRight": @124, @"ArrowDown": @125, @"ArrowUp": @126, @" ": @49, @"a": @0 };
           NSNumber *code = codes[key];
           if (!code) { finish(cb, ctx, nil, @"unsupported acceptance key"); return; }
-          NSDictionary *characters = @{ @"Escape": @"\x1b", @"Tab": @"\t", @"Backspace": @"\x7f", @"Enter": @"\r", @"ArrowLeft": @"\uf702", @"ArrowRight": @"\uf703", @"ArrowDown": @"\uf701", @"ArrowUp": @"\uf700" };
+          NSDictionary *characters = @{ @"Escape": @"\x1b", @"Tab": @"\t", @"Backspace": @"\x7f", @"Enter": @"\r", @"F10": @"\uf70d", @"ArrowLeft": @"\uf702", @"ArrowRight": @"\uf703", @"ArrowDown": @"\uf701", @"ArrowUp": @"\uf700" };
           NSString *text = characters[key] ?: key;
           NSUInteger flags = [input[@"modifiers"] unsignedIntegerValue];
           NSEventModifierFlags modifiers = ((flags & 4) ? NSEventModifierFlagCommand : 0) | ((flags & 8) ? NSEventModifierFlagShift : 0);

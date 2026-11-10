@@ -135,11 +135,14 @@ export class Driver {
       evaluate,
       inspect: () => request('inspect'), capture: () => request('capture'), reload: () => request('reload'),
       resize: (width, height) => request('resize', { width, height }),
-      mouse: (kind, x, y) => request('mouse', { input: { kind, x, y } }),
+      mouse: (kind, x, y, button = 'left') => {
+        assert(button === 'left' || button === 'right', 'Unsupported mouse button: expected left or right')
+        return request('mouse', { input: { kind, x, y, button } })
+      },
       clickAt: async (x, y) => {
-        await request('mouse', { input: { kind: 'move', x, y } })
-        await request('mouse', { input: { kind: 'down', x, y } })
-        await request('mouse', { input: { kind: 'up', x, y } })
+        await request('mouse', { input: { kind: 'move', x, y, button: 'left' } })
+        await request('mouse', { input: { kind: 'down', x, y, button: 'left' } })
+        await request('mouse', { input: { kind: 'up', x, y, button: 'left' } })
       },
       key: (key, code = key, modifiers = 0) => request('key', { input: { key, code, modifiers } }),
       selectAll: () => request('select-all', { input: {} }),

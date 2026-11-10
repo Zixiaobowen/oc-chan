@@ -65,6 +65,8 @@ npm run smoke:renderer -- --scenario topology --out /tmp/oc-chan-topology-new
 
 主窗、托盘和恢复窗均通过Tauri公开配置入口启用WKPreferences的[`tabFocusesLinks`](https://developer.apple.com/documentation/webkit/wkpreferences/tabfocuseslinks)，使用依赖树已有的WebKit绑定。无头窗口实际`document.hasFocus()`为false，原生Tab专项未触达目标；不将它记为可见窗口键盘导航通过。通知控件显式设置DOM焦点，再发送真实AppKit按键，验证激活、保存、错误回滚与焦点保留；事件select显式设置DOM焦点和值，再验证React草稿和实际Rust查询。鼠标点击本身不被假定会聚焦按钮或复选框，也不通过固定Tab次数推定目标焦点。
 
+协作拓扑的 2D 与 3D 共用手动控制的顶层 Agent 菜单：右键松开后保持打开，后续外部 pointerdown 关闭，菜单内部按下不提前卸载；卸载释放监听。拓扑定向 smoke 通过 AppKit responder 验证完整右键、移入、菜单点击、外部关闭及 Escape/Shift+F10/Tab。跳转请求调用真实 Rust IPC，无头模式明确返回 `OC_TERN_UNAVAILABLE`，不激活用户的 Tern，也不代表原生前台切换通过。
+
 隐藏WKWebView的`requestAnimationFrame`可能挂起；后台任务节流开关不保证动画帧执行。桌面更新调度依据宿主登记的模式选择：普通窗口使用原生rAF，无头展示使用可取消的单次任务，执行真实布局、Three.js绘制和标签投影；显式暂停和卸载会取消待执行更新，不建立常驻绘制循环。场景的`frames()`在真实`document.visibilityState === 'hidden'`时同步刷新布局并记录`hidden-layout-flush`，可见文档才等待双动画帧。实际WebGL绘制批次与原生rAF相关间隔分开计量，不将单次任务或布局刷新当作显示帧率和可见动画连续性证明。
 
 总流程限时20分钟，首次构建/启动限时5分钟，场景限时6分钟，普通RPC限时5秒；较长操作另有明确边界。失败保留阶段、实际错误及截图并返回非零。`--fault fixture` / `--fault ipc` 用于验证故障不能被误报通过。退出记录资源归零、真实进程退出与实例清理；清理错误同样不能通过。
