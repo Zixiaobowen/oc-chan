@@ -179,6 +179,10 @@ export async function launchDevelopment(options) {
     if (!requestedSignal) {
       const record = await loadDevelopmentBuild(instance)
       env.OC_CHAN_RESOURCE_DIR = record.developmentBundle.resourcesDir
+      // The receipt, bundle identities and signature are verified before the
+      // application can start. Consumers must not charge cold compilation to
+      // their application-readiness deadline (including resumed instances).
+      console.log(JSON.stringify({ developmentStage: 'build-complete', instance, resumed: resume }))
       console.log(`[oc-chan] ${options.window ? '窗口' : '无头'}模式；Ctrl+C 停止并排空本实例`)
       await runOwned(record.binary, [], env, 'app')
     }
