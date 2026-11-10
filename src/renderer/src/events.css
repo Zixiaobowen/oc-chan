@@ -17,8 +17,13 @@
 .event-filter-help, .event-applied, .event-counts, .event-history-limit { color: var(--muted); font-size: max(12px, calc(12px * var(--font-scale))); }
 .event-filter-help { margin: 10px 0 18px; }
 .event-filter-help strong { color: var(--ink); font-weight: 550; }
-.event-feedback:empty { display: none; }
-.event-feedback p { margin: 10px 0; color: var(--warning); }
+/* Reserve both status rows at their natural wrapped height, including at 200% text.
+   Mutually exclusive read states share a row; new records can coexist with any state. */
+.event-feedback { display: grid; grid-template-columns: minmax(0, 1fr); }
+.event-feedback p { display: grid; grid-template-columns: minmax(0, 1fr); grid-area: 1 / 1; margin: 10px 0; color: var(--warning); }
+.event-feedback .event-newer-feedback { grid-row: 2; }
+.event-feedback p::before { content: attr(data-text); visibility: hidden; grid-area: 1 / 1; }
+.event-feedback p > span { grid-area: 1 / 1; }
 .event-error { margin: 16px 0; padding: 14px 0; border-block: 1px solid var(--border); color: var(--error); }
 .event-error > * + * { margin-top: 8px; }
 .event-collection-error, .event-retention-warning, .event-gap, .event-history-limit { margin: 12px 0; color: var(--warning); }

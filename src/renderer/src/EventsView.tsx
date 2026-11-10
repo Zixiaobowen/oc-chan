@@ -116,6 +116,12 @@ function EventIdentity({ entry, snapshot, onNavigate }: {
   </div>
 }
 
+function EventFeedbackMessage({ visible, newer = false, children }: { visible: boolean; newer?: boolean; children: string }) {
+  return <p className={newer ? 'event-newer-feedback' : undefined} data-text={children} aria-hidden={!visible}>
+    {visible && <span>{children}</span>}
+  </p>
+}
+
 export default function EventsView({ snapshot, enabled, active, view, onViewChange, onNavigate }: {
   snapshot: MonitorSnapshot
   enabled: boolean
@@ -275,10 +281,10 @@ export default function EventsView({ snapshot, enabled, active, view, onViewChan
     </p>
 
     <div className="event-feedback" role="status" aria-live="polite" aria-atomic="true">
-      {!enabled && <p>{page ? t('本地事件已停用。已取消读取，保留上次成功页；重新启用后再读取。', 'Local events are disabled. Reads are cancelled; the last successful page is retained until enabled again.') : t('本地事件未启用，尚无读取数据。可在数据来源页开启本地事件。', 'Local events are disabled; no page has been read. Enable local events in Sources.')}</p>}
-      {enabled && !canRead && <p>{page ? t('显示已暂停，保留当前页；后台事件采集仍可继续。', 'Display paused; the current page is retained. Background event collection can continue.') : t('显示已暂停，尚未读取事件。恢复显示后读取第一页。', 'Display paused; events have not been read. Resume to read the first page.')}</p>}
-      {busy && <p>{page ? t('正在读取；下方仍为上次成功页。', 'Reading; the last successful page remains below.') : t('正在读取事件…', 'Reading events…')}</p>}
-      {newer && <p>{t('有新记录。当前页保持不变；点击“查看最新”时更新。新记录可能不符合当前筛选。', 'New records are available. This page stays unchanged until you choose “View latest”; new records may not match these filters.')}</p>}
+      <EventFeedbackMessage visible={!enabled}>{page ? t('本地事件已停用。已取消读取，保留上次成功页；重新启用后再读取。', 'Local events are disabled. Reads are cancelled; the last successful page is retained until enabled again.') : t('本地事件未启用，尚无读取数据。可在数据来源页开启本地事件。', 'Local events are disabled; no page has been read. Enable local events in Sources.')}</EventFeedbackMessage>
+      <EventFeedbackMessage visible={enabled && !canRead}>{page ? t('显示已暂停，保留当前页；后台事件采集仍可继续。', 'Display paused; the current page is retained. Background event collection can continue.') : t('显示已暂停，尚未读取事件。恢复显示后读取第一页。', 'Display paused; events have not been read. Resume to read the first page.')}</EventFeedbackMessage>
+      <EventFeedbackMessage visible={busy}>{page ? t('正在读取；下方仍为上次成功页。', 'Reading; the last successful page remains below.') : t('正在读取事件…', 'Reading events…')}</EventFeedbackMessage>
+      <EventFeedbackMessage visible={newer} newer>{t('有新记录。当前页保持不变；点击“查看最新”时更新。新记录可能不符合当前筛选。', 'New records are available. This page stays unchanged until you choose “View latest”; new records may not match these filters.')}</EventFeedbackMessage>
     </div>
     {view.error && <div className="event-error" role="alert">
       <p><strong>{t('事件读取失败。', 'Event read failed.')}</strong> {page ? t('下方保留上次成功页，失败请求没有替换列表或游标。', 'The last successful page remains below; the failed request did not replace the list or cursor.') : t('尚无成功读取结果，不能判定没有事件。', 'No successful result is available; this does not mean there are no events.')}</p>
