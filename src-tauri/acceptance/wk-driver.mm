@@ -110,7 +110,15 @@ extern "C" void oc_wk_request(void *pointer, const char *operation, const char *
       finish(cb, ctx, nil, @"hidden/prohibited invariant violated"); return;
     }
     if (!strcmp(operation, "inspect")) {
-      finish(cb, ctx, @{ @"visible": @(window.visible), @"key": @(window.keyWindow), @"main": @(window.mainWindow), @"appActive": @(NSApp.active), @"activationPolicy": @(NSApp.activationPolicy), @"width": @(webview.bounds.size.width), @"height": @(webview.bounds.size.height), @"outerWidth": @(window.frame.size.width), @"outerHeight": @(window.frame.size.height), @"loading": @(webview.loading), @"tabFocusesLinks": @(webview.configuration.preferences.tabFocusesLinks), @"url": webview.URL.absoluteString ?: [NSNull null], @"firstResponder": window.firstResponder ? NSStringFromClass(window.firstResponder.class) : [NSNull null], @"webviewClass": NSStringFromClass(webview.class), @"webviewIsFirstResponder": @(window.firstResponder == webview), @"webviewFlipped": @(webview.flipped), @"windowNumber": @(window.windowNumber), @"geometry": viewportGeometry(webview, window), @"processes": acceptanceProcessSnapshot(webview) }, nil);
+      NSMutableDictionary *scheduling = [NSMutableDictionary dictionaryWithDictionary:@{ @"supported": @NO }];
+      if (@available(macOS 14.0, *)) {
+        WKInactiveSchedulingPolicy policy = webview.configuration.preferences.inactiveSchedulingPolicy;
+        NSString *name = policy == WKInactiveSchedulingPolicyNone ? @"none" : policy == WKInactiveSchedulingPolicyThrottle ? @"throttle" : policy == WKInactiveSchedulingPolicySuspend ? @"suspend" : @"unknown";
+        scheduling[@"supported"] = @YES;
+        scheduling[@"policy"] = name;
+        scheduling[@"value"] = @(policy);
+      }
+      finish(cb, ctx, @{ @"visible": @(window.visible), @"key": @(window.keyWindow), @"main": @(window.mainWindow), @"appActive": @(NSApp.active), @"activationPolicy": @(NSApp.activationPolicy), @"width": @(webview.bounds.size.width), @"height": @(webview.bounds.size.height), @"outerWidth": @(window.frame.size.width), @"outerHeight": @(window.frame.size.height), @"loading": @(webview.loading), @"tabFocusesLinks": @(webview.configuration.preferences.tabFocusesLinks), @"inactiveScheduling": scheduling, @"url": webview.URL.absoluteString ?: [NSNull null], @"firstResponder": window.firstResponder ? NSStringFromClass(window.firstResponder.class) : [NSNull null], @"webviewClass": NSStringFromClass(webview.class), @"webviewIsFirstResponder": @(window.firstResponder == webview), @"webviewFlipped": @(webview.flipped), @"windowNumber": @(window.windowNumber), @"geometry": viewportGeometry(webview, window), @"processes": acceptanceProcessSnapshot(webview) }, nil);
     } else if (!strcmp(operation, "eval")) {
       // A window exists before its initial navigation commits. An async call in
       // that old document can lose both promise handlers when WebKit discards it.

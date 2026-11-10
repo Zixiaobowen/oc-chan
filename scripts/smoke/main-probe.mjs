@@ -28,7 +28,7 @@ export async function absent(filename) {
   try { await lstat(filename); return false } catch (error) { if (error.code === 'ENOENT') return true; throw error }
 }
 export class Driver {
-  static async open(receipt) {
+  static async open(receipt, record) {
     assert.equal(receipt.protocol, 'OC_CHAN_ACCEPTANCE_DRIVER_V1')
     assert(Number.isSafeInteger(receipt.pid) && receipt.pid > 0)
     assert.match(receipt.driverDirectory, new RegExp(`^/tmp/ocwk-${receipt.pid}-[0-9a-f]{12}$`))
@@ -42,10 +42,10 @@ export class Driver {
     assert.match(token, /^[a-f0-9]{64}$/)
     const socket = await lstat(path.join(directory, 'driver.sock'))
     assert(socket.isSocket() && socket.uid === process.getuid() && (socket.mode & 0o777) === 0o600)
-    return new Driver(receipt, identity, token)
+    return new Driver(receipt, identity, token, record)
   }
-  constructor(receipt, identity, token) {
-    this.receipt = receipt; this.identity = identity; this.token = token
+  constructor(receipt, identity, token, record) {
+    this.receipt = receipt; this.identity = identity; this.token = token; this.record = record
     this.sequence = 0; this.pending = 0; this.queue = Promise.resolve(); this.closed = false
     this.socket = connect(path.join(receipt.driverDirectory, 'driver.sock'))
     this.socket.on('error', error => { this.failure = error })
@@ -56,9 +56,25 @@ export class Driver {
     assert(!this.closed, 'Driver is closed')
     assert(this.pending < 16, 'Client request admission exceeded')
     this.pending++
-    const operation = this.queue.then(() => this.exchange(command, fields, timeout))
+    const queuedAt = performance.now()
+    let startedAt, status = 'failed'
+    const operation = this.queue.then(() => {
+      startedAt = performance.now()
+      return this.exchange(command, fields, timeout)
+    })
     this.queue = operation.then(() => undefined, () => undefined)
-    try { return await operation } finally { this.pending-- }
+    try { const value = await operation; status = 'passed'; return value }
+    finally {
+      this.pending--
+      const finishedAt = performance.now()
+      // Emit only slow/failed operations; never retain scripts, tokens or replies.
+      // This distinguishes socket/native/WK latency from collector resource time.
+      if (status === 'failed' || finishedAt - queuedAt >= 250) this.record?.('driver-operation', {
+        command, view: fields.view ?? null, action: fields.action ?? null, status,
+        queueMs: (startedAt ?? finishedAt) - queuedAt,
+        executionMs: startedAt === undefined ? 0 : finishedAt - startedAt
+      })
+    }
   }
   async exchange(command, fields, timeout) {
     assert(!this.closed, 'Driver is closed')
