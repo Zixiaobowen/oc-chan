@@ -438,9 +438,14 @@ export async function exerciseSmoke({ main, renderer, manifest, record, capture,
     } finally { db.close(); await owned.file.close() }
     const started = performance.now()
     for (let sample = 0; sample < 100; sample++) {
+      const sampleStarted = performance.now()
+      record('events-deduplication-sample', { sample, phase: 'refresh-started' })
       await renderer.evaluate('window.monitor.refresh("events")', 20_000)
+      const refreshedAt = performance.now()
+      record('events-deduplication-sample', { sample, phase: 'snapshot-started', refreshMs: refreshedAt - sampleStarted })
       const error = await ui.evaluate('window.monitor.snapshot().then(value => value.events.error)')
       assert.equal(error, null, `event sample ${sample} failed`)
+      record('events-deduplication-sample', { sample, phase: 'passed', snapshotMs: performance.now() - refreshedAt })
     }
     const page = await ui.evaluate('window.monitor.events({sourceId:"hermes-events"})')
     assert.deepEqual(page.entries.map(event => event.type).sort(), ['delivery-failed', 'execution-failed', 'execution-failed'])

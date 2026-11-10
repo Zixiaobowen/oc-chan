@@ -47,6 +47,10 @@ npm run smoke:renderer -- --scenario topology --out /tmp/oc-chan-topology-new
 
 验收feature在每个新文档解析应用脚本前注册有界的未捕获异常和Promise拒绝观察器，重载时重新建立；场景检查重载前后的状态，缺少监测对象也判失败。该脚本不进入生产构建。
 
+无头文档在产品层保持逻辑可见，因此在 macOS 14+ 通过 Tauri `background_throttling(Disabled)` 禁用 WebKit 的后台节流/挂起；原生窗口仍隐藏且禁止激活，普通窗口保留系统默认策略。正式应用最低 macOS 13 不变：Wry 在 13 上不设置此策略；当前原生输入验收要求 macOS 26+，启动证据必须回读 `inactiveScheduling.policy=none`。不能把无头逻辑可见误当作 WebKit 已自动保持活跃。
+
+超时调查使用 `evidence/*.jsonl` 中的 `driver-operation`（≥250ms 或失败的操作，区分排队与执行耗时，不记录脚本、令牌和响应正文）及 `events-deduplication-sample`（100 次采样各自的 refresh/snapshot 进度）。先比较阶段累计时间和后端资源耗时，区分驱动/WebKit调度与采集器耗时；总deadline触发后的driver关闭是收尾结果，不能据此认定事件采集挂起。
+
 资源断言使用Rust资源池的`history`、`events`等固定标签；业务来源`hermes-events`与分页结果`hermes`是不同字段。缺少资源记录必须失败，不能让空集合检查通过。暂停显示只取消该视图查询，后台事件采集继续；停用事件插件后才要求整个`events`资源桶归零。诊断导出保留当前固定资源标签，未知标签脱敏为`unknown`并标记`invalid-fields`。
 
 市场场景使用签名原生插件和有界本机HTTP源，覆盖离线首装、启用、卸载、下载取消、升级、摘要篡改拒绝、激活失败恢复旧版及重启复验。v1/v2使用真实系统collector，v3通过验收feature返回真实采集错误；HTTP服务只提供包字节，不模拟采集结果。测试信任根仅在验收构建可用，不能进入发布包。

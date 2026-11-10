@@ -182,6 +182,12 @@ impl Inner {
                     if let Some(inner) = weak.upgrade() { (inner.sink)(WindowSignal::DocumentStarted(view)); }
                 }
             });
+        // Headless documents are logically live even though their native windows
+        // remain hidden. On macOS 14+, prevent WebKit from throttling/suspending
+        // their JS; ordinary windows retain the platform's background policy.
+        if self.headless {
+            builder = builder.background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled);
+        }
         #[cfg(feature = "acceptance")]
         {
             builder = builder.initialization_script(include_str!("../acceptance/renderer-errors.js"));

@@ -124,7 +124,7 @@ class Instance {
     }
     readLines(this.launcher.stdout, consume, fail); readLines(this.launcher.stderr, consume, fail)
     await until(() => this.instance && this.receipt, { timeout: limits.startupMs, signal: abort.signal })
-    this.driver = await Driver.open(this.receipt)
+    this.driver = await Driver.open(this.receipt, record)
     this.renderer = this.driver.view(recovery ? 'recovery' : 'main')
     this.appIdentity = (await processes()).find(row => row.pid === this.receipt.pid)
     assert(this.appIdentity, 'Native application identity is missing')
@@ -140,6 +140,7 @@ class Instance {
   async hidden(view = 'main') {
     const native = await this.driver.view(view).inspect()
     assert.equal(native.visible, false); assert.equal(native.key, false); assert.equal(native.appActive, false); assert.equal(native.activationPolicy, 2)
+    assert.deepEqual(native.inactiveScheduling, { supported: true, policy: 'none', value: 2 }, 'Headless acceptance requires active WebKit scheduling (macOS 14+)')
     record('headless-invariant', { view, native }); return native
   }
   async quit() {

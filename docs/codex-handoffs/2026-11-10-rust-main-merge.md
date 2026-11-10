@@ -46,3 +46,10 @@
 - GitHub第一轮run42750138461在行为测试前失败：build-marketplace-fixtures未映射。已按全部差异补市场夹具/WK探针映射，退役入口按模块映射且未知路径仍失败；修复host组冷checkout缺少catalog/前端产物的前置条件。
 - CI修复本机验证：选择器16项通过，真实PR差异--plan通过；独立临时catalog/前端生成后的真实host组28项通过。只改CI脚本/测试与开发文档，不改变已验收安装包的生产实现。
 - PR尚需新一轮GitHub检查及SHA条件合并，完成后记录最终平台回执。源码worktree、ZIP/DMG和source-snapshot证据保留；嵌套源码快照中的构建产物受现有清理规则保护，未绕过删除。
+
+## 无头 WebKit 调度修复
+
+- 第二轮CI行为测试全部通过，但完整无头场景在360秒总预算内未结束。市场场景远端约156秒/本机9.3秒，事件采集资源279次合计4.6秒，不支持SQLite单次挂起判断。原始证据保留在外部ci-42751391582目录。
+- 确认headless逻辑可见与WK默认后台节流/挂起策略不一致：仅headless设置Tauri BackgroundThrottlingPolicy::Disabled，正常窗口不变。接受验收的macOS26+回读公开inactiveSchedulingPolicy；生产最低13.0不变，库在13上不设置14+策略。
+- 增加有界慢操作/失败耗时与100次事件采样进度记录，不记录脚本/令牌/响应正文，不增加总deadline或削弱场景。
+- 本机smoke-scheduling完整通过：complete=true/errors=[]，实际策略none(value2)，隐藏/无焦点/禁止激活及100次采样原断言通过，177.17秒包含构建/重启/恢复。远端是否消除累计超时仍待新CI回执，不宣称整体性能提升。
