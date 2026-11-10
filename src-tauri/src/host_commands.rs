@@ -17,6 +17,8 @@ use crate::{documents::{Document, Interest}, ipc::{decode, empty, reply}};
 #[derive(Deserialize)] #[serde(deny_unknown_fields)] struct Preview { #[serde(deserialize_with="nullable")] intensity: Option<f64> }
 #[derive(Deserialize)] #[serde(deny_unknown_fields)] struct Enabled { enabled: bool }
 #[derive(Deserialize)] #[serde(deny_unknown_fields)] struct ShowMain { #[serde(default, deserialize_with="present")] target: Option<NavigationTarget> }
+#[derive(Deserialize)] #[serde(rename_all="lowercase")] enum PermissionTarget { Accessibility, Notifications }
+#[derive(Deserialize)] #[serde(deny_unknown_fields)] struct PermissionSettings { target: PermissionTarget }
 fn present<'de, D: Deserializer<'de>, T: Deserialize<'de>>(input: D) -> std::result::Result<Option<T>, D::Error> { T::deserialize(input).map(Some) }
 fn nullable<'de, D: Deserializer<'de>, T: Deserialize<'de>>(input: D) -> std::result::Result<Option<T>, D::Error> { Option::<T>::deserialize(input) }
 
@@ -77,7 +79,7 @@ impl Host {
         let _owner_task = owner_bound.then(|| document.tasks.token());
         check_cancel(&document.cancel)?;
         if matches!(command, "desktop_committed" | "monitor_snapshot" | "monitor_cancel_schedule_history" | "monitor_cancel_events" | "monitor_navigation"
-            | "diagnostics_generate" | "diagnostics_cancel" | "settings_snapshot" | "settings_retry_geometry" | "settings_request_notification_permission"
+            | "diagnostics_generate" | "diagnostics_cancel" | "settings_snapshot" | "settings_retry_geometry" | "settings_request_notification_permission" | "settings_accessibility_state"
             | "updates_snapshot" | "updates_check" | "updates_download" | "updates_cancel" | "updates_install" | "updates_open_release_notes"
             | "marketplace_snapshot" | "marketplace_check" | "marketplace_cancel" | "recovery_snapshot" | "recovery_retry" | "recovery_quit") { empty(&args)?; }
         #[cfg(feature="acceptance")]
@@ -129,6 +131,16 @@ impl Host {
             "settings_preview_glass" => { let input: Preview = decode(args)?; services.settings.preview_glass(owner, input.intensity).await?; reply(&()) },
             "settings_update_login_item" => { let input: Enabled = decode(args)?; reply(&services.settings.update_login_item(input.enabled).await?) },
             "settings_request_notification_permission" => reply(&services.settings.request_notification_permission().await?),
+            "settings_accessibility_state" => {
+                if self.config.headless { return reply(&json!({"availability":"headless","status":"unknown","details":"无头实例不查询辅助功能授权 / Accessibility authorization is unavailable in headless mode"})); }
+                reply(&self.native.call("accessibilityRead", json!({})).await?)
+            },
+            "settings_open_permission_settings" => {
+                let input: PermissionSettings = decode(args)?;
+                if self.config.headless { return Err(Error::new("OC_HEADLESS", "无头实例不能打开系统设置 / Headless instances cannot open System Settings")); }
+                let target = match input.target { PermissionTarget::Accessibility => "accessibility", PermissionTarget::Notifications => "notifications" };
+                self.native.call("openPermissionSettings", json!({"target":target})).await?; reply(&())
+            },
             "settings_show_main_window" => { let input: ShowMain = decode(args)?; self.show_main(input.target).await?; reply(&()) },
             "updates_snapshot" => reply(&services.updates.snapshot()),
             "updates_check" => reply(&services.updates.check().await?),

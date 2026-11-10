@@ -92,6 +92,10 @@ int oc_native_create(int acceptance_mode, oc_native_callback callback, void *use
  *   about OS disappearance until notificationState readback confirms absence.
  * openReleaseNotes {url:string<=2048} -> {opened:true}; HTTPS fixed GitHub releases
  * authority/path only, no credentials/query/fragment. Non-acceptance only.
+ * accessibilityRead {} -> {availability:"available",status:"authorized"|"not-authorized",details:null};
+ * reads AXIsProcessTrusted without prompting. Non-acceptance only.
+ * openPermissionSettings {target:"accessibility"|"notifications"} -> {opened:true};
+ * opens only the fixed System Settings pane; non-acceptance only.
  * clipboardWrite {window,text} -> {copied:true}; prefer raw clipboard ABI to avoid
  * JSON expansion. Window must be live; host binds address to registered generation.
  * Acceptance rejects Dock/sleep/login mutation, clipboard, save panel, external

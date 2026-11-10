@@ -22,6 +22,7 @@ fn operation(command:&CStr)->&'static str {
         b"dockSet"=>"dockSet", b"sleepSet"=>"sleepSet", b"loginRead"=>"loginRead", b"loginSet"=>"loginSet",
         b"windowRead"=>"windowRead", b"glassSet"=>"glassSet", b"clipboardWrite"=>"clipboardWrite",
         b"openReleaseNotes"=>"openReleaseNotes", b"notificationRemove"=>"notificationRemove",
+        b"accessibilityRead"=>"accessibilityRead", b"openPermissionSettings"=>"openPermissionSettings",
         b"permissionQuery"=>"permissionQuery", b"permissionRequest"=>"permissionRequest",
         b"notificationSend"=>"notificationSend", b"notificationState"=>"notificationState", b"savePanel"=>"savePanel",
         _=>"unknown",
@@ -161,7 +162,7 @@ impl NativeBridge {
         let (command,args)=input(command,json!({}))?;self.inner.sync(&command,&args)
     }
     pub async fn call(&self,command:&str,args:Value)->Result<Value>{
-        if !matches!(command,"systemRead"|"themeSet"|"dockSet"|"sleepSet"|"loginRead"|"loginSet"|"windowRead"|"glassSet"|"notificationRemove"){return Err(Error::invalid("native command"));}
+        if !matches!(command,"systemRead"|"themeSet"|"dockSet"|"sleepSet"|"loginRead"|"loginSet"|"windowRead"|"glassSet"|"notificationRemove"|"accessibilityRead"|"openPermissionSettings"){return Err(Error::invalid("native command"));}
         let (command,args)=input(command,args)?;
         let permit=self.inner.permits.clone().try_acquire_owned().map_err(|_|failure("OC_NATIVE_BUSY"))?;
         self.inner.main(move|inner|{let _permit=permit;inner.sync(&command,&args)}).await
@@ -214,7 +215,7 @@ impl NativeBridge {
     pub async fn release(&self)->Result<()>{self.inner.main(|inner|release_main(inner)).await}
     pub async fn open_release_notes(&self,url:&str,cancel:&CancellationToken)->Result<()>{
         check_cancel(cancel)?;
-        let base="https://github.com/Zixiaobowen/oc-chan-releases/releases";
+        let base="https://github.com/Zixiaobowen/oc-chan/releases";
         if url.len()>2048||!(url==base||url.strip_prefix(&format!("{base}/tag/")).is_some_and(|tag|!tag.is_empty()&&tag.bytes().all(|b|b.is_ascii_alphanumeric()||b"._-".contains(&b)))){return Err(Error::invalid("release URL"));}
         let (command,args)=input("openReleaseNotes",json!({"url":url}))?;let cancel=cancel.clone();
         let permit=self.inner.permits.clone().try_acquire_owned().map_err(|_|failure("OC_NATIVE_BUSY"))?;

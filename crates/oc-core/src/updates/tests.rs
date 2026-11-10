@@ -18,19 +18,42 @@ fn offer(controller: &UpdateController) {
     controller.finish(ticket(controller, Kind::Check), Ok(Outcome::Checked(Some(candidate())))).unwrap();
 }
 #[tokio::test]
-async fn disabled_builds_never_start_worker_or_create_profile_staging() {
+async fn unsupported_platform_never_starts_worker_or_creates_staging() {
     let temporary = tempfile::tempdir().unwrap(); let profile = temporary.path().canonicalize().unwrap();
-    for reason in [DisabledReason::Development, DisabledReason::Platform, DisabledReason::Unsigned] {
+    let controller = controller(profile.clone(), Some(DisabledReason::Platform)); controller.start();
+    assert_eq!(controller.check().await.unwrap().phase, UpdatePhase::Disabled);
+    assert_eq!(controller.download().await.unwrap_err().code, "OC_UPDATE_DISABLED");
+    assert!(matches!(controller.prepare_install().await, Err(error) if error.code == "OC_UPDATE_DISABLED"));
+    assert!(!profile.join("updates-v2").exists()); controller.stop().await.unwrap();
+}
+#[tokio::test]
+async fn unsigned_and_development_allow_manual_checks_but_never_automatic_download_or_install() {
+    let temporary = tempfile::tempdir().unwrap(); let profile = temporary.path().canonicalize().unwrap();
+    for reason in [DisabledReason::Development, DisabledReason::Unsigned] {
         let controller = controller(profile.clone(), Some(reason)); controller.start();
-        assert_eq!(controller.check().await.unwrap().phase, UpdatePhase::Disabled);
-        assert_eq!(controller.download().await.unwrap().disabled_reason, Some(reason));
-        assert!(controller.prepare_install().await.is_err());
-        controller.fail(Error::new("anything", "/private/credential?secret=value"));
-        let snapshot = controller.check().await.unwrap(); assert_eq!(snapshot.phase, UpdatePhase::Disabled);
-        assert!(!snapshot.error.unwrap().contains("secret")); assert!(!profile.join("updates-v2").exists()); controller.stop().await.unwrap();
+        assert_eq!(controller.snapshot().phase, UpdatePhase::Idle);
+        assert!(!controller.state.lock().unwrap().scheduler_started);
+        let due = *controller.deadline.borrow();
+        assert!(matches!(controller.admit(Kind::Check, Some(due)).unwrap(), Admission::Unchanged(_)));
+        let first = ticket(&controller, Kind::Check);
+        assert_eq!(controller.snapshot().phase, UpdatePhase::Checking);
+        controller.finish(first, Ok(Outcome::Checked(Some(candidate())))).unwrap();
+        assert_eq!(controller.snapshot().phase, UpdatePhase::Available);
+        assert_eq!(controller.snapshot().disabled_reason, Some(reason));
+        assert!(controller.snapshot().checked_at.is_some());
+        assert_eq!(controller.download().await.unwrap_err().code, "OC_UPDATE_DISABLED");
+        assert!(matches!(controller.prepare_install().await, Err(error) if error.code == "OC_UPDATE_DISABLED"));
+        // The public check path really invokes transport. This fixture has no
+        // worker executable, so it must report failure without public networking.
+        assert!(controller.check().await.is_err());
+        assert_eq!(controller.snapshot().phase, UpdatePhase::Error);
+        assert!(controller.snapshot().error.is_some());
+        let retry = ticket(&controller, Kind::Check);
+        controller.finish(retry, Ok(Outcome::Checked(None))).unwrap();
+        assert_eq!(controller.snapshot().phase, UpdatePhase::Idle);
+        assert!(controller.snapshot().error.is_none());
+        assert!(!profile.join("updates-v2").exists()); controller.stop().await.unwrap();
     }
-    let actual = UpdateController::new(config(profile), BoundedIo::new(ResourceBudget::default())).await.unwrap();
-    assert_eq!(actual.snapshot().disabled_reason, Some(DisabledReason::Development)); actual.stop().await.unwrap();
 }
 #[tokio::test]
 async fn checks_coalesce_revision_increases_and_never_downloads_automatically() {
@@ -166,8 +189,16 @@ async fn checking_preserves_an_already_downloaded_candidate() {
 }
 
 #[tokio::test]
-async fn development_prerelease_is_disabled_without_contacting_update_worker() {
+async fn development_prerelease_can_manually_check_and_reports_worker_errors() {
     let temporary = tempfile::tempdir().unwrap(); let mut options = config(temporary.path().canonicalize().unwrap()); options.current_version = "0.2.0-dev.1".into();
     let controller = UpdateController::new(options, BoundedIo::new(ResourceBudget::default())).await.unwrap();
-    assert_eq!(controller.check().await.unwrap().disabled_reason, Some(DisabledReason::Development)); controller.stop().await.unwrap();
+    if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        assert_eq!(controller.snapshot().disabled_reason, Some(DisabledReason::Development));
+        assert_eq!(controller.snapshot().phase, UpdatePhase::Idle);
+        assert!(controller.check().await.is_err());
+        assert_eq!(controller.snapshot().phase, UpdatePhase::Error);
+    } else {
+        assert_eq!(controller.check().await.unwrap().phase, UpdatePhase::Disabled);
+    }
+    controller.stop().await.unwrap();
 }

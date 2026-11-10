@@ -222,6 +222,7 @@ test('registered running owner is previewed but an active claim blocks cleanup a
   assert.equal(code, 0); assert.equal(await exists(instance), false)
 })
 
+
 test('stale registered instance is removable; ownerless instances are never guessed', mac, async t => {
   const f = await fixture(t)
   const { child, instance } = await launcher(f, { cleanup: false })

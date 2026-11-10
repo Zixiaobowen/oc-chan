@@ -21,7 +21,7 @@ impl BundleValidator for AppleValidator {
         // This requirement validates the cryptographic chain and the Developer ID
         // Application leaf/intermediate extensions. Ad-hoc/Apple Development and
         // self-signed certificates cannot satisfy it.
-        let requirement = format!("anchor apple generic and identifier \"{BUNDLE_ID}\" and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists");
+        let requirement = format!("=anchor apple generic and identifier \"{BUNDLE_ID}\" and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists");
         bounded_command(Path::new("/usr/bin/codesign"), &[
             "--verify".into(), "--deep".into(), "--strict".into(), "--all-architectures".into(),
             "--test-requirement".into(), requirement.into(), bundle.as_os_str().to_owned()], end)?;

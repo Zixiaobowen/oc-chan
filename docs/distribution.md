@@ -22,17 +22,17 @@ npm run dist
 需要从包含未提交改动的当前源码生成可核对交付时：
 
 ```sh
-npm run delivery:local -- --out release/local-rust-new
+npm run delivery:local -- --out release/tauri/local-rust-new
 ```
 
-输出目录必须全新且父目录存在。工具记录实际HEAD、分支、dirty状态、精确构建输入和逐文件摘要，在独立源码快照中构建；HEAD不代表未提交内容。源码在构建期间变化会失败，不生成成功交付清单。源码、依赖审计、包内容、ZIP/DMG一致性和签名回执随交付保留，失败记录不能冒充可安装版本。此入口不启动、退出或替换正式应用。
+输出目录必须全新且位于当前工作区的`release/tauri/`内，工具创建父目录。工具记录实际HEAD、分支、dirty状态、精确构建输入和逐文件摘要，在独立源码快照中构建；HEAD不代表未提交内容。源码在构建期间变化会失败，不生成成功交付清单。源码、依赖审计、包内容、ZIP/DMG一致性和签名回执随交付保留，失败记录不能冒充可安装版本。此入口不启动、退出或替换正式应用。
 
 核验与安装使用不同操作：
 
 ```sh
-npm run install:local -- --check-delivery release/local-rust-new
+npm run install:local -- --check-delivery release/tauri/local-rust-new
 # 只有获得替换正式应用的授权后：
-npm run install:local -- --delivery release/local-rust-new
+npm run install:local -- --delivery release/tauri/local-rust-new
 ```
 
 第一条只核对已有交付；第二条会退出旧应用、同卷暂存并整包替换`/Applications/OC Chan.app`，验证新包就绪，失败尝试还原。也可在获得对应授权后用`npm run install:local`安装当前工作目录。工具不把旧交付当作当前源码，不改写或迁移个人设置、事件库及上游数据；目标被其他任务替换、安装锁占用、签名/摘要不符或路径不安全时拒绝操作。
@@ -43,9 +43,9 @@ npm run install:local -- --delivery release/local-rust-new
 
 ## 应用内更新
 
-正式安装版必须通过Developer ID信任链、固定Bundle ID和实际架构校验，才启用更新。开发和ad-hoc版本显示明确禁用原因。固定公开源为`Zixiaobowen/oc-chan-releases`；客户端不含GitHub凭据、用户自定义更新URL或远程上报。
+正式安装版必须通过Developer ID信任链、固定Bundle ID和实际架构校验，才启用自动检查、下载和安装。开发和ad-hoc版本仍可手动检查新版、查看结果和重试真实错误，界面保留下载/安装受限原因；不支持的平台不能检查。固定公开源为`Zixiaobowen/oc-chan`；客户端不含GitHub凭据、用户自定义更新URL或远程上报。
 
-启动30秒后检查，此后每6小时检查，也可手动检查。元数据使用schema2的稳定语义版本和单个arm64资产，记录固定ZIP文件名、精确长度与SHA-512。HTTP仅允许受限HTTPS发布域，流式写入私有暂存文件；元数据、下载大小、磁盘空间、并发、超时和取消均有边界。
+具备完整更新资格时启动30秒后检查，此后每6小时检查，也可手动检查。元数据使用schema2的稳定语义版本和单个arm64资产，记录固定ZIP文件名、精确长度与SHA-512。HTTP仅允许受限HTTPS发布域，流式写入私有暂存文件；元数据、下载大小、磁盘空间、并发、超时和取消均有边界。
 
 下载、取消和“重启并安装”都是显式操作。普通退出不安装。安装前复验Developer ID、同Team、固定应用标识、架构和严格升级版本；Rust安装助手绑定父进程出生身份、应用路径及文件身份，持独占锁并记录事务阶段，同卷替换。
 
@@ -69,11 +69,10 @@ CI安装锁定的npm/Cargo依赖，按变更映射运行行为测试；应用入
 | `APPLE_ID` | 公证账号 |
 | `APPLE_PASSWORD` | Apple应用专用密码 |
 | `APPLE_TEAM_ID` | 10位Team ID |
-| `UPDATE_RELEASE_TOKEN` | 仅公开分发仓库所需的Contents写权限 |
 
 构建签名输入统一为`APPLE_SIGNING_IDENTITY`。证书只导入runner临时keychain，构建后回收；本地ad-hoc构建不自动发现签名或公证凭据。标签流水线验证完整签名、公证票据和Gatekeeper，复核归档及元数据后先上传草稿，确认附件完整再公开。客户端只消费稳定版`latest.json`，没有旧Electron更新元数据兼容路径。
 
-Actions产物保持源码仓库的访问限制，可在成功运行记录中下载`oc-chan-macos-arm64-<运行编号>`。公开发布使用独立分发仓库，发布说明不包含私有源码信息。实际签名、公证、公开下载及正式应用内升级须各自取得回执，不能以ad-hoc测试代替。
+Actions产物可在成功运行记录中下载`oc-chan-macos-arm64-<运行编号>`。公开发布使用`Zixiaobowen/oc-chan`的Release，发布job使用具有Contents写权限的`github.token`，并以独立并发锁串行执行Latest读取、草稿上传、公开及回读，旧版本不得替换更新的Latest。实际签名、公证、公开下载及正式应用内升级须各自取得回执，不能以ad-hoc测试代替。
 
 ## 包内容、体积与依赖审查
 

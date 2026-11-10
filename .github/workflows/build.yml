@@ -68,7 +68,6 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          UPDATE_RELEASE_TOKEN: ${{ secrets.UPDATE_RELEASE_TOKEN }}
         run: node --input-type=module -e 'import {packageReleaseInfo,requireReleaseEnvironment} from "./scripts/release-config.mjs";requireReleaseEnvironment(packageReleaseInfo())'
 
       - name: Import release identity into a job-owned temporary keychain
@@ -214,6 +213,11 @@ jobs:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    permissions:
+      contents: write
+    concurrency:
+      group: oc-chan-public-release
+      cancel-in-progress: false
     defaults:
       run:
         shell: bash
@@ -242,5 +246,5 @@ jobs:
         run: node scripts/prepare-release.mjs artifacts release-assets "$GITHUB_RUN_NUMBER" "$RELEASE_TAG"
       - name: Upload draft and publish complete release
         env:
-          UPDATE_RELEASE_TOKEN: ${{ secrets.UPDATE_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: node scripts/publish-release.mjs release-assets "$RELEASE_TAG"

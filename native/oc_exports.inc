@@ -164,12 +164,26 @@ static id Call(std::shared_ptr<State> state, NSString *command, NSDictionary *ar
     Require([[pasteboard stringForType:NSPasteboardTypeString] isEqualToString:text], "clipboard readback mismatch");
     return @{ @"copied":@YES };
   }
+  if ([command isEqualToString:@"accessibilityRead"]) {
+    Require(!state->acceptance, "accessibility query forbidden in acceptance");
+    return @{ @"availability":@"available", @"status":AXIsProcessTrusted() ? @"authorized" : @"not-authorized", @"details":NSNull.null };
+  }
+  if ([command isEqualToString:@"openPermissionSettings"]) {
+    Require(!state->acceptance, "system settings forbidden in acceptance");
+    NSString *target = String(args, @"target", 32);
+    Require([target isEqualToString:@"accessibility"] || [target isEqualToString:@"notifications"], "permission settings target rejected");
+    NSString *destination = [target isEqualToString:@"accessibility"]
+      ? @"x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+      : @"x-apple.systempreferences:com.apple.Notifications-Settings.extension";
+    Require([NSWorkspace.sharedWorkspace openURL:[NSURL URLWithString:destination]], "permission settings open failed");
+    return @{ @"opened":@YES };
+  }
   if ([command isEqualToString:@"openReleaseNotes"]) {
     Require(!state->acceptance, "external URL forbidden in acceptance");
     NSString *text = String(args, @"url", 2048);
     NSURL *url = [NSURL URLWithString:text];
     Require([url.scheme isEqualToString:@"https"] && [url.host isEqualToString:@"github.com"] && !url.user && !url.password && !url.port && !url.query && !url.fragment, "release URL authority rejected");
-    NSString *base = @"/Zixiaobowen/oc-chan-releases/releases";
+    NSString *base = @"/Zixiaobowen/oc-chan/releases";
     Require([url.path isEqualToString:base] || [url.path hasPrefix:[base stringByAppendingString:@"/tag/"]], "release URL path rejected");
     Require([NSWorkspace.sharedWorkspace openURL:url], "release URL open failed");
     return @{ @"opened":@YES };

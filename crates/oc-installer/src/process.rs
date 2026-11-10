@@ -304,13 +304,37 @@ fn reap_child(pid: i32, blocking: bool) -> Result<()> {
         return Err(crate::Error::Io { operation: "reap application".into(), source: error });
     }
 }
+#[cfg(target_os = "macos")]
+pub(crate) fn group_exists(pgid: i32) -> Result<bool> {
+    // Darwin killpg1 skips SZOMB members and returns EPERM when none remain
+    // signalable, even for our own child. Query membership instead: a zombie
+    // still holds the group until waitpid reaps it. Never equate EPERM to absence.
+    let mut mib = [libc::CTL_KERN, libc::KERN_PROC, libc::KERN_PROC_PGRP, pgid];
+    // A non-null buffer smaller than one kinfo_proc distinguishes an empty
+    // result (success) from any members (ENOMEM), with no process-list allocation.
+    // A null size query would include Darwin's KERN_PROCSLOP even for an empty group.
+    let mut byte = 0u8;
+    let mut size = 1usize;
+    let result = unsafe { libc::sysctl(mib.as_mut_ptr(), mib.len() as _,
+        (&mut byte as *mut u8).cast(), &mut size, std::ptr::null_mut(), 0) };
+    if result == 0 {
+        ensure(size == 0, "unexpected process group query size")?;
+        return Ok(false);
+    }
+    let error = std::io::Error::last_os_error();
+    if error.raw_os_error() == Some(libc::ENOMEM) { return Ok(true); }
+    Err(crate::Error::Io { operation: "inspect launched process group".into(), source: error })
+}
+#[cfg(not(target_os = "macos"))]
+pub(crate) fn group_exists(pgid: i32) -> Result<bool> {
+    if unsafe { libc::kill(-pgid, 0) } == 0 { return Ok(true); }
+    let error = std::io::Error::last_os_error();
+    if error.raw_os_error() == Some(libc::ESRCH) { return Ok(false); }
+    Err(crate::Error::Io { operation: "inspect launched process group".into(), source: error })
+}
+
 pub(crate) fn stop_exact(expected: &ProcessIdentity, gate_executable: &Path, end: Instant) -> Result<()> {
-    let group_live = || -> Result<bool> {
-        if unsafe { libc::kill(-expected.pid, 0) } == 0 { return Ok(true); }
-        let e = std::io::Error::last_os_error();
-        if e.raw_os_error() == Some(libc::ESRCH) { return Ok(false); }
-        Err(crate::Error::Io { operation: "inspect launched process group".into(), source: e })
-    };
+    let group_live = || group_exists(expected.pid);
     let Some(actual) = ProcessIdentity::inspect(expected.pid)? else {
         reap_child(expected.pid, false)?;
         ensure(!group_live()?, "new host is gone but unverified descendants remain; preserving bundles")?;

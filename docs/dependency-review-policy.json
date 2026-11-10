@@ -1,6 +1,6 @@
 {
   "schema": 2,
-  "lockSha256": "2ce7e0da66e7971b15961a916d1f4be93f7088a63a2e2b686e3f1fefeb8f984b",
+  "lockSha256": "343eb643a2108e10d8e4e8008959d42262b5bbd1bcc1002afe5599eb3c1fcdaa",
   "cargoLockSha256": "42b59dfdc630395a24833ba82de5c9d0420297701ff8ffe4db87077cd4a617f8",
   "allowedLicenses": [
     "Apache-2.0",
@@ -42,5 +42,5 @@
   ],
   "advisories": [],
   "reviewedAt": "2026-11-10",
-  "dependencyChangeReason": "Rust/Tauri全量替换Electron/Node生产后台；Node依赖仅承担构建工具和保留的React/React Flow/Three.js前端，实际进入界面的模块由Vite清单单独分类。Rust复用Tauri/Wry/Tao、Tokio、rusqlite、reqwest/rustls、notify及平台绑定完成宿主、可取消worker、原生插件与安装事务，不另引入JS执行宿主。已核对npm锁140项和aarch64 Cargo发布闭包311项的许可证声明，重新生成并校验580份完整许可/NOTICE文件；原14项缺失文本按精确crate checksum/VCS commit补证据，来源见resources/rust-license-supplements/manifest.json。针对RUSTSEC-2026-0429、0367、0368、0369将zip升级至9.5.0（MIT），禁用默认功能并仅启用deflate-flate2-zlib-rs；移除zopfli、arbitrary及derive_arbitrary，没有升级其他原有包版本。新增constant_time_eq 0.6.1（CC0-1.0 OR MIT-0 OR Apache-2.0）、nix 0.31.3（MIT）、typed-path 0.13.0（MIT OR Apache-2.0）、zeroize_derive 1.5.0（Apache-2.0 OR MIT）的声明均在现有许可范围。2026-11-10现场npm与Cargo审计通过，报告为docs/rust-migration/evidence/dependency-review-20261110-2.json；归档相关24项行为测试通过。MPL组件用于CSS/选择器或平台辅助，未修改其上游源；Unicode数据和webpki-roots证书数据保留Unicode-3.0及CDLA-Permissive-2.0文本。所有多许可证声明按原文保留并包含归档授权与通知，不因依赖标为dev而视为未入包。此清单只绑定许可证和锁文件，不豁免公告；后续发布仍须现场审计，实际包大小和源码排除由产物门禁独立证明。"
+  "dependencyChangeReason": "Rust/Tauri替换Electron/Node生产后台；Node仅承担构建工具和React/React Flow/Three.js前端，实际入包模块由Vite清单分类。Rust使用Tauri/Wry/Tao、Tokio、rusqlite、reqwest/rustls、notify及平台绑定完成宿主、可取消worker、原生插件与安装事务。合并main时沿用Kubai 0.2.1（MIT）替换lucide，消费者与锁文件统一，不保留两套图标依赖。Cargo锁未改变，完整许可补证来源见resources/rust-license-supplements/manifest.json。历史迁移审计docs/rust-migration/evidence/dependency-review-20261110-2.json仅证明当时输入，不覆盖此次npm锁变更；合并产物须重新执行依赖审计。所有多许可证声明保留原文与授权通知，不因依赖标为dev而视为未入包。此清单只绑定许可证和锁，不豁免公告；实际包大小和源码排除由产物门禁独立证明。"
 }

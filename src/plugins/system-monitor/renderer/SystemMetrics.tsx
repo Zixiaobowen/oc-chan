@@ -1,7 +1,8 @@
-import type { ProcessInfo, SystemSnapshot } from '../../shared/types'
-import { ArrowDown, ArrowUp } from 'lucide-react'
-import { bytes } from './components'
-import { useI18n } from './i18n'
+import type { ProcessInfo, SystemSnapshot } from '../types'
+import ArrowDown from 'kubai-icons-react/icons/arrow-down'
+import ArrowUp from 'kubai-icons-react/icons/arrow-up'
+import { bytes } from '../../../renderer/src/components'
+import { useI18n } from '../../../renderer/src/i18n'
 import './system-metrics.css'
 
 export function MemoryBreakdown({ data }: { data: SystemSnapshot }) {
@@ -35,8 +36,8 @@ export function NetworkTraffic({ data }: { data: SystemSnapshot }) {
   }
   return <div className="network-traffic">
     <div className="network-values">
-      <div className="network-receive"><span><ArrowDown size={15} />{t('接收', 'Received')}</span><strong>{bytes(data.rxBytesPerSecond)}<small>/s</small></strong></div>
-      <div className="network-send"><span><ArrowUp size={15} />{t('发送', 'Sent')}</span><strong>{bytes(data.txBytesPerSecond)}<small>/s</small></strong></div>
+      <div className="network-receive"><span><ArrowDown trigger="none" size={15} />{t('接收', 'Received')}</span><strong>{bytes(data.rxBytesPerSecond)}<small>/s</small></strong></div>
+      <div className="network-send"><span><ArrowUp trigger="none" size={15} />{t('发送', 'Sent')}</span><strong>{bytes(data.txBytesPerSecond)}<small>/s</small></strong></div>
     </div>
     <div className="network-history" role="img" aria-label={t(`网络收发趋势，最近 ${samples.length} 次采样；接收实线，发送虚线`, `Network traffic, last ${samples.length} samples; solid receive, dashed send`)}>
       <div className="network-scale"><span>{bytes(maximum)}/s</span><span>0</span></div>

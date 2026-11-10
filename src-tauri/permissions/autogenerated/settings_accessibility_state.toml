@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-settings-accessibility-state"
+description = "Enables the settings_accessibility_state command without any pre-configured scope."
+commands.allow = ["settings_accessibility_state"]
+
+[[permission]]
+identifier = "deny-settings-accessibility-state"
+description = "Denies the settings_accessibility_state command without any pre-configured scope."
+commands.deny = ["settings_accessibility_state"]

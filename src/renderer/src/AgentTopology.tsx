@@ -1,5 +1,14 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
-import { AlertCircle, Bot, ChevronDown, ChevronRight, CornerDownRight, Maximize, Minus, Plus, RotateCcw, X } from 'lucide-react'
+import CircleAlert from 'kubai-icons-react/icons/circle-alert'
+import Bot from 'kubai-icons-react/icons/bot'
+import ChevronDown from 'kubai-icons-react/icons/chevron-down'
+import ChevronRight from 'kubai-icons-react/icons/chevron-right'
+import CornerDownRight from 'kubai-icons-react/icons/corner-down-right'
+import Maximize from 'kubai-icons-react/icons/maximize'
+import ZoomOut from 'kubai-icons-react/icons/zoom-out'
+import ZoomIn from 'kubai-icons-react/icons/zoom-in'
+import RotateCcw from 'kubai-icons-react/icons/rotate-ccw'
+import CircleX from 'kubai-icons-react/icons/circle-x'
 import {
   Background,
   BaseEdge,
@@ -111,7 +120,7 @@ const AgentNode = memo(function AgentNode({ data, selected }: NodeProps<AgentFlo
   return <div style={projectStyle} className={`topology-node${selected ? ' is-selected' : ''}${contextOnly ? ' is-context' : ''}`}>
     <Handle type="target" position={Position.Top} isConnectable={false} />
     <div className="topology-node-heading">
-      {agent.kind === 'main' ? <Bot size={16} aria-hidden="true" /> : <CornerDownRight size={16} aria-hidden="true" />}
+      {agent.kind === 'main' ? <Bot trigger="none" size={16} aria-hidden="true" /> : <CornerDownRight trigger="none" size={16} aria-hidden="true" />}
       <strong title={heading}>{heading}</strong>
     </div>
     <div className="topology-node-project" title={project}>{project}</div>
@@ -126,7 +135,7 @@ const AgentNode = memo(function AgentNode({ data, selected }: NodeProps<AgentFlo
       <div><dt>{t('内存', 'Memory')}</dt><dd title={memory}>{memory}</dd></div>
     </dl>
     <div className={`topology-node-note${issue ? ' has-issue' : ''}`} title={note || undefined}>
-      {issue && <AlertCircle size={12} aria-hidden="true" />}
+      {issue && <CircleAlert trigger="none" size={12} aria-hidden="true" />}
       {agent.activity && !issue ? <AgentActivity agent={agent} /> : <span>{note}</span>}
     </div>
     <div className="topology-node-footer">
@@ -142,7 +151,7 @@ const AgentNode = memo(function AgentNode({ data, selected }: NodeProps<AgentFlo
         onKeyDown={event => event.stopPropagation()}
         onClick={event => { event.stopPropagation(); onToggleCollapse(agent.id) }}
       >
-        {collapsed ? <ChevronRight size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
+        {collapsed ? <ChevronRight trigger="none" size={14} aria-hidden="true" /> : <ChevronDown trigger="none" size={14} aria-hidden="true" />}
         {collapsed ? t('展开', 'Expand') : t('收起', 'Collapse')} {descendantCount}
       </button>}
     </div>
@@ -192,12 +201,12 @@ function CanvasControls({ onFit, onRelayout, onViewportAction }: { onFit: () => 
   const { zoomIn, zoomOut } = useReactFlow()
   const { zoom } = useViewport()
   return <Panel position="bottom-left" className="topology-controls nodrag nopan" role="group" aria-label={t('画布控制', 'Canvas controls')} onClickCapture={onViewportAction}>
-    <button type="button" aria-label={t('缩小画布', 'Zoom out')} title={t('缩小画布', 'Zoom out')} disabled={zoom <= MIN_ZOOM} onClick={() => { void zoomOut({ duration: 0 }) }}><Minus size={16} aria-hidden="true" /></button>
+    <button type="button" aria-label={t('缩小画布', 'Zoom out')} title={t('缩小画布', 'Zoom out')} disabled={zoom <= MIN_ZOOM} onClick={() => { void zoomOut({ duration: 0 }) }}><ZoomOut trigger="none" size={16} aria-hidden="true" /></button>
     <output className="topology-zoom" aria-label={t('当前缩放比例', 'Current zoom')}>{Math.round(zoom * 100)}%</output>
-    <button type="button" aria-label={t('放大画布', 'Zoom in')} title={t('放大画布', 'Zoom in')} disabled={zoom >= MAX_ZOOM} onClick={() => { void zoomIn({ duration: 0 }) }}><Plus size={16} aria-hidden="true" /></button>
+    <button type="button" aria-label={t('放大画布', 'Zoom in')} title={t('放大画布', 'Zoom in')} disabled={zoom >= MAX_ZOOM} onClick={() => { void zoomIn({ duration: 0 }) }}><ZoomIn trigger="none" size={16} aria-hidden="true" /></button>
     <span className="topology-controls-divider" aria-hidden="true" />
-    <button type="button" title={t('显示当前画布中的全部节点', 'Show all nodes on the current canvas')} onClick={onFit}><Maximize size={15} aria-hidden="true" /><span>{t('适应视图', 'Fit view')}</span></button>
-    <button type="button" title={t('清除手动位置，重新排列当前节点', 'Clear manual positions and rearrange current nodes')} onClick={onRelayout}><RotateCcw size={15} aria-hidden="true" /><span>{t('重新布局', 'Reset layout')}</span></button>
+    <button type="button" title={t('显示当前画布中的全部节点', 'Show all nodes on the current canvas')} onClick={onFit}><Maximize trigger="none" size={15} aria-hidden="true" /><span>{t('适应视图', 'Fit view')}</span></button>
+    <button type="button" title={t('清除手动位置，重新排列当前节点', 'Clear manual positions and rearrange current nodes')} onClick={onRelayout}><RotateCcw trigger="none" size={15} aria-hidden="true" /><span>{t('重新布局', 'Reset layout')}</span></button>
   </Panel>
 }
 
@@ -606,9 +615,9 @@ function TopologyCanvas({ graph, pageIndex, selectedId, onSelect, onToggleCollap
       </Panel>}
       {graph.nodes.length > 0 && <CanvasControls onFit={fitAll} onRelayout={relayout} onViewportAction={chooseViewport} />}
       {navigationError && <Panel position="top-right" className="topology-navigation-error" role="alert">
-        <AlertCircle size={16} aria-hidden="true" />
+        <CircleAlert trigger="none" size={16} aria-hidden="true" />
         <span>{navigationError.kind === 'connection' ? t('桌面连接不可用，请重新打开应用。', 'Desktop connection unavailable. Please reopen the app.') : navigationError.message}</span>
-        <button type="button" aria-label={t('关闭跳转提示', 'Dismiss navigation message')} onClick={() => setNavigationError(null)}><X size={14} /></button>
+        <button type="button" aria-label={t('关闭跳转提示', 'Dismiss navigation message')} onClick={() => setNavigationError(null)}><CircleX trigger="none" size={14} /></button>
       </Panel>}
     </ReactFlow>
     {menu && <AgentContextMenu anchor={menu} busy={navigating} onClose={closeMenu} onNavigate={navigateToTern} />}

@@ -9,6 +9,15 @@ const row = id => `${ROWS}[data-event-id=${JSON.stringify(id)}]`
 const idsExpression = `Array.from(document.querySelectorAll(${JSON.stringify(ROWS)}), element => element.dataset.eventId)`
 const settled = `${$(ROOT)}?.getAttribute('aria-busy') === 'false' && !${$('.event-error')}`
 
+async function requestPage(ui, name) {
+  const requestId = await ui.evaluate(`Number(${$(ROOT)}.dataset.eventRequestId)`)
+  assert.ok(Number.isSafeInteger(requestId), 'event view must expose its request acknowledgement')
+  await ui.click(action(name))
+  // AppKit acknowledges input dispatch before WebKit necessarily handles it.
+  // Waiting only for idle + 50 rows can therefore read the previous page.
+  await ui.dom(`event ${name} request acknowledged`, `Number(${$(ROOT)}?.dataset.eventRequestId) === ${requestId + 1}`)
+}
+
 async function page(ui, count = 50) {
   await ui.dom(`event page settles with ${count} rows`, `${settled} && document.querySelectorAll(${JSON.stringify(ROWS)}).length === ${count}`)
   const ids = await ui.evaluate(idsExpression)
@@ -77,19 +86,19 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     assert.ok(seed.retention.count >= 5003, 'F04 records must survive the F05 seed')
     assert.ok(seed.retention.diskBytes <= 20 * 1024 * 1024)
     await ui.navigate('事件', 'Events')
-    await ui.click(action('latest'))
+    await requestPage(ui, 'latest')
     first = await page(ui)
     assert.ok(first.includes(seed.validId) && first.includes(seed.obsoleteId) && first.includes(seed.nullId))
     const firstPage = await queryForRows(ui, main)
-    await ui.click(action('next'))
+    await requestPage(ui, 'next')
     second = await page(ui)
     assert.equal(new Set([...first, ...second]).size, 100, 'stable cursor pages must not overlap')
     const nextPage = await queryForRows(ui, main)
     assert.equal(nextPage.query.before, firstPage.result.next)
     assert.equal(nextPage.query.upper, firstPage.result.upper)
-    await ui.click(action('previous'))
+    await requestPage(ui, 'previous')
     assert.deepEqual(await page(ui), first, 'previous must return the same page')
-    await ui.click(action('refresh'))
+    await requestPage(ui, 'refresh')
     assert.deepEqual(await page(ui), first, 'same-page refresh must preserve the upper cursor')
     return { seed, mountedRows: 50, first: [first[0], first.at(-1)], second: [second[0], second.at(-1)] }
   })
@@ -100,7 +109,7 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     await select(ui, 'event-type-filter', 'execution-failed')
     await select(ui, 'event-range-filter', '1h')
     assert.equal((await ui.info()).eventQueries.total, before, 'draft editing must not query events')
-    await ui.click(action('apply'))
+    await requestPage(ui, 'apply')
     await page(ui)
     const filtered = await queryForRows(ui, main)
     assert.equal(filtered.query.sourceId, 'smoke-events-a')
@@ -109,7 +118,7 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     assert.ok(filtered.result.entries.every(entry => entry.sourceId === 'smoke-events-a' && entry.type === 'execution-failed' && entry.observedAt >= filtered.query.from && entry.observedAt <= filtered.query.to))
     assert.ok(filtered.result.entries.some(entry => entry.occurredAt < filtered.query.from), 'discovery-time filter must retain older occurrence times')
     await ui.dom('occurrence and discovery have separate labels', `Array.from(document.querySelectorAll('.event-metadata dt')).some(e => /发生时间|Occurred/.test(e.textContent)) && Array.from(document.querySelectorAll('.event-metadata dt')).some(e => /发现时间|Discovered/.test(e.textContent))`)
-    await ui.click(action('next'))
+    await requestPage(ui, 'next')
     const saved = await page(ui)
     await ui.evaluate(`${$(ROWS)}.querySelector('[data-event-action="target"]').scrollIntoView({block:'center',inline:'nearest',behavior:'instant'})`)
     await ui.frames()
@@ -123,21 +132,21 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     await ui.dom('returning from target restores event scroll', `Math.abs(${$('.main-content')}.scrollTop - ${savedScroll}) <= 1`)
     assert.deepEqual(await ui.evaluate(`[${$('#event-source-filter')}.value,${$('#event-type-filter')}.value,${$('#event-range-filter')}.value]`), ['smoke-events-a', 'execution-failed', '1h'])
     await source(ui, renderer, 'smoke-events-no-such-source')
-    await ui.click(action('apply'))
+    await requestPage(ui, 'apply')
     await page(ui, 0)
     await ui.dom('no matches differs from empty store', `/没有匹配的事件|No matching events/.test(${$('.event-empty')}?.textContent ?? '')`)
-    await ui.click(action('clear'))
+    await requestPage(ui, 'clear')
     assert.deepEqual(await page(ui), first)
     assert.deepEqual(await ui.evaluate(`[${$('#event-source-filter')}.value,${$('#event-type-filter')}.value,${$('#event-range-filter')}.value]`), ['', 'all', 'all'])
     for (const [range, duration] of [['24h', 86_400_000], ['7d', 604_800_000]]) {
       await select(ui, 'event-range-filter', range)
-      await ui.click(action('apply'))
+      await requestPage(ui, 'apply')
       await page(ui)
       const ranged = await queryForRows(ui, main)
       assert.equal(Date.parse(ranged.query.to) - Date.parse(ranged.query.from), duration)
       assert.ok(ranged.result.entries.every(entry => entry.observedAt >= ranged.query.from && entry.observedAt <= ranged.query.to))
     }
-    await ui.click(action('clear'))
+    await requestPage(ui, 'clear')
     assert.deepEqual(await page(ui), first)
     return { filters: filtered.query, realHistory: true, preservedPage: saved[0], cleared: true,
       selectInput: 'DOM option selection with input/change; native popup keyboard not exercised' }
@@ -146,7 +155,7 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
   await ui.stage('events-identity-and-background-new-record', async () => {
     await ui.dom('changed identity remains visible without navigation', `${$(row(seed.obsoleteId))}?.textContent.includes(${JSON.stringify(seed.target.id)}) && /身份已变化|different identity/.test(${`${$(row(seed.obsoleteId))}?.querySelector('.event-target-reason')?.textContent`} ?? '') && !${$(row(seed.obsoleteId))}?.querySelector('[data-event-action="target"]')`)
     await ui.dom('null targets never fabricate navigation', `/没有可导航目标|no navigation target/.test(${$(row(seed.nullId))}?.textContent ?? '') && !${$(row(seed.nullId))}?.querySelector('[data-event-action="target"]')`)
-    await ui.click(action('next'))
+    await requestPage(ui, 'next')
     assert.deepEqual(await page(ui), second)
     await ui.click($('#event-source-filter'))
     // Close native datalist suggestions without moving input focus before scrolling.
@@ -178,7 +187,7 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     assert.equal(after.anchor.id, before.anchor.id, 'background updates must retain the same visible event')
     assert.ok(Math.abs(after.anchor.top - before.anchor.top) <= 1, `background updates moved the reading position: ${JSON.stringify({before, after})}`)
     assert.equal((await ui.info()).eventQueries.total, queryCount, 'background collection must not automatically query a replacement page')
-    await ui.click(action('latest'))
+    await requestPage(ui, 'latest')
     const latest = await page(ui)
     assert.notDeepEqual(latest, first)
     const actual = await queryForRows(ui, main)
@@ -192,26 +201,26 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     let failure
     try {
       await main.host('fault-command', { targetCommand: 'monitor_events', enabled: true })
-      await ui.click(action('next'))
+      await requestPage(ui, 'next')
       await ui.dom('real native events rejection is visible', `${$(ROOT)}?.getAttribute('aria-busy') === 'false' && ${$('.event-error')}?.textContent.includes('OC_ACCEPTANCE_REJECTION')`)
       assert.deepEqual(await ui.evaluate(idsExpression), original, 'failed page request must preserve successful rows')
       await capture('events-real-ipc-failure')
       await main.host('fault-command', { targetCommand: 'monitor_events', enabled: false })
-      await ui.click(action('retry'))
+      await requestPage(ui, 'retry')
       const recovered = await page(ui)
       assert.notDeepEqual(recovered, original, 'retry must complete the failed next-page request')
-      await ui.click(action('previous'))
+      await requestPage(ui, 'previous')
       assert.deepEqual(await page(ui), original)
       await main.host('fault-command', { targetCommand: 'monitor_events', enabled: true })
-      await ui.click(action('next'))
+      await requestPage(ui, 'next')
       await ui.dom('second next-page failure retains its error', `${$(ROOT)}?.getAttribute('aria-busy') === 'false' && ${$('.event-error')}?.textContent.includes('OC_ACCEPTANCE_REJECTION')`)
       await main.host('fault-command', { targetCommand: 'monitor_events', enabled: false })
       await ui.navigate('本机概览', 'Overview')
       await ui.navigate('事件', 'Events')
       assert.deepEqual(await page(ui), original, 'reactivation must refresh the last successful page instead of replaying failed next')
-      await ui.click(action('next'))
+      await requestPage(ui, 'next')
       assert.deepEqual(await page(ui), recovered, 'only an explicit next action may leave the restored successful page')
-      await ui.click(action('previous'))
+      await requestPage(ui, 'previous')
       assert.deepEqual(await page(ui), original)
     } catch (error) { failure = error; throw error }
     finally {
@@ -273,7 +282,7 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     }
     await ui.click($('.page-actions button[aria-pressed]'))
     await ui.dom('resuming events allows requests again', `${action('refresh')}?.getAttribute('aria-disabled') === 'false'`)
-    await ui.click(action('refresh'))
+    await requestPage(ui, 'refresh')
     assert.deepEqual(await page(ui), original, 'UI must successfully query again after pause cancellation and lock release')
     return { channel: 'monitor_events', restored: true, cancellation: cancelled, uiCancellationRecovered: true, pauseDispatchMs }
   })
@@ -312,7 +321,7 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
       await renderer.evaluate('window.monitor.refresh("events")', 20_000)
       const snapshot = await ui.evaluate('window.monitor.snapshot()')
       assert.ok(snapshot.events.data.coverage.some(item => item.sourceId === 'hermes-events' && item.state === 'unavailable' && item.lastGap), 'real locked history must produce unavailable coverage and a persistent gap')
-      await ui.click(action('refresh'))
+      await requestPage(ui, 'refresh')
       await page(ui)
       await ui.click($('.event-coverage summary'))
       await ui.dom('coverage gap and retention deletion range are rendered', `${$('.event-coverage')}.open && !!${$('.event-gap')} && !!${$('[data-coverage-state="unavailable"]')} && /删除截至发现时间|Deleted through discovery time/.test(${$('.event-retention-metadata')}.textContent)`)
@@ -321,14 +330,14 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
       try { await release() } catch (error) { throw new AggregateError([coverageFailure, error].filter(Boolean), 'Event coverage lock release failed') }
     }
     await renderer.evaluate('window.monitor.refresh("events")', 20_000)
-    await ui.click(action('refresh'))
+    await requestPage(ui, 'refresh')
     await page(ui)
     await ui.dom('restored observation retains historical gap disclosure', `!!${$('[data-coverage-state="observing"]')} && !!${$('.event-gap')}`)
     return { pauseRetained: true, disabledRetained: true, coverage: 'real SQLite lock -> unavailable -> observing with lastGap' }
   })
 
   await ui.stage('events-responsive-long-metadata-and-text-scale', async () => {
-    await ui.click(action('latest'))
+    await requestPage(ui, 'latest')
     await page(ui)
     const originalScale = await ui.evaluate(`document.documentElement.style.getPropertyValue('--font-scale')`)
     const originalMetrics = await ui.evaluate('({width:innerWidth,height:innerHeight,deviceScaleFactor:devicePixelRatio})')

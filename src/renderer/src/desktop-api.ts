@@ -329,6 +329,8 @@ export async function initializeDesktop(onFailure: (error: Error) => void): Prom
       previewGlass: intensity => call('settings_preview_glass', { intensity }),
       updateLoginItem: enabled => call('settings_update_login_item', { enabled }),
       requestNotificationPermission: () => call('settings_request_notification_permission'),
+      accessibilityState: () => call('settings_accessibility_state'),
+      openPermissionSettings: target => call('settings_open_permission_settings', { target }),
       showMainWindow: target => call('settings_show_main_window', target === undefined ? {} : { target }),
       subscribe: listener => subscribe('settings', listener)
     })

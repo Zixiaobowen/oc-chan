@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDownToLine, Package, RefreshCw, Search, Trash2 } from 'lucide-react'
+import ArrowDown from 'kubai-icons-react/icons/arrow-down'
+import Server from 'kubai-icons-react/icons/server'
+import Sync from 'kubai-icons-react/icons/sync'
+import Search from 'kubai-icons-react/icons/search'
+import CircleX from 'kubai-icons-react/icons/circle-x'
 import type { MarketplaceAction, MarketplaceItem } from '../../shared/marketplace'
 import { bytes, time } from './components'
 import { useI18n } from './i18n'
@@ -43,7 +47,7 @@ function PluginRow({ item }: { item: MarketplaceItem }) {
     downloading: t('正在下载', 'Downloading'), verifying: t('正在校验', 'Verifying'), activating: t('正在启用', 'Activating'), removing: t('正在卸载', 'Uninstalling')
   }[operation.phase] : t('正在处理', 'Working')
   return <article ref={row} className="market-row" data-plugin-id={item.manifest.id} aria-labelledby={`plugin-${item.manifest.id}`}>
-    <Package className="market-plugin-icon" size={26} aria-hidden="true" />
+    <Server trigger="none" className="market-plugin-icon" size={26} aria-hidden="true" />
     <div className="market-plugin-content">
       <div className="market-title"><h2 tabIndex={-1} id={`plugin-${item.manifest.id}`}>{name}</h2><span className="market-state" role="status">{item.installed ? item.error ? t('安装异常', 'Installation error') : item.updateAvailable ? t('可更新', 'Update available') : t('已安装', 'Installed') : t('未安装', 'Not installed')}</span></div>
       <p>{description}</p>
@@ -60,9 +64,9 @@ function PluginRow({ item }: { item: MarketplaceItem }) {
         <p>{t('官方插件在本机执行代码；安装仅添加此插件声明的采集能力。', 'Official plugins execute code locally. Installation adds the collection capabilities declared here.')}</p>
       </details>
       <div className="market-actions">
-        {!item.installed && <button data-install data-plugin-action="install" className="button primary" aria-disabled={busy} onClick={() => perform('install')}><ArrowDownToLine size={15} aria-hidden="true" />{t('安装', 'Install')}</button>}
-        {item.updateAvailable && item.installed && <button data-plugin-action="update" className="button primary" aria-disabled={busy} onClick={() => perform('update')}><ArrowDownToLine size={15} aria-hidden="true" />{t('更新', 'Update')}</button>}
-        {item.installed && <button ref={uninstallButton} data-plugin-action="uninstall" className="button secondary" aria-disabled={busy} aria-expanded={confirming} onClick={() => { if (!busy) setConfirming(value => !value) }}><Trash2 size={15} aria-hidden="true" />{t('卸载', 'Uninstall')}</button>}
+        {!item.installed && <button data-install data-plugin-action="install" className="button primary" aria-disabled={busy} onClick={() => perform('install')}><ArrowDown trigger="none" size={15} aria-hidden="true" />{t('安装', 'Install')}</button>}
+        {item.updateAvailable && item.installed && <button data-plugin-action="update" className="button primary" aria-disabled={busy} onClick={() => perform('update')}><ArrowDown trigger="none" size={15} aria-hidden="true" />{t('更新', 'Update')}</button>}
+        {item.installed && <button ref={uninstallButton} data-plugin-action="uninstall" className="button secondary" aria-disabled={busy} aria-expanded={confirming} onClick={() => { if (!busy) setConfirming(value => !value) }}><CircleX trigger="none" size={15} aria-hidden="true" />{t('卸载', 'Uninstall')}</button>}
       </div>
       {confirming && item.installed && <div className="market-confirm" role="group" aria-label={t('确认卸载', 'Confirm uninstall')} onKeyDown={event => { if (event.key === 'Escape' && !busy) { event.stopPropagation(); dismiss() } }}>
         <p>{t(`卸载“${name}”会停止采集并清除当前系统数据。采集偏好仍会保留，之后可重新安装。`, `Uninstalling “${name}” stops collection and clears current system data. Collection preferences are retained for reinstallation.`)}</p>
@@ -104,8 +108,8 @@ export default function MarketplaceView({ view, onViewChange }: { view: Marketpl
   function clear() { onViewChange({ search: '', filter: 'all' }); searchInput.current?.focus() }
   return <div className="marketplace">
     <div className="market-toolbar">
-      <label className="market-search"><span>{t('搜索插件', 'Search plugins')}</span><div><Search size={16} aria-hidden="true" /><input ref={searchInput} type="search" value={view.search} maxLength={256} placeholder={t('名称、发布者或能力', 'Name, publisher or capability')} onChange={event => onViewChange({ ...view, search: event.target.value })} /></div></label>
-      <button data-marketplace-action="check" className="button secondary" aria-disabled={busy} onClick={() => { if (!busy) void check() }}><RefreshCw size={15} aria-hidden="true" />{snapshot?.checking || pending?.action === 'check' ? t('正在检查', 'Checking') : t('检查在线更新', 'Check online updates')}</button>
+      <label className="market-search"><span>{t('搜索插件', 'Search plugins')}</span><div><Search trigger="none" size={16} aria-hidden="true" /><input ref={searchInput} type="search" value={view.search} maxLength={256} placeholder={t('名称、发布者或能力', 'Name, publisher or capability')} onChange={event => onViewChange({ ...view, search: event.target.value })} /></div></label>
+      <button data-marketplace-action="check" className="button secondary" aria-disabled={busy} onClick={() => { if (!busy) void check() }}><Sync trigger="none" size={15} aria-hidden="true" />{snapshot?.checking || pending?.action === 'check' ? t('正在检查', 'Checking') : t('检查在线更新', 'Check online updates')}</button>
     </div>
     <div className="market-filters" role="group" aria-label={t('插件筛选', 'Filter plugins')}>{([
       ['all', t('全部', 'All')], ['installed', t('已安装', 'Installed')], ['updates', t('可更新', 'Updates')]
@@ -117,7 +121,7 @@ export default function MarketplaceView({ view, onViewChange }: { view: Marketpl
       <div className="market-results"><span role="status">{t(`${items.length} 个插件`, `${items.length} plugins`)}</span>{(view.search || view.filter !== 'all') && <button className="text-button" onClick={clear}>{t('清除筛选', 'Clear filters')}</button>}</div>
       {snapshot.operation && !items.some(item => item.manifest.id === snapshot.operation?.id) && <div className="market-progress" role="status"><p>{t(`插件 ${snapshot.operation.id} 正在处理。`, `Plugin ${snapshot.operation.id} is being processed.`)}</p><button className="button secondary" onClick={clear}>{t('显示插件', 'Show plugin')}</button><button className="button secondary" disabled={pending?.action === 'cancel'} onClick={() => void cancel()}>{t('取消操作', 'Cancel operation')}</button></div>}
       {(hiddenFailure || (snapshot.error && !items.some(item => item.manifest.id === snapshot.error?.id))) && <div className="market-error" role="alert"><p>{hiddenFailure ? failure?.message : snapshot.error?.message}</p><button className="button secondary" onClick={clear}>{t('显示插件并重试', 'Show plugin to retry')}</button></div>}
-      <div className="panel market-list">{items.map(item => <PluginRow key={item.manifest.id} item={item} />)}{items.length === 0 && <div className="market-empty"><Package size={26} aria-hidden="true" /><h2>{view.filter === 'updates' && !search ? snapshot.catalogError ? t('在线更新状态未确认', 'Online update status is unconfirmed') : t('当前目录没有可用更新', 'No updates in the current catalog') : t('没有匹配的插件', 'No matching plugins')}</h2><p>{t('调整搜索或筛选；检查在线更新可读取最新官方目录。', 'Adjust your search or filters. Check online updates to read the latest official catalog.')}</p></div>}</div>
+      <div className="panel market-list">{items.map(item => <PluginRow key={item.manifest.id} item={item} />)}{items.length === 0 && <div className="market-empty"><Server trigger="none" size={26} aria-hidden="true" /><h2>{view.filter === 'updates' && !search ? snapshot.catalogError ? t('在线更新状态未确认', 'Online update status is unconfirmed') : t('当前目录没有可用更新', 'No updates in the current catalog') : t('没有匹配的插件', 'No matching plugins')}</h2><p>{t('调整搜索或筛选；检查在线更新可读取最新官方目录。', 'Adjust your search or filters. Check online updates to read the latest official catalog.')}</p></div>}</div>
     </>}
   </div>
 }
