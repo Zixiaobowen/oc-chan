@@ -4,8 +4,8 @@ use std::{ffi::{CStr, CString}, time::Duration};
 use tokio_util::sync::CancellationToken;
 
 pub(super) struct Output { pub streams: Vec<(Stream, Vec<u8>)>, pub exit_code: Option<i32>, pub identity: String }
-pub(super) async fn perform(io: BoundedIo, operation: IoOperation, maximum: usize, timeout: Duration, cancel: CancellationToken,
-    consume: impl FnOnce(Output, CancellationToken) -> super::BoxFuture<'static, Result<()>> + Send + 'static) -> Result<()> {
+pub(super) async fn perform<T: Send + 'static>(io: BoundedIo, operation: IoOperation, maximum: usize, timeout: Duration, cancel: CancellationToken,
+    consume: impl FnOnce(Output, CancellationToken) -> super::BoxFuture<'static, Result<T>> + Send + 'static) -> Result<T> {
     operation.validate().map_err(|_| Error::invalid("plugin IO operation"))?;
     check_cancel(&cancel)?;
     if let IoOperation::Command { command } = operation {

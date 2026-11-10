@@ -83,7 +83,53 @@ struct Active {
     deadline: tokio::time::Instant,
 }
 struct IoReservation { bytes: usize, total: Arc<AtomicUsize> }
+impl IoReservation {
+    fn acquire(total: &Arc<AtomicUsize>, bytes: usize, pending: usize) -> Result<Self> {
+        if pending >= sdk::MAX_IO { return Err(protocol("Too many host IO requests")); }
+        if bytes > sdk::MAX_IO_BYTES.saturating_sub(total.load(Ordering::Acquire)) { return Err(protocol("Host IO exceeds negotiated reassembly reservation")); }
+        total.fetch_add(bytes, Ordering::AcqRel);
+        Ok(Self { bytes, total: total.clone() })
+    }
+}
 impl Drop for IoReservation { fn drop(&mut self) { self.total.fetch_sub(self.bytes, Ordering::AcqRel); } }
+struct HostIo { generation: u64, call: u64, io: u64, reservation: IoReservation, cancel: CancellationToken }
+type IoCompletion = (HostIo, Result<HostMessage>);
+impl HostIo {
+    async fn perform(self, host: crate::io::BoundedIo, operation: sdk::IoOperation, timeout: Duration, writer: mpsc::Sender<Vec<u8>>, plugin_id: String) -> IoCompletion {
+        let (generation, call, io) = (self.generation, self.call, self.io);
+        let result = host_io::perform(host, operation, self.reservation.bytes, timeout, self.cancel.clone(), move |output, cancel| Box::pin(async move {
+            let mut hash = Sha256::new(); let mut bytes = 0; let mut counts = [0usize; 3]; let mut seq = 0;
+            for (stream, data) in output.streams {
+                counts[match stream { Stream::Stdout => 0, Stream::Stderr => 1, Stream::Data => 2 }] += data.len();
+                for chunk in data.chunks(sdk::MAX_CHUNK) {
+                    check_cancel(&cancel)?; hash.update(chunk); bytes += chunk.len();
+                    enqueue(&writer, || Ok(HostMessage::IoChunk { v: VERSION, generation, call, io, seq, stream, data: sdk::encode_chunk(chunk).map_err(sdk_error)? })).await?; seq += 1;
+                }
+            }
+            check_cancel(&cancel)?;
+            let identity = format!("plugin={plugin_id};generation={generation};call={call};io={io};{}", output.identity);
+            Ok(HostMessage::IoEnd { v: VERSION, generation, call, io, bytes, sha256: format!("{:x}", hash.finalize()), stdout_bytes: counts[0], stderr_bytes: counts[1], data_bytes: counts[2], exit_code: output.exit_code, identity })
+        })).await;
+        (self, result)
+    }
+}
+async fn finish_io(joined: std::result::Result<IoCompletion, tokio::task::JoinError>, writer: &mpsc::Sender<Vec<u8>>) -> Result<()> {
+    let (HostIo { generation, call, io, reservation, .. }, result) = joined.map_err(|_| Error::cleanup("plugin host IO", protocol("IO supervisor panicked")))?;
+    // A terminal frame grants the plugin permission to request more IO or end
+    // its call. Publish only after JoinSet removal and reservation release.
+    drop(reservation);
+    match result {
+        Ok(message) => send(writer, message).await,
+        Err(error) => {
+            let code = if error.is_cleanup() { ErrorCode::Cleanup } else if error.is_cancelled() { ErrorCode::Cancelled } else { ErrorCode::Io };
+            match send(writer, HostMessage::IoError { v: VERSION, generation, call, io, code, message: error.code.clone() }).await {
+                Err(delivery) => Err(Error::aggregate(vec![error, delivery])),
+                Ok(()) if error.is_cleanup() => Err(error),
+                Ok(()) => Ok(()),
+            }
+        }
+    }
+}
 async fn supervise(spec: NativePluginSpec, context: PluginContext, mut requests: mpsc::Receiver<Collect>, ready: oneshot::Sender<Result<()>>) -> Result<()> {
     // Both processes' protocol buffers and plugin IO reassembly are in the same
     // accounting ledger. Host command outputs have their own BoundedIo leases.
@@ -135,7 +181,7 @@ async fn supervise(spec: NativePluginSpec, context: PluginContext, mut requests:
         };
         tokio::select! { result = work => result, _ = error_stop.cancelled() => Ok(()) }
     });
-    let mut ios: JoinSet<Result<()>> = JoinSet::new();
+    let mut ios: JoinSet<IoCompletion> = JoinSet::new();
     let mut active: Option<Active> = None; let mut ready = Some(ready); let mut initialized = false;
     let mut call = 0u64; let mut last_io = 0u64; let mut stopping = false; let mut stopped = false; let mut stderr_done = false;
     let mut stop_deadline = tokio::time::Instant::now() + spec.timeout;
@@ -156,7 +202,7 @@ async fn supervise(spec: NativePluginSpec, context: PluginContext, mut requests:
             tokio::select! {
                 biased;
                 joined = ios.join_next(), if !ios.is_empty() => {
-                    joined.expect("nonempty IO set").map_err(|_| Error::cleanup("plugin host IO", protocol("IO supervisor panicked")))??;
+                    finish_io(joined.expect("nonempty IO set"), &writer).await?;
                 }
                 stderr = &mut stderr_task, if !stderr_done => { stderr_done = true; stderr.map_err(|_| protocol("Plugin stderr reader panicked"))??; }
                 message = messages.recv() => {
@@ -174,37 +220,11 @@ async fn supervise(spec: NativePluginSpec, context: PluginContext, mut requests:
                                 send(&writer, HostMessage::IoError { v: VERSION, generation, call, io, code: ErrorCode::Cancelled, message: "Host IO admission revoked".into() }).await?;
                                 continue;
                             }
-                            if ios.len() >= sdk::MAX_IO { return Err(protocol("Too many host IO requests")); }
                             if !spec.capabilities.contains(&operation.capability()) { return Err(protocol("Undeclared host IO capability")); }
-                            if max_bytes > IO_RESERVATION.saturating_sub(a.io_bytes.load(Ordering::Acquire)) { return Err(protocol("Host IO exceeds negotiated reassembly reservation")); }
-                            a.io_bytes.fetch_add(max_bytes, Ordering::AcqRel);
-                            let reservation = IoReservation { bytes: max_bytes, total: a.io_bytes.clone() };
-                            let host = context.io.clone(); let cancel = a.io_cancel.child_token(); let writer = writer.clone();
+                            let reservation = IoReservation::acquire(&a.io_bytes, max_bytes, ios.len())?;
+                            let request = HostIo { generation, call, io, reservation, cancel: a.io_cancel.child_token() };
                             let remaining = a.deadline.saturating_duration_since(tokio::time::Instant::now());
-                            let plugin_id = spec.id.clone();
-                            ios.spawn(async move {
-                                let _reservation = reservation;
-                                let transfer = writer.clone();
-                                let result = host_io::perform(host, operation, max_bytes, Duration::from_millis(timeout_ms).min(remaining), cancel.clone(), move |output, cancel| Box::pin(async move {
-                                    let mut hash = Sha256::new(); let mut bytes = 0; let mut counts = [0usize; 3]; let mut seq = 0;
-                                    for (stream, data) in output.streams {
-                                        counts[match stream { Stream::Stdout => 0, Stream::Stderr => 1, Stream::Data => 2 }] += data.len();
-                                        for chunk in data.chunks(sdk::MAX_CHUNK) {
-                                            check_cancel(&cancel)?; hash.update(chunk); bytes += chunk.len();
-                                            enqueue(&transfer, || Ok(HostMessage::IoChunk { v: VERSION, generation, call, io, seq, stream, data: sdk::encode_chunk(chunk).map_err(sdk_error)? })).await?; seq += 1;
-                                        }
-                                    }
-                                    check_cancel(&cancel)?;
-                                    let identity = format!("plugin={plugin_id};generation={generation};call={call};io={io};{}", output.identity);
-                                    send(&transfer, HostMessage::IoEnd { v: VERSION, generation, call, io, bytes, sha256: format!("{:x}", hash.finalize()), stdout_bytes: counts[0], stderr_bytes: counts[1], data_bytes: counts[2], exit_code: output.exit_code, identity }).await
-                                })).await;
-                                if let Err(error) = result {
-                                    let code = if error.is_cleanup() { ErrorCode::Cleanup } else if error.is_cancelled() { ErrorCode::Cancelled } else { ErrorCode::Io };
-                                    send(&writer, HostMessage::IoError { v: VERSION, generation, call, io, code, message: error.code.clone() }).await?;
-                                    if error.is_cleanup() { return Err(error); }
-                                }
-                                Ok(())
-                            });
+                            ios.spawn(request.perform(context.io.clone(), operation, Duration::from_millis(timeout_ms).min(remaining), writer.clone(), spec.id.clone()));
                         }
                         PluginMessage::ResultChunk { call, seq, data, .. } => {
                             let a = active.as_mut().filter(|a| a.call == call).ok_or_else(|| protocol("Result outside active call"))?;
@@ -221,8 +241,11 @@ async fn supervise(spec: NativePluginSpec, context: PluginContext, mut requests:
                             if code == ErrorCode::Cleanup || call.is_none() { return Err(Error::cleanup("native plugin", protocol("Plugin lifecycle failure"))); }
                             let a = active.take().filter(|a| Some(a.call) == call).ok_or_else(|| protocol("Error outside active call"))?;
                             a.io_cancel.cancel();
-                            while let Some(result) = ios.join_next().await { result.map_err(|_| protocol("Host IO panicked"))??; }
-                            let _sent = a.response.send(Err(Error::new("OC_PLUGIN_COLLECT", format!("Native collection failed: {code:?}"))));
+                            let mut failures = vec![Error::new("OC_PLUGIN_COLLECT", format!("Native collection failed: {code:?}"))];
+                            while let Some(result) = ios.join_next().await { if let Err(error) = finish_io(result, &writer).await { failures.push(error); } }
+                            let fatal = failures.len() > 1;
+                            let error = Error::aggregate(failures); let _sent = a.response.send(Err(error.clone()));
+                            if fatal { return Err(error); }
                         }
                         PluginMessage::Cancelled { call, .. } => {
                             let a = active.take().filter(|a| a.call == call).ok_or_else(|| protocol("Cancellation outside active call"))?;
@@ -252,7 +275,7 @@ async fn supervise(spec: NativePluginSpec, context: PluginContext, mut requests:
     if let Some(ready) = ready.take() { let _sent = ready.send(result.clone().and_then(|_| Err(protocol("Plugin stopped before ready")))); }
     if let Some(a) = &active { a.io_cancel.cancel(); }
     let mut failures: Vec<Error> = result.err().into_iter().collect();
-    while let Some(result) = ios.join_next().await { match result { Ok(Ok(())) => {}, Ok(Err(error)) => failures.push(error), Err(_) => failures.push(Error::cleanup("host IO", protocol("IO task panicked"))) } }
+    while let Some(result) = ios.join_next().await { if let Err(error) = finish_io(result, &writer).await { failures.push(error); } }
     drop(writer);
     let mut read_done = false; let mut write_done = false; let mut terminated = false;
     if stopped {

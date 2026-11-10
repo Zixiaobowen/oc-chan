@@ -40,7 +40,7 @@ manifest位于Apple签名资源封印内；正式候选验证完整bundle签名�
 |host→plugin|collect|本代唯一采样call和剩余deadline|
 |plugin→host|ioRequest|绑定call/io的宿主命令、受限文件或socket请求；参数、总输出和deadline在准入前冻结|
 |host→plugin|ioChunk|stdout/stderr/data、连续seq、base64块；写入遵守背压|
-|host→plugin|ioEnd|最终字节总量、退出状态/身份；仅实际子进程与stdio结束后发送|
+|host→plugin|ioEnd|最终字节总量、退出状态/身份；实际IO、子进程与stdio结束，宿主回收该IO任务并归还重组预留后发送|
 |host→plugin|ioError|有界错误码；失败/取消不能产生ioEnd成功|
 |plugin→host|resultChunk/resultEnd|采样结果UTF8 JSON分块，连续seq、声明总量≤1MiB、最终摘要；宿主有界重组后校验业务DTO|
 |plugin→host|error|有界采样/协议错误，不含敏感原始输出|
@@ -50,6 +50,8 @@ manifest位于Apple签名资源封印内；正式候选验证完整bundle签名�
 |plugin→host|stopped|插件业务清理结束；host最后仍wait进程与管道|
 
 读循环、写队列与collect执行分离；插件不能在等待hostIO结果时停止读控制帧。每插件一个collect、最多8项hostIO，写队列最多4个编码帧；读缓冲最多一帧。stdin/stdout使用流式读取，换行超过64KiB立即失败；总结果超过1MiB立即拒绝。stderr每代保留≤64KiB，超限明确失败。
+
+host IO的终态由监督循环在回收任务后统一发布；底层worker只发送chunk并返回终态元数据。插件看到`ioEnd`或`ioError`时，旧IO的槽位和重组预留必须已经归还，随后申请完整4MiB或提交`resultEnd`不得与旧任务记账竞争。真实清理失败不能先发布成功，清理与终态发送同时失败时保留两项原因。IO已成功完成后才到来的取消不改写该IO结果；采样结果是否发布仍服从call/代次的取消状态。
 
 SDK只提供已授权的固定命令和只读路径能力；host按manifest能力重新校验，不接受通用shell。环境从明确白名单创建，不复制宿主完整环境或凭据。官方插件禁止自行spawn、daemonize、改变进程组或创建未登记常驻资源；这是一方代码契约，不称作OS强制隔离。
 

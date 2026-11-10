@@ -31,6 +31,16 @@
 - 云端真实无头Tauri/WKWebView验收完成：`oc-chan-renderer-smoke-56`（artifact 13779545096），`complete=true`、`errors=[]`、`fault=null`；2026-11-10 15:27:28Z至15:39:03Z。生产Rust采集、IPC与真实React渲染已运行；报告确认fixture进程和目录、保留实例清理完成。证据下载到`/private/tmp/oc-release-smoke-56-u1ApVO/result.json`。不包含可见原生窗口或OS通知投递验收。
 - 稳定Latest核对基线：`v0.1.0`，Release ID `434182593`，发布时间`2026-11-04T16:41:41Z`。预览公开后须再次比对。
 - #56发布失败根因：download-artifact v8对单个pattern匹配将文件直接展开到`artifacts`，而CLI读取`artifacts/oc-chan-macos-arm64-56/latest.json`。实际下载日志与ENOENT明确证实。工作流现改为exact name并显式指定对应子目录，去掉不适用的merge-multiple；不添加路径兼容或降级逻辑。
+- 路径修复经actionlint通过；下载真实#56分发artifact到显式命名目录后，原prepare-release CLI成功生成且仅生成DMG、ZIP、SHA256SUMS，`shasum -a 256 -c SHA256SUMS.txt`两项OK。证据目录`/private/tmp/oc-release-dist-56-4xFILX`。未重复运行未修改的101项发布测试。
+- 后续修复`ad5fe2e5fa825b8ad11346d75cd087249e9c336f`已推送main并经GitHub ref确认；[Build macOS #57](https://github.com/Zixiaobowen/oc-chan/actions/runs/42848991728) 在真实WKWebView验收失败，Release未运行。原文：`OC_PLUGIN_PROTOCOL: Host IO exceeds negotiated reassembly reservation`，来自`Driver.exchange` (`scripts/smoke/main-probe.mjs:109`)；不能因#56通过就归为随机抖动。后续已定位并修复下述顺序竞态。
+- 根因已由源码证实：`host.rs` 在BoundedIo worker中发送IoEnd，外层IO task尚未释放IoReservation；SDK收到terminal后立即申请下一IO。串行64KiB→4MiB或4MiB→64KiB会因旧预留未扣除误拒，ResultEnd也存在JoinSet未回收窗口。实际#57日志没有逐IO身份，不能断定是哪一项触发。
+- 已在`host.rs`、`host_io.rs`将终态元数据经现有BoundedIo泛型返回给supervisor；JoinSet回收后统一释放预留、发送IoEnd/IoError。预算、wire contract和成功完成后的取消语义不变；原始cleanup与发送失败聚合保留。`host_tests.rs`增加5项确定性屏障/边界/错误回归。主代理`cargo test -p oc-core plugins::host::tests`通过8项，`cargo test -p oc-plugin-sdk runtime::tests`通过4项。协议文档同步于`docs/rust-migration/plugin-contract.md`。
+- 同机基线工作区`/private/tmp/oc-release-io-baseline-20261111`（ad5fe2e，detached且锁定）；依赖须独立npm ci，项目依赖审计拒绝跨工作区node_modules软链接。原始stress尝试的软链接已仅移除自身链接并修正安装。
+- 基线baseline/stress第二次运行未完成：`/private/tmp/oc-release-io-baseline-stress-r2-20261111/result.json`报告`Requested event load fell behind more than 1s`及performance cleanup错误；shutdownReport显示全部资源current为0，launcher确认本实例已清理。完整stress前后对照及持续高负载未通过验收，不宣称性能提升或长期无OOM。
+- 同机`--mode smoke --scenario daily`前后均complete=true、errors=[]。Apple M5 Max/18核/128GiB，macOS27.2、Node22.23.4；证据分别为`/private/tmp/oc-release-io-baseline-daily-20261111/result.json`和`/private/tmp/oc-release-io-fixed-daily-20261111/result.json`。应用至interactive 6767.6→4283.9ms，输入至commit单样本111→110ms，交互往返4.44→4.76ms；应用后代RSS采样峰值164.31→164.97MiB，合并关联WK进程492.00→497.25MiB。关联CPU样本1→5，均值35.88%→21.14%（单核口径）；基线纯后代CPU无完整区间，关联进程可能共享。样本不足以判定性能变化，未观察到该短场景内OOM。
+- `npm run smoke:renderer -- --scenario marketplace --out /private/tmp/oc-release-io-fixed-marketplace-20261111`通过，complete=true、errors=[]。真实无头Tauri/WKWebView、Rust插件安装/更新/回退/卸载与重启路径已执行；退出documents、requests及全部全局资源归零，测试实例、driver、fixture进程和目录已清理。
+- 独立ReviewIoTerminal只读复核未发现阻塞问题；检查了8并发、4MiB准入、成功/失败/取消终态顺序、三处排空、进程/写队列/panic错误路径。该复核不替代真实Actions回执。
+- 本次提交前重新审阅中文README；顺序修复不改变用户操作、插件协议格式、支持范围或发布条件，中英文README均无需增补。协议内部完成约束已更新。
 
 ## 工作区变化与限制
 
@@ -42,9 +52,9 @@ GitHub官方Create Release规则：若目标提交的workflow内容相对当前�
 
 ## 后续动作
 
-1. 用真实#56分发artifact验收明确下载目录，校验修改后的workflow；提交推送该路径修复，观察新的完整main流水线。
-2. 核对预览Release状态、完整标签SHA、三附件、下载SHA256及稳定Latest未变。
-3. 写回实际回执，更新当前Tern右侧HTML证据页；释放浏览器接管，不关闭用户分栏。
+1. 提交并推送竞态修复，观察完整main自动发布。
+2. 核对预览Release状态、完整标签SHA、三附件、公开下载SHA256及稳定Latest未变。
+3. 更新最终交接与HTML回执，显示当前Tern右侧并释放接管；保留分栏和所有交付证据。
 
 ## 恢复提示
 
