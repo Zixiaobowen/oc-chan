@@ -14,7 +14,7 @@ export function performancePlugin() {
     const file = path.relative(root, id.split('?')[0])
     if (file === 'src/renderer/src/main.tsx') return { code: `import ${probe};\n${source}`, map: null }
     if (['src/renderer/src/App.tsx', 'src/renderer/src/TrayView.tsx'].includes(file)) {
-      const match = source.match(/const \[snapshot, setSnapshot\] = useState(?:<[^>]+>)?\((?:initial|empty)\)/g)
+      const match = source.match(/^  const snapshot = .+$/gm)
       if (match?.length !== 1) throw new Error(`Performance snapshot hook drift: ${file}`)
       return { code: `import { usePerformanceSnapshot } from ${probe};\n` + replace(source, match[0], `${match[0]}; usePerformanceSnapshot(snapshot, setSnapshot)`), map: null }
     }

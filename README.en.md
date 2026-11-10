@@ -57,6 +57,8 @@ View launchd, cron, OMP, and Hermes tasks together, filtering by type, scope, st
 
 Install the official system-monitor plugin from the in-app Plugin Marketplace to view CPU, memory, and network trends, disk space, and processes ranked by CPU or memory usage. The menu-bar panel can combine agent, task, and system summaries.
 
+Installed plugins appear under Plugins in the sidebar; open Plugins → System monitor to access system monitoring. Entries appear after installation, remain visible when collection is disabled, and disappear after uninstallation.
+
 System monitoring is not installed automatically on first launch. The bundled plugin package supports offline installation; online checks and updates require its release source to be available. See the [Plugin Marketplace guide (Chinese)](docs/architecture.md#插件市场与独立插件包) for installation, removal, and updates.
 
 The interface supports Chinese and English, light and dark modes, and six themes. Native Liquid Glass is available on macOS 26 and later and respects system accessibility settings.

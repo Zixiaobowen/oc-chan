@@ -33,13 +33,17 @@ import MarketplaceView, { type MarketplaceViewState } from './MarketplaceView'
 import { useSystemPlugin } from './marketplace'
 import SystemPluginNotice from './SystemPluginNotice'
 import { isDesktopDocumentVisible, scheduleDesktopUpdate } from './desktop-visibility'
+import PluginNavigation from './PluginNavigation'
 
 const initial = createEmptySnapshot()
+const marketplacePlugins = monitorPlugins.filter(plugin => plugin.distribution === 'marketplace')
 
 export default function App() {
   const { t, language } = useI18n()
   const { snapshot: { settings: { plugins: preferences } } } = useSettings()
-  const { installed: systemInstalled, item: systemItem } = useSystemPlugin()
+  const { installed: systemInstalled, item: systemItem, snapshot: marketSnapshot, loading: marketLoading, failure: marketFailure } = useSystemPlugin()
+  const installedPlugins = useMemo(() => marketplacePlugins.filter(plugin => marketSnapshot?.items.some(item =>
+    item.manifest.id === plugin.id && item.manifest.section === plugin.section && item.installed)), [marketSnapshot])
   const plugins = useMemo(() => ({ ...preferences, system: systemInstalled === true && Boolean(systemItem?.enabled) && preferences.system }), [preferences, systemInstalled, systemItem?.enabled])
   const renderer = useRendererPlugins(plugins, systemInstalled === true)
   const displayTime = (value?: string) => time(value, language)
@@ -52,6 +56,7 @@ export default function App() {
   ] as const
   const [page, setPageValue] = useState<AppPage>('overview')
   const [agentView, setAgentView] = useState(initialAgentView)
+  const selectedPlugin = marketplacePlugins.find(plugin => plugin.page.id === page)
   const [scheduleView, setScheduleView] = useState(initialScheduleView)
   const [eventView, setEventView] = useState(createEventView)
   const [marketView, setMarketView] = useState<MarketplaceViewState>({ search: '', filter: 'all' })
@@ -123,6 +128,12 @@ export default function App() {
     openTarget({ kind: 'page', page: next })
     if (navigation.current?.matches(':popover-open')) navigation.current.hidePopover()
   }
+  useLayoutEffect(() => {
+    if (!selectedPlugin || !marketSnapshot || installedPlugins.includes(selectedPlugin)) return
+    setPage('plugins')
+    setIntent(null)
+    content.current?.querySelector<HTMLElement>('.page-heading h1')?.focus({ preventScroll: true })
+  }, [selectedPlugin, marketSnapshot, installedPlugins, setPage])
   useEffect(() => {
     const api = window.monitor
     if (!api) return
@@ -249,7 +260,11 @@ export default function App() {
     <div className="window-drag" />
     <aside ref={navigation} id="main-navigation" className="sidebar" popover={compactNavigation ? 'auto' : undefined}>
       <div className="brand"><img className="brand-mark" src={brandIcon} width={35} height={35} alt="" aria-hidden="true" /><div><strong>OC Chan</strong><span>{t('本机运行观察', 'Local monitor')}</span></div></div>
-      <nav aria-label={t('主导航', 'Main navigation')}>{pages.filter(item => item.id !== 'sources' && item.id !== 'settings').map(item => <button key={item.id} className={`nav-item ${page === item.id ? 'selected' : ''}`} onClick={() => navigate(item.id)} aria-current={page === item.id ? 'page' : undefined}><item.icon trigger="none" size={18} /><span>{item.label}</span>{item.id === 'agents' && plugins.agents && agents && <small>{agents.agents.length}</small>}{item.id === 'schedules' && plugins.schedules && scheduled && <small>{scheduled.length}</small>}</button>)}</nav>
+      <nav aria-label={t('主导航', 'Main navigation')}>
+        {pages.filter(item => item.id !== 'sources' && item.id !== 'settings' && item.id !== 'plugins' && !marketplacePlugins.some(plugin => plugin.page.id === item.id)).map(item => <button key={item.id} className={`nav-item ${page === item.id ? 'selected' : ''}`} onClick={() => navigate(item.id)} aria-current={page === item.id ? 'page' : undefined}><item.icon trigger="none" size={18} /><span>{item.label}</span>{item.id === 'agents' && plugins.agents && agents && <small>{agents.agents.length}</small>}{item.id === 'schedules' && plugins.schedules && scheduled && <small>{scheduled.length}</small>}</button>)}
+        <PluginNavigation plugins={installedPlugins} page={page} navigate={navigate} loading={marketLoading} failed={marketSnapshot === null && Boolean(marketFailure)} />
+        <button className={`nav-item ${page === 'plugins' ? 'selected' : ''}`} onClick={() => navigate('plugins')} aria-current={page === 'plugins' ? 'page' : undefined}><Server trigger="none" size={18} /><span>{t('插件市场', 'Plugin marketplace')}</span></button>
+      </nav>
       <div className="sidebar-bottom">
         <button className={`nav-item ${page === 'sources' ? 'selected' : ''}`} onClick={() => navigate('sources')} aria-current={page === 'sources' ? 'page' : undefined}><Database trigger="none" size={18} /><span>{t('数据来源', 'Data sources')}</span>{issues > 0 && <small className="warning-count">{issues}</small>}</button>
         <button className={`nav-item ${page === 'settings' ? 'selected' : ''}`} onClick={() => navigate('settings')} aria-current={page === 'settings' ? 'page' : undefined}><Settings trigger="none" size={18} /><span>{t('设置', 'Settings')}</span></button>
@@ -257,7 +272,7 @@ export default function App() {
       </div>
     </aside>
     <SidebarResizeHandle compact={compactNavigation} />
-    <div className="workspace"><header className="topbar"><button ref={navigationToggle} className="navigation-toggle" popoverTarget="main-navigation" aria-label={t('主导航', 'Main navigation')} title={t('主导航', 'Main navigation')}><MenuIcon trigger="none" size={20} aria-hidden="true" /></button><div className="breadcrumb">{t('工作台', 'Workspace')}<ChevronRight trigger="none" size={14} /><span>{currentPage.label}</span></div><div className={`live-state ${paused || samplingError || collectionDisabled || partiallyDisabled ? 'paused' : ''}`}><span className="status-dot" />{paused ? t('显示已暂停', 'Display paused') : samplingError ? t('更新异常', 'Update failed') : collectionDisabled ? t('采集已停用', 'Collection disabled') : partiallyDisabled ? t('部分采集已停用', 'Some collection disabled') : t('实时显示已开启', 'Live display enabled')}</div></header>
+    <div className="workspace"><header className="topbar"><button ref={navigationToggle} className="navigation-toggle" popoverTarget="main-navigation" aria-label={t('主导航', 'Main navigation')} title={t('主导航', 'Main navigation')}><MenuIcon trigger="none" size={20} aria-hidden="true" /></button><div className="breadcrumb">{t('工作台', 'Workspace')}<ChevronRight trigger="none" size={14} />{selectedPlugin && <><span>{t('插件', 'Plugins')}</span><ChevronRight trigger="none" size={14} /></>}<span>{currentPage.label}</span></div><div className={`live-state ${paused || samplingError || collectionDisabled || partiallyDisabled ? 'paused' : ''}`}><span className="status-dot" />{paused ? t('显示已暂停', 'Display paused') : samplingError ? t('更新异常', 'Update failed') : collectionDisabled ? t('采集已停用', 'Collection disabled') : partiallyDisabled ? t('部分采集已停用', 'Some collection disabled') : t('实时显示已开启', 'Live display enabled')}</div></header>
       <main ref={content} className="main-content" onScroll={event => {
         if (restoringScroll.current) return
         const saved = pageScroll.current[page]
