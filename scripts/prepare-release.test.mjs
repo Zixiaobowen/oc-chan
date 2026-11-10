@@ -1,17 +1,20 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdtemp, mkdir, readFile, writeFile, rm, stat, symlink, truncate } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, readdir, writeFile, rm, stat, symlink, truncate } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { prepareRelease } from './prepare-release.mjs'
 import { stableMetadata } from './dist.mjs'
-import { releaseInfo, requireReleaseEnvironment, signingSecrets } from './release-config.mjs'
+import { publicationInfo, releaseInfo, releaseRepository, requireReleaseEnvironment, signingSecrets } from './release-config.mjs'
 
-async function fixture(t, version = '0.2.0') {
+const previewEnv = { GITHUB_REPOSITORY: releaseRepository, GITHUB_EVENT_NAME: 'push', GITHUB_REF: 'refs/heads/main', GITHUB_SHA: `abcdef0${'1'.repeat(33)}`, GITHUB_RUN_NUMBER: '42' }
+
+async function fixture(t, version = '0.2.0', preview = false) {
   const root = await mkdtemp(join(tmpdir(), 'oc-chan-release-')); t.after(() => rm(root, { recursive: true, force: true }))
   const directory = join(root, 'arm64'); await mkdir(directory)
-  const info = releaseInfo(version), options = { version, tag: info.tag, inputs: { arm64: directory }, output: join(root, 'output'), info }, sums = []
+  const env = preview ? { ...previewEnv } : { GITHUB_REPOSITORY: releaseRepository, GITHUB_EVENT_NAME: 'push', GITHUB_REF: `refs/tags/v${version}` }
+  const info = publicationInfo(version, env), options = { version, tag: info.tag, env, inputs: { arm64: directory }, output: join(root, 'output'), info }, sums = []
   for (const extension of ['zip', 'dmg']) {
     const name = `OC-Chan-${version}-mac-arm64.${extension}`, content = Buffer.from(`release unit fixture ${version} ${extension}`)
     await writeFile(join(directory, name), content)
@@ -35,6 +38,20 @@ test('publishes one schema2 ZIP declaration and both bounded installer attachmen
     assert.deepEqual(await readFile(join(options.output, name)), await readFile(join(options.inputs.arm64, name)))
     assert.ok((await readFile(join(options.output, 'SHA256SUMS.txt'), 'utf8')).includes(`  ${name}\n`))
   }
+  await assert.rejects(prepareRelease(options), { code: 'EEXIST' })
+})
+test('preview copies exactly three verified attachments without stable update metadata', async t => {
+  const options = await fixture(t, '0.2.0', true)
+  await prepareRelease(options)
+  const names = ['OC-Chan-0.2.0-mac-arm64.dmg', 'OC-Chan-0.2.0-mac-arm64.zip']
+  assert.deepEqual((await readdir(options.output)).sort(), [...names, 'SHA256SUMS.txt'].sort())
+  const checksums = await readFile(join(options.output, 'SHA256SUMS.txt'), 'utf8')
+  for (const name of names) {
+    const content = await readFile(join(options.output, name))
+    assert.deepEqual(content, await readFile(join(options.inputs.arm64, name)))
+    assert.ok(checksums.includes(`${createHash('sha256').update(content).digest('hex')}  ${name}\n`))
+  }
+  await assert.rejects(stat(join(options.output, 'latest.json')), { code: 'ENOENT' })
   await assert.rejects(prepareRelease(options), { code: 'EEXIST' })
 })
 const invalidCases = [
@@ -61,6 +78,12 @@ for (const [name, mutate, expected] of invalidCases) test(`rejects ${name} befor
   const options = await fixture(t); await mutate(options)
   await assert.rejects(prepareRelease(options), expected); await assert.rejects(stat(options.output), { code: 'ENOENT' })
 })
+test('preview still rejects tampered metadata SHA512 before creating output', async t => {
+  const options = await fixture(t, '0.2.0', true)
+  await changeMetadata(options, data => { data.assets[0].sha512 = 'incorrect' })
+  await assert.rejects(prepareRelease(options), /SHA512 mismatch/)
+  await assert.rejects(stat(options.output), { code: 'ENOENT' })
+})
 test('only strict stable semantic versions produce latest.json', () => {
   assert.deepEqual(releaseInfo('1.2.3'), { version: '1.2.3', tag: 'v1.2.3', metadataName: 'latest.json' })
   for (const version of ['../bad', '1.2', 'v1.2.3', '01.2.3', '1.2.3-beta.2', '1.2.3+build', '18446744073709551616.0.0']) assert.throws(() => releaseInfo(version), /strict stable/)
@@ -72,4 +95,25 @@ test('signed release preflight binds the push tag, exact Developer ID team and a
   assert.throws(() => requireReleaseEnvironment(info, { ...env, APPLE_SIGNING_IDENTITY: 'Developer ID Application: Other (AAAAA99999)' }), /APPLE_SIGNING_IDENTITY/)
   assert.throws(() => requireReleaseEnvironment(info, { ...env, GITHUB_EVENT_NAME: 'workflow_dispatch' }), /tag push/)
   assert.throws(() => requireReleaseEnvironment(info, { ...env, GITHUB_REF: 'refs/tags/v1.2.4' }), /tag push/)
+})
+
+test('publication channels bind exact source, commit and canonical bounded run number', () => {
+  for (const event of ['push', 'workflow_dispatch']) {
+    assert.deepEqual(publicationInfo('1.2.3', { ...previewEnv, GITHUB_EVENT_NAME: event }), { ...releaseInfo('1.2.3'), tag: 'preview-42-abcdef0', prerelease: true, commit: previewEnv.GITHUB_SHA })
+  }
+  assert.deepEqual(publicationInfo('1.2.3', { ...previewEnv, GITHUB_REF: 'refs/tags/v1.2.3' }), { ...releaseInfo('1.2.3'), prerelease: false })
+  assert.equal(publicationInfo('1.2.3', { ...previewEnv, GITHUB_RUN_NUMBER: String(Number.MAX_SAFE_INTEGER) }).tag, 'preview-9007199254740991-abcdef0')
+  for (const run of [undefined, '', '0', '01', '-1', '1.5', '1e3', ' 1', '1\n', 1, '9007199254740992', '9'.repeat(100)]) {
+    assert.throws(() => publicationInfo('1.2.3', { ...previewEnv, GITHUB_RUN_NUMBER: run }), /GITHUB_RUN_NUMBER/)
+  }
+  for (const sha of [undefined, '', 'a'.repeat(39), 'a'.repeat(41), 'A'.repeat(40), 'g'.repeat(40), `${previewEnv.GITHUB_SHA}\n`]) {
+    assert.throws(() => publicationInfo('1.2.3', { ...previewEnv, GITHUB_SHA: sha }), /GITHUB_SHA/)
+  }
+  for (const version of ['01.2.3', '1.2.3-beta.1', '1.2.3+build', '1.2.3\n', '18446744073709551616.0.0']) assert.throws(() => publicationInfo(version, previewEnv), /strict stable/)
+  for (const overrides of [
+    { GITHUB_REPOSITORY: 'fork/oc-chan' }, { GITHUB_REPOSITORY: undefined },
+    { GITHUB_EVENT_NAME: 'pull_request' }, { GITHUB_EVENT_NAME: 'pull_request_target' },
+    { GITHUB_REF: 'refs/heads/feature' }, { GITHUB_REF: 'refs/tags/v1.2.4' },
+    { GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF: 'refs/tags/v1.2.3' },
+  ]) assert.throws(() => publicationInfo('1.2.3', { ...previewEnv, ...overrides }), /Publishing requires/)
 })

@@ -13,7 +13,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -44,6 +44,17 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
+      - name: Preflight signed release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: node --input-type=module -e 'import {packageReleaseInfo,requireReleaseEnvironment} from "./scripts/release-config.mjs";requireReleaseEnvironment(packageReleaseInfo())'
+
       - name: Verify native WebKit acceptance environment
         run: |
           node --input-type=module <<'NODE'
@@ -58,17 +69,6 @@ jobs:
           rustup toolchain install 1.99.0 --profile minimal
           cargo install cargo-audit --version 0.22.2 --locked --root "$RUNNER_TEMP/oc-audit-tools"
           printf '%s\n' "$RUNNER_TEMP/oc-audit-tools/bin" >> "$GITHUB_PATH"
-
-      - name: Preflight signed release
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: node --input-type=module -e 'import {packageReleaseInfo,requireReleaseEnvironment} from "./scripts/release-config.mjs";requireReleaseEnvironment(packageReleaseInfo())'
 
       - name: Import release identity into a job-owned temporary keychain
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
@@ -208,9 +208,11 @@ jobs:
           if test -f "$RUNNER_TEMP/oc-release.keychain-db"; then security delete-keychain "$RUNNER_TEMP/oc-release.keychain-db"; fi
 
   release:
-    name: Publish checked stable schema2 update
+    name: Publish checked macOS installers
     needs: build
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -221,8 +223,6 @@ jobs:
     defaults:
       run:
         shell: bash
-    env:
-      RELEASE_TAG: ${{ github.ref_name }}
     steps:
       - name: Check out release scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -236,15 +236,29 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Install release tooling
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Resolve release channel and source commit
+        id: publication
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from 'node:fs'
+          import { packageReleaseInfo, publicationInfo } from './scripts/release-config.mjs'
+          const info = publicationInfo(packageReleaseInfo().version)
+          appendFileSync(process.env.GITHUB_OUTPUT, `tag=${info.tag}\n`)
+          NODE
       - name: Download checked arm64 artifact
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: oc-chan-macos-arm64-${{ github.run_number }}
           path: artifacts
           merge-multiple: false
-      - name: Rehash attachments and validate strict latest.json
+      - name: Rehash attachments and stage channel-specific assets
+        env:
+          RELEASE_TAG: ${{ steps.publication.outputs.tag }}
         run: node scripts/prepare-release.mjs artifacts release-assets "$GITHUB_RUN_NUMBER" "$RELEASE_TAG"
       - name: Upload draft and publish complete release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node scripts/publish-release.mjs release-assets "$RELEASE_TAG"
+          RELEASE_TAG: ${{ steps.publication.outputs.tag }}
+        run: |
+          node scripts/publish-release.mjs release-assets "$RELEASE_TAG"
+          printf 'Release: https://github.com/%s/releases/tag/%s\n' "$GITHUB_REPOSITORY" "$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"

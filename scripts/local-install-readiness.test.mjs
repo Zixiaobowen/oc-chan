@@ -44,6 +44,11 @@ test('real native gate holds a parent-owned POSIX lock and drains a child before
   const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'oc-local-gate-test-')))
   t.after(() => rm(directory, { recursive: true, force: true }))
   const tool = await compileLocalProcessTool(ROOT, directory), bundle = path.join(directory, 'OC Chan.app')
+  // Compile with the same native toolchain as the gate, before it holds a lock.
+  // The observation must not depend on macOS's separate Python installation.
+  const lockObserver = path.join(directory, 'local-install-lock-test')
+  await exec('/usr/bin/xcrun', ['clang', '-O2', '-Wall', '-Wextra', '-Werror', path.join(ROOT, 'scripts/local-install-lock.test.c'), '-o', lockObserver], { cwd: ROOT, timeout: 30000, maxBuffer: 512 * 1024 })
+  const observeLock = async filename => JSON.parse((await exec(lockObserver, [filename], { timeout: 5000, maxBuffer: 1024 })).stdout)
   await mkdir(path.join(bundle, 'Contents/MacOS'), { recursive: true })
   await copyFile('/bin/sleep', path.join(bundle, 'Contents/MacOS/oc-chan'))
   const authorizationDirectory = path.join(directory, 'oc-local-install-b53a76cd-a128-478c-b028-d49ba9f9bc2e'); await mkdir(authorizationDirectory, { mode: 0o700 })
@@ -54,10 +59,10 @@ test('real native gate holds a parent-owned POSIX lock and drains a child before
   const [line] = await once(lines, 'line'), gate = JSON.parse(line)
   assert.equal(gate.installer.pid, child.pid); assert.equal(gate.installer.executable, tool)
   assert.equal((await nativeProcess(tool, 'inspect', gate.process.pid)).process.executable, tool, 'child is still blocked before exec')
-  const python = 'import fcntl,os,struct,sys,json\nf=os.open(sys.argv[1],os.O_RDWR)\nr=fcntl.fcntl(f,fcntl.F_GETLK,struct.pack("qqihh",0,0,0,fcntl.F_WRLCK,os.SEEK_SET))\na=struct.unpack("qqihh",r)\nprint(json.dumps({"pid":a[2],"write":a[3]==fcntl.F_WRLCK,"start":a[0],"length":a[1]}))\nos.close(f)'
-  const locked = JSON.parse((await exec('/usr/bin/python3', ['-c', python, gate.lock], { timeout: 5000 })).stdout)
+  const locked = await observeLock(gate.lock)
   assert.deepEqual(locked, { pid: child.pid, write: true, start: 0, length: 0 })
   child.stdin.end(); const [code, signal] = await completed
   assert.equal(signal, null, diagnostics); assert.equal(code, 125, diagnostics)
   assert.equal((await nativeProcess(tool, 'inspect', gate.process.pid)).process, null)
+  assert.deepEqual(await observeLock(gate.lock), { unlocked: true }, 'parent exit releases the POSIX lock')
 })

@@ -79,11 +79,11 @@ OC Chan 只读观察上游 Agent 和任务，不执行定时任务、不终止 A
 
 ## 安装与体验
 
-当前面向 **Apple Silicon Mac**，Intel 不在本期支持与验收范围。源码仓库与 Actions 产物保持私有。
+当前面向 **Apple Silicon Mac**，Intel 不在本期支持与验收范围。源码仓库公开。
 
-有仓库访问权限时，可从 [Build macOS 构建记录](https://github.com/Zixiaobowen/oc-chan/actions/workflows/build.yml)下载成功运行的 `oc-chan-macos-arm64-<运行编号>` 产物，内含 DMG、ZIP 和校验清单。安装前核对来源与摘要，具体步骤见[本地交付与手动升级](docs/distribution.md#本地交付与手动升级)。
+推送到 `main` 后，GitHub Actions 自动构建，并在检查通过后发布 [预览 Release](https://github.com/Zixiaobowen/oc-chan/releases)，标签为 `preview-<运行编号>-<提交短 SHA>`。下载其中的 DMG 或 ZIP，使用 `SHA256SUMS.txt` 核对摘要；预览版不进入应用内稳定更新通道。[Build macOS 构建记录](https://github.com/Zixiaobowen/oc-chan/actions/workflows/build.yml)同时保留产物和验收证据，PR 只验证、不发布。具体步骤见[本地交付与手动升级](docs/distribution.md#本地交付与手动升级)。
 
-本地和普通 CI 构建采用 ad-hoc 签名，不等于 Developer ID 签名或 Apple 公证。正式签名、公证及签名版本的原地更新仍待验收；应用内更新仅适用于具备 Developer ID 签名的安装版。详见[发布与更新条件](docs/distribution.md#应用内更新)。
+本地和预览版采用 ad-hoc 签名，不等于 Developer ID 签名或 Apple 公证。正式版使用与包版本一致的 `vX.Y.Z` 标签，并要求 Apple 签名与公证密钥；正式签名、公证及签名版本的原地更新仍待验收。应用内更新仅适用于具备 Developer ID 签名的安装版。详见[发布与更新条件](docs/distribution.md#应用内更新)。
 
 ## 开发
 

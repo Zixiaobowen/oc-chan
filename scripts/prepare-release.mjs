@@ -3,7 +3,7 @@ import { constants } from 'node:fs'
 import { mkdir, open, writeFile } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { packageReleaseInfo, releaseInfo } from './release-config.mjs'
+import { packageReleaseInfo, publicationInfo } from './release-config.mjs'
 import { stableMetadata } from './dist.mjs'
 import { readBounded } from './rust-dependencies.mjs'
 
@@ -44,9 +44,9 @@ function parseChecksums(text, expected) {
   if (sums.size !== expected.size) throw new Error('Missing SHA256SUMS.txt entry')
   return sums
 }
-export async function prepareRelease({ version, tag, inputs, output }) {
-  const info = releaseInfo(version)
-  if (tag !== info.tag) throw new Error(`Release tag ${tag} must match package version ${info.tag}`)
+export async function prepareRelease({ version, tag, inputs, output, env = process.env }) {
+  const info = publicationInfo(version, env)
+  if (tag !== info.tag) throw new Error(`Release tag ${tag} must match package version and publication source: ${info.tag}`)
   if (!keysAre(inputs, ['arm64']) || typeof inputs.arm64 !== 'string') throw new Error('Release requires exactly the arm64 artifact directory')
   const directory = inputs.arm64, expected = new Set(['zip', 'dmg'].map(extension => assetName(version, extension)))
   const metadata = JSON.parse(readBounded(join(directory, info.metadataName), 64 * 1024).toString('utf8'))
@@ -68,12 +68,13 @@ export async function prepareRelease({ version, tag, inputs, output }) {
     const copied = await digestAsset(join(directory, asset.name), join(output, asset.name))
     if (copied.size !== asset.size || copied.sha512 !== asset.sha512 || copied.sha256 !== asset.sha256) throw new Error('Release asset changed between validation and copy')
   }
-  await writeFile(join(output, info.metadataName), `${JSON.stringify(canonical, null, 2)}\n`, { flag: 'wx', mode: 0o600 })
+  if (!info.prerelease) await writeFile(join(output, info.metadataName), `${JSON.stringify(canonical, null, 2)}\n`, { flag: 'wx', mode: 0o600 })
   await writeFile(join(output, 'SHA256SUMS.txt'), assets.map(asset => `${asset.sha256}  ${asset.name}\n`).join(''), { flag: 'wx', mode: 0o600 })
   return canonical
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const [artifacts, output, run, tag] = process.argv.slice(2), info = packageReleaseInfo()
-  if (!artifacts || !output || !/^\d+$/.test(run ?? '') || !tag || process.argv.length !== 6) throw new Error('Usage: node scripts/prepare-release.mjs <artifacts-dir> <output-dir> <run-number> <tag>')
-  prepareRelease({ version: info.version, tag, inputs: { arm64: join(resolve(artifacts), `oc-chan-macos-arm64-${run}`) }, output: resolve(output) }).catch(error => { console.error(error); process.exitCode = 1 })
+  const [artifacts, output, run, tag] = process.argv.slice(2), info = publicationInfo(packageReleaseInfo().version)
+  if (!artifacts || !output || !/^[1-9][0-9]{0,15}$/.test(run ?? '') || !Number.isSafeInteger(Number(run)) || String(Number(run)) !== run || !tag || process.argv.length !== 6) throw new Error('Usage: node scripts/prepare-release.mjs <artifacts-dir> <output-dir> <run-number> <tag>')
+  if (info.prerelease && run !== process.env.GITHUB_RUN_NUMBER) throw new Error('Preview artifact run must match GITHUB_RUN_NUMBER')
+  prepareRelease({ version: info.version, tag, env: process.env, inputs: { arm64: join(resolve(artifacts), `oc-chan-macos-arm64-${run}`) }, output: resolve(output) }).catch(error => { console.error(error); process.exitCode = 1 })
 }

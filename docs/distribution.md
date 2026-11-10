@@ -53,11 +53,15 @@ npm run install:local -- --delivery release/tauri/local-rust-new
 
 ## GitHub Actions构建与发布
 
-[Build macOS工作流](https://github.com/Zixiaobowen/oc-chan/actions/workflows/build.yml)覆盖main、目标为main的PR、版本标签及手动构建。原生验收运行器需要macOS 26+；生产最低系统要求与验收系统不能混同。云端执行状态以对应提交的实际Actions回执为准，本地修改工作流不等于CI已经通过。
+[Build macOS工作流](https://github.com/Zixiaobowen/oc-chan/actions/workflows/build.yml)覆盖main、目标为main的PR、版本标签及手动构建。macOS安装包使用GitHub Releases分发；GitHub Packages用于依赖包或容器镜像，不用于本项目的DMG/ZIP。原生验收运行器需要macOS 26+；生产最低系统要求与验收系统不能混同。云端执行状态以对应提交的实际Actions回执为准，本地修改工作流不等于CI已经通过。
 
 CI安装锁定的npm/Cargo依赖，按变更映射运行行为测试；应用入口、采集、桥接、界面或构建改变时运行真实隔离WKWebView场景。未映射测试、未知代码路径、测试失败、许可证/公告查询失败和产物校验失败都阻止交付。只上传明确成功的安装材料，失败场景证据单独保存。
 
-普通分支和PR只生成本地ad-hoc材料。正式发布要求独立发布授权、匹配`package.json`的稳定版本标签、签名和公证；合并或推送分支不授权创建标签或发布。新版本递增，已有Release和附件不得覆盖。
+`main`推送或在`main`手动运行工作流时，检查通过后自动发布预览Release，标签为`preview-<运行编号>-<提交短SHA>`，绑定本次构建的完整提交。附件包含ad-hoc签名的arm64 DMG、ZIP和`SHA256SUMS.txt`；Release标为Pre-release，不设为Latest，也不上传`latest.json`，不会触发应用内稳定更新。仓库可见性不因发布而改变。
+
+PR和其他分支上的手动构建只上传Actions产物，不发布。PR新提交可取消旧检查；main和标签运行不因后续推送取消在途发布。GitHub同一并发组只保留一个运行和一个待运行任务，密集推送可能合并为最新的待运行提交。
+
+正式版仍由匹配`package.json`的稳定版本标签`vX.Y.Z`触发，要求完整Developer ID签名和Apple公证密钥。已有Release和附件不得覆盖。同一次运行重跑会使用相同标签；若已存在Release或预览标签，发布会明确拒绝并保留现场，不能用覆盖或自动删除掩盖不完整发布。
 
 签名CI使用以下Secrets，不将证书、密码或令牌写入仓库：
 
@@ -72,7 +76,9 @@ CI安装锁定的npm/Cargo依赖，按变更映射运行行为测试；应用入
 
 构建签名输入统一为`APPLE_SIGNING_IDENTITY`。证书只导入runner临时keychain，构建后回收；本地ad-hoc构建不自动发现签名或公证凭据。标签流水线验证完整签名、公证票据和Gatekeeper，复核归档及元数据后先上传草稿，确认附件完整再公开。客户端只消费稳定版`latest.json`，没有旧Electron更新元数据兼容路径。
 
-Actions产物可在成功运行记录中下载`oc-chan-macos-arm64-<运行编号>`。公开发布使用`Zixiaobowen/oc-chan`的Release，发布job使用具有Contents写权限的`github.token`，并以独立并发锁串行执行Latest读取、草稿上传、公开及回读，旧版本不得替换更新的Latest。实际签名、公证、公开下载及正式应用内升级须各自取得回执，不能以ad-hoc测试代替。
+Actions产物可在成功运行记录中下载`oc-chan-macos-arm64-<运行编号>`。预览版和稳定版都使用`Zixiaobowen/oc-chan`的Release，发布job显式申请Contents写权限，使用内置`github.token`，不需要额外PAT。两种发布共用并发锁，先上传草稿、核对附件完整性，再公开并回读验证；预览版额外核对标签指向构建提交，稳定版只在版本较新时更新Latest。校验失败不公开草稿，公开后的错误保留Release供诊断，不自动删除。实际签名、公证、公开下载及正式应用内升级须各自取得回执，不能以ad-hoc测试代替。
+
+若构建期间较新的main提交又修改了`.github/workflows/`，旧构建的workflow内容可能不同于当前默认分支。GitHub对此类目标要求Workflows写权限，而内置`GITHUB_TOKEN`不具备该权限，创建Release可能明确返回403/404。此时检查较新main的运行结果；流程不会用新提交给旧附件打标签，也不把权限错误解释为成功。
 
 ## 包内容、体积与依赖审查
 

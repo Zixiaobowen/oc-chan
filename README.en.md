@@ -79,11 +79,11 @@ OC Chan observes upstream agents and tasks without modifying them. It does not r
 
 ## Installation
 
-Currently intended for **Apple Silicon Macs**. Intel Macs are outside the current support and validation scope. The source repository and Actions artifacts remain private.
+Currently intended for **Apple Silicon Macs**. Intel Macs are outside the current support and validation scope. The source repository is public.
 
-With repository access, download the `oc-chan-macos-arm64-<run-number>` artifact from a successful [Build macOS run](https://github.com/Zixiaobowen/oc-chan/actions/workflows/build.yml). It contains a DMG, ZIP, and checksum manifest. Verify the source and checksums before installing; see [local delivery and manual upgrades (Chinese)](docs/distribution.md#本地交付与手动升级).
+Each push to `main` starts a GitHub Actions build. After the checks pass, it publishes a [preview Release](https://github.com/Zixiaobowen/oc-chan/releases) tagged `preview-<run-number>-<short-commit-SHA>`. Download its DMG or ZIP and verify it against `SHA256SUMS.txt`. Previews do not enter the in-app stable update channel. [Build macOS runs](https://github.com/Zixiaobowen/oc-chan/actions/workflows/build.yml) also retain artifacts and validation evidence; pull requests run checks without publishing. See [local delivery and manual upgrades (Chinese)](docs/distribution.md#本地交付与手动升级).
 
-Local and ordinary CI builds use ad-hoc signing, which is not Developer ID signing or Apple notarization. Formal signing, notarization, and in-place updates for signed builds still require validation. In-app updates apply only to installed builds signed with Developer ID. See [release and update requirements (Chinese)](docs/distribution.md#应用内更新).
+Local and preview builds use ad-hoc signing, which is not Developer ID signing or Apple notarization. Stable releases require a `vX.Y.Z` tag matching the package version and Apple signing and notarization secrets. Formal signing, notarization, and in-place updates for signed builds still require validation. In-app updates apply only to installed builds signed with Developer ID. See [release and update requirements (Chinese)](docs/distribution.md#应用内更新).
 
 ## Development
 

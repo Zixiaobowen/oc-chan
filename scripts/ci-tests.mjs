@@ -53,6 +53,7 @@ const rules = [
   [/^src\/renderer\//, ['topology', 'views'], [], '渲染与视图状态'],
   [/^src\/plugins\//, ['views', 'marketplace'], ['system', 'plugins'], '插件界面贡献与原生插件契约'],
   [/^src\/shared\//, ['diagnostics', 'views', 'navigation'], ['core', 'host'], '前后端DTO契约'],
+  [/^scripts\/local-install-lock\.test\.c$/, ['install'], [], '本机安装锁的原生测试观察器'],
   [/^scripts\/(?:install-(?:local|validation)|local-install-(?:readiness|process)|local-app-lifecycle|push-main|develop)\.(?:mjs|m)$|^\.githooks\//, ['install', 'delivery'], ['installer'], '本机安装、真实就绪与实例归属'],
   [/^scripts\/(?:prepare-release|publish-release|release-config|dist)\.mjs$/, ['updates', 'packaging'], ['updates'], 'schema2发布与打包'],
   [/^scripts\/(?:build-app|check-package|dependency-review|rust-dependencies)\.mjs$|^scripts\/bundled-licenses\.ts$|^docs\/(?:package-baseline|dependency-review-policy)\.json$|^resources\/rust-license-supplements\//, ['packaging', 'delivery'], [], 'Rust产物、锁绑定审计与完整许可证'],
