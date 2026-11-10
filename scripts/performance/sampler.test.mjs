@@ -93,6 +93,26 @@ describe('native sampler transport', { skip: !supported, timeout: 30000 }, () =>
     }
   })
 
+  test('explicit associated identities are birth checked and never zero-fill reused PIDs', async t => {
+    const { launcher, appPid } = await tree(t)
+    const { handle, observed } = await sampler(t)
+    handle.input.write(`roots ${appPid} ${launcher.pid}\n`)
+    const first = await until(() => observed.rows.find(row => row.type === 'resources'), { timeout:5000 })
+    const identity = first.app.find(row => row.pid === appPid)
+    const [seconds,microseconds] = identity.startId.split(':')
+    handle.input.write(`xpc-reset\nxpc ${appPid} ${seconds} ${microseconds}\n`)
+    const associated = await until(() => observed.rows.find(row => row.associated?.length === 1), { timeout:5000 })
+    assert.equal(associated.associated[0].startId,identity.startId)
+    assert.equal(associated.associated[0].mayBeShared,true)
+    assert(associated.associated[0].rssBytes > 0)
+    const wrong = `${Number(seconds)+1}:${microseconds}`
+    handle.input.write(`xpc-reset\nxpc ${appPid} ${Number(seconds)+1} ${microseconds}\n`)
+    const stale = await until(() => observed.rows.find(row => row.associated?.[0]?.startId === wrong), { timeout:5000 })
+    assert.equal(stale.associated[0].rssBytes,null)
+    assert.equal(stale.associated[0].cpuNs,null)
+    assert.notEqual(stale.associated[0].sampleErrors.identity,0)
+  })
+
   test('dispose stops a live idle sampler and is idempotent', async t => {
     const listeners = process.listenerCount('exit')
     const { handle, observed } = await sampler(t)

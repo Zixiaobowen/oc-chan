@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-updates-cancel"
+description = "Enables the updates_cancel command without any pre-configured scope."
+commands.allow = ["updates_cancel"]
+
+[[permission]]
+identifier = "deny-updates-cancel"
+description = "Denies the updates_cancel command without any pre-configured scope."
+commands.deny = ["updates_cancel"]

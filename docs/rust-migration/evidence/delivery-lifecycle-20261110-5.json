@@ -1,0 +1,61 @@
+{
+  "observedAt": "2026-11-10T00:11:46.830591+00:00",
+  "installedApplication": "/Applications/OC Chan.app",
+  "installedApplicationDirectoryPresent": true,
+  "matchingProcesses": [
+    {
+      "pid": 99645,
+      "ppid": 1,
+      "scope": "installed-application"
+    },
+    {
+      "pid": 99650,
+      "ppid": 99645,
+      "scope": "installed-application"
+    },
+    {
+      "pid": 99651,
+      "ppid": 99645,
+      "scope": "installed-application"
+    },
+    {
+      "pid": 99654,
+      "ppid": 99645,
+      "scope": "installed-application"
+    }
+  ],
+  "processScope": "Current ps command lines containing the migration worktree or installed application path; runtime shutdown receipts separately prove owned instances drained and exited.",
+  "remainingTaskApplicationBundles": [],
+  "applicationSearchScope": [
+    ".dev-instances/**/OC Chan.app",
+    "release/**/OC Chan.app"
+  ],
+  "preservedInstanceDirectories": [
+    {
+      "path": "/Users/zixiaobowen/myProjects/oc-chan-rust-migration-20261109/.dev-instances/instance-3dLeVO",
+      "reason": "License source directory protection; previous cleanup rejection retained"
+    },
+    {
+      "path": "/Users/zixiaobowen/myProjects/oc-chan-rust-migration-20261109/.dev-instances/instance-1f4M2Y",
+      "reason": "No matching stopped receipt"
+    },
+    {
+      "path": "/Users/zixiaobowen/myProjects/oc-chan-rust-migration-20261109/.dev-instances/instance-nDNSNx",
+      "reason": "No matching stopped receipt"
+    },
+    {
+      "path": "/Users/zixiaobowen/myProjects/oc-chan-rust-migration-20261109/.dev-instances/instance-K0ABJF",
+      "reason": "No matching stopped receipt"
+    },
+    {
+      "path": "/Users/zixiaobowen/myProjects/oc-chan-rust-migration-20261109/.dev-instances/instance-sx0YYN",
+      "reason": "No matching stopped receipt"
+    }
+  ],
+  "cleanupReceipt": "release-20261110-5/cleanup.json",
+  "priorRejections": "cleanup-20261110-2.json",
+  "formalInstallationChanged": false,
+  "committed": false,
+  "pushed": false,
+  "published": false
+}

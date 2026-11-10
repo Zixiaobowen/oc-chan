@@ -32,6 +32,7 @@ import { PluginPage, PluginSlot, useRendererPlugins, type RendererContext } from
 import MarketplaceView, { type MarketplaceViewState } from './MarketplaceView'
 import { useSystemPlugin } from './marketplace'
 import SystemPluginNotice from './SystemPluginNotice'
+import { isDesktopDocumentVisible, scheduleDesktopUpdate } from './desktop-visibility'
 
 const initial = createEmptySnapshot()
 
@@ -92,7 +93,7 @@ export default function App() {
   const [pausedAt, setPausedAt] = useState<number | null>(null)
   const paused = pausedAt !== null
   const [bridgeError, setBridgeError] = useState<string | null>(null)
-  const [hiddenAt, setHiddenAt] = useState<number | null>(() => document.hidden ? Date.now() : null)
+  const [hiddenAt, setHiddenAt] = useState<number | null>(() => isDesktopDocumentVisible() ? null : Date.now())
   const visible = hiddenAt === null
   const frozenAt = pausedAt ?? hiddenAt
   const focusUpdates = useRef(false)
@@ -147,14 +148,14 @@ export default function App() {
     let active = true
     const received = new Set<MonitorSection>()
     const onUpdate = (update: MonitorUpdate) => {
-      if (!active || document.hidden || (update.section === 'system' && systemInstalled !== true)) return
+      if (!active || !isDesktopDocumentVisible() || (update.section === 'system' && systemInstalled !== true)) return
       received.add(update.section)
       setSnapshot(previous => ({ ...previous, [update.section]: update.state }))
       if (monitorSections.every(section => received.has(section))) setBridgeError(null)
     }
     const unsubscribe = api.subscribe(onUpdate)
     void api.snapshot().then(data => {
-      if (!active || document.hidden) return
+      if (!active || !isDesktopDocumentVisible()) return
       // Subscribe first; a slower initial read must not replace newer section events.
       setSnapshot(previous => Object.fromEntries(monitorSections.map(section => [section, section === 'system' && systemInstalled !== true ? initial.system : received.has(section) ? previous[section] : data[section]])) as MonitorSnapshot)
       setBridgeError(null)
@@ -174,7 +175,7 @@ export default function App() {
     setScheduleView(view => reconcileScheduleView(view, snapshot.schedules.data))
   }, [snapshot.schedules.data, scheduleView.selectedId, scheduleView.identity])
   useEffect(() => {
-    const updateVisibility = () => setHiddenAt(at => document.hidden ? at ?? Date.now() : null)
+    const updateVisibility = () => setHiddenAt(at => isDesktopDocumentVisible() ? null : at ?? Date.now())
     document.addEventListener('visibilitychange', updateVisibility)
     return () => document.removeEventListener('visibilitychange', updateVisibility)
   }, [])
@@ -192,8 +193,8 @@ export default function App() {
     const saved = pageScroll.current[page]
     restoringScroll.current = true
     element.scrollTo({ top: saved.top, left: saved.left, behavior: 'instant' })
-    const frame = requestAnimationFrame(() => { restoringScroll.current = false })
-    return () => { cancelAnimationFrame(frame); restoringScroll.current = false }
+    const update = scheduleDesktopUpdate(() => { restoringScroll.current = false })
+    return () => { update.cancel(); restoringScroll.current = false }
   }, [page, renderer.contributions.find(plugin => plugin.section === page)])
   useLayoutEffect(() => {
     if (page !== 'sources' || !sourceTarget || focusedSource.current === sourceTarget) return

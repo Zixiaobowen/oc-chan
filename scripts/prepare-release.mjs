@@ -1,99 +1,79 @@
 import { createHash } from 'node:crypto'
-import { createReadStream, constants } from 'node:fs'
-import { copyFile, lstat, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { mkdir, open, writeFile } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import yaml from 'js-yaml'
 import { packageReleaseInfo, releaseInfo } from './release-config.mjs'
+import { stableMetadata } from './dist.mjs'
+import { readBounded } from './rust-dependencies.mjs'
 
-const architectures = ['arm64']
-const extensions = ['zip', 'dmg']
-const assetName = (version, arch, extension) => `OC-Chan-${version}-mac-${arch}.${extension}`
-
-async function readSmallFile(path) {
-  const stat = await lstat(path)
-  if (!stat.isFile() || stat.size > 64 * 1024) throw new Error(`Invalid or oversized metadata: ${path}`)
-  return readFile(path, 'utf8')
-}
-
-async function digestFile(path) {
-  const stat = await lstat(path)
-  if (!stat.isFile() || stat.size <= 0 || !Number.isSafeInteger(stat.size)) throw new Error(`Invalid release asset: ${path}`)
-  const sha512 = createHash('sha512')
-  const sha256 = createHash('sha256')
-  for await (const chunk of createReadStream(path)) {
-    sha512.update(chunk)
-    sha256.update(chunk)
+const MAX_ASSET = 512 * 1024 * 1024
+const assetName = (version, extension) => `OC-Chan-${version}-mac-arm64.${extension}`
+const keysAre = (value, keys) => value !== null && typeof value === 'object' && !Array.isArray(value) && JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...keys].sort())
+async function digestAsset(filename, destination) {
+  const source = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+  let output, primaryFailure
+  try {
+    const before = await source.stat()
+    if (!before.isFile() || !Number.isSafeInteger(before.size) || before.size <= 0 || before.size > MAX_ASSET) throw new Error('Invalid release asset or 512MiB limit exceeded')
+    if (destination) output = await open(destination, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600)
+    const sha512 = createHash('sha512'), sha256 = createHash('sha256'); let size = 0
+    for await (const chunk of source.createReadStream({ autoClose: false, highWaterMark: 64 * 1024 })) {
+      size += chunk.length
+      if (size > before.size || size > MAX_ASSET) throw new Error('Release asset grew during bounded read')
+      sha512.update(chunk); sha256.update(chunk)
+      if (output) await output.writeFile(chunk)
+    }
+    const after = await source.stat()
+    if (size !== before.size || after.size !== before.size || after.dev !== before.dev || after.ino !== before.ino || after.mtimeMs !== before.mtimeMs || after.ctimeMs !== before.ctimeMs) throw new Error('Release asset changed during read')
+    if (output) await output.sync()
+    return { size, sha512: sha512.digest('base64'), sha256: sha256.digest('hex') }
+  } catch (error) { primaryFailure = error; throw error } finally {
+    const closed = await Promise.allSettled([source.close(), ...(output ? [output.close()] : [])])
+    const failures = closed.filter(result => result.status === 'rejected').map(result => result.reason)
+    if (failures.length) throw new AggregateError([...(primaryFailure ? [primaryFailure] : []), ...failures], 'Release asset close failed')
   }
-  return { size: stat.size, sha512: sha512.digest('base64'), sha256: sha256.digest('hex') }
 }
-
 function parseChecksums(text, expected) {
   const sums = new Map()
   for (const line of text.trim().split('\n')) {
-    const match = /^([a-f0-9]{64})  (?:\.\/)?([^/\\]+)$/.exec(line)
-    if (!match || !expected.has(match[2]) || sums.has(match[2])) throw new Error('Invalid SHA256SUMS.txt entry')
+    const match = /^([a-f0-9]{64})  (?:\.\/)?([^/\\\r\n]+)$/.exec(line)
+    if (!match || !expected.has(match[2]) || sums.has(match[2])) throw new Error('Invalid or duplicate SHA256SUMS.txt entry')
     sums.set(match[2], match[1])
   }
   if (sums.size !== expected.size) throw new Error('Missing SHA256SUMS.txt entry')
   return sums
 }
-
 export async function prepareRelease({ version, tag, inputs, output }) {
   const info = releaseInfo(version)
   if (tag !== info.tag) throw new Error(`Release tag ${tag} must match package version ${info.tag}`)
-  if (Object.keys(inputs).some(arch => !architectures.includes(arch))) throw new Error('Unsupported release architecture; this release targets arm64')
-  const assets = []
-  const dates = []
-  for (const arch of architectures) {
-    if (!inputs[arch]) throw new Error(`Missing ${arch} build directory`)
-    const directory = inputs[arch]
-    const metadata = yaml.load(await readSmallFile(join(directory, info.metadataName)), { schema: yaml.JSON_SCHEMA })
-    if (metadata?.version !== version) throw new Error(`Wrong metadata version for ${arch}: ${metadata?.version}`)
-    if (!Array.isArray(metadata.files) || metadata.files.length !== 2) throw new Error(`Expected ZIP and DMG metadata for ${arch}`)
-    if (typeof metadata.releaseDate !== 'string' || !Number.isFinite(Date.parse(metadata.releaseDate))) throw new Error(`Invalid releaseDate for ${arch}`)
-    dates.push(metadata.releaseDate)
-    const expected = new Set(extensions.map(extension => assetName(version, arch, extension)))
-    const sums = parseChecksums(await readSmallFile(join(directory, 'SHA256SUMS.txt')), expected)
-    const seen = new Set()
-    for (const file of metadata.files) {
-      if (!file || !expected.has(file.url) || seen.has(file.url)) throw new Error(`Wrong architecture, version, or duplicate metadata asset for ${arch}: ${file?.url}`)
-      seen.add(file.url)
-      const source = join(directory, file.url)
-      const digest = await digestFile(source)
-      if (file.size !== digest.size) throw new Error(`Size mismatch: ${file.url}`)
-      if (file.sha512 !== digest.sha512) throw new Error(`SHA512 mismatch: ${file.url}`)
-      if (sums.get(file.url) !== digest.sha256) throw new Error(`SHA256 mismatch: ${file.url}`)
-      assets.push({ source, url: file.url, ...digest })
-    }
-    const zip = assets.find(file => file.url === assetName(version, arch, 'zip'))
-    if (metadata.path !== zip.url || metadata.sha512 !== zip.sha512) throw new Error(`Invalid primary ZIP metadata for ${arch}`)
+  if (!keysAre(inputs, ['arm64']) || typeof inputs.arm64 !== 'string') throw new Error('Release requires exactly the arm64 artifact directory')
+  const directory = inputs.arm64, expected = new Set(['zip', 'dmg'].map(extension => assetName(version, extension)))
+  const metadata = JSON.parse(readBounded(join(directory, info.metadataName), 64 * 1024).toString('utf8'))
+  if (!keysAre(metadata, ['schema', 'version', 'assets']) || metadata.schema !== 2 || metadata.version !== version) throw new Error('Invalid schema2 metadata fields or version')
+  if (!Array.isArray(metadata.assets) || metadata.assets.length !== 1 || !keysAre(metadata.assets[0], ['target', 'name', 'size', 'sha512'])) throw new Error('Expected exactly one strict arm64 ZIP asset')
+  const declaration = metadata.assets[0]
+  if (declaration.target !== ['darwin', 'aarch64'].join('-') || declaration.name !== assetName(version, 'zip')) throw new Error('Invalid update target or fixed ZIP filename')
+  const sums = parseChecksums(readBounded(join(directory, 'SHA256SUMS.txt'), 64 * 1024).toString('utf8'), expected), assets = []
+  for (const name of expected) {
+    const digest = await digestAsset(join(directory, name))
+    if (sums.get(name) !== digest.sha256) throw new Error(`SHA256 mismatch: ${name}`)
+    if (name === declaration.name && (declaration.size !== digest.size || declaration.sha512 !== digest.sha512)) throw new Error('Update ZIP size or SHA512 mismatch')
+    assets.push({ name, ...digest })
   }
-  // Validate every input before creating anything. A prior output directory is an error.
-  assets.sort((a, b) => Number(a.url.endsWith('.dmg')) - Number(b.url.endsWith('.dmg')) || b.url.localeCompare(a.url))
-  const merged = {
-    version,
-    files: assets.map(({ url, sha512, size }) => ({ url, sha512, size })),
-    path: assets[0].url,
-    sha512: assets[0].sha512,
-    releaseDate: new Date(Math.max(...dates.map(Date.parse))).toISOString(),
+  const zip = assets.find(asset => asset.name === declaration.name), canonical = stableMetadata(version, { bytes: zip.size, digest: zip.sha512 })
+  // All declarations and input digests are checked before the destination exists.
+  await mkdir(output, { mode: 0o700 })
+  for (const asset of assets) {
+    const copied = await digestAsset(join(directory, asset.name), join(output, asset.name))
+    if (copied.size !== asset.size || copied.sha512 !== asset.sha512 || copied.sha256 !== asset.sha256) throw new Error('Release asset changed between validation and copy')
   }
-  await mkdir(output)
-  for (const asset of assets) await copyFile(asset.source, join(output, asset.url), constants.COPYFILE_EXCL)
-  await writeFile(join(output, info.metadataName), yaml.dump(merged, { lineWidth: -1, noRefs: true }), { flag: 'wx' })
-  await writeFile(join(output, 'SHA256SUMS.txt'), assets.map(asset => `${asset.sha256}  ${asset.url}\n`).join(''), { flag: 'wx' })
-  return merged
+  await writeFile(join(output, info.metadataName), `${JSON.stringify(canonical, null, 2)}\n`, { flag: 'wx', mode: 0o600 })
+  await writeFile(join(output, 'SHA256SUMS.txt'), assets.map(asset => `${asset.sha256}  ${asset.name}\n`).join(''), { flag: 'wx', mode: 0o600 })
+  return canonical
 }
-
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const [artifacts, output, runNumber, tag] = process.argv.slice(2)
-  if (!artifacts || !output || !/^\d+$/.test(runNumber ?? '') || !tag || process.argv.length !== 6) {
-    throw new Error('Usage: node scripts/prepare-release.mjs <artifacts-dir> <output-dir> <run-number> <tag>')
-  }
-  await prepareRelease({
-    version: packageReleaseInfo().version,
-    tag,
-    inputs: Object.fromEntries(architectures.map(arch => [arch, join(artifacts, `oc-chan-macos-${arch}-${runNumber}`)])),
-    output,
-  })
+  const [artifacts, output, run, tag] = process.argv.slice(2), info = packageReleaseInfo()
+  if (!artifacts || !output || !/^\d+$/.test(run ?? '') || !tag || process.argv.length !== 6) throw new Error('Usage: node scripts/prepare-release.mjs <artifacts-dir> <output-dir> <run-number> <tag>')
+  prepareRelease({ version: info.version, tag, inputs: { arm64: join(resolve(artifacts), `oc-chan-macos-arm64-${run}`) }, output: resolve(output) }).catch(error => { console.error(error); process.exitCode = 1 })
 }

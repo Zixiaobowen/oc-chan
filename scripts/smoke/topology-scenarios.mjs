@@ -7,6 +7,7 @@ const employee = '.topology-3d-picker:nth-child(2) select'
 
 export async function exerciseTopology({ ui, renderer, record, agent }) {
   const agents = await ui.evaluate('window.monitor.snapshot().then(snapshot => snapshot.agents.data.agents)')
+  record('topology-agent-evidence', { agents: agents.map(({ id, parentId, kind, cwd, sessionId, pid, name }) => ({ id, parentId, kind, cwd, sessionId, pid, name })) })
   const agentsById = new Map(agents.map(item => [item.id, item]))
   const rootFor = id => {
     const seen = new Set()
@@ -38,7 +39,8 @@ export async function exerciseTopology({ ui, renderer, record, agent }) {
     await ui.navigate('本机概览', 'Overview')
     await ui.click($('.agent-preview .entity-button'))
     await ui.dom('overview opens the exact employee in 3D', `${$('.agent-inspector')}?.dataset.agentId === ${JSON.stringify(agent.id)} && !!${$('.topology-3d-webgl')}`)
-    await ui.dom('selected employee is revealed in its own task', `${$(floor)}?.value === ${JSON.stringify(expectedFloor(agent.id))} && !!${$(`.topology-3d-label[data-id=${JSON.stringify(agent.id)}]:not([hidden])`)}`)
+    await ui.dom('selected employee opens its own task floor', `${$(floor)}?.value === ${JSON.stringify(expectedFloor(agent.id))}`)
+    await ui.dom('selected employee label is projected into the visible scene', `!!${$(`.topology-3d-label[data-id=${JSON.stringify(agent.id)}]:not([hidden])`)}`)
     await ui.key('Escape', 'Escape', 27)
     await ui.dom('details close and keyboard focus returns to the office', `!${$('.agent-inspector')} && (document.activeElement?.matches('.topology-3d-label, .topology-3d-webgl') ?? false)`)
     await ui.frames()
@@ -66,7 +68,7 @@ export async function exerciseTopology({ ui, renderer, record, agent }) {
       assert.ok(option, `employee picker must contain ${item.id}`)
       assert.match(option.label, item.kind === 'main' ? /主 Agent|Main agent/ : /子 Agent|Subagent/, 'main and subagent responsibilities must remain distinguishable')
     }
-    const sharedProject = [...projects.entries()].find(([, tasks]) => tasks.length > 1)
+    const sharedProject = [...projects.entries()].find(([, tasks]) => tasks.length > 1 && tasks.slice(0, 2).every(task => agents.some(item => item.kind === 'subagent' && item.parentId === task.id)))
     assert.ok(sharedProject, 'fixture must provide multiple task branches in one project group')
     const [cwd, tasks] = sharedProject
     await chooseEmployee(tasks[0].id)
@@ -85,7 +87,12 @@ export async function exerciseTopology({ ui, renderer, record, agent }) {
   await ui.stage('office-state-after-page-and-mode-switch', async () => {
     await ui.click(`Array.from(document.querySelectorAll('.topology-3d-controls button')).find(button => ['聚焦楼层','Focus floor'].includes(button.textContent))`)
     await ui.frames()
-    const labels = () => ui.evaluate(`Array.from(document.querySelectorAll('.topology-3d-floor-label:not([hidden])'), label => ({id:label.dataset.floorId,position:label.style.transform,dimmed:label.classList.contains('is-dimmed')}))`)
+    const labels = () => ui.evaluate(`Array.from(document.querySelectorAll('.topology-3d-floor-label:not([hidden])'), label => {
+      const kind = label.classList.contains('topology-3d-building-label') ? 'building' : 'floor';
+      const id = kind === 'building' ? label.dataset.buildingId : label.dataset.floorId;
+      if (!id) throw new Error('Projected ' + kind + ' label has no identity');
+      return {kind,id,position:label.style.transform,dimmed:label.classList.contains('is-dimmed')};
+    }).sort((left,right) => left.kind.localeCompare(right.kind) || left.id.localeCompare(right.id))`)
     const selectedFloor = await ui.evaluate(`${$(floor)}.value`)
     const before = await labels()
     assert.ok(before.some(label => label.id === selectedFloor && !label.dimmed), 'selected floor must remain legible')
@@ -116,7 +123,7 @@ export async function exerciseTopology({ ui, renderer, record, agent }) {
     await ui.evaluate(`${$('.agent-search input')}.select()`)
     await ui.key('Backspace', 'Backspace', 8)
     // The query is intentionally unmatched; data still comes from the real fixture plugin and IPC.
-    await renderer.call('Input.insertText', { text: 'office-smoke-no-match' }, 5000)
+    await renderer.text('office-smoke-no-match')
     await ui.dom('filter empty state retains task selection and explains absence', `!!${$('.topology-empty-overlay')} && !!${$('.topology-3d-floor-status')} && ${$(floor)}?.value === ${JSON.stringify(selectedTaskFloor)}`)
     await ui.click($('.topology-empty-overlay button'))
     await ui.dom('clearing filters restores employees and the selected task', `!${$('.topology-empty-overlay')} && ${$(employee)}?.options.length === ${agents.length + 1} && ${$(floor)}?.value === ${JSON.stringify(selectedTaskFloor)} && !${$('.topology-3d-floor-status')}`)
@@ -142,7 +149,7 @@ export async function exerciseTopology({ ui, renderer, record, agent }) {
     await ui.click($('.agent-preview .entity-button'))
     const inspector = `.agent-inspector[data-agent-id=${JSON.stringify(agent.id)}]`
     await ui.dom('overview opens the exact Agent', `${$(inspector)}?.querySelector('h2')?.textContent === ${JSON.stringify(agent.name)}`)
-    await ui.dom('Agent source remains explicitly synthetic', `${$(inspector)}?.textContent.includes('Performance fixture (synthetic)')`)
+    await ui.dom('Agent source retains actual collector provenance', `${$(inspector)}?.textContent.includes(${JSON.stringify(agent.source)})`)
     await ui.key('Escape', 'Escape', 27)
     await ui.dom('Agent inspector closes on Escape', `!${$('.agent-inspector')}`)
     const focused = `document.activeElement === ${$(`.react-flow__node[data-id=${JSON.stringify(agent.id)}]`)}`
@@ -161,7 +168,7 @@ export async function exerciseTopology({ ui, renderer, record, agent }) {
     await ui.dom('Agent focus returns after reopening details', focused)
     await ui.frames()
     assert.equal(await ui.evaluate(focused), true, 'U-07: repeated open/close must retain node focus')
-    return { agentId: agent.id, input: 'CDP mouse and Enter/Escape', focusCheckedAfterFrames: 2 }
+    return { agentId: agent.id, input: 'AppKit responder mouse and Enter/Escape', focusCheckedAfterFrames: 2 }
   })
   return { settings: { appearance: 'dark' } }
 }

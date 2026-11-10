@@ -1,0 +1,36 @@
+[package]
+name = "oc-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+default = []
+acceptance = []
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+chrono.workspace = true
+sha2.workspace = true
+base64.workspace = true
+libc.workspace = true
+semver.workspace = true
+uuid.workspace = true
+reqwest.workspace = true
+futures-util.workspace = true
+rusqlite.workspace = true
+notify.workspace = true
+plist.workspace = true
+zip.workspace = true
+regex.workspace = true
+oc-plugin-sdk = { path = "../oc-plugin-sdk" }
+oc-installer = { path = "../oc-installer" }
+unicode-normalization.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

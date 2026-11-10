@@ -5,7 +5,7 @@ import { existsSync, globSync, mkdirSync, mkdtempSync, renameSync, rmSync, write
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { changedFiles, changeRange, selectTests, suites, validateTestCoverage } from './ci-tests.mjs'
+import { changedFiles, changeRange, selectTests, suites, validateTestCoverage, rustCommands, runRustTests } from './ci-tests.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const allTests = Object.values(suites).flat().sort()
@@ -22,35 +22,37 @@ test('documentation selects no product tests', () => {
 
 test('renderer smoke follows executable and UI changes, while documentation and unit-test-only edits stay targeted', () => {
   assert.equal(selectTests(['README.md', 'docs/performance-baseline.json']).rendererSmoke, false)
-  assert.equal(selectTests(['src/main/settings.test.ts']).rendererSmoke, false)
+  assert.equal(selectTests(['src/renderer/src/view-state.test.ts']).rendererSmoke, false)
   assert.equal(selectTests(['scripts/install-local.mjs']).rendererSmoke, false)
   for (const files of [
-    ['src/renderer/src/styles.css'], ['src/main/collectors/hermes-history.ts'],
+    ['src/renderer/src/styles.css'], ['crates/oc-core/src/agents/runtime.rs'],
     ['scripts/smoke-renderer.mjs', 'scripts/smoke/scenarios.mjs'],
-    ['scripts/develop.mjs'], ['scripts/performance/fixture-plugin.mjs'],
+    ['scripts/develop.mjs'], ['src-tauri/acceptance/driver.rs'],
     ['package-lock.json'], ['.github/workflows/build.yml']
   ]) assert.equal(selectTests(files).rendererSmoke, true, files.join(', '))
   assert.equal(selectTests([], '版本标签').rendererSmoke, true)
-  assert.equal(selectTests(['src/main/removed-module.ts'], undefined, ['src/main/removed-module.ts']).rendererSmoke, true)
+  assert.equal(selectTests(['src/main/collectors/agents.ts'], undefined, ['src/main/collectors/agents.ts']).rendererSmoke, true)
 })
 
-test('collection and view changes include their relevant callers without unrelated suites', () => {
-  assert.deepEqual(selectTests(['src/main/collectors/launchd.ts']).tests, union('schedules', 'monitor', 'plugins'))
-  assert.deepEqual(selectTests(['src/main/collectors/agent-activity.ts']).tests, union('agents', 'monitor', 'plugins', 'tern'))
-  assert.deepEqual(selectTests(['src/main/collectors/hermes-history.ts']).tests, union('history', 'plugins', 'monitor'))
-  assert.deepEqual(selectTests(['src/renderer/src/AgentTopology.tsx', 'src/renderer/src/view-state.ts']).tests, union('topology', 'views', 'navigation'))
-  assert.deepEqual(selectTests(['src/renderer/src/ScheduleHistory.tsx']).tests, union('history', 'views', 'navigation'))
+test('collection and view changes include Rust module callers without unrelated packages', () => {
+  assert.deepEqual(selectTests(['crates/oc-core/src/schedules/launchd.rs']).rust, ['events', 'monitor', 'schedules'])
+  assert.deepEqual(selectTests(['crates/oc-core/src/agents/activity.rs']).rust, ['agents', 'monitor', 'tern'])
+  assert.deepEqual(selectTests(['crates/oc-core/src/updates/source.rs']).rust, ['updates'])
+  assert.deepEqual(selectTests(['crates/oc-core/src/marketplace/archive.rs']).rust, ['marketplace', 'plugins'])
+  assert.deepEqual(selectTests(['src/renderer/src/AgentTopology.tsx', 'src/renderer/src/view-state.ts']).tests, union('topology', 'views'))
+  assert.deepEqual(selectTests(['src-tauri/src/documents.rs']).rust, ['host'])
 })
 
 test('dependency and public contract changes widen coverage explicitly', () => {
   const dependency = selectTests(['package-lock.json'])
   assert.deepEqual(dependency.tests, allTests)
   assert.ok(dependency.reasons.some(reason => reason.includes('依赖')))
-  const shared = selectTests(['src/shared/types.ts']).tests
-  assert.ok(shared.includes(suites.history[0]))
-  assert.ok(shared.includes(suites.topology[0]))
-  assert.ok(shared.includes(suites.settings[0]))
-  assert.ok(!shared.includes(suites.install[0]))
+  const shared = selectTests(['src/shared/types.ts'])
+  assert.deepEqual(shared.rust, ['core', 'host'])
+  assert.ok(shared.tests.includes(suites.views[0]))
+  assert.ok(!shared.tests.includes(suites.install[0]))
+  assert.ok(shared.tests.includes('src/shared/navigation.test.ts'))
+  assert.deepEqual(selectTests(['crates/oc-core/src/io.rs', 'crates/oc-core/src/updates/mod.rs']).rust, ['core', 'host'])
 })
 
 test('new behavior files must be mapped and deleted tests cannot remain in the manifest', () => {
@@ -58,10 +60,71 @@ test('new behavior files must be mapped and deleted tests cannot remain in the m
   assert.throws(() => validateTestCoverage([...allTests, 'src/main/new.test.ts']), /未映射/)
   assert.throws(() => validateTestCoverage(allTests.filter(file => file !== suites.views[0])), /缺失/)
   assert.throws(() => selectTests(['src/main/new-feature.ts']), /未配置测试映射/)
-  assert.deepEqual(selectTests(['src/main/removed.test.ts'], undefined, ['src/main/removed.test.ts']).tests, suites.ci)
-  const removed = selectTests(['src/main/removed-module.ts'], undefined, ['src/main/removed-module.ts'])
-  assert.ok(removed.reasons.some(reason => reason.includes('跨模块调用方')))
-  assert.ok(removed.tests.includes(suites.monitor[0]))
+  for (const file of ['src/main/removed.test.ts', 'src/main/removed-module.ts', 'scripts/unknown.mjs', 'plugins/unknown.ts']) {
+    assert.throws(() => selectTests([file], undefined, [file]), /未配置测试映射/)
+  }
+  const removed = selectTests(['src/main/collectors/agents.test.ts'], undefined, ['src/main/collectors/agents.test.ts'])
+  assert.deepEqual(removed.tests, union('ci', 'topology', 'views'))
+  assert.deepEqual(removed.rust, ['agents', 'monitor', 'tern'])
+})
+
+test('retired root build configuration deletion checks frontend and packaging without accepting unknown roots', () => {
+  const file = 'electron.vite.config.ts'
+  const plan = selectTests([file], undefined, [file])
+  assert.deepEqual(plan.tests, union('topology', 'views', 'navigation', 'packaging'))
+  assert.deepEqual(plan.rust, [])
+  assert.equal(plan.rendererSmoke, true)
+  assert.throws(() => selectTests([file]), /未配置测试映射/)
+  assert.throws(() => selectTests(['unknown.config.ts'], undefined, ['unknown.config.ts']), /未配置测试映射/)
+})
+
+test('renderer smoke keeps its live mapping while the retired collector has only deletion coverage', () => {
+  for (const file of ['scripts/smoke-renderer.mjs', 'scripts/smoke/scenarios.mjs']) {
+    const plan = selectTests([file])
+    assert.deepEqual(plan.tests, union('performance', 'install'))
+    assert.deepEqual(plan.rust, ['host'])
+    assert.equal(plan.rendererSmoke, true)
+  }
+  assert.throws(() => selectTests(['scripts/smoke.ts']), /未配置测试映射/)
+  assert.deepEqual(selectTests(['scripts/smoke.ts'], undefined, ['scripts/smoke.ts']).tests, union('performance', 'install'))
+  assert.deepEqual(selectTests(['src/shared/navigation.test.ts']).tests, suites.navigation)
+})
+
+test('marketplace fixture builds and WK probes select their consumers and real renderer smoke', () => {
+  const fixture = selectTests(['scripts/build-marketplace-fixtures.mjs'])
+  assert.deepEqual(fixture.tests, union('marketplace', 'performance', 'install'))
+  assert.deepEqual(fixture.rust, ['marketplace', 'plugins', 'system'])
+  assert.equal(fixture.rendererSmoke, true)
+  for (const file of ['Cargo.lock', 'Cargo.toml', 'build-frontend.mjs', 'build.rs', 'frontend/index.html', 'frontend/main.jsx', 'run-probe.mjs', 'src/main.rs', 'tauri.conf.json']) {
+    const probe = selectTests([`scripts/probes/wk/${file}`])
+    assert.deepEqual(probe.tests, union('performance', 'install'))
+    assert.deepEqual(probe.rust, ['host'])
+    assert.equal(probe.rendererSmoke, true)
+  }
+  assert.throws(() => selectTests(['scripts/probes/unknown/run.mjs']), /未配置测试映射/)
+  assert.throws(() => selectTests(['scripts/build-marketplace-unknown.mjs']), /未配置测试映射/)
+  assert.equal(selectTests(['rust-toolchain.toml']).rendererSmoke, true)
+})
+
+test('retired entry points select replacement modules only on deletion and renames cover both sides', () => {
+  const groups = [
+    ['src/main/events/collector.ts', ['events', 'host', 'monitor']],
+    ['src/main/plugins/update-source.ts', ['host', 'installer', 'updates']],
+    ['src/main/marketplace/manager.ts', ['marketplace', 'plugins']],
+    ['src/main/collectors/schedules.ts', ['events', 'monitor', 'schedules']],
+    ['src/main/diagnostics.ts', ['diagnostics', 'host']],
+    ['src/main/resource-io.ts', ['core', 'host']],
+    ['scripts/build-native.mjs', ['host', 'native']],
+    ['scripts/build-plugin-market.mjs', ['marketplace', 'system']],
+    ['src/preload/index.ts', ['host', 'installer', 'monitor']]
+  ]
+  for (const [file, rust] of groups) {
+    assert.deepEqual(selectTests([file], undefined, [file]).rust, rust, file)
+    assert.throws(() => selectTests([file]), /未配置测试映射/, file)
+  }
+  const moved = selectTests(['src/main/tern-present.swift', 'native/tern-present.swift'], undefined, ['src/main/tern-present.swift'])
+  assert.deepEqual(moved.rust, ['host', 'native', 'navigation', 'tern'])
+  assert.equal(moved.rendererSmoke, true)
 })
 
 test('unsafe or oversized changed paths fail instead of producing an empty passing plan', () => {
@@ -86,6 +149,54 @@ test('branch and PR events require a precise base; release and manual events che
     assert.deepEqual(selectTests([], range.fullReason).tests, allTests)
   }
   assert.throws(() => changeRange({ GITHUB_EVENT_NAME: 'pull_request_target' }), /支持的CI事件/)
+})
+
+test('core tests first build a real worker and pass its exact absolute executable path', () => {
+  const plan = rustCommands(['events', 'updates'], { cwd: '/workspace/project', environment: { CARGO_TARGET_DIR: 'isolated-target' } })
+  assert.deepEqual(plan.commands[0], ['build', '--locked', '-p', 'oc-core', '--bin', 'oc-data-worker', '--features', 'acceptance'])
+  assert.equal(plan.env.OC_DATA_WORKER_TEST_EXECUTABLE, '/workspace/project/isolated-target/debug/oc-data-worker')
+  assert.equal(plan.env.OC_DATA_WORKER, plan.env.OC_DATA_WORKER_TEST_EXECUTABLE)
+  assert.deepEqual(plan.commands.slice(1).map(args => args.at(-3)), ['events::', 'updates::'])
+  assert.ok(plan.commands.slice(1).every(args => args.includes('--lib') && !args.includes('--workspace')))
+  assert.equal(rustCommands(['installer']).commands.length, 1)
+  assert.throws(() => rustCommands(['unknown']), /未知Rust/)
+})
+
+test('host tests prepare real catalog and frontend inputs before cargo tests in an isolated directory', () => {
+  const environment = { CARGO_TARGET_DIR: 'isolated-target', OC_CHAN_RESOURCE_DIR: '/stale/resources', TAURI_CONFIG: '{"build":{"frontendDist":"/stale/frontend"}}' }
+  const plan = rustCommands(['host'], { cwd: '/workspace/project', environment, hostDirectory: '/tmp/ci-owned' })
+  assert.deepEqual(plan.prerequisites, [
+    ['cargo', ['build', '--locked', '--release', '--target', 'aarch64-apple-darwin', '--target-dir', '/workspace/project/isolated-target', '-p', 'oc-system-monitor', '--bin', 'collector']],
+    [process.execPath, ['/workspace/project/scripts/build-plugin-market-rust.mjs', '--collector', '/workspace/project/isolated-target/aarch64-apple-darwin/release/collector', '--manifest', '/workspace/project/plugins/system-monitor/manifest.json', '--out', '/tmp/ci-owned/resources/plugin-market', '--sign', '-']],
+    [process.execPath, ['/workspace/project/node_modules/vite/bin/vite.js', 'build', '--outDir', '/tmp/ci-owned/frontend', '--emptyOutDir']]
+  ])
+  assert.equal(plan.env.OC_CHAN_RESOURCE_DIR, '/tmp/ci-owned/resources')
+  assert.deepEqual(JSON.parse(plan.env.TAURI_CONFIG), { build: { frontendDist: '/tmp/ci-owned/frontend' } })
+  assert.equal(environment.OC_CHAN_RESOURCE_DIR, '/stale/resources')
+  assert.deepEqual(plan.commands.at(-1), ['test', '--locked', '-p', 'oc-chan', '--features', 'acceptance', '--', '--test-threads=1'])
+  assert.deepEqual(rustCommands(['core', 'installer']).prerequisites, [])
+})
+
+test('host prerequisites fail closed and release their directory on success, nonzero exit, and spawn error', () => {
+  for (const outcome of ['success', 'exit', 'error']) {
+    const calls = []; let directory
+    const failure = new Error('spawn failed')
+    const execute = () => runRustTests(['host'], { cwd: root, environment: {}, spawn(command, args, options) {
+      directory = path.dirname(options.env.OC_CHAN_RESOURCE_DIR)
+      assert.equal(existsSync(directory), true)
+      assert.equal(options.stdio, 'inherit')
+      assert.equal(options.timeout, 20 * 60 * 1000)
+      calls.push([command, args])
+      if (calls.length === 2 && outcome === 'exit') return { status: 7 }
+      if (calls.length === 2 && outcome === 'error') return { error: failure }
+      return { status: 0 }
+    } })
+    if (outcome === 'error') assert.throws(execute, error => error === failure)
+    else assert.equal(execute(), outcome === 'exit' ? 7 : 0)
+    assert.equal(existsSync(directory), false)
+    assert.equal(calls.length, outcome === 'success' ? 5 : 2)
+    assert.equal(calls.some(([command, args]) => command === 'cargo' && args[0] === 'test'), outcome === 'success')
+  }
 })
 
 test('commit diff reports both sides of a rename and preserves spaces without shell parsing', t => {

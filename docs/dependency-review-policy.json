@@ -1,29 +1,46 @@
 {
-  "schema": 1,
-  "lockSha256": "37d1737d54298d41e611656d3a6353f6d1a542669e00904976befad521c268cc",
+  "schema": 2,
+  "lockSha256": "343eb643a2108e10d8e4e8008959d42262b5bbd1bcc1002afe5599eb3c1fcdaa",
+  "cargoLockSha256": "42b59dfdc630395a24833ba82de5c9d0420297701ff8ffe4db87077cd4a617f8",
   "allowedLicenses": [
-    "(MIT OR CC0-1.0)",
-    "(WTFPL OR MIT)",
-    "0BSD",
     "Apache-2.0",
-    "BSD-2-Clause",
+    "Apache-2.0 OR MIT",
     "BSD-3-Clause",
-    "BlueOak-1.0.0",
-    "CC-BY-4.0",
     "ISC",
     "MIT",
+    "MPL-2.0"
+  ],
+  "allowedCargoLicenses": [
+    "(MIT OR Apache-2.0) AND Unicode-3.0",
+    "0BSD OR MIT OR Apache-2.0",
+    "Apache-2.0",
+    "Apache-2.0 / MIT",
+    "Apache-2.0 AND ISC",
+    "Apache-2.0 AND MIT",
+    "Apache-2.0 OR BSL-1.0",
+    "Apache-2.0 OR ISC OR MIT",
+    "Apache-2.0 OR MIT",
+    "BSD-3-Clause",
+    "BSD-3-Clause AND MIT",
+    "BSD-3-Clause OR Apache-2.0",
+    "BSD-3-Clause/MIT",
+    "CC0-1.0",
+    "CC0-1.0 OR MIT-0 OR Apache-2.0",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "MIT OR Apache-2.0",
+    "MIT OR Apache-2.0 OR Zlib",
+    "MIT OR Zlib OR Apache-2.0",
+    "MIT/Apache-2.0",
     "MPL-2.0",
-    "Python-2.0",
-    "WTFPL",
-    "WTFPL OR ISC"
+    "Unicode-3.0",
+    "Unlicense OR MIT",
+    "Unlicense/MIT",
+    "Zlib",
+    "Zlib OR Apache-2.0 OR MIT"
   ],
-  "advisories": [
-    {
-      "id": "GHSA-g3hv-75wg-m249",
-      "scope": "build-only",
-      "reason": "2026-11-05核对npm audit与GitHub原公告：所有minimatch节点均为开发依赖；应用运行依赖不含它。GitHub标注>=7,<11.0.1且需攻击者控制pattern和optimizationLevel>=2；npm标注范围更广(<11)，报告保留该差异。构建glob来自仓库配置，CI有30分钟作业上限；新增/修改构建pattern需要评审。打包后还需确认该模块不在实际renderer清单或外部运行依赖中。未自动采用npm建议的electron-builder跨大版本降级。",
-      "reviewedAt": "2026-11-05"
-    }
-  ],
-  "dependencyChangeReason": "R-01已移除systeminformation，应用无外部npm运行时依赖。2026-11-05为Apple原生Liquid Glass增加node-api-headers@1.9.0构建依赖；D-02复用unzipper@0.12.5校验本地ZIP。2026-11-06为WebGL办公楼增加three@0.187.0与@types/three@0.187.0，两者MIT，按实际使用模块打入scene chunk。2026-11-06合入应用更新，js-yaml@4.3.2（MIT）与semver@7.8.6（ISC）由已有构建链传递依赖提升为直接dev依赖，新增MIT的类型包；主进程实际使用代码打入bundle，node_modules仍不进入安装包。2026-11-09按用户要求以kubai-icons-react@0.2.1及其精确依赖kubai-icons@0.2.1替换lucide-react；两包均MIT，仅导入实际使用的图标模块，不加载全量图库或增加外置运行依赖。主进程与renderer分别输出实际打包清单及完整许可证，审计合并两份清单，不能把进入主进程的依赖标记为仅构建使用。现有3MiB ASAR和其它冻结预算不变；最终体积及依赖范围以产物检查回执为准。"
+  "advisories": [],
+  "reviewedAt": "2026-11-10",
+  "dependencyChangeReason": "Rust/Tauri替换Electron/Node生产后台；Node仅承担构建工具和React/React Flow/Three.js前端，实际入包模块由Vite清单分类。Rust使用Tauri/Wry/Tao、Tokio、rusqlite、reqwest/rustls、notify及平台绑定完成宿主、可取消worker、原生插件与安装事务。合并main时沿用Kubai 0.2.1（MIT）替换lucide，消费者与锁文件统一，不保留两套图标依赖。Cargo锁未改变，完整许可补证来源见resources/rust-license-supplements/manifest.json。历史迁移审计docs/rust-migration/evidence/dependency-review-20261110-2.json仅证明当时输入，不覆盖此次npm锁变更；合并产物须重新执行依赖审计。所有多许可证声明保留原文与授权通知，不因依赖标为dev而视为未入包。此清单只绑定许可证和锁，不豁免公告；实际包大小和源码排除由产物门禁独立证明。"
 }

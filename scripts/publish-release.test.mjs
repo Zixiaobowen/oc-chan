@@ -124,7 +124,7 @@ async function fixture(t, version = '1.2.3', serverOptions = {}) {
 function assertPublic(fixture, latestTag) {
   const release = fixture.remote.releases.get(fixture.info.tag)
   assert.equal(release.draft, false)
-  assert.equal(release.prerelease, fixture.info.prerelease)
+  assert.equal(release.prerelease, false)
   assert.equal(release.tag_name, fixture.info.tag)
   assert.deepEqual(new Map(release.assets.map(asset => [asset.name, asset.size])), fixture.sizes)
   assert.ok(release.assets.every(asset => asset.state === 'uploaded'))
@@ -144,8 +144,6 @@ for (const [version, latest, expected] of [
   ['1.10.0', 'v1.9.0', 'v1.10.0'],
   ['2.0.0', 'v1.99.99', 'v2.0.0'],
   ['1.2.3', undefined, 'v1.2.3'],
-  ['2.0.0-beta.1', 'v1.2.3', 'v1.2.3'],
-  ['2.0.0-beta.1', undefined, null],
 ]) {
   test(`publishes ${version} with existing Latest ${latest ?? 'none'} as Latest ${expected ?? 'none'}`, async t => {
     const f = await fixture(t, version, { latest })

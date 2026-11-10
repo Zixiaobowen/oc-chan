@@ -1,0 +1,3734 @@
+{
+  "schema": 3,
+  "options": {
+    "mode": "smoke",
+    "seed": "20261104",
+    "scenario": "stress",
+    "sampler": "user",
+    "out": "docs/rust-migration/evidence/performance-stress-20261110-7"
+  },
+  "startedAt": "2026-11-09T23:33:01.604Z",
+  "complete": true,
+  "runs": [
+    {
+      "label": "128-session-burst",
+      "counters": {
+        "expected": 2560,
+        "read": 1720,
+        "published": 1720,
+        "received": 1720,
+        "committed": 1720,
+        "zeroByteReads": 80,
+        "bytesRead": 398928,
+        "readIssues": 0,
+        "overlappingReads": 0,
+        "earlierWatchReads": 0,
+        "resourceSamples": 35,
+        "incompleteResourceSamples": 35,
+        "lifecycleSamples": 589,
+        "missedLifecycles": 4077,
+        "incompleteLifecycles": 4105,
+        "incompleteApplicationSamples": 1,
+        "incompleteDevelopmentSamples": 0,
+        "incompleteApplicationCpuIntervals": 24,
+        "incompleteDevelopmentCpuIntervals": 26
+      },
+      "traffic": {
+        "agents": {
+          "publications": 64,
+          "main": {
+            "messages": 44,
+            "serializedBytes": 3519717
+          },
+          "tray": {
+            "messages": 50,
+            "serializedBytes": 3953301
+          },
+          "unloaded": {
+            "messages": 0,
+            "serializedBytes": 0
+          }
+        },
+        "schedules": {
+          "publications": 6,
+          "main": {
+            "messages": 20,
+            "serializedBytes": 17782636
+          },
+          "tray": {
+            "messages": 20,
+            "serializedBytes": 17782636
+          },
+          "unloaded": {
+            "messages": 0,
+            "serializedBytes": 0
+          }
+        },
+        "system": {
+          "publications": 16,
+          "main": {
+            "messages": 15,
+            "serializedBytes": 229102
+          },
+          "tray": {
+            "messages": 21,
+            "serializedBytes": 321789
+          },
+          "unloaded": {
+            "messages": 0,
+            "serializedBytes": 0
+          }
+        },
+        "events": {
+          "publications": 5,
+          "main": {
+            "messages": 10,
+            "serializedBytes": 13317
+          },
+          "tray": {
+            "messages": 10,
+            "serializedBytes": 13317
+          },
+          "unloaded": {
+            "messages": 0,
+            "serializedBytes": 0
+          }
+        }
+      },
+      "latencyMs": {
+        "eventToWatch": {
+          "count": 0,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "max": null,
+          "mean": null,
+          "overflow": 0,
+          "resolutionMs": 0.25
+        },
+        "eventToReadComplete": {
+          "count": 1720,
+          "p50": 22.75,
+          "p95": 104.5,
+          "p99": 108.25,
+          "max": 109.294677734375,
+          "mean": 54.086729821493456,
+          "overflow": 0,
+          "resolutionMs": 0.25
+        },
+        "read": {
+          "count": 1720,
+          "p50": 1,
+          "p95": 1.5,
+          "p99": 1.75,
+          "max": 2.55078125,
+          "mean": 0.8600408509720203,
+          "overflow": 0,
+          "resolutionMs": 0.25
+        },
+        "readOverlap": {
+          "count": 0,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "max": null,
+          "mean": null,
+          "overflow": 0,
+          "resolutionMs": 0.25
+        },
+        "readToPublish": {
+          "count": 1720,
+          "p50": 11.25,
+          "p95": 18.25,
+          "p99": 19.25,
+          "max": 19.99951171875,
+          "mean": 10.833088577625363,
+          "overflow": 0,
+          "resolutionMs": 0.25
+        },
+        "publishToIpc": {
+          "count": 1720,
+          "p50": 3.5,
+          "p95": 4.5,
+          "p99": 4.5,
+          "max": 4.660888671875,
+          "mean": 3.444739053415698,
+          "overflow": 0,
+          "resolutionMs": 0.25
+        },
+        "ipcToCommit": {
+          "count": 1720,
+          "p50": 2,
+          "p95": 2,
+          "p99": 2,
+          "max": 2,
+          "mean": 1.7587209302325582,
+          "overflow": 0,
+          "resolutionMs": 0.25
+        },
+        "eventToCommit": {
+          "count": 1720,
+          "p50": 45.75,
+          "p95": 119.75,
+          "p99": 119.75,
+          "max": 122.508544921875,
+          "mean": 70.12327838276708,
+          "overflow": 0,
+          "resolutionMs": 0.25
+        }
+      },
+      "collectionMs": {
+        "agents": {
+          "count": 0,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "max": null,
+          "mean": null,
+          "overflow": 0,
+          "resolutionMs": 0.25
+        },
+        "schedules": {
+          "count": 0,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "max": null,
+          "mean": null,
+          "overflow": 0,
+          "resolutionMs": 0.25
+        },
+        "system": {
+          "count": 0,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "max": null,
+          "mean": null,
+          "overflow": 0,
+          "resolutionMs": 0.25
+        },
+        "events": {
+          "count": 0,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "max": null,
+          "mean": null,
+          "overflow": 0,
+          "resolutionMs": 0.25
+        }
+      },
+      "inputToNextCommitMs": {
+        "count": 1,
+        "p50": 5,
+        "p95": 5,
+        "p99": 5,
+        "max": 5,
+        "mean": 5,
+        "overflow": 0,
+        "resolutionMs": 0.25
+      },
+      "applicationRssMiB": {
+        "count": 31,
+        "p50": 181,
+        "p95": 190,
+        "p99": 190,
+        "max": 189.890625,
+        "mean": 180.26209677419354,
+        "overflow": 0,
+        "resolutionMs": 0.25
+      },
+      "applicationCpuOneCorePercent": {
+        "count": 8,
+        "p50": 8.25,
+        "p95": 104.75,
+        "p99": 104.75,
+        "max": 104.73097927501,
+        "mean": 22.364923774011032,
+        "overflow": 0,
+        "resolutionMs": 0.25
+      },
+      "interactionRoundTripMs": {
+        "count": 1,
+        "p50": 3.5,
+        "p95": 3.5,
+        "p99": 3.5,
+        "max": 3.37744140625,
+        "mean": 3.37744140625,
+        "overflow": 0,
+        "resolutionMs": 0.25
+      },
+      "developmentRssMiB": {
+        "count": 34,
+        "p50": 189.5,
+        "p95": 193.75,
+        "p99": 194.75,
+        "max": 194.71875,
+        "mean": 189.59558823529412,
+        "overflow": 0,
+        "resolutionMs": 0.25
+      },
+      "developmentCpuOneCorePercent": {
+        "count": 8,
+        "p50": 1.25,
+        "p95": 2.25,
+        "p99": 2.25,
+        "max": 2.1755554779089064,
+        "mean": 1.2004087007006377,
+        "overflow": 0,
+        "resolutionMs": 0.25
+      },
+      "maxObservedFd": 175,
+      "maxObservedProcesses": 5,
+      "maxObservedAuxiliaryRssBytes": 14614528,
+      "limits": "RSS is a one-second sampled maximum of observed descendants, with 10 ms lifecycle supplements; CPU intervals exclude new, departed or unreadable identities. System enumeration errors and observed-app missing fields are counted separately; neither proves unseen descendants absent. Commit percentiles cover committed events only; compare counters for coalescing or loss.",
+      "slices": [
+        {
+          "label": "128-session-burst",
+          "counters": {
+            "expected": 2560,
+            "read": 1720,
+            "published": 1720,
+            "received": 1720,
+            "committed": 1720,
+            "zeroByteReads": 80,
+            "bytesRead": 398928,
+            "readIssues": 0,
+            "overlappingReads": 0,
+            "earlierWatchReads": 0,
+            "resourceSamples": 4,
+            "incompleteResourceSamples": 4,
+            "lifecycleSamples": 36,
+            "missedLifecycles": 14,
+            "incompleteLifecycles": 16,
+            "incompleteApplicationSamples": 0,
+            "incompleteDevelopmentSamples": 0,
+            "incompleteApplicationCpuIntervals": 4,
+            "incompleteDevelopmentCpuIntervals": 4
+          },
+          "traffic": {
+            "agents": {
+              "publications": 25,
+              "main": {
+                "messages": 24,
+                "serializedBytes": 2000622
+              },
+              "tray": {
+                "messages": 24,
+                "serializedBytes": 2000622
+              },
+              "unloaded": {
+                "messages": 0,
+                "serializedBytes": 0
+              }
+            },
+            "schedules": {
+              "publications": 0,
+              "main": {
+                "messages": 0,
+                "serializedBytes": 0
+              },
+              "tray": {
+                "messages": 0,
+                "serializedBytes": 0
+              },
+              "unloaded": {
+                "messages": 0,
+                "serializedBytes": 0
+              }
+            },
+            "system": {
+              "publications": 2,
+              "main": {
+                "messages": 2,
+                "serializedBytes": 29274
+              },
+              "tray": {
+                "messages": 2,
+                "serializedBytes": 29274
+              },
+              "unloaded": {
+                "messages": 0,
+                "serializedBytes": 0
+              }
+            },
+            "events": {
+              "publications": 0,
+              "main": {
+                "messages": 0,
+                "serializedBytes": 0
+              },
+              "tray": {
+                "messages": 0,
+                "serializedBytes": 0
+              },
+              "unloaded": {
+                "messages": 0,
+                "serializedBytes": 0
+              }
+            }
+          },
+          "latencyMs": {
+            "eventToWatch": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "max": null,
+              "mean": null,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            },
+            "eventToReadComplete": {
+              "count": 1720,
+              "p50": 22.75,
+              "p95": 104.5,
+              "p99": 108.25,
+              "max": 109.294677734375,
+              "mean": 54.086729821493456,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            },
+            "read": {
+              "count": 1720,
+              "p50": 1,
+              "p95": 1.5,
+              "p99": 1.75,
+              "max": 2.55078125,
+              "mean": 0.8600408509720203,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            },
+            "readOverlap": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "max": null,
+              "mean": null,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            },
+            "readToPublish": {
+              "count": 1720,
+              "p50": 11.25,
+              "p95": 18.25,
+              "p99": 19.25,
+              "max": 19.99951171875,
+              "mean": 10.833088577625363,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            },
+            "publishToIpc": {
+              "count": 1720,
+              "p50": 3.5,
+              "p95": 4.5,
+              "p99": 4.5,
+              "max": 4.660888671875,
+              "mean": 3.444739053415698,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            },
+            "ipcToCommit": {
+              "count": 1720,
+              "p50": 2,
+              "p95": 2,
+              "p99": 2,
+              "max": 2,
+              "mean": 1.7587209302325582,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            },
+            "eventToCommit": {
+              "count": 1720,
+              "p50": 45.75,
+              "p95": 119.75,
+              "p99": 119.75,
+              "max": 122.508544921875,
+              "mean": 70.12327838276708,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            }
+          },
+          "collectionMs": {
+            "agents": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "max": null,
+              "mean": null,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            },
+            "schedules": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "max": null,
+              "mean": null,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            },
+            "system": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "max": null,
+              "mean": null,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            },
+            "events": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "max": null,
+              "mean": null,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            }
+          },
+          "inputToNextCommitMs": {
+            "count": 0,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "max": null,
+            "mean": null,
+            "overflow": 0,
+            "resolutionMs": 0.25
+          },
+          "applicationRssMiB": {
+            "count": 4,
+            "p50": 169.5,
+            "p95": 169.5,
+            "p99": 169.5,
+            "max": 169.421875,
+            "mean": 169.33984375,
+            "overflow": 0,
+            "resolutionMs": 0.25
+          },
+          "applicationCpuOneCorePercent": {
+            "count": 0,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "max": null,
+            "mean": null,
+            "overflow": 0,
+            "resolutionMs": 0.25
+          },
+          "interactionRoundTripMs": {
+            "count": 0,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "max": null,
+            "mean": null,
+            "overflow": 0,
+            "resolutionMs": 0.25
+          },
+          "developmentRssMiB": {
+            "count": 4,
+            "p50": 189.25,
+            "p95": 189.5,
+            "p99": 189.5,
+            "max": 189.28125,
+            "mean": 189.2578125,
+            "overflow": 0,
+            "resolutionMs": 0.25
+          },
+          "developmentCpuOneCorePercent": {
+            "count": 0,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "max": null,
+            "mean": null,
+            "overflow": 0,
+            "resolutionMs": 0.25
+          },
+          "maxObservedFd": 155,
+          "maxObservedProcesses": 2,
+          "maxObservedAuxiliaryRssBytes": 1343488,
+          "limits": "RSS is a one-second sampled maximum of observed descendants, with 10 ms lifecycle supplements; CPU intervals exclude new, departed or unreadable identities. System enumeration errors and observed-app missing fields are counted separately; neither proves unseen descendants absent. Commit percentiles cover committed events only; compare counters for coalescing or loss."
+        }
+      ],
+      "frames": {
+        "count": 0,
+        "p50": null,
+        "p95": null,
+        "p99": null,
+        "max": null,
+        "mean": null,
+        "overflow": 0,
+        "resolutionMs": 0.25
+      },
+      "webglDraws": {
+        "batches": 65,
+        "calls": 968,
+        "byView": {
+          "main": {
+            "batches": 65,
+            "calls": 968
+          },
+          "tray": {
+            "batches": 0,
+            "calls": 0
+          }
+        }
+      },
+      "rendererEvidence": {
+        "main": {
+          "documentHidden": true,
+          "visibilityState": "hidden",
+          "nativeRafTimestamp": null
+        },
+        "tray": {
+          "documentHidden": true,
+          "visibilityState": "hidden",
+          "nativeRafTimestamp": null
+        }
+      },
+      "calibrations": [
+        {
+          "domain": "rust",
+          "at": 1794267238226.8157,
+          "offsetMs": -0.094970703125,
+          "errorBoundMs": 0.0284423828125
+        },
+        {
+          "domain": "main",
+          "at": 1794267238229.7527,
+          "offsetMs": 1.522705078125,
+          "errorBoundMs": 0.22998046875
+        },
+        {
+          "domain": "rust",
+          "at": 1794267253995.1155,
+          "offsetMs": -0.089599609375,
+          "errorBoundMs": 0.0347900390625
+        },
+        {
+          "domain": "main",
+          "at": 1794267254003.1604,
+          "offsetMs": 0.722412109375,
+          "errorBoundMs": 0.43798828125
+        },
+        {
+          "domain": "tray",
+          "at": 1794267254010.7322,
+          "offsetMs": 1.48291015625,
+          "errorBoundMs": 0.2491455078125
+        }
+      ],
+      "loaded": 2560,
+      "workload": null,
+      "workloadExecuted": {
+        "warmupEvents": 0,
+        "measuredEvents": 2560,
+        "writtenBytes": 398928,
+        "interactions": 3,
+        "historyQueries": 0,
+        "mutationBatches": 0,
+        "mutatedFiles": 0
+      },
+      "viewport": {
+        "main": {
+          "height": 860,
+          "scale": 2,
+          "width": 1280
+        },
+        "tray": {
+          "height": 560,
+          "scale": 2,
+          "width": 380
+        }
+      },
+      "settingsObserved": {
+        "resolvedLanguage": "zh-CN",
+        "resolvedTheme": "light",
+        "settings": {
+          "appearance": "light",
+          "codeFont": "system",
+          "language": "zh-CN",
+          "preventSleep": false,
+          "showDock": false,
+          "textSize": "default",
+          "uiFont": "system"
+        }
+      },
+      "channelTraffic": {
+        "main": {
+          "monitor": {
+            "messages": 124,
+            "bytes": 24236164
+          },
+          "sources": {
+            "messages": 0,
+            "bytes": 0
+          },
+          "settings": {
+            "messages": 9,
+            "bytes": 9336
+          },
+          "updates": {
+            "messages": 0,
+            "bytes": 0
+          },
+          "marketplace": {
+            "messages": 45,
+            "bytes": 41145
+          },
+          "navigation": {
+            "messages": 0,
+            "bytes": 0
+          }
+        },
+        "tray": {
+          "monitor": {
+            "messages": 103,
+            "bytes": 22157685
+          },
+          "sources": {
+            "messages": 0,
+            "bytes": 0
+          },
+          "settings": {
+            "messages": 4,
+            "bytes": 4156
+          },
+          "updates": {
+            "messages": 0,
+            "bytes": 0
+          },
+          "marketplace": {
+            "messages": 0,
+            "bytes": 0
+          },
+          "navigation": {
+            "messages": 0,
+            "bytes": 0
+          }
+        }
+      },
+      "lifecycleIdentityGaps": 4173,
+      "associatedProcesses": {
+        "scope": "deduplicated host descendants plus instance-associated WebKit processes; processes may be shared with other instances; not exclusive application cost",
+        "associationRefreshMs": 500,
+        "evidenceLeaseMs": 2000,
+        "refreshes": 82,
+        "incompleteRefreshes": 0,
+        "resourceSamples": 56,
+        "incompleteSamples": 13,
+        "missingRoles": {
+          "web": 0,
+          "provisionalWeb": 0,
+          "gpu": 0,
+          "network": 0
+        },
+        "latest": {
+          "at": 1794267287946.025,
+          "identities": [
+            {
+              "pid": 16434,
+              "role": "web",
+              "startMicroseconds": 923440,
+              "startSeconds": 1794267237,
+              "views": [
+                "main"
+              ],
+              "roles": [
+                "web"
+              ]
+            },
+            {
+              "pid": 16433,
+              "role": "gpu",
+              "startMicroseconds": 914920,
+              "startSeconds": 1794267237,
+              "views": [
+                "main",
+                "tray"
+              ],
+              "roles": [
+                "gpu"
+              ]
+            },
+            {
+              "pid": 16435,
+              "role": "network",
+              "startMicroseconds": 947305,
+              "startSeconds": 1794267237,
+              "views": [
+                "main",
+                "tray"
+              ],
+              "roles": [
+                "network"
+              ]
+            },
+            {
+              "pid": 17140,
+              "role": "web",
+              "startMicroseconds": 906596,
+              "startSeconds": 1794267253,
+              "views": [
+                "tray"
+              ],
+              "roles": [
+                "web"
+              ]
+            }
+          ],
+          "failures": [],
+          "views": [
+            {
+              "view": "main",
+              "notRunning": [
+                "provisionalWeb"
+              ]
+            },
+            {
+              "view": "tray",
+              "notRunning": [
+                "provisionalWeb"
+              ]
+            }
+          ],
+          "complete": true
+        },
+        "measurement": {
+          "label": "L2-boundaries:host-plus-associated",
+          "counters": {
+            "expected": 0,
+            "read": 0,
+            "published": 0,
+            "received": 0,
+            "committed": 0,
+            "zeroByteReads": 0,
+            "bytesRead": 0,
+            "readIssues": 0,
+            "overlappingReads": 0,
+            "earlierWatchReads": 0,
+            "resourceSamples": 43,
+            "incompleteResourceSamples": 43,
+            "lifecycleSamples": 684,
+            "missedLifecycles": 4163,
+            "incompleteLifecycles": 4203,
+            "incompleteApplicationSamples": 1,
+            "incompleteDevelopmentSamples": 0,
+            "incompleteApplicationCpuIntervals": 33,
+            "incompleteDevelopmentCpuIntervals": 0
+          },
+          "traffic": {
+            "agents": {
+              "publications": 0,
+              "main": {
+                "messages": 0,
+                "serializedBytes": 0
+              },
+              "tray": {
+                "messages": 0,
+                "serializedBytes": 0
+              },
+              "unloaded": {
+                "messages": 0,
+                "serializedBytes": 0
+              }
+            },
+            "schedules": {
+              "publications": 0,
+              "main": {
+                "messages": 0,
+                "serializedBytes": 0
+              },
+              "tray": {
+                "messages": 0,
+                "serializedBytes": 0
+              },
+              "unloaded": {
+                "messages": 0,
+                "serializedBytes": 0
+              }
+            },
+            "system": {
+              "publications": 0,
+              "main": {
+                "messages": 0,
+                "serializedBytes": 0
+              },
+              "tray": {
+                "messages": 0,
+                "serializedBytes": 0
+              },
+              "unloaded": {
+                "messages": 0,
+                "serializedBytes": 0
+              }
+            },
+            "events": {
+              "publications": 0,
+              "main": {
+                "messages": 0,
+                "serializedBytes": 0
+              },
+              "tray": {
+                "messages": 0,
+                "serializedBytes": 0
+              },
+              "unloaded": {
+                "messages": 0,
+                "serializedBytes": 0
+              }
+            }
+          },
+          "latencyMs": {
+            "eventToWatch": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "max": null,
+              "mean": null,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            },
+            "eventToReadComplete": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "max": null,
+              "mean": null,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            },
+            "read": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "max": null,
+              "mean": null,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            },
+            "readOverlap": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "max": null,
+              "mean": null,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            },
+            "readToPublish": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "max": null,
+              "mean": null,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            },
+            "publishToIpc": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "max": null,
+              "mean": null,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            },
+            "ipcToCommit": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "max": null,
+              "mean": null,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            },
+            "eventToCommit": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "max": null,
+              "mean": null,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            }
+          },
+          "collectionMs": {
+            "agents": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "max": null,
+              "mean": null,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            },
+            "schedules": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "max": null,
+              "mean": null,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            },
+            "system": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "max": null,
+              "mean": null,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            },
+            "events": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "max": null,
+              "mean": null,
+              "overflow": 0,
+              "resolutionMs": 0.25
+            }
+          },
+          "inputToNextCommitMs": {
+            "count": 0,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "max": null,
+            "mean": null,
+            "overflow": 0,
+            "resolutionMs": 0.25
+          },
+          "applicationRssMiB": {
+            "count": 42,
+            "p50": 845.25,
+            "p95": 945.5,
+            "p99": 949.25,
+            "max": 949.03125,
+            "mean": 723.1268601190476,
+            "overflow": 0,
+            "resolutionMs": 0.25
+          },
+          "applicationCpuOneCorePercent": {
+            "count": 10,
+            "p50": 23.75,
+            "p95": 108.5,
+            "p99": 108.5,
+            "max": 108.25273077652295,
+            "mean": 29.675244263841115,
+            "overflow": 0,
+            "resolutionMs": 0.25
+          },
+          "interactionRoundTripMs": {
+            "count": 0,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "max": null,
+            "mean": null,
+            "overflow": 0,
+            "resolutionMs": 0.25
+          },
+          "developmentRssMiB": {
+            "count": 0,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "max": null,
+            "mean": null,
+            "overflow": 0,
+            "resolutionMs": 0.25
+          },
+          "developmentCpuOneCorePercent": {
+            "count": 0,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "max": null,
+            "mean": null,
+            "overflow": 0,
+            "resolutionMs": 0.25
+          },
+          "maxObservedFd": 198,
+          "maxObservedProcesses": 9,
+          "maxObservedAuxiliaryRssBytes": 14614528,
+          "limits": "RSS is a one-second sampled maximum of observed descendants, with 10 ms lifecycle supplements; CPU intervals exclude new, departed or unreadable identities. System enumeration errors and observed-app missing fields are counted separately; neither proves unseen descendants absent. Commit percentiles cover committed events only; compare counters for coalescing or loss."
+        },
+        "fullCoverageEstablished": false,
+        "remainingGaps": "between-observation process changes, startup before driver connection, unobserved short-lived processes, and any explicit unavailable/permission rows"
+      },
+      "startupMs": {
+        "build": 50804,
+        "applicationToCommitObserved": 3591.522705078125,
+        "applicationToInteractive": 4306.33056640625,
+        "total": 55968.6611328125
+      },
+      "stages": {
+        "build-start": {
+          "performanceStage": "build-start",
+          "atMs": 1794267183735
+        },
+        "build-end": {
+          "performanceStage": "build-end",
+          "atMs": 1794267234539
+        },
+        "app-spawn": {
+          "performanceStage": "app-spawn",
+          "atMs": 1794267234656,
+          "pid": 14427
+        }
+      },
+      "native": {
+        "activationPolicy": 2,
+        "appActive": false,
+        "firstResponder": "wry::wkwebview::class::wry_web_view::WryWebView0.57.1",
+        "geometry": {
+          "contentLayoutInWebview": {
+            "height": 828,
+            "width": 1280,
+            "x": 0,
+            "y": 32
+          },
+          "contentLayoutRect": {
+            "height": 828,
+            "width": 1280,
+            "x": 0,
+            "y": 0
+          },
+          "contentViewBounds": {
+            "height": 860,
+            "width": 1280,
+            "x": 0,
+            "y": 0
+          },
+          "contentViewFrame": {
+            "height": 860,
+            "width": 1280,
+            "x": 0,
+            "y": 0
+          },
+          "magnification": 1,
+          "obscuredContentInsets": {
+            "bottom": 0,
+            "left": 0,
+            "right": 0,
+            "top": 0
+          },
+          "pageZoom": 1,
+          "webviewBounds": {
+            "height": 860,
+            "width": 1280,
+            "x": 0,
+            "y": 0
+          },
+          "webviewFrame": {
+            "height": 860,
+            "width": 1280,
+            "x": 0,
+            "y": 0
+          }
+        },
+        "height": 860,
+        "key": false,
+        "loading": false,
+        "main": false,
+        "outerHeight": 860,
+        "outerWidth": 1280,
+        "processes": {
+          "entries": [
+            {
+              "pid": 16434,
+              "role": "web",
+              "startMicroseconds": 923440,
+              "startSeconds": 1794267237
+            },
+            {
+              "pid": 16433,
+              "role": "gpu",
+              "startMicroseconds": 914920,
+              "startSeconds": 1794267237
+            },
+            {
+              "pid": 16435,
+              "role": "network",
+              "startMicroseconds": 947305,
+              "startSeconds": 1794267237
+            }
+          ],
+          "notRunning": [
+            "provisionalWeb"
+          ],
+          "scope": "instance-associated processes; may be shared",
+          "unavailable": []
+        },
+        "tabFocusesLinks": true,
+        "url": "tauri://localhost/index.html?view=main",
+        "visible": false,
+        "webviewClass": "wry::wkwebview::class::wry_web_view::WryWebView0.57.1",
+        "webviewFlipped": true,
+        "webviewIsFirstResponder": true,
+        "width": 1280,
+        "windowNumber": 4978
+      },
+      "nativeTray": {
+        "activationPolicy": 2,
+        "appActive": false,
+        "firstResponder": "TaoWindow",
+        "geometry": {
+          "contentLayoutInWebview": {
+            "height": 560,
+            "width": 380,
+            "x": 0,
+            "y": 0
+          },
+          "contentLayoutRect": {
+            "height": 560,
+            "width": 380,
+            "x": 0,
+            "y": 0
+          },
+          "contentViewBounds": {
+            "height": 560,
+            "width": 380,
+            "x": 0,
+            "y": 0
+          },
+          "contentViewFrame": {
+            "height": 560,
+            "width": 380,
+            "x": 0,
+            "y": 0
+          },
+          "magnification": 1,
+          "obscuredContentInsets": {
+            "bottom": 0,
+            "left": 0,
+            "right": 0,
+            "top": 0
+          },
+          "pageZoom": 1,
+          "webviewBounds": {
+            "height": 560,
+            "width": 380,
+            "x": 0,
+            "y": 0
+          },
+          "webviewFrame": {
+            "height": 560,
+            "width": 380,
+            "x": 0,
+            "y": 0
+          }
+        },
+        "height": 560,
+        "key": false,
+        "loading": false,
+        "main": false,
+        "outerHeight": 560,
+        "outerWidth": 380,
+        "processes": {
+          "entries": [
+            {
+              "pid": 17140,
+              "role": "web",
+              "startMicroseconds": 906596,
+              "startSeconds": 1794267253
+            },
+            {
+              "pid": 16433,
+              "role": "gpu",
+              "startMicroseconds": 914920,
+              "startSeconds": 1794267237
+            },
+            {
+              "pid": 16435,
+              "role": "network",
+              "startMicroseconds": 947305,
+              "startSeconds": 1794267237
+            }
+          ],
+          "notRunning": [
+            "provisionalWeb"
+          ],
+          "scope": "instance-associated processes; may be shared",
+          "unavailable": []
+        },
+        "tabFocusesLinks": true,
+        "url": "tauri://localhost/index.html?view=tray",
+        "visible": false,
+        "webviewClass": "wry::wkwebview::class::wry_web_view::WryWebView0.57.1",
+        "webviewFlipped": true,
+        "webviewIsFirstResponder": false,
+        "width": 380,
+        "windowNumber": 4980
+      },
+      "trayOpenMs": 165.470458984375,
+      "shutdownReport": {
+        "documents": 0,
+        "requests": 0,
+        "resources": {
+          "global": {
+            "admitted": 35644,
+            "cancelled": 3,
+            "completed": 35619,
+            "current": {
+              "commandBytes": 0,
+              "commands": 0,
+              "fileBytes": 0,
+              "files": 0,
+              "pluginProcesses": 0,
+              "pluginProtocolBytes": 0,
+              "queued": 0,
+              "socketBytes": 0,
+              "sockets": 0,
+              "stderrBytes": 0,
+              "stdoutBytes": 0
+            },
+            "failed": 22,
+            "maxExecutionMs": 16074.055000000002,
+            "maxWaitMs": 1948.680458,
+            "peak": {
+              "commandBytes": 33554432,
+              "commands": 4,
+              "fileBytes": 16777216,
+              "files": 8,
+              "pluginProcesses": 1,
+              "pluginProtocolBytes": 7684096,
+              "queued": 7,
+              "socketBytes": 65536,
+              "sockets": 1,
+              "stderrBytes": 16777216,
+              "stdoutBytes": 16842752
+            },
+            "queueTimeouts": 0,
+            "rejected": 0,
+            "totalExecutionMs": 73427.58965299955,
+            "totalWaitMs": 4194.884691999996
+          },
+          "limits": {
+            "commandBytes": 33554432,
+            "commands": 8,
+            "fileBytes": 16777216,
+            "files": 8,
+            "pluginProcesses": 16,
+            "pluginProtocolBytes": 8388608,
+            "queueTimeoutMs": 10000,
+            "queued": 256,
+            "queuedPerSource": 128,
+            "socketBytes": 524288,
+            "sockets": 8,
+            "sources": 32
+          },
+          "sources": [
+            {
+              "admitted": 3,
+              "cancelled": 0,
+              "completed": 3,
+              "current": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 0,
+                "files": 0,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "failed": 0,
+              "maxExecutionMs": 7.4365000000000006,
+              "maxWaitMs": 0,
+              "peak": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 65537,
+                "files": 1,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "queueTimeouts": 0,
+              "rejected": 0,
+              "source": "desktop-startup",
+              "totalExecutionMs": 8.507417,
+              "totalWaitMs": 0
+            },
+            {
+              "admitted": 10,
+              "cancelled": 0,
+              "completed": 10,
+              "current": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 0,
+                "files": 0,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "failed": 0,
+              "maxExecutionMs": 11.278375,
+              "maxWaitMs": 0,
+              "peak": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 65537,
+                "files": 1,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "queueTimeouts": 0,
+              "rejected": 0,
+              "source": "settings",
+              "totalExecutionMs": 79.363126,
+              "totalWaitMs": 0
+            },
+            {
+              "admitted": 59,
+              "cancelled": 1,
+              "completed": 58,
+              "current": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 0,
+                "files": 0,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "failed": 0,
+              "maxExecutionMs": 50.592167,
+              "maxWaitMs": 0,
+              "peak": {
+                "commandBytes": 8388608,
+                "commands": 1,
+                "fileBytes": 0,
+                "files": 0,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 4194304,
+                "stdoutBytes": 4194304
+              },
+              "queueTimeouts": 0,
+              "rejected": 0,
+              "source": "agent-processes",
+              "totalExecutionMs": 2019.545868,
+              "totalWaitMs": 0
+            },
+            {
+              "admitted": 29,
+              "cancelled": 1,
+              "completed": 28,
+              "current": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 0,
+                "files": 0,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "failed": 0,
+              "maxExecutionMs": 219.97270899999998,
+              "maxWaitMs": 0,
+              "peak": {
+                "commandBytes": 8388608,
+                "commands": 1,
+                "fileBytes": 0,
+                "files": 0,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 4194304,
+                "stdoutBytes": 4194304
+              },
+              "queueTimeouts": 0,
+              "rejected": 0,
+              "source": "agent-ownership",
+              "totalExecutionMs": 5827.183206999998,
+              "totalWaitMs": 0
+            },
+            {
+              "admitted": 3584,
+              "cancelled": 0,
+              "completed": 3584,
+              "current": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 0,
+                "files": 0,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "failed": 0,
+              "maxExecutionMs": 0.37775,
+              "maxWaitMs": 0,
+              "peak": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 16384,
+                "files": 1,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "queueTimeouts": 0,
+              "rejected": 0,
+              "source": "agent-metadata",
+              "totalExecutionMs": 346.3321510000005,
+              "totalWaitMs": 0
+            },
+            {
+              "admitted": 28,
+              "cancelled": 0,
+              "completed": 28,
+              "current": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 0,
+                "files": 0,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "failed": 0,
+              "maxExecutionMs": 9.891334,
+              "maxWaitMs": 0,
+              "peak": {
+                "commandBytes": 4194304,
+                "commands": 1,
+                "fileBytes": 0,
+                "files": 0,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 2097152,
+                "stdoutBytes": 2097152
+              },
+              "queueTimeouts": 0,
+              "rejected": 0,
+              "source": "agent-tern",
+              "totalExecutionMs": 255.25874800000003,
+              "totalWaitMs": 0
+            },
+            {
+              "admitted": 28,
+              "cancelled": 0,
+              "completed": 28,
+              "current": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 0,
+                "files": 0,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "failed": 0,
+              "maxExecutionMs": 0.155291,
+              "maxWaitMs": 1948.680458,
+              "peak": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 16777216,
+                "files": 1,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 1,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "queueTimeouts": 0,
+              "rejected": 0,
+              "source": "agent-collab",
+              "totalExecutionMs": 2.8227510000000002,
+              "totalWaitMs": 1996.716499
+            },
+            {
+              "admitted": 24,
+              "cancelled": 0,
+              "completed": 12,
+              "current": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 0,
+                "files": 0,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "failed": 12,
+              "maxExecutionMs": 0.86575,
+              "maxWaitMs": 0,
+              "peak": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 1048577,
+                "files": 1,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "queueTimeouts": 0,
+              "rejected": 0,
+              "source": "schedule-metadata",
+              "totalExecutionMs": 5.1420840000000005,
+              "totalWaitMs": 0
+            },
+            {
+              "admitted": 80,
+              "cancelled": 0,
+              "completed": 80,
+              "current": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 0,
+                "files": 0,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "failed": 0,
+              "maxExecutionMs": 30.54075,
+              "maxWaitMs": 36.493125,
+              "peak": {
+                "commandBytes": 33554432,
+                "commands": 2,
+                "fileBytes": 0,
+                "files": 0,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 5,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 16777216,
+                "stdoutBytes": 16777216
+              },
+              "queueTimeouts": 0,
+              "rejected": 0,
+              "source": "schedule-commands",
+              "totalExecutionMs": 623.4628360000003,
+              "totalWaitMs": 922.258003
+            },
+            {
+              "admitted": 21356,
+              "cancelled": 0,
+              "completed": 21347,
+              "current": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 0,
+                "files": 0,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "failed": 9,
+              "maxExecutionMs": 11.080416,
+              "maxWaitMs": 0.224167,
+              "peak": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 1826816,
+                "files": 4,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 4,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "queueTimeouts": 0,
+              "rejected": 0,
+              "source": "schedule-files",
+              "totalExecutionMs": 923.434082000005,
+              "totalWaitMs": 3.879796000000001
+            },
+            {
+              "admitted": 5808,
+              "cancelled": 0,
+              "completed": 5808,
+              "current": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 0,
+                "files": 0,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "failed": 0,
+              "maxExecutionMs": 11.370584,
+              "maxWaitMs": 7.467083000000001,
+              "peak": {
+                "commandBytes": 33554432,
+                "commands": 4,
+                "fileBytes": 4194308,
+                "files": 4,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 4,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 16777216,
+                "stdoutBytes": 16777216
+              },
+              "queueTimeouts": 0,
+              "rejected": 0,
+              "source": "schedule-plist",
+              "totalExecutionMs": 19590.170736999957,
+              "totalWaitMs": 52.428833000000004
+            },
+            {
+              "admitted": 4290,
+              "cancelled": 0,
+              "completed": 4290,
+              "current": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 0,
+                "files": 0,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "failed": 0,
+              "maxExecutionMs": 1.974375,
+              "maxWaitMs": 0.42616699999999996,
+              "peak": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 29005,
+                "files": 8,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 4,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "queueTimeouts": 0,
+              "rejected": 0,
+              "source": "agent-activity",
+              "totalExecutionMs": 1282.7603620000027,
+              "totalWaitMs": 98.13293699999996
+            },
+            {
+              "admitted": 8,
+              "cancelled": 0,
+              "completed": 8,
+              "current": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 0,
+                "files": 0,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "failed": 0,
+              "maxExecutionMs": 18.493541,
+              "maxWaitMs": 0.929083,
+              "peak": {
+                "commandBytes": 4259840,
+                "commands": 1,
+                "fileBytes": 2637,
+                "files": 1,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 1,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 65536,
+                "stdoutBytes": 4194304
+              },
+              "queueTimeouts": 0,
+              "rejected": 0,
+              "source": "schedules",
+              "totalExecutionMs": 139.643459,
+              "totalWaitMs": 0.929083
+            },
+            {
+              "admitted": 21,
+              "cancelled": 0,
+              "completed": 21,
+              "current": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 0,
+                "files": 0,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "failed": 0,
+              "maxExecutionMs": 8.988958,
+              "maxWaitMs": 13.299750000000001,
+              "peak": {
+                "commandBytes": 4259840,
+                "commands": 1,
+                "fileBytes": 4952,
+                "files": 1,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 1,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 65536,
+                "stdoutBytes": 4194304
+              },
+              "queueTimeouts": 0,
+              "rejected": 0,
+              "source": "events",
+              "totalExecutionMs": 135.10799699999998,
+              "totalWaitMs": 53.88912500000001
+            },
+            {
+              "admitted": 120,
+              "cancelled": 0,
+              "completed": 120,
+              "current": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 0,
+                "files": 0,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "failed": 0,
+              "maxExecutionMs": 80.248416,
+              "maxWaitMs": 0.031208999999999997,
+              "peak": {
+                "commandBytes": 65536,
+                "commands": 1,
+                "fileBytes": 3407873,
+                "files": 2,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 1,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 32768,
+                "stdoutBytes": 32768
+              },
+              "queueTimeouts": 0,
+              "rejected": 0,
+              "source": "plugin-market",
+              "totalExecutionMs": 4389.347117000002,
+              "totalWaitMs": 0.031208999999999997
+            },
+            {
+              "admitted": 183,
+              "cancelled": 0,
+              "completed": 183,
+              "current": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 0,
+                "files": 0,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "failed": 0,
+              "maxExecutionMs": 16074.055000000002,
+              "maxWaitMs": 1006.6886669999999,
+              "peak": {
+                "commandBytes": 4210688,
+                "commands": 1,
+                "fileBytes": 131072,
+                "files": 1,
+                "pluginProcesses": 1,
+                "pluginProtocolBytes": 7684096,
+                "queued": 1,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 16384,
+                "stdoutBytes": 4194304
+              },
+              "queueTimeouts": 0,
+              "rejected": 0,
+              "source": "plugin-host",
+              "totalExecutionMs": 33934.29762799999,
+              "totalWaitMs": 1066.6192069999997
+            },
+            {
+              "admitted": 8,
+              "cancelled": 1,
+              "completed": 7,
+              "current": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 0,
+                "files": 0,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "failed": 0,
+              "maxExecutionMs": 162.249167,
+              "maxWaitMs": 0,
+              "peak": {
+                "commandBytes": 1114112,
+                "commands": 1,
+                "fileBytes": 1310910,
+                "files": 1,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 65536,
+                "sockets": 1,
+                "stderrBytes": 65536,
+                "stdoutBytes": 1048576
+              },
+              "queueTimeouts": 0,
+              "rejected": 0,
+              "source": "http",
+              "totalExecutionMs": 254.89824999999996,
+              "totalWaitMs": 0
+            },
+            {
+              "admitted": 5,
+              "cancelled": 0,
+              "completed": 4,
+              "current": {
+                "commandBytes": 0,
+                "commands": 0,
+                "fileBytes": 0,
+                "files": 0,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 0,
+                "stdoutBytes": 0
+              },
+              "failed": 1,
+              "maxExecutionMs": 3002.8232080000002,
+              "maxWaitMs": 0,
+              "peak": {
+                "commandBytes": 196608,
+                "commands": 1,
+                "fileBytes": 269,
+                "files": 1,
+                "pluginProcesses": 0,
+                "pluginProtocolBytes": 0,
+                "queued": 0,
+                "socketBytes": 0,
+                "sockets": 0,
+                "stderrBytes": 65536,
+                "stdoutBytes": 131072
+              },
+              "queueTimeouts": 0,
+              "rejected": 0,
+              "source": "history",
+              "totalExecutionMs": 3610.311833,
+              "totalWaitMs": 0
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "errors": [],
+  "scope": {
+    "headless": true,
+    "permissionRequests": false,
+    "processCoverage": "native descendants and separately measured birth-verified WK instance associations",
+    "webkitXpc": {
+      "method": "acceptance-only WebKit instance SPI, birth identity checked by driver and sampler; shared identities deduplicated",
+      "coverage": "reported per run; unavailable roles and expired association leases remain gaps"
+    },
+    "totalApplicationMemoryComparison": "no exclusive-cost or improvement claim: associated XPC processes may be shared and incomplete intervals are excluded",
+    "watchTiming": "missing: reader start/completion are observed; no event-specific filesystem watch timestamp",
+    "publication": "actual core Publisher acceptance before monitor deduplication; delivery and commit have separate coverage",
+    "hidden": "native windows remain hidden; acceptance presentation state is explicit and does not change document visibility or native rAF",
+    "frames": "milliseconds between draws in distinct observed native rAF timestamp buckets; hidden WK may suspend rAF; neither physical presentation nor display refresh rate",
+    "webglDraws": "original WebGL draw methods returned; synchronous calls coalesced by at most one pending microtask, independent of rAF; not GPU completion or presented frames; run-wide including warmup and mode transitions",
+    "bytes": "UTF-8 JSON of received event value, excluding Tauri transport envelope; not wire bytes",
+    "lifecycle": "acceptance command spawn/exit plus verified sampled birth identities; startup before probe install, unseen grandchildren, and sub-poll lifetimes remain missing",
+    "readBytes": "only reads carrying a fixture correlation key; not all filesystem traffic",
+    "collectionTiming": "missing: no per-section collect-span hook",
+    "physicalRefresh": false,
+    "sleepNetworkTransitions": false
+  },
+  "evidenceDirectory": "/Users/zixiaobowen/myProjects/oc-chan-rust-migration-20261109/docs/rust-migration/evidence/performance-stress-20261110-7/evidence",
+  "source": {
+    "commit": "112d1d03f33373b96f3edc1898631149f030507e",
+    "branch": "feat/rust-tauri-migration-20261109",
+    "workspace": "D .githooks/pre-push\n M .github/workflows/build.yml\n M .gitignore\n M AGENTS.md\n M DESIGN.md\n M PRODUCT.md\n M README.md\n M docs/codex-handoffs/2026-11-04-github-release-publishing.md\n M docs/dependency-review-policy.json\n D electron.vite.config.ts\n M package-lock.json\n M package.json\n D plugin-market/catalog.json\n D plugin-market/system-1.0.0.ocplugin\n D plugins/system-monitor/index.ts\n M plugins/system-monitor/manifest.json\n D plugins/system-monitor/network.test.ts\n D plugins/system-monitor/network.ts\n D plugins/system-monitor/system.test.ts\n D plugins/system-monitor/system.ts\n D scripts/build-glass.mjs\n D scripts/build-native.mjs\n D scripts/build-notifications.mjs\n D scripts/build-plugin-market.mjs\n D scripts/build-plugin-market.test.mjs\n M scripts/check-package.mjs\n M scripts/check-package.test.mjs\n M scripts/ci-tests.mjs\n M scripts/ci-tests.test.mjs\n M scripts/delivery-source.mjs\n M scripts/delivery-source.test.mjs\n M scripts/delivery-zip.mjs\n M scripts/delivery-zip.test.mjs\n M scripts/dependency-review.mjs\n M scripts/dependency-review.test.mjs\n M scripts/develop.mjs\n M scripts/dist.mjs\n M scripts/install-local.mjs\n M scripts/install-local.test.mjs\n M scripts/install-validation.mjs\n M scripts/local-app-lifecycle.mjs\n M scripts/local-app-lifecycle.test.mjs\n M scripts/local-delivery.mjs\n M scripts/local-delivery.test.mjs\n M scripts/performance/core.mjs\n D scripts/performance/event-keys.mjs\n D scripts/performance/fixture-plugin.mjs\n D scripts/performance/main-probe.mjs\n D scripts/performance/preload-probe.mjs\n M scripts/performance/process-sampler-native.test.c\n M scripts/performance/process-sampler.c\n D scripts/performance/renderer-probe.mjs\n M scripts/performance/run.mjs\n M scripts/performance/sampler.test.mjs\n M scripts/performance/soak-scenario.mjs\n D scripts/performance/vite.config.mjs\n M scripts/prepare-release.mjs\n M scripts/prepare-release.test.mjs\n M scripts/publish-release.mjs\n M scripts/release-config.mjs\n M scripts/smoke-renderer.mjs\n D scripts/smoke.ts\n M scripts/smoke/events-scenarios.mjs\n M scripts/smoke/main-probe.mjs\n M scripts/smoke/marketplace-feed.mjs\n D scripts/smoke/marketplace-fetch.mjs\n M scripts/smoke/marketplace-scenarios.mjs\n M scripts/smoke/notification-scenarios.mjs\n M scripts/smoke/scenarios.mjs\n M scripts/smoke/topology-scenarios.mjs\n D scripts/smoke/vite.config.mjs\n D src/main/app-updates.test.ts\n D src/main/collection-limits.test.ts\n D src/main/collection-limits.ts\n D src/main/collectors/agent-activity.ts\n D src/main/collectors/agents.test.ts\n D src/main/collectors/agents.ts\n D src/main/collectors/codex-sessions.test.ts\n D src/main/collectors/codex-sessions.ts\n D src/main/collectors/hermes-history.test.ts\n D src/main/collectors/hermes-history.ts\n D src/main/collectors/hermes-runtime.test.ts\n D src/main/collectors/hermes-runtime.ts\n D src/main/collectors/launchd.ts\n D src/main/collectors/schedules.test.ts\n D src/main/collectors/schedules.ts\n D src/main/desktop-settings.ts\n D src/main/diagnostic-report.test.ts\n D src/main/diagnostic-report.ts\n D src/main/diagnostics.test.ts\n D src/main/diagnostics.ts\n D src/main/events/collector.test.ts\n D src/main/events/collector.ts\n D src/main/events/contracts.ts\n D src/main/events/hermes.test.ts\n D src/main/events/hermes.ts\n D src/main/events/native-notifications.test.ts\n D src/main/events/native-notifications.ts\n D src/main/events/notification-contracts.ts\n D src/main/events/notification-journal.test.ts\n D src/main/events/notification-journal.ts\n D src/main/events/notifications.test.ts\n D src/main/events/notifications.ts\n D src/main/events/store.test.ts\n D src/main/events/store.ts\n D src/main/index.ts\n D src/main/installation-check.mts\n D src/main/installation-check.test.ts\n D src/main/ipc-boundary.test.ts\n D src/main/ipc-boundary.ts\n D src/main/liquid-glass.ts\n D src/main/live-agents.test.ts\n D src/main/live-agents.ts\n D src/main/login-items.test.ts\n D src/main/login-items.ts\n D src/main/marketplace/io.test.ts\n D src/main/marketplace/io.ts\n D src/main/marketplace/loader.ts\n D src/main/marketplace/manager.test.ts\n D src/main/marketplace/manager.ts\n D src/main/marketplace/sdk.ts\n D src/main/marketplace/validation.ts\n D src/main/monitor-subscriptions.test.ts\n D src/main/monitor-subscriptions.ts\n D src/main/monitor.test.ts\n D src/main/monitor.ts\n D src/main/navigation.test.ts\n D src/main/plugins/agents.test.ts\n D src/main/plugins/agents.ts\n D src/main/plugins/app-updates.ts\n D src/main/plugins/contracts.ts\n D src/main/plugins/events.ts\n D src/main/plugins/native-update.ts\n D src/main/plugins/registry.test.ts\n D src/main/plugins/registry.ts\n D src/main/plugins/schedules.test.ts\n D src/main/plugins/schedules.ts\n D src/main/plugins/update-controller.ts\n D src/main/plugins/update-source.ts\n D src/main/resource-budget.test.ts\n D src/main/resource-budget.ts\n D src/main/resource-io.test.ts\n D src/main/resource-io.ts\n D src/main/schedule-history.test.ts\n D src/main/schedule-history.ts\n D src/main/settings.test.ts\n D src/main/settings.ts\n D src/main/shutdown.test.ts\n D src/main/shutdown.ts\n D src/main/startup-recovery.test.ts\n D src/main/startup-recovery.ts\n D src/main/tern-navigation.test.ts\n D src/main/tern-navigation.ts\n D src/main/tern-present.swift\n D src/main/tern-present.test.ts\n D src/main/tray-window.test.ts\n D src/main/tray-window.ts\n D src/main/window-geometry.test.ts\n D src/main/window-geometry.ts\n D src/native/liquid-glass.mm\n D src/native/notification-permission.mm\n D src/preload/index.ts\n M src/renderer/src/AgentTopology.tsx\n M src/renderer/src/AgentTopology3D.tsx\n M src/renderer/src/App.tsx\n M src/renderer/src/EventsView.tsx\n M src/renderer/src/LiquidGlassSetting.tsx\n M src/renderer/src/LoginItemSetting.tsx\n M src/renderer/src/ScheduleHistory.tsx\n M src/renderer/src/SchedulesView.tsx\n M src/renderer/src/SidebarResizeHandle.tsx\n M src/renderer/src/TrayView.tsx\n M src/renderer/src/agent-office-building.ts\n M src/renderer/src/agent-office-employee.ts\n M src/renderer/src/agent-topology-3d-layout.test.ts\n M src/renderer/src/agent-topology-3d-layout.ts\n M src/renderer/src/agent-topology-3d.css\n M src/renderer/src/agent-topology-scene.ts\n M src/renderer/src/components.tsx\n M src/renderer/src/env.d.ts\n M src/renderer/src/main.tsx\n M src/renderer/src/settings.tsx\n M src/shared/events.ts\n M src/shared/marketplace.ts\n M src/shared/navigation.ts\n D src/shared/plugins.ts\n M src/shared/source-capabilities.ts\n M src/shared/types.ts\n M tsconfig.json\n?? Cargo.lock\n?? Cargo.toml\n?? crates/\n?? docs/architecture.md\n?? docs/codex-handoffs/2026-11-08-push-update-audit.html\n?? docs/codex-handoffs/2026-11-08-push-update-audit.md\n?? docs/codex-handoffs/2026-11-09-local-update.md\n?? docs/codex-handoffs/2026-11-09-project-task-offices-evidence.json\n?? docs/codex-handoffs/2026-11-09-project-task-offices.html\n?? docs/codex-handoffs/2026-11-09-project-task-offices.sheet-2.png\n?? docs/codex-handoffs/2026-11-09-project-task-offices.sheet-3.png\n?? docs/codex-handoffs/2026-11-09-project-task-offices.sheet.png\n?? docs/codex-handoffs/2026-11-09-project-task-offices.src.html\n?? docs/codex-handoffs/2026-11-09-readme-preview.html\n?? docs/codex-handoffs/2026-11-09-readme-refresh.md\n?? docs/codex-handoffs/2026-11-09-readme-review.html\n?? docs/codex-handoffs/2026-11-09-readme-review.md\n?? docs/codex-handoffs/2026-11-10-rust-migration-integration.md\n?? docs/development.md\n?? docs/distribution.md\n?? docs/features.md\n?? docs/images/\n?? docs/rust-migration/\n?? native/\n?? plugins/system-monitor/Cargo.toml\n?? plugins/system-monitor/src/\n?? resources/rust-license-supplements/\n?? rust-toolchain.toml\n?? scripts/build-app.mjs\n?? scripts/build-app.test.mjs\n?? scripts/build-marketplace-fixtures.mjs\n?? scripts/build-plugin-market-rust.mjs\n?? scripts/build-plugin-market-rust.test.mjs\n?? scripts/develop.test.mjs\n?? scripts/local-install-process.m\n?? scripts/local-install-readiness.mjs\n?? scripts/local-install-readiness.test.mjs\n?? scripts/performance/compare.mjs\n?? scripts/performance/comparison-workload.mjs\n?? scripts/performance/event-ui.mjs\n?? scripts/performance/native-harness.test.mjs\n?? scripts/performance/scenarios.mjs\n?? scripts/performance/session-load.mjs\n?? scripts/performance/vite-plugin.d.mts\n?? scripts/performance/vite-plugin.mjs\n?? scripts/performance/xpc.mjs\n?? scripts/probes/\n?? scripts/rust-dependencies.mjs\n?? scripts/rust-dependencies.test.mjs\n?? src-tauri/\n?? src/renderer/src/desktop-api.ts\n?? src/renderer/src/desktop-visibility.ts\n?? src/renderer/src/performance-probe.ts\n?? src/renderer/src/smoke-probe.ts\n?? src/shared/navigation.test.ts\n?? vite.config.ts",
+    "digest": "e6c752142fa93a36d9d832623c92012852ca5766ff73525415bb40e02a72d0f0",
+    "files": [
+      {
+        "path": "src/renderer/index.html",
+        "bytes": 527,
+        "sha256": "55bd50d4ded8085cd100eb48eeb20458847be7877410b755116a01d1a72f84a3"
+      },
+      {
+        "path": "src/renderer/src/AgentContextMenu.tsx",
+        "bytes": 1876,
+        "sha256": "dec84c04a963507ccaf7fa83b3c4f5e41d9e8721a58b472642da965bb214b9c8"
+      },
+      {
+        "path": "src/renderer/src/AgentTopology.tsx",
+        "bytes": 31732,
+        "sha256": "5f12d643d5b4492cdcfad1982667c376798829d1ecac30bafdefb5a5d6fc406f"
+      },
+      {
+        "path": "src/renderer/src/AgentTopology3D.tsx",
+        "bytes": 13835,
+        "sha256": "3bbfc7fa10251548dbe0f3df52e3fb7cbf8afa47f23e10d96e9b28307cda0e7d"
+      },
+      {
+        "path": "src/renderer/src/AgentsView.tsx",
+        "bytes": 26186,
+        "sha256": "d5bcd1359ca63dc167b7141bbed14ed6373cff75ed8213701492122b6f3d4f20"
+      },
+      {
+        "path": "src/renderer/src/App.tsx",
+        "bytes": 32960,
+        "sha256": "f2b6dc5050e6c1f59cb94448570900db700fe3c417ebbcc38937961debfa0954"
+      },
+      {
+        "path": "src/renderer/src/DiagnosticPanel.tsx",
+        "bytes": 14788,
+        "sha256": "c66d883ab3ad942c116ef600c12e14062800c52570e7f45467a482263b8b1824"
+      },
+      {
+        "path": "src/renderer/src/EventsView.tsx",
+        "bytes": 27572,
+        "sha256": "08193f10dc2a749ac91e52268df8f0320028a0148770e3fe09ef86570539e4f4"
+      },
+      {
+        "path": "src/renderer/src/LiquidGlassSetting.tsx",
+        "bytes": 6298,
+        "sha256": "1eeda477b2ef130718ed40451f11c2369127f3bf429753150567f3f8ed450253"
+      },
+      {
+        "path": "src/renderer/src/LoginItemSetting.tsx",
+        "bytes": 6381,
+        "sha256": "09e4d65a957807f700ff91ac5a9760162fe601f65fd2495eaee01d5cebcb5afd"
+      },
+      {
+        "path": "src/renderer/src/MarketplaceView.tsx",
+        "bytes": 14260,
+        "sha256": "db4cd05dcbc8b212eeecb0a197a7f6cde976011c5ea152a9b2cf34246e92817e"
+      },
+      {
+        "path": "src/renderer/src/NotificationSettings.tsx",
+        "bytes": 17102,
+        "sha256": "c65fed3e26dd34572e61a15091d62c94ee7e8cd044bdf30a82fc6110c3ade10b"
+      },
+      {
+        "path": "src/renderer/src/ScheduleHistory.tsx",
+        "bytes": 11435,
+        "sha256": "26d0f3c6166b1b0ed62208c68658904e38603af0b0aed86f63c78a559c7c8fae"
+      },
+      {
+        "path": "src/renderer/src/SchedulesView.tsx",
+        "bytes": 31982,
+        "sha256": "d81e4c92d9ae0bd253a0396b7836bbd349eb54ea8e81d1c27aabf86f870716f9"
+      },
+      {
+        "path": "src/renderer/src/SettingsSaveError.tsx",
+        "bytes": 10578,
+        "sha256": "7312b6f9f1bfda5505579defa95ecef8969780335edb0b04c71c195a3c1b0b17"
+      },
+      {
+        "path": "src/renderer/src/SettingsView.tsx",
+        "bytes": 9773,
+        "sha256": "de956997dc79be69522c038d8894e5a887e7bd8497c2d4bc50018b7b17b9b162"
+      },
+      {
+        "path": "src/renderer/src/SidebarResizeHandle.tsx",
+        "bytes": 7037,
+        "sha256": "ad518ebdc4f7779e61f03408a639c4cfabbe53a300b8310b95bfc3e52d7ab67c"
+      },
+      {
+        "path": "src/renderer/src/SourcePanels.tsx",
+        "bytes": 7391,
+        "sha256": "19240967b2c9935b5b86de994689691a19962ce36b30e735999e80d1b0d055e8"
+      },
+      {
+        "path": "src/renderer/src/StartupRecoveryView.tsx",
+        "bytes": 8902,
+        "sha256": "ee38108d9f8a165c2d6800bd8c1a45c91dae57db280a8a9a7fd3387ee229dc4b"
+      },
+      {
+        "path": "src/renderer/src/SystemMetrics.tsx",
+        "bytes": 4803,
+        "sha256": "651d35575489233c59831f17e6b98fde2e6ada31207eee0af0305b3b779b10d5"
+      },
+      {
+        "path": "src/renderer/src/SystemPluginNotice.tsx",
+        "bytes": 2364,
+        "sha256": "39e4bd204ac0ad579833ac2ea61bdd01393672affabb68555ee29d6ea284c62c"
+      },
+      {
+        "path": "src/renderer/src/SystemView.tsx",
+        "bytes": 4528,
+        "sha256": "eade05434f6de7c7748d051cbdb8125aa36db4860e798525f4a5426a612bd88a"
+      },
+      {
+        "path": "src/renderer/src/TaskNotificationSubscription.tsx",
+        "bytes": 3957,
+        "sha256": "cc22be1743ebdd475c295b4f2fe2ea233afd37f1c120d356dd1237779880543c"
+      },
+      {
+        "path": "src/renderer/src/ThemePicker.tsx",
+        "bytes": 2781,
+        "sha256": "a39135303c5d79ed0717d73ec6a92a8ac845ba7a5b69d86da89598ff3e9c517f"
+      },
+      {
+        "path": "src/renderer/src/TrayView.tsx",
+        "bytes": 15422,
+        "sha256": "6b4e661b1d9845bc0e65793dcc77e14735f22ed23e912827aa33e7aedaa73ee6"
+      },
+      {
+        "path": "src/renderer/src/UpdateSettings.tsx",
+        "bytes": 7346,
+        "sha256": "730d069405a0c0d26a39fedd7c0143b76d63e4104991a371452d590ec3e21f36"
+      },
+      {
+        "path": "src/renderer/src/agent-office-building.ts",
+        "bytes": 9154,
+        "sha256": "9a0dccca6799423bb44bf5188e5cd6a8349e24b235002cbf222788cd3e990013"
+      },
+      {
+        "path": "src/renderer/src/agent-office-employee.ts",
+        "bytes": 6768,
+        "sha256": "8538faf533246a9ee440ef1e05b09a73abb10dbffa86f13e2cca160d51387ba6"
+      },
+      {
+        "path": "src/renderer/src/agent-topology-3d-layout.test.ts",
+        "bytes": 16380,
+        "sha256": "d86c47d97564e235e105be8f932db3fa2a499a734d474731919ebbc19ad3fef9"
+      },
+      {
+        "path": "src/renderer/src/agent-topology-3d-layout.ts",
+        "bytes": 7063,
+        "sha256": "b72e4e4489be683368c5f7e6c68c19e598e8d67922efc574ba19faf7ca59c463"
+      },
+      {
+        "path": "src/renderer/src/agent-topology-3d.css",
+        "bytes": 5683,
+        "sha256": "a7289e552e3c41fbeef1a4828f4d87059c6b8dfa947e4aa713e8c849473078ee"
+      },
+      {
+        "path": "src/renderer/src/agent-topology-scene.ts",
+        "bytes": 44145,
+        "sha256": "2627152591606ff50308b3d07460e2a7c7fb477e6bc1f9f32be7a73d00b85751"
+      },
+      {
+        "path": "src/renderer/src/agent-topology.css",
+        "bytes": 12785,
+        "sha256": "cb84bb45c57dd1d7b022a8f9ddd993bfc529b3f62a19d1dc3ce53a72b8f8a6bb"
+      },
+      {
+        "path": "src/renderer/src/agent-topology.test.ts",
+        "bytes": 27140,
+        "sha256": "3d2e44e9bcaa7acec85882dcb4e34d3b6b77c1ed0d2cf65f4de685b9d3049f80"
+      },
+      {
+        "path": "src/renderer/src/agent-topology.ts",
+        "bytes": 13831,
+        "sha256": "9d271882dd59186fcee3cf9ae126b964965e4907e1b71d7da58254884d26845c"
+      },
+      {
+        "path": "src/renderer/src/components.tsx",
+        "bytes": 31164,
+        "sha256": "e79434a919753ad81c56408400cfc196b930820210fb9c5ba13989c59a636027"
+      },
+      {
+        "path": "src/renderer/src/desktop-api.ts",
+        "bytes": 17484,
+        "sha256": "5f7293e623143ffe91963b18e90d5eed22a6c6ce7a633d7268b805e3b3dbb760"
+      },
+      {
+        "path": "src/renderer/src/desktop-visibility.ts",
+        "bytes": 2259,
+        "sha256": "b1315a036a4b8d347078fb371e78f589af388442ba5dca869978a5233cf795d1"
+      },
+      {
+        "path": "src/renderer/src/detail-source-reasons.css",
+        "bytes": 809,
+        "sha256": "b441ed0369921b0da85530803c85e01e99850e07571e50e6a6cc77691a7d7827"
+      },
+      {
+        "path": "src/renderer/src/diagnostic-panel.css",
+        "bytes": 2606,
+        "sha256": "bf0a4edb53c571607b2fcb0ef76ea9badead886ce22881b19a5c7327ab90a01b"
+      },
+      {
+        "path": "src/renderer/src/env.d.ts",
+        "bytes": 559,
+        "sha256": "0b560e54e7b3d044399d586db9aebed3fc5a6f33ff20fef36b595ce4c0f77e49"
+      },
+      {
+        "path": "src/renderer/src/events.css",
+        "bytes": 5766,
+        "sha256": "8c3bbc27ed0d32148fa114648b8116adc5bd47afd4d1b8f860c163b97a258a5b"
+      },
+      {
+        "path": "src/renderer/src/i18n.tsx",
+        "bytes": 609,
+        "sha256": "e209bcf3b9b71e92d3ce24d77f26cf2ee41034d8adb87d64a50cc04ac1bd6085"
+      },
+      {
+        "path": "src/renderer/src/liquid-glass.css",
+        "bytes": 1042,
+        "sha256": "c1097473bb37cdcb6e666bc889a3a9928b19bce75f7ee8e9cccb3208d60c00a2"
+      },
+      {
+        "path": "src/renderer/src/main.tsx",
+        "bytes": 1385,
+        "sha256": "069804cbd675f1477a7955599dd670517f7ab4cbe84bd5e8cb4d9ced194d8686"
+      },
+      {
+        "path": "src/renderer/src/marketplace.css",
+        "bytes": 3891,
+        "sha256": "62c7958b8d63536a92ffb65774a0322978bcf8862c094faf71bd97b8c68f415b"
+      },
+      {
+        "path": "src/renderer/src/marketplace.tsx",
+        "bytes": 4642,
+        "sha256": "6a8f16aedc9e721b7abbad98e6ab48526640ca44292b074d994615cb1ae69cd3"
+      },
+      {
+        "path": "src/renderer/src/notification-settings.css",
+        "bytes": 4402,
+        "sha256": "bdb2ca09eb04cdf4dbf8ac45f846d9d9a96adad372cad424e5a7cba4be3d42ee"
+      },
+      {
+        "path": "src/renderer/src/performance-probe.ts",
+        "bytes": 6618,
+        "sha256": "5fe67cabee37c16ac266a8ba0d55da07831a39bc12a8ef5c3767724be6530715"
+      },
+      {
+        "path": "src/renderer/src/schedule-details.css",
+        "bytes": 5828,
+        "sha256": "08bdf2b8e48dc54c9927f3ea594da9c31454250ccccc9e6a6d5cc7ddebbb7ac0"
+      },
+      {
+        "path": "src/renderer/src/settings-error.css",
+        "bytes": 2473,
+        "sha256": "34c622627ee3881ae3348488b78c4f5de93faea3ca9e216814fc1fe5eaec42f2"
+      },
+      {
+        "path": "src/renderer/src/settings.css",
+        "bytes": 7432,
+        "sha256": "cb74036f71c0f30c2312e761da8b66d53170a648cab69add990d9acec4cc112a"
+      },
+      {
+        "path": "src/renderer/src/settings.tsx",
+        "bytes": 12933,
+        "sha256": "45e661c1a936450b1d2c206c81e5be891523bfb4a1db51042039b242d5789287"
+      },
+      {
+        "path": "src/renderer/src/smoke-probe.ts",
+        "bytes": 1838,
+        "sha256": "9e706a293048fffb9cb42d8bbff3deccba8766031d998e5adaac163ef818dfef"
+      },
+      {
+        "path": "src/renderer/src/sources.css",
+        "bytes": 4057,
+        "sha256": "660b6de5a9f2f1090be7d8afc57006b823e51967105bf93a0afa2420d0bb6128"
+      },
+      {
+        "path": "src/renderer/src/startup-recovery.css",
+        "bytes": 1113,
+        "sha256": "e27dc4f4e59f054d295cb8589f8524b6a03464117e77c6b64b2bd0adb4ef2fc0"
+      },
+      {
+        "path": "src/renderer/src/styles.css",
+        "bytes": 27605,
+        "sha256": "33e786fd3ca40bc4aa3710f06d0619bdb25b70172ebd2b21549a4170e362aa4b"
+      },
+      {
+        "path": "src/renderer/src/system-metrics.css",
+        "bytes": 2824,
+        "sha256": "07b1fd93749fd6e0ac5cf549d376fe21676b302491aa5a0f4eee1a93c74881c0"
+      },
+      {
+        "path": "src/renderer/src/tokens.css",
+        "bytes": 217,
+        "sha256": "9dbf4eee9d27e65d1acc41a74ed165cda8815659872a916bd0a9daeeb7667af6"
+      },
+      {
+        "path": "src/renderer/src/tray.css",
+        "bytes": 5496,
+        "sha256": "818094d743f891de3d4958a8ef75dbb962a9675267d56e74ae117da87ec5237f"
+      },
+      {
+        "path": "src/renderer/src/updates.css",
+        "bytes": 2164,
+        "sha256": "4117638dfc990cd989a93695c4113d4eba54c6a7932faf04a59aef236fe23aa5"
+      },
+      {
+        "path": "src/renderer/src/updates.tsx",
+        "bytes": 4269,
+        "sha256": "43273e96059c08bb37c53a535a7b8cd93f76cdc50705774a0401b4771ba18ce7"
+      },
+      {
+        "path": "src/renderer/src/view-state.test.ts",
+        "bytes": 5979,
+        "sha256": "b61402cb2fb6d32765613f2f5d97260435a66eab90128805bc266233c6ea6570"
+      },
+      {
+        "path": "src/renderer/src/view-state.ts",
+        "bytes": 4688,
+        "sha256": "5754f460720279406f3fb8733e6146ccd97b5fe931c064c045119602872d4e71"
+      },
+      {
+        "path": "src/shared/diagnostic-report.ts",
+        "bytes": 1288,
+        "sha256": "39ea01effff8d1852ca27d389d18d492948ffebb2e792884b32ab2cd2115c463"
+      },
+      {
+        "path": "src/shared/diagnostics.test.ts",
+        "bytes": 4267,
+        "sha256": "d8766c8a10aea676abb3303e09be6938e361033ffab6f7857063cd54c569b0f7"
+      },
+      {
+        "path": "src/shared/diagnostics.ts",
+        "bytes": 13027,
+        "sha256": "622dda82715b9e1182692bbdbb05e41379a6574c357a65f73b225c31c32bfb2c"
+      },
+      {
+        "path": "src/shared/events.ts",
+        "bytes": 1752,
+        "sha256": "ba94e7c791868324fec6880b652171984942f07cfb3f763336194e4d40a53cb3"
+      },
+      {
+        "path": "src/shared/marketplace.ts",
+        "bytes": 1699,
+        "sha256": "991d701b7d678668d8c182b727d093f5e31528c38cada3572680d71c9cef7bdc"
+      },
+      {
+        "path": "src/shared/navigation.test.ts",
+        "bytes": 3596,
+        "sha256": "1a28fdd13447c1e71936daa5883149f024551e8377f13d3a001b69bc100ab8be"
+      },
+      {
+        "path": "src/shared/navigation.ts",
+        "bytes": 2835,
+        "sha256": "a20611781d6f97627a4b54f4bc7408a7d0ad110a7d9aae767ebf18f8aab7f2da"
+      },
+      {
+        "path": "src/shared/notifications.ts",
+        "bytes": 1482,
+        "sha256": "10e008c1b2aa4ca23ff23bea578314b3ca03d12ecac9a01f92834ae42fc686d1"
+      },
+      {
+        "path": "src/shared/resources.ts",
+        "bytes": 1261,
+        "sha256": "dead0e5729963367b1c821f5a67eec2d3ab2cf64fcdae59a5ccd5909e618d7ce"
+      },
+      {
+        "path": "src/shared/settings.ts",
+        "bytes": 3460,
+        "sha256": "ce1909ca978adf2c11661928336632353140a54f8df42d2da629d4f7da906dae"
+      },
+      {
+        "path": "src/shared/source-capabilities.ts",
+        "bytes": 13191,
+        "sha256": "bbe7c1d585374f674eddc59206afa72130bf92b0d2a310d81ae8fb5b82772c0b"
+      },
+      {
+        "path": "src/shared/startup-recovery.ts",
+        "bytes": 586,
+        "sha256": "eb745b7cd11e8645369879af49e32f75148e137532e8ada1dd8861c436455796"
+      },
+      {
+        "path": "src/shared/themes.ts",
+        "bytes": 10417,
+        "sha256": "762b25f6b98d7437e9480f71a4c361ad06e1341db98cdf260ae40c5afa7af7f7"
+      },
+      {
+        "path": "src/shared/types.ts",
+        "bytes": 6323,
+        "sha256": "c325a57b41d936220b5b2cb4561d264b5fc8c71ea827c7ca451eb76650e52d9a"
+      },
+      {
+        "path": "src/shared/updates.ts",
+        "bytes": 802,
+        "sha256": "751e4fdb00da8bb9facf09db992b3eb16c9c037d76f4bf4c95197b12eb76ac2f"
+      },
+      {
+        "path": "scripts/build-app.mjs",
+        "bytes": 17868,
+        "sha256": "be2d67c8f8461c657dbdf4ad2160cd5a9ae0e46c5703212d5285d3f415a515f8"
+      },
+      {
+        "path": "scripts/build-app.test.mjs",
+        "bytes": 5997,
+        "sha256": "b4f2559d243edcf5e43d5d63ac8a5556238345e2236046e436b6a7b72ffe05be"
+      },
+      {
+        "path": "scripts/build-marketplace-fixtures.mjs",
+        "bytes": 6527,
+        "sha256": "072b642b551af1d251ae22e19d70bc4cbb8d3ca824ba099ec3270b4137e78314"
+      },
+      {
+        "path": "scripts/build-plugin-market-rust.mjs",
+        "bytes": 11191,
+        "sha256": "965dce7aca590e6ead25021a1de777828264495892043fcea183d18d272df765"
+      },
+      {
+        "path": "scripts/build-plugin-market-rust.test.mjs",
+        "bytes": 5117,
+        "sha256": "b55f61a1a56b42bc4aa18986c0bea9db81e9f36e135274b84373182d024eebee"
+      },
+      {
+        "path": "scripts/bundled-licenses.ts",
+        "bytes": 7968,
+        "sha256": "6b74e17207fba4fd11026179d33563232cfa50105dec1a2886350acb4935fd20"
+      },
+      {
+        "path": "scripts/check-package.mjs",
+        "bytes": 19162,
+        "sha256": "53f1622491f6d1014988571b731def676e177899eb96ad2361b90958a3b003fc"
+      },
+      {
+        "path": "scripts/check-package.test.mjs",
+        "bytes": 7677,
+        "sha256": "5cee99397db1b4181acbf5e353ad734c014bdcfe7be3b3e8154b916f3023fca1"
+      },
+      {
+        "path": "scripts/ci-tests.mjs",
+        "bytes": 13818,
+        "sha256": "7f016fb7c7cd5c6ce3b6fe949091119fb65997030ece7175c389056b534bd39e"
+      },
+      {
+        "path": "scripts/ci-tests.test.mjs",
+        "bytes": 10236,
+        "sha256": "51b171ed703d6d69a303465f6b5f4b9de7fb7641718b2857348920bd837f5387"
+      },
+      {
+        "path": "scripts/delivery-source.mjs",
+        "bytes": 11242,
+        "sha256": "1eb4c8357a9399989f294f4998121485aec3e64ab2a495d4520082d773e24e91"
+      },
+      {
+        "path": "scripts/delivery-source.test.mjs",
+        "bytes": 15290,
+        "sha256": "989d3d3a016123caa48ff184e5df32fdaa77ec9582422aaec70b614af99fa518"
+      },
+      {
+        "path": "scripts/delivery-zip.mjs",
+        "bytes": 16108,
+        "sha256": "39ca466050b469c0329ba3ae51ef3c6f3fd37ce7b0145fff3b927be13ea04efa"
+      },
+      {
+        "path": "scripts/delivery-zip.test.mjs",
+        "bytes": 14996,
+        "sha256": "bead4485624105b84f84f0fb99430c8eaceba18554add6c5cc995d6c1225fd35"
+      },
+      {
+        "path": "scripts/dependency-review.mjs",
+        "bytes": 19245,
+        "sha256": "2b03e45c6b57dd0add6feb3ba2cd4607375650a62b56ea24859b8655feeecd5f"
+      },
+      {
+        "path": "scripts/dependency-review.test.mjs",
+        "bytes": 15493,
+        "sha256": "071a41942ec2a36d9face06e2623c5fdb9068295754446bced471b24ab6046fd"
+      },
+      {
+        "path": "scripts/develop.mjs",
+        "bytes": 13948,
+        "sha256": "abd02847213e7069f09d7bcd1902aa4e06e7c1aa008d20eed3477b60126f660c"
+      },
+      {
+        "path": "scripts/develop.test.mjs",
+        "bytes": 7956,
+        "sha256": "7396d9779e1fbb692ed775427bb4ba7a84f272f53db64a08510142c055a7efbe"
+      },
+      {
+        "path": "scripts/dist.mjs",
+        "bytes": 4980,
+        "sha256": "e2f13dfe1e246392265fa62454c04e58350eb4a41633be74d5730b7862fdb716"
+      },
+      {
+        "path": "scripts/install-local.mjs",
+        "bytes": 14224,
+        "sha256": "c99fea8dc2d23274aa7165cd27c1e1c0aa0e223cf738a53bb984d7712586b24f"
+      },
+      {
+        "path": "scripts/install-local.test.mjs",
+        "bytes": 11671,
+        "sha256": "264da223c37587512cd6d7bad33c9c035fb6eb18a5ba264ed72328d1fe8f4274"
+      },
+      {
+        "path": "scripts/install-validation.mjs",
+        "bytes": 10704,
+        "sha256": "7bc9c9d1d312c054985df006f275ebce5207a911c52a91b8a04b5aab7702e880"
+      },
+      {
+        "path": "scripts/local-app-lifecycle.mjs",
+        "bytes": 34065,
+        "sha256": "410558053a4e78c7b7ad595d7eeadc9c519b4d70c085b444abfe7c7cd2c73a56"
+      },
+      {
+        "path": "scripts/local-app-lifecycle.test.mjs",
+        "bytes": 23907,
+        "sha256": "d1deaf9872a6fb907655a7e73f0b2e63c64eb28b84d8cac20de46ed596ff0186"
+      },
+      {
+        "path": "scripts/local-delivery.mjs",
+        "bytes": 16785,
+        "sha256": "fce9e521edaf3c5a88d9f56abe9a696b2feeb8976ea5644f59c827322bbd459f"
+      },
+      {
+        "path": "scripts/local-delivery.test.mjs",
+        "bytes": 2736,
+        "sha256": "70631d6832c3b224c1494267b3dae30df47cc5579b5289b3833de573f4f31ede"
+      },
+      {
+        "path": "scripts/local-install-process.m",
+        "bytes": 10142,
+        "sha256": "a7ae83e32617624d5fad967c0785cda94e4021077cdc35721445cfa3bc78d657"
+      },
+      {
+        "path": "scripts/local-install-readiness.mjs",
+        "bytes": 13116,
+        "sha256": "6c5ca2eccc787fed40cb0f4229fa30047fd35d63b5bb25f07dfd2852d1fbf485"
+      },
+      {
+        "path": "scripts/local-install-readiness.test.mjs",
+        "bytes": 5399,
+        "sha256": "6055442b96a71f327467f5bef6306cdedd3bcf55129af964c7c354d406319b2c"
+      },
+      {
+        "path": "scripts/performance/compare.mjs",
+        "bytes": 8280,
+        "sha256": "81e699061b676f550d44a68337434659fa216a2ea71d1b07d04696fab2a156bf"
+      },
+      {
+        "path": "scripts/performance/comparison-workload.mjs",
+        "bytes": 3827,
+        "sha256": "57c3dfa3c342b7fea0e3981801ed7e08cbc18f771c9d96b2106c3e4a731b0c3d"
+      },
+      {
+        "path": "scripts/performance/core.mjs",
+        "bytes": 6129,
+        "sha256": "16d3bb1bfcdfe7442628249effb17bfadaf95c585fbe4183bda71e061ce624b4"
+      },
+      {
+        "path": "scripts/performance/core.test.mjs",
+        "bytes": 8030,
+        "sha256": "a7d1739b41cd8baf1b153df6896ea1800faf6c7adf3f7dc65e8d7e3ba4106e74"
+      },
+      {
+        "path": "scripts/performance/event-ui.mjs",
+        "bytes": 1493,
+        "sha256": "cd823282c6ba1b7dd5144e8b4000da2ed8bc3841e59ad02e6cc4f6328b6a7a7c"
+      },
+      {
+        "path": "scripts/performance/fixtures.mjs",
+        "bytes": 23724,
+        "sha256": "ef7c72e1fe29a6c641156e592ca3e87a9876e9f5be81cbd7e601f4232bc8b5da"
+      },
+      {
+        "path": "scripts/performance/fixtures.test.mjs",
+        "bytes": 10682,
+        "sha256": "fb7a974e83c1bb0398fd15a143b43a1a70c1ebc0730ac19907244a6b63410852"
+      },
+      {
+        "path": "scripts/performance/measurement.mjs",
+        "bytes": 8426,
+        "sha256": "8ad792f89b04e2c414746b604bde75b17130d4f4970f34fa3fe4818370150f73"
+      },
+      {
+        "path": "scripts/performance/measurement.test.mjs",
+        "bytes": 3555,
+        "sha256": "b61a029f717589b4c693040a3c1f8dcbff99af8cf341b59574cfca26130ad95f"
+      },
+      {
+        "path": "scripts/performance/native-harness.test.mjs",
+        "bytes": 5911,
+        "sha256": "7935a40fd25759ec9005ddf78f73a72355931aef14fae50490daa8e631f50c8f"
+      },
+      {
+        "path": "scripts/performance/process-sampler-native.test.c",
+        "bytes": 3381,
+        "sha256": "6bcb160d6c060b9863dc5175f31242b54b7102d4eb2f1d0d87649a66d87a7bb1"
+      },
+      {
+        "path": "scripts/performance/process-sampler.c",
+        "bytes": 32933,
+        "sha256": "3726af4760b09f12f1f95e05e72abdd09264733c6d95807065bb61244f0aa162"
+      },
+      {
+        "path": "scripts/performance/run.mjs",
+        "bytes": 30566,
+        "sha256": "e81a0328ebcbfad024846eea878b05dadbacb890acc749ff903a301a493ebcbd"
+      },
+      {
+        "path": "scripts/performance/sampler.mjs",
+        "bytes": 10558,
+        "sha256": "6c8c494ba83badf868c1a7263f7bc0e51ace2a0ffea0253957af6271c339dd41"
+      },
+      {
+        "path": "scripts/performance/sampler.test.mjs",
+        "bytes": 10668,
+        "sha256": "66f62fbf65356cae98f9089f83949d0ce669420ea59dab9c3d21ee7229244dc0"
+      },
+      {
+        "path": "scripts/performance/scenarios.mjs",
+        "bytes": 18307,
+        "sha256": "4c475c7d3b946de1626ce0244a359d7b3af478796c991572612da9bcb5622907"
+      },
+      {
+        "path": "scripts/performance/session-load.mjs",
+        "bytes": 3817,
+        "sha256": "2d160cf6364f90d5b7086356be2b10e4f6f068c32af0212b17eb1dcb27cfe42c"
+      },
+      {
+        "path": "scripts/performance/soak-scenario.mjs",
+        "bytes": 14882,
+        "sha256": "61e31e7ec337dceb4fd83dbc30b30c5c8dfb812da1d1353c935cb862f7b57811"
+      },
+      {
+        "path": "scripts/performance/soak-scenario.test.mjs",
+        "bytes": 2192,
+        "sha256": "845924429164ffc109a63e36428d68e3d2ba101a7e1226aa96e83849658dac52"
+      },
+      {
+        "path": "scripts/performance/vite-plugin.d.mts",
+        "bytes": 121,
+        "sha256": "b95ccba946cab196673dc3369633482073242c96fec1b2f2cf90b26366b1c31d"
+      },
+      {
+        "path": "scripts/performance/vite-plugin.mjs",
+        "bytes": 2707,
+        "sha256": "ed09a9b279af8692af909e120edc8bb31d670c66d5fa32c2af3684508f7709c3"
+      },
+      {
+        "path": "scripts/performance/xpc.mjs",
+        "bytes": 4812,
+        "sha256": "7d09da48b49f8255f2ac334aeaafd12ead617ce84855295b653e64dac9889757"
+      },
+      {
+        "path": "scripts/prepare-release.mjs",
+        "bytes": 6085,
+        "sha256": "9bc48f1a4e564717dd8fba2b9527be37e1f23e633856929d1668550eacf3d5ba"
+      },
+      {
+        "path": "scripts/prepare-release.test.mjs",
+        "bytes": 6598,
+        "sha256": "9f8411419e7e62d989880c948931b66ec7f8768e375f2ad7d59afcdae0f2ffc6"
+      },
+      {
+        "path": "scripts/probes/wk/Cargo.lock",
+        "bytes": 103263,
+        "sha256": "35486eb6d17ac875fcb872a6d81b5fee4c87d7987c7877880b2ad0beb4b07fc7"
+      },
+      {
+        "path": "scripts/probes/wk/Cargo.toml",
+        "bytes": 432,
+        "sha256": "f2436dc8b70da6ab04baf976967fc8f562d7500a7b9aa8f9a3439d8040d6a6b0"
+      },
+      {
+        "path": "scripts/probes/wk/build-frontend.mjs",
+        "bytes": 1092,
+        "sha256": "95ffa71e51be162cf4ba512ef0f5ac56c94871669b7bfbbc9f6d723c9b0c1492"
+      },
+      {
+        "path": "scripts/probes/wk/build.rs",
+        "bytes": 460,
+        "sha256": "c3d8ec7c76ded720e9c60f856741d63133ea8ef8d39710089dd900879da4d5c3"
+      },
+      {
+        "path": "scripts/probes/wk/frontend/index.html",
+        "bytes": 175,
+        "sha256": "dd8c77a4339f16a637b18a2c52c1018750efe698050afbdf7eb0aa6e6eeab381"
+      },
+      {
+        "path": "scripts/probes/wk/frontend/main.jsx",
+        "bytes": 2959,
+        "sha256": "4c5f811022d8acc11af8d26d3f9b2eea8e40f23c1e65fe040ff94355b37431e7"
+      },
+      {
+        "path": "scripts/probes/wk/frontend-dist/assets/index-qI9wVdmW.js",
+        "bytes": 1750099,
+        "sha256": "63749054e058c8d5ab6acf24a65cff984a86851392080dae5527bfa70be5f4e2"
+      },
+      {
+        "path": "scripts/probes/wk/frontend-dist/dependency-root.txt",
+        "bytes": 38,
+        "sha256": "ed7c13259bd72681a25348897d83d94790f2b1053cddb4716415cd0f5e7a310a"
+      },
+      {
+        "path": "scripts/probes/wk/frontend-dist/index.html",
+        "bytes": 206,
+        "sha256": "e313efe929969af815736e68c554c78784c57d8e01d24710d469686c9a5e5b46"
+      },
+      {
+        "path": "scripts/probes/wk/run-probe.mjs",
+        "bytes": 13739,
+        "sha256": "845e68516438dcc99f2c39e0244832319ae57bd591fece23e966d1d396a8c306"
+      },
+      {
+        "path": "scripts/probes/wk/src/main.rs",
+        "bytes": 2145,
+        "sha256": "aa929861d5b78aaf97ca076bf165106c89af408f3f5cc4e5cdcf267503946523"
+      },
+      {
+        "path": "scripts/probes/wk/tauri.conf.json",
+        "bytes": 698,
+        "sha256": "7a448f3323da172a466e120ecdadbc9df87c3094e5ee176ad67b28cf52165135"
+      },
+      {
+        "path": "scripts/publish-release.mjs",
+        "bytes": 2996,
+        "sha256": "a01a1daaebc795402e9d570e424db7f59bdbff64a77391e2fc2f8369a8f876b0"
+      },
+      {
+        "path": "scripts/push-main.mjs",
+        "bytes": 8400,
+        "sha256": "0a664dcc1f69d1f52307c1ee23b5c870a6c0b2f7c58359283e2782f347ab5e94"
+      },
+      {
+        "path": "scripts/push-main.test.mjs",
+        "bytes": 11823,
+        "sha256": "6bdad385eeed0f3bb17af0fdaa6d9c23c265c6ddfc83b6f14348f0ded51dc46e"
+      },
+      {
+        "path": "scripts/release-config.mjs",
+        "bytes": 1608,
+        "sha256": "c29eb6a16e15631aa98f83a95787232fbf18602a471a8dbca326d3082e4538d7"
+      },
+      {
+        "path": "scripts/rust-dependencies.mjs",
+        "bytes": 22736,
+        "sha256": "208a540c1563d66b8ccaf5697abfe5212335502a6f8ed181f473e7da60a23c7d"
+      },
+      {
+        "path": "scripts/rust-dependencies.test.mjs",
+        "bytes": 5588,
+        "sha256": "885fe3e86716c8cdbe06fde609ceffbbd50b7f3caac79a3e4afeb355477d4e49"
+      },
+      {
+        "path": "scripts/smoke/events-scenarios.mjs",
+        "bytes": 26164,
+        "sha256": "1e2a3ebc36815da2318a026c80b4c921aa82085f8a2d05bfa5a4337d491aa551"
+      },
+      {
+        "path": "scripts/smoke/main-probe.mjs",
+        "bytes": 17129,
+        "sha256": "617b1e44008909cdf11b01fb754b681ce33473fa08b67c1b50412773f617ffe9"
+      },
+      {
+        "path": "scripts/smoke/marketplace-feed.mjs",
+        "bytes": 9376,
+        "sha256": "dd4faa78dcc8c35b71dde63b364b24468ee050987254609e7c2e401a9d697e1e"
+      },
+      {
+        "path": "scripts/smoke/marketplace-scenarios.mjs",
+        "bytes": 10281,
+        "sha256": "63242d8b742a4d190667bd94136d16afbae77dc26646e2418b1880ce9c61b9ec"
+      },
+      {
+        "path": "scripts/smoke/notification-scenarios.mjs",
+        "bytes": 29510,
+        "sha256": "279d5fbeefd1b978eafff5927d948c73c9f8713efcd86d9ded00f3ff9ea804da"
+      },
+      {
+        "path": "scripts/smoke/scenarios.mjs",
+        "bytes": 52767,
+        "sha256": "85656c14ee8fbb31e16b4bea7e6439efa4f0289c2d0881c20f7aa2d1849b5dea"
+      },
+      {
+        "path": "scripts/smoke/topology-scenarios.mjs",
+        "bytes": 13289,
+        "sha256": "e7b2c3c530353513cfeba27104d7fafd87f776fbdd88811dec623b229202101f"
+      },
+      {
+        "path": "scripts/smoke-renderer.mjs",
+        "bytes": 18802,
+        "sha256": "220355ec36eb0f5d05bc84e5fd23d4c099844d1763882dcde520e8b3c8fedbb3"
+      },
+      {
+        "path": "crates/oc-core/Cargo.toml",
+        "bytes": 803,
+        "sha256": "192d489c4fe429d3c96279b1a5b88fe9e6d2ed6beda177a3f7f02245a9ece014"
+      },
+      {
+        "path": "crates/oc-core/src/agents/activity.rs",
+        "bytes": 8926,
+        "sha256": "515180720309c662d76f8905e7b49c88168d2d6c41ba1775a755ae6e259b2b19"
+      },
+      {
+        "path": "crates/oc-core/src/agents/discovery.rs",
+        "bytes": 16622,
+        "sha256": "2874ae1431c82f4d224b9f42c4ce18c2ec68fec0110f200ca987ae4aefa89cab"
+      },
+      {
+        "path": "crates/oc-core/src/agents/live.rs",
+        "bytes": 16368,
+        "sha256": "7779a41bceb482670e429f4018fee45fb5bcd36b26a2021fa9f076ddf41262f5"
+      },
+      {
+        "path": "crates/oc-core/src/agents/mod.rs",
+        "bytes": 8456,
+        "sha256": "de0cc4f94524d834d9c9cf365a02691938ab2e797ad3ecd888f4dc824d4682d7"
+      },
+      {
+        "path": "crates/oc-core/src/agents/runtime.rs",
+        "bytes": 11727,
+        "sha256": "fdd2b04c704c227a621a6f99db3354f70c4a7a12ae6fa9cd8a6092df15afdd4c"
+      },
+      {
+        "path": "crates/oc-core/src/agents/sessions.rs",
+        "bytes": 19696,
+        "sha256": "98a148187e2800759e095182a493302bb8ac3a0764f0e0731b21c481b8b6090b"
+      },
+      {
+        "path": "crates/oc-core/src/agents/tests.rs",
+        "bytes": 30518,
+        "sha256": "fe61b550a72a13897628dc99a4920c0755a1169da326f625617635bb72eef0c5"
+      },
+      {
+        "path": "crates/oc-core/src/agents/watch.rs",
+        "bytes": 10255,
+        "sha256": "e544e54bf401fe1e3e0af23180f98b9dfb0f2ffaa7fd589a49c90947be473f2d"
+      },
+      {
+        "path": "crates/oc-core/src/bin/oc-data-worker.rs",
+        "bytes": 439,
+        "sha256": "0309f9487bc3476e52f4ab1a5bb50abf1f1518fca810077515a3bc70365b9910"
+      },
+      {
+        "path": "crates/oc-core/src/diagnostics/mod.rs",
+        "bytes": 12599,
+        "sha256": "7725cfa0497ff75004ab4d277a0d886b4750c1338395785cf434cc2d406e7bf1"
+      },
+      {
+        "path": "crates/oc-core/src/diagnostics/report.rs",
+        "bytes": 14670,
+        "sha256": "60fc8429ca443597f9a402e73af63d4871c491243533d411a053aba0466c3c46"
+      },
+      {
+        "path": "crates/oc-core/src/diagnostics/tests.rs",
+        "bytes": 5122,
+        "sha256": "2863d4f615a5b8fb9db4d87640e8ccd8238741a1835be4435870241efd56956e"
+      },
+      {
+        "path": "crates/oc-core/src/error.rs",
+        "bytes": 4028,
+        "sha256": "4adea3d106bb02a917b240161ec519f7c93170087f37bd93af065d7da06e8b23"
+      },
+      {
+        "path": "crates/oc-core/src/events/collector.rs",
+        "bytes": 8470,
+        "sha256": "41446374384e3793e41ad8ecded89a2d57ba24a42d9a16f1fb11d68650f6fe1c"
+      },
+      {
+        "path": "crates/oc-core/src/events/contracts.rs",
+        "bytes": 7881,
+        "sha256": "22693d7701ba0f934c50d31e0c86820e8ea3a6d18f44efd800aeed97023f8fa8"
+      },
+      {
+        "path": "crates/oc-core/src/events/journal.rs",
+        "bytes": 2686,
+        "sha256": "0a78e170d82c256385ad4516535a9d0e2b21c645834be6baa325897189fa1389"
+      },
+      {
+        "path": "crates/oc-core/src/events/mod.rs",
+        "bytes": 18647,
+        "sha256": "0c7a48ff0b55da148b5299c1e217e8da8483b3498849cce449772f017cd6ad31"
+      },
+      {
+        "path": "crates/oc-core/src/events/notification_tests.rs",
+        "bytes": 14432,
+        "sha256": "c31ca7ed6450c31f71d0b44c1af1279043fd8ddb69c6b0e6e398db73c8599d9b"
+      },
+      {
+        "path": "crates/oc-core/src/events/notifications.rs",
+        "bytes": 25013,
+        "sha256": "0b96af5d6d89962022ccd46ee02e40ec14916f5ba6f988f7fe993acc21946827"
+      },
+      {
+        "path": "crates/oc-core/src/events/service_tests.rs",
+        "bytes": 8212,
+        "sha256": "60c48d5875f3cee6b10d18a4c10cb201c20c8d9f137962946d5cce2ba69ed52b"
+      },
+      {
+        "path": "crates/oc-core/src/events/worker_tests.rs",
+        "bytes": 16733,
+        "sha256": "8ade7cc35f58c964764212fc7e4eb19ab65fd86fbbb596606f473b63ff109115"
+      },
+      {
+        "path": "crates/oc-core/src/http/tests.rs",
+        "bytes": 8959,
+        "sha256": "2b1e412b0c2ba7a7f33d0fe83c144bad71725ef79cc28d29db25af6408361040"
+      },
+      {
+        "path": "crates/oc-core/src/http.rs",
+        "bytes": 31350,
+        "sha256": "a24eeb8b5f04a0edd63c4156b6de80870366f4eab6671a2f477c8dee6096732f"
+      },
+      {
+        "path": "crates/oc-core/src/io/directory.rs",
+        "bytes": 4883,
+        "sha256": "1f1148bf5df640ebb2e9bc285b3f21af5cb7e4c4aad78a7bab6061a6f85e8188"
+      },
+      {
+        "path": "crates/oc-core/src/io/tests.rs",
+        "bytes": 8105,
+        "sha256": "b77f2532c8120a8d3b6b54469635cffc6ad1a0bde6bd322789cba388fc4273a1"
+      },
+      {
+        "path": "crates/oc-core/src/io.rs",
+        "bytes": 26782,
+        "sha256": "632b632d447868580c4aa644b42d0aa78024e46104827371c439b1504f09c331"
+      },
+      {
+        "path": "crates/oc-core/src/lib.rs",
+        "bytes": 389,
+        "sha256": "59f03e767f02d736a2341d6fa8917bf619d3eabb5daa69cd33c4e5a7f46ca8a1"
+      },
+      {
+        "path": "crates/oc-core/src/marketplace/acceptance_tests.rs",
+        "bytes": 4947,
+        "sha256": "b4d5c12690e275c21a675826fdeb2a032776eec9db60a435d38ec48c55daf286"
+      },
+      {
+        "path": "crates/oc-core/src/marketplace/archive.rs",
+        "bytes": 13679,
+        "sha256": "f5d76de13f138e93cc5ce337f163a9a265162eb2904ee7a2c5115704aebeeb2c"
+      },
+      {
+        "path": "crates/oc-core/src/marketplace/fs.rs",
+        "bytes": 12052,
+        "sha256": "8df551be97d3be4945072f7952775c6de5746440632eb8571f857b67d89ad0cc"
+      },
+      {
+        "path": "crates/oc-core/src/marketplace/mod.rs",
+        "bytes": 28646,
+        "sha256": "04775ba04a9d0967727af35d7821eede08152645d54c4030d0b6e025a615b174"
+      },
+      {
+        "path": "crates/oc-core/src/marketplace/model.rs",
+        "bytes": 6544,
+        "sha256": "57f63cbd5bffff8b4e313ceb855d231f71a0b32f21f4311687c1fdddb77888e3"
+      },
+      {
+        "path": "crates/oc-core/src/marketplace/remote_acceptance_tests.rs",
+        "bytes": 16913,
+        "sha256": "b28598e4508b0e7c4b25fb32b345e3c43a2870bef9673d833f34d9e1d3a5b306"
+      },
+      {
+        "path": "crates/oc-core/src/marketplace/tests.rs",
+        "bytes": 13742,
+        "sha256": "7b2e615cbc56c8ba6469ba9fbc54a7005d5ce9b3e273a57e13964361a442d81c"
+      },
+      {
+        "path": "crates/oc-core/src/marketplace/transaction.rs",
+        "bytes": 15985,
+        "sha256": "8601e4e3c84b64755573ba673a3547bd203a488e4b1d785483d71ab5dff45409"
+      },
+      {
+        "path": "crates/oc-core/src/marketplace/transport.rs",
+        "bytes": 6028,
+        "sha256": "8c694e2b01c736880f96b55bd32e167ed133084aeec687a50f81c8142424ae1e"
+      },
+      {
+        "path": "crates/oc-core/src/marketplace/trust.rs",
+        "bytes": 7202,
+        "sha256": "b159dc9a76f50d95f0b70c343ec4bad8cf352396297f00e79a5739813d38aa1f"
+      },
+      {
+        "path": "crates/oc-core/src/model/agents.rs",
+        "bytes": 2476,
+        "sha256": "90f4ae9a1b7a3e9951d620c05cd5d3d5ba1ec2bfc1d05793beb610bbba3d892b"
+      },
+      {
+        "path": "crates/oc-core/src/model/events.rs",
+        "bytes": 4983,
+        "sha256": "e3a15950c3eeefbe37c6af3369e56a7d32aebb521466b33edf94b6a5cc6d7cc9"
+      },
+      {
+        "path": "crates/oc-core/src/model/mod.rs",
+        "bytes": 7371,
+        "sha256": "1db7332e36606d3f0714f4da5e58860f59a403f2b9eb93f5daccc99ead377a1a"
+      },
+      {
+        "path": "crates/oc-core/src/model/navigation.rs",
+        "bytes": 2853,
+        "sha256": "8edec12f435f00513cd476b7a6c82742690d8033dbd9ad86cae78d9a8016e84d"
+      },
+      {
+        "path": "crates/oc-core/src/model/schedules.rs",
+        "bytes": 3834,
+        "sha256": "df5e244043460dbac74ce53fe1bd43726e584c1e6e0caa6793cecfeab96268f5"
+      },
+      {
+        "path": "crates/oc-core/src/model/system.rs",
+        "bytes": 1459,
+        "sha256": "bd8912a03ada4fb048c3a56d37241da4005fe24d7ee7a1f1013561fbfeac462e"
+      },
+      {
+        "path": "crates/oc-core/src/monitor/builtins.rs",
+        "bytes": 7429,
+        "sha256": "bed4c21daf119fec1e9069f203842c2fcb728a9b5b05e67b46f0091416f9fa67"
+      },
+      {
+        "path": "crates/oc-core/src/monitor/state.rs",
+        "bytes": 17825,
+        "sha256": "cee98caeb7b3037a6ccad958dd0f0a4bda80e439e2abde2d6a9c14b42321d592"
+      },
+      {
+        "path": "crates/oc-core/src/monitor/tests.rs",
+        "bytes": 21987,
+        "sha256": "6b482d8fc78e1effab703b7d1cdde9a52813772f933b6515e11c648a0399e0dd"
+      },
+      {
+        "path": "crates/oc-core/src/monitor.rs",
+        "bytes": 15815,
+        "sha256": "7095859edad86841873747ab9463056ca4b7b1e396231c0d84ac16448325d089"
+      },
+      {
+        "path": "crates/oc-core/src/navigation/mod.rs",
+        "bytes": 3604,
+        "sha256": "5f843d2dc080707415733fabc42456f12faa0fa40c0e7138e36af521c2e661e5"
+      },
+      {
+        "path": "crates/oc-core/src/performance.rs",
+        "bytes": 2482,
+        "sha256": "363f9e2d34b81fd87d42e9b57a5afe30bbf49bf124fb68eeed2ff8345b24e790"
+      },
+      {
+        "path": "crates/oc-core/src/plugins/host.rs",
+        "bytes": 25235,
+        "sha256": "deece3a91633b5e3ea6db3edced2d54bb8ba122f16da6e91aa2bbbed0cb0efb7"
+      },
+      {
+        "path": "crates/oc-core/src/plugins/host_io.rs",
+        "bytes": 7902,
+        "sha256": "5c94eb14a073d07bcdeda2f365d09522bb48c5147140c22aa84e3a79a900b014"
+      },
+      {
+        "path": "crates/oc-core/src/plugins/host_tests.rs",
+        "bytes": 2107,
+        "sha256": "211560047bc87d028a8f1a3a1f8477628851590fc6ca3ded4f451a295e347ed6"
+      },
+      {
+        "path": "crates/oc-core/src/plugins/mod.rs",
+        "bytes": 244,
+        "sha256": "9bb53e6479388b5e5c4348fcdd28d7867fe3c1432877e11d98e93b726de031d4"
+      },
+      {
+        "path": "crates/oc-core/src/plugins/registry.rs",
+        "bytes": 27724,
+        "sha256": "a12dc29c84c64d17bd44c34d58481db8528ce6570a6459c756d99981aca7e61a"
+      },
+      {
+        "path": "crates/oc-core/src/plugins/tests.rs",
+        "bytes": 7311,
+        "sha256": "5f76b6ba0567fae9eabebd12844facfa40bdc1775b6d601f27717d71750278f3"
+      },
+      {
+        "path": "crates/oc-core/src/process.rs",
+        "bytes": 1651,
+        "sha256": "508335806225f8e39817345e79ae9b0d5616e4a804597a31ed03a6a084730f18"
+      },
+      {
+        "path": "crates/oc-core/src/resources.rs",
+        "bytes": 26247,
+        "sha256": "c793f235bb722330d233fdb29a39cbab6c31d096ab08bf2dd024d929b3aeaca2"
+      },
+      {
+        "path": "crates/oc-core/src/schedules/launchd.rs",
+        "bytes": 11870,
+        "sha256": "026b2a3a42011b9b2b5b13f92b2740bcb9f5e376fb9be59ef007224e98df0d04"
+      },
+      {
+        "path": "crates/oc-core/src/schedules/mod.rs",
+        "bytes": 26169,
+        "sha256": "d4de25da20962110d2a4ca5c31981d57dd09df12c73d2380a2f8355f0a444064"
+      },
+      {
+        "path": "crates/oc-core/src/schedules/parse.rs",
+        "bytes": 20239,
+        "sha256": "223b5e6895b20b0a5b43fb10beadcb03613827bc6d9bce7aae4d68eaad8b9430"
+      },
+      {
+        "path": "crates/oc-core/src/schedules/runtime.rs",
+        "bytes": 11397,
+        "sha256": "e92887f23a127b3f2781d204d652775a3d5ae7967b92af48dd67d8536a2a73a2"
+      },
+      {
+        "path": "crates/oc-core/src/schedules/tests.rs",
+        "bytes": 19156,
+        "sha256": "68035cceadda248e91882ea1e6e30a9ce4bbe179ddc759f6cf83e70c0610e339"
+      },
+      {
+        "path": "crates/oc-core/src/settings/mod.rs",
+        "bytes": 59,
+        "sha256": "ce6c4fb5ae33d4b70934be57503e52c7c76a39e24ebabdddeeeb9ece43f81385"
+      },
+      {
+        "path": "crates/oc-core/src/settings/model.rs",
+        "bytes": 14511,
+        "sha256": "5fb4f6a48c9415a27599e396bda10cc4282f07f2f695b3c028bbadbcba226984"
+      },
+      {
+        "path": "crates/oc-core/src/settings/store.rs",
+        "bytes": 8170,
+        "sha256": "8e8abfd18988b3015281a61af95db37cdd6493377981243e3b572942137e0233"
+      },
+      {
+        "path": "crates/oc-core/src/tern/mod.rs",
+        "bytes": 20511,
+        "sha256": "f2887abe12b708e8a95593dbd879d28aa780fa36a6b5a08f589c7a20c074428e"
+      },
+      {
+        "path": "crates/oc-core/src/updates/archive/tests.rs",
+        "bytes": 12683,
+        "sha256": "8fe646a71d26bc7324fba8791a6364a5b135ceee4c1162a5f66513bce9e14d24"
+      },
+      {
+        "path": "crates/oc-core/src/updates/archive.rs",
+        "bytes": 20232,
+        "sha256": "d326ffa1bb7b83065123116094ca9e9f997e9a5f1c37844ce5f796a87554659c"
+      },
+      {
+        "path": "crates/oc-core/src/updates/fs.rs",
+        "bytes": 10929,
+        "sha256": "6eebcdb1034e126b5540fb7fcb116d77e66cbd21d831536f602545c56be8e712"
+      },
+      {
+        "path": "crates/oc-core/src/updates/install.rs",
+        "bytes": 6249,
+        "sha256": "c9205b6fae0e11e84643f42dc7fb93b2a9066ccd37091ca72d5a75d213998390"
+      },
+      {
+        "path": "crates/oc-core/src/updates/mod.rs",
+        "bytes": 18005,
+        "sha256": "b64cd0d5f3761728c525d82357202daef702b941496c10e073828440bfdb6457"
+      },
+      {
+        "path": "crates/oc-core/src/updates/model.rs",
+        "bytes": 1088,
+        "sha256": "e40c74142aaf925146ab1dd19fea6e59fcdcba3f6de37a6ea6c1250ab4ea1412"
+      },
+      {
+        "path": "crates/oc-core/src/updates/source/tests.rs",
+        "bytes": 5703,
+        "sha256": "6a8ddabe806807c5d9bad01f0e782f1267bda482b13f1dc8a787aeb6e728132b"
+      },
+      {
+        "path": "crates/oc-core/src/updates/source.rs",
+        "bytes": 7941,
+        "sha256": "61713707fd4c9b76973e5607531188b329cafe4b8c83a464e581e372ce32b071"
+      },
+      {
+        "path": "crates/oc-core/src/updates/tests.rs",
+        "bytes": 13958,
+        "sha256": "48406eda0e2d821b24cefa614b0fc5ab8c284851c8c1e051f5bbcbff8ac75b39"
+      },
+      {
+        "path": "crates/oc-core/src/updates/work.rs",
+        "bytes": 5762,
+        "sha256": "2568b722e545adf510dfdfdaa2489a96879c3fa111cd79fe4f98e5b99e79208f"
+      },
+      {
+        "path": "crates/oc-core/src/worker/events.rs",
+        "bytes": 36163,
+        "sha256": "f472fbb35b6cef3a06e41e92f0d642faa933966d5992020ec720277607011f28"
+      },
+      {
+        "path": "crates/oc-core/src/worker/hermes.rs",
+        "bytes": 20733,
+        "sha256": "d68309b57ae32ee6b9ad072a8549de94edf840d93343aec43f463890a98ca955"
+      },
+      {
+        "path": "crates/oc-core/src/worker.rs",
+        "bytes": 6189,
+        "sha256": "c8c5142b56d6aa4d413f3b4f37293641d05f6ea015849d3d1ca764afe5c76b6d"
+      },
+      {
+        "path": "crates/oc-installer/Cargo.toml",
+        "bytes": 431,
+        "sha256": "4b3a858862216d5090be2cc1fb578f523b3a8f90277760fcb62b5260c0ab9739"
+      },
+      {
+        "path": "crates/oc-installer/src/filesystem.rs",
+        "bytes": 17659,
+        "sha256": "b7bbad4b19db0aea6be2a66f40c132842e2bab94313106f5842012e685b5e18d"
+      },
+      {
+        "path": "crates/oc-installer/src/lib.rs",
+        "bytes": 11702,
+        "sha256": "a3717d16a51dd71bb6c2350785066adc9939957fa90183b931ed1c592f27e747"
+      },
+      {
+        "path": "crates/oc-installer/src/local.rs",
+        "bytes": 21735,
+        "sha256": "fc8093e07b6fad721a8af5e397617add508e36fc865000401ca1292d03e0d718"
+      },
+      {
+        "path": "crates/oc-installer/src/local_tests.rs",
+        "bytes": 12937,
+        "sha256": "b11089cf0b629403c741e3d171b6c5b500d8c760adeb80dea31b40c9f8ca7fee"
+      },
+      {
+        "path": "crates/oc-installer/src/main.rs",
+        "bytes": 508,
+        "sha256": "aa4e4eee38a81deecd4996be262b09041abf5f527ed0890e5d318970554a105f"
+      },
+      {
+        "path": "crates/oc-installer/src/process.rs",
+        "bytes": 21994,
+        "sha256": "517cb23578d8186825ccba431f94c2c085de10f0b2d06047a1679a4363df9fe5"
+      },
+      {
+        "path": "crates/oc-installer/src/signature.rs",
+        "bytes": 5875,
+        "sha256": "681e537130bfc0fdc3434b980b4922006ed245a7ea5f5d5bbe7b5315116f8592"
+      },
+      {
+        "path": "crates/oc-installer/src/tests.rs",
+        "bytes": 25578,
+        "sha256": "89f670b77ef462f506af0ad69f48f6a0644c4e0cd08fcbd800f85ed7c82cb614"
+      },
+      {
+        "path": "crates/oc-installer/src/transaction.rs",
+        "bytes": 39554,
+        "sha256": "8546b40304b77356ed1a66ce6333ad1919ff1bdfbeb3d7ca979a08898d33b2b2"
+      },
+      {
+        "path": "crates/oc-plugin-sdk/Cargo.toml",
+        "bytes": 300,
+        "sha256": "9d1ca33fbf1aea1ec070b7f1333ba2bc2846b06681d1aad454114a3230150cc3"
+      },
+      {
+        "path": "crates/oc-plugin-sdk/src/lib.rs",
+        "bytes": 23561,
+        "sha256": "f9a942fee53c9795b01a3b111f2e7120ba21fa6d1f02a20da5fe928fb912da90"
+      },
+      {
+        "path": "crates/oc-plugin-sdk/src/runtime.rs",
+        "bytes": 26834,
+        "sha256": "f4b20ffc9a6b36e3c0e22320d6dcf752d837ddc3d7438fb40ae352bc1c466fc0"
+      },
+      {
+        "path": "src-tauri/Cargo.toml",
+        "bytes": 1595,
+        "sha256": "77327cbb12779db76da66661b181a678a2d21cf9dd0ed934f5cefde5bd3293f2"
+      },
+      {
+        "path": "src-tauri/acceptance/driver.rs",
+        "bytes": 12604,
+        "sha256": "232c0cd16995a5e0dcab543294fb42c5ff3680e21136bdda605d343083c18f9a"
+      },
+      {
+        "path": "src-tauri/acceptance/host.rs",
+        "bytes": 14667,
+        "sha256": "36a51a12b704f50ea5afb769187f9870f625e30fc371a5845e1d5be19d3e8a06"
+      },
+      {
+        "path": "src-tauri/acceptance/renderer-errors.js",
+        "bytes": 685,
+        "sha256": "5c7d578a2b2ba9267a72ef85bb1325ac29151b7bbe53d24497c3cffd78afc697"
+      },
+      {
+        "path": "src-tauri/acceptance/wk-driver.mm",
+        "bytes": 19013,
+        "sha256": "118cf593fbf17dd3b12d09b4151f70f31c67363c1bf3c28abbc67fd8a0afff19"
+      },
+      {
+        "path": "src-tauri/build.rs",
+        "bytes": 3044,
+        "sha256": "92b0a2441dbab35a547578e28bc53c23b6e62578072616937f5bf8ffdb191ad3"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/desktop_ack.toml",
+        "bytes": 366,
+        "sha256": "214067f1d823d2c35da2bc9ce0aab41eab01128d23fabeb755142663c04e3b42"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/desktop_committed.toml",
+        "bytes": 402,
+        "sha256": "eeefa3025a300bbcc795bf517e271f0c5cfb1f91e1c4342100b8a4b0d9c7c9c2"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/desktop_interest.toml",
+        "bytes": 396,
+        "sha256": "38ed50e6caa5b8b308f5d2104f06a94b787733d6eb2fa96758c4b9942eea96e1"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/desktop_register.toml",
+        "bytes": 396,
+        "sha256": "82967ec06f6080405b207b38cafc6e7ee818ca434615fa92cf7d98f5f5e54fb4"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/diagnostics_cancel.toml",
+        "bytes": 408,
+        "sha256": "5c3472ee2a8068eae17069aad130039e3332f020b61114f20839fd4c3358df6a"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/diagnostics_copy.toml",
+        "bytes": 396,
+        "sha256": "b2151d69dcd6cac3457939e768f5f109521f20467c9c215ba8cde19a2d73c4eb"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/diagnostics_generate.toml",
+        "bytes": 420,
+        "sha256": "5941e0d9b15b2d3e0be7193e586d11c53c4eaba14e18132d146f4117b72ed7e3"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/diagnostics_save.toml",
+        "bytes": 396,
+        "sha256": "604efd206242d6881eda306de2f5ab941ee12e4094969f97683c9403d2687595"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/marketplace_cancel.toml",
+        "bytes": 408,
+        "sha256": "ca6d0547a84d93cfa93e1609ad9b02cb5561b5866f9ac0920abada0f4b998a47"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/marketplace_check.toml",
+        "bytes": 402,
+        "sha256": "32e8de5d015baadfb78c835d4a0c0e76d41ea39f6e80a4dcf9b4cc57c773e038"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/marketplace_install.toml",
+        "bytes": 414,
+        "sha256": "7e94cc44db0d61e53a27c56032c5b1c938110f8b8723d7d45c9ad1ea430c79d5"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/marketplace_snapshot.toml",
+        "bytes": 420,
+        "sha256": "1930120adda8cbdbe84c12aab9993c0707eddd49d6ed6311c5ab79f95e3b841c"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/marketplace_uninstall.toml",
+        "bytes": 426,
+        "sha256": "b8266812d852e3071f79d8cfcb13dc33c7a1ecb1f9e22cdc4d986d34178babf7"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/marketplace_update.toml",
+        "bytes": 408,
+        "sha256": "b3977961448444b8768fd90fadb20949a698dc3e335fb397774851e78a7e19fa"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/monitor_acknowledge_navigation.toml",
+        "bytes": 480,
+        "sha256": "e3c36849b68751568ffd7fb1d9217a38592f51a1ae580888354cd145d12b46a7"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/monitor_cancel_events.toml",
+        "bytes": 426,
+        "sha256": "869cac2bcb29ef06dd29be751fd97a98a2c02b07a79d9ca27001f8353c899ba8"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/monitor_cancel_schedule_history.toml",
+        "bytes": 486,
+        "sha256": "12933b5b48d3a835611373e16fe2c3986803cc813f3434bfde8b028ac9bd03bc"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/monitor_events.toml",
+        "bytes": 384,
+        "sha256": "b39fcb6bb4807cc6650e71ed79fa82cd1aef252361fd98f5f6221c5f8043148a"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/monitor_focus_agent_in_tern.toml",
+        "bytes": 462,
+        "sha256": "6e85f95dc16494d176dea1ff08cb695e7a4af0bc96c4754e45969304f813b233"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/monitor_navigation.toml",
+        "bytes": 408,
+        "sha256": "b02ea2e96e3f76083616dfe14ed9ff6562e90a853765bf5ec571cefb20071b66"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/monitor_refresh.toml",
+        "bytes": 390,
+        "sha256": "7034583d64eaf6a8cd9e22d805ef3a2d00062ce460cacc64bee4492b89a04fc9"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/monitor_retry_source.toml",
+        "bytes": 420,
+        "sha256": "f0b622ca77058fe8e58b9ada3d2cf5d3c86fc23291233cfd8e18da3757dc0ff9"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/monitor_schedule_history.toml",
+        "bytes": 444,
+        "sha256": "5f9b152cce6313baedfb9dfd6cb3db398d5843af05b12f4434a16732448ba78f"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/monitor_snapshot.toml",
+        "bytes": 396,
+        "sha256": "8c317eeb9865678b9d5851485b9663a0c551e49f638fac3d98f27935b26e82cd"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/recovery_quit.toml",
+        "bytes": 378,
+        "sha256": "36ae3d2b3b70a86fceb90da0f03eb479e0b7e0220b6e4a4d265b563a8e376566"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/recovery_retry.toml",
+        "bytes": 384,
+        "sha256": "804b926ff43d513fddf04ab9b89c8e30484ef574e6d316060662e9798c5e5cca"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/recovery_snapshot.toml",
+        "bytes": 402,
+        "sha256": "697889b3c86a59934858a9a30dc758b4bb1dfff35c2cb37a1cb22260258c5e89"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/settings_preview_glass.toml",
+        "bytes": 432,
+        "sha256": "faf120d7bcab1a2fba5d793ca725db5f06a14ac29fd644d72370ea429466a82b"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/settings_request_notification_permission.toml",
+        "bytes": 540,
+        "sha256": "6b60957ead6c1c39f67a256bf8e37ea0b8243140f36012d7651f8b6c815cb050"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/settings_retry_geometry.toml",
+        "bytes": 438,
+        "sha256": "84fa2df57d2fb151bf7597f662b4609b31325aab36b30a219e3006b82c84e4f8"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/settings_show_main_window.toml",
+        "bytes": 450,
+        "sha256": "47a06aa0ebe1b66222c0e94346bca33a454274d802ee2d480429706dbce5472f"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/settings_snapshot.toml",
+        "bytes": 402,
+        "sha256": "b9483f660859b1ebe61b4e5e6ab917696623aa7e61812963a524448dd810a2c7"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/settings_update.toml",
+        "bytes": 390,
+        "sha256": "9af52b80d60092f7ecc780a5b84c1a50f3540eaca6ea92ad12a6e959885435c1"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/settings_update_login_item.toml",
+        "bytes": 456,
+        "sha256": "4b410ae72ce02d3f4ad4acea82620ee863565b5e648743e17f2f1e5b5e4dba27"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/updates_cancel.toml",
+        "bytes": 384,
+        "sha256": "5ef150dd96c2ec8d56501e74949cca1991bd57a40e0865dc248cc9afbc4eb304"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/updates_check.toml",
+        "bytes": 378,
+        "sha256": "c8106fb4d9f207ea1f1a2ef022a1699460c2f7cb1a25c2cd35f42b768dc5dc1c"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/updates_download.toml",
+        "bytes": 396,
+        "sha256": "692a73acf4ac257557cf20266aac8c6e873b55fd3738120f85409b2561d90e6d"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/updates_install.toml",
+        "bytes": 390,
+        "sha256": "83f9629419ca5c89c45a4ad342a8ad413f3324247554e51572af718c08b7bec8"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/updates_open_release_notes.toml",
+        "bytes": 456,
+        "sha256": "1f08ea826685ccd3d6e18aeaab02d70d0570e2d2101078a1615971fc869134af"
+      },
+      {
+        "path": "src-tauri/permissions/autogenerated/updates_snapshot.toml",
+        "bytes": 396,
+        "sha256": "0169d408503c32e9655d484fabf5be697699ca5b5982bf9bdc000eacd0359149"
+      },
+      {
+        "path": "src-tauri/src/api.rs",
+        "bytes": 788,
+        "sha256": "cf8a8a3ee006030061cba456d31299afd1bd0d78af679626f785cec38595406a"
+      },
+      {
+        "path": "src-tauri/src/commands.rs",
+        "bytes": 1392,
+        "sha256": "ee1b533870b09861b189071a13f721d4032cd20ec4fc425eadb1708594d448b2"
+      },
+      {
+        "path": "src-tauri/src/config.rs",
+        "bytes": 9897,
+        "sha256": "339d11fdfe900b44ba449518ed27a9dafdb4428e3d8216891abef2b15f571fb9"
+      },
+      {
+        "path": "src-tauri/src/document_tests.rs",
+        "bytes": 5133,
+        "sha256": "c94578921e1e23eb8ae8d7bebf85bde20718acd669fc12c1f60f4155c7fa0c15"
+      },
+      {
+        "path": "src-tauri/src/documents.rs",
+        "bytes": 10371,
+        "sha256": "f32624e3fa6dd5c6f73f7e5c9bdf2f0b897e4364ee5f91b7937284f7d40ecd49"
+      },
+      {
+        "path": "src-tauri/src/host.rs",
+        "bytes": 31104,
+        "sha256": "35d6e6f6ee55b0f712f0071688472ec23093efd95e53f88fdd3cbdf10b7d9f1c"
+      },
+      {
+        "path": "src-tauri/src/host_commands.rs",
+        "bytes": 13232,
+        "sha256": "e87547a0f4f9676ec4d164cf72150e49d3f5bcbbbcd3764c7c4821596763a355"
+      },
+      {
+        "path": "src-tauri/src/ipc.rs",
+        "bytes": 4693,
+        "sha256": "e77110a2c2436fe3f83a21ac47c1dd60ee0c0a87bacb16fa1265269eca02eb6f"
+      },
+      {
+        "path": "src-tauri/src/main.rs",
+        "bytes": 4717,
+        "sha256": "cd761d31ef029e490a8cf30087969ed3cbb4ae3a2feb803eb827a89b52a5969d"
+      },
+      {
+        "path": "src-tauri/src/native.rs",
+        "bytes": 26561,
+        "sha256": "ccdfbdec361a411fbc10b415addaac9b607fa4213c7107456ff3887958ce4068"
+      },
+      {
+        "path": "src-tauri/src/readiness.rs",
+        "bytes": 7555,
+        "sha256": "ce00b3fb2583c632a3503abe20fc83c4804250c2aa13c0172dd5851da5d5bec7"
+      },
+      {
+        "path": "src-tauri/src/settings.rs",
+        "bytes": 30146,
+        "sha256": "4917369d02c899f16c6fece246fb73c6d794e90f5544166938211fa799e38d7d"
+      },
+      {
+        "path": "src-tauri/src/settings_tests.rs",
+        "bytes": 15146,
+        "sha256": "ba485299e38d09bf26a711b33b4d054eb99ea537b6791a8dc9fa15b7695ba840"
+      },
+      {
+        "path": "src-tauri/src/windows.rs",
+        "bytes": 28501,
+        "sha256": "053dfb36e92af3ab4300778f80529ac07e78d648a85ee42c1a8347c729db0ddc"
+      },
+      {
+        "path": "src-tauri/tauri.conf.json",
+        "bytes": 886,
+        "sha256": "0a7c9e8a0d66a98b3f8f4703fab587b7c417b6aac0acc11c46c5b7fd34c2240c"
+      },
+      {
+        "path": "native/Cargo.lock",
+        "bytes": 811,
+        "sha256": "e84e09f0fb8c010532ebab7efa1015fb1b27ee4e221bfa96da4d65ea2ee57dcd"
+      },
+      {
+        "path": "native/Cargo.toml",
+        "bytes": 141,
+        "sha256": "8546d41ab21f8902836315928f6f573d9832e17437dc7a68c8eeed940032e60a"
+      },
+      {
+        "path": "native/build.rs",
+        "bytes": 1819,
+        "sha256": "a9796c01f5a779a970c2a3a39a3ef87e658f00de5bdab895c40216cfc01f67eb"
+      },
+      {
+        "path": "native/oc_exports.inc",
+        "bytes": 18899,
+        "sha256": "2d78c8252bfbabaf81249eeaaef1ca6d3d97b7e12df59426598101e9c14a4e7d"
+      },
+      {
+        "path": "native/oc_native.h",
+        "bytes": 8366,
+        "sha256": "9edef1fdbb6717e9fae428008e71f97fa252a0d08b1eed35d4ea9680bb4636b4"
+      },
+      {
+        "path": "native/oc_native.mm",
+        "bytes": 11860,
+        "sha256": "a801b9a5904e75701612019ab62d3849f695655432890b5bf3fbfa8a1b92de95"
+      },
+      {
+        "path": "native/oc_notifications.inc",
+        "bytes": 9522,
+        "sha256": "01ede71bd0ee1e3b43f4d73b7f9c50f0a3e4707eed4457c70c8d173187c09053"
+      },
+      {
+        "path": "native/src/lib.rs",
+        "bytes": 1302,
+        "sha256": "0c6a81257e2d51ddf052b2669a352132c39b42fc1b44a4a8831ef9724a99a7f0"
+      },
+      {
+        "path": "native/tern-present.swift",
+        "bytes": 16067,
+        "sha256": "056d142eea2a3d1fafbc98f70274e23bddb517149feea66d154238ae47811dcd"
+      },
+      {
+        "path": "Cargo.toml",
+        "bytes": 1316,
+        "sha256": "0a86ca396a49bd898f2bb2a4f04f114c9f0f6b5e8c9872f3331d717b08634317"
+      },
+      {
+        "path": "Cargo.lock",
+        "bytes": 121450,
+        "sha256": "42b59dfdc630395a24833ba82de5c9d0420297701ff8ffe4db87077cd4a617f8"
+      },
+      {
+        "path": "rust-toolchain.toml",
+        "bytes": 51,
+        "sha256": "515c80a149c1e927d497dbebc399e241822aa0197e8f778c21bf5c136c90afd2"
+      },
+      {
+        "path": "vite.config.ts",
+        "bytes": 814,
+        "sha256": "8541e64816b2230e870e349e8bdbaa6a8f6d3a69ef354245723bbc7e065a5866"
+      },
+      {
+        "path": "package.json",
+        "bytes": 2075,
+        "sha256": "c9b321c3971092630ef0db7380a1ce3d8b9b8790479651cbf5d8843df889f31c"
+      },
+      {
+        "path": "package-lock.json",
+        "bytes": 71245,
+        "sha256": "2ce7e0da66e7971b15961a916d1f4be93f7088a63a2e2b686e3f1fefeb8f984b"
+      },
+      {
+        "path": "tsconfig.json",
+        "bytes": 459,
+        "sha256": "bcc075c2573e1f202ba070d384e78038b0b88e7002a6f3eccf86e6b426fcab55"
+      }
+    ]
+  },
+  "host": {
+    "os": "ProductName:\t\tmacOS\nProductVersion:\t\t27.2\nBuildVersion:\t\t26B123",
+    "arch": "arm64",
+    "cpu": "Apple M5 Max",
+    "logicalCores": 18,
+    "memoryBytes": 137438953472,
+    "node": "v22.23.4",
+    "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23789667)\t100%; charged; 0:00 remaining present: true"
+  },
+  "finishedAt": "2026-11-09T23:34:50.938Z"
+}

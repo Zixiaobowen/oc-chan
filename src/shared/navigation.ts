@@ -37,14 +37,3 @@ export function parseNavigationTarget(value: unknown): NavigationTarget {
     return { kind: 'source', id: target.id, section: target.section as MonitorSection }
   throw new Error('导航目标无效 / Invalid navigation target')
 }
-
-// One replaceable slot, retained until the renderer acknowledges handling it.
-export class PendingNavigation {
-  private intent: NavigationIntent | null = null
-  private sequence = 0
-  put(target: NavigationTarget): void { this.intent = { sequence: ++this.sequence, target } }
-  read(): NavigationIntent | null { return this.intent }
-  acknowledge(sequence: number): void {
-    if (this.intent?.sequence === sequence) this.intent = null
-  }
-}

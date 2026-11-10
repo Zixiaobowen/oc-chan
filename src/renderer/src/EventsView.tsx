@@ -7,6 +7,8 @@ import { agentTarget, scheduleTarget, type NavigationTarget } from '../../shared
 import type { MonitorSnapshot } from '../../shared/types'
 import { NativeSelect } from './components'
 import { useI18n } from './i18n'
+import { reportDesktopFailure } from './desktop-api'
+import { isDesktopDocumentVisible } from './desktop-visibility'
 import './events.css'
 
 type EventRange = 'all' | '1h' | '24h' | '7d'
@@ -114,6 +116,12 @@ function EventIdentity({ entry, snapshot, onNavigate }: {
   </div>
 }
 
+function EventFeedbackMessage({ visible, newer = false, children }: { visible: boolean; newer?: boolean; children: string }) {
+  return <p className={newer ? 'event-newer-feedback' : undefined} data-text={children} aria-hidden={!visible}>
+    {visible && <span>{children}</span>}
+  </p>
+}
+
 export default function EventsView({ snapshot, enabled, active, view, onViewChange, onNavigate }: {
   snapshot: MonitorSnapshot
   enabled: boolean
@@ -123,7 +131,7 @@ export default function EventsView({ snapshot, enabled, active, view, onViewChan
   onNavigate: (target: NavigationTarget) => void
 }) {
   const { t, language } = useI18n()
-  const [visible, setVisible] = useState(document.visibilityState !== 'hidden')
+  const [visible, setVisible] = useState(isDesktopDocumentVisible)
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error' | 'inactive'>('loading')
   const viewRef = useRef(view)
   viewRef.current = view
@@ -133,11 +141,11 @@ export default function EventsView({ snapshot, enabled, active, view, onViewChan
 
   useLayoutEffect(() => {
     const onVisibility = () => {
-      if (document.visibilityState === 'hidden') {
+      if (!isDesktopDocumentVisible()) {
         generation.current += 1
-        window.monitor?.cancelEvents()
+        void window.monitor?.cancelEvents().catch(reportDesktopFailure)
       }
-      setVisible(document.visibilityState !== 'hidden')
+      setVisible(isDesktopDocumentVisible())
     }
     document.addEventListener('visibilitychange', onVisibility)
     return () => document.removeEventListener('visibilitychange', onVisibility)
@@ -146,10 +154,10 @@ export default function EventsView({ snapshot, enabled, active, view, onViewChan
   useLayoutEffect(() => {
     const token = ++generation.current
     const monitor = window.monitor
-    monitor?.cancelEvents()
+    void monitor?.cancelEvents().catch(reportDesktopFailure)
     if (!canRead) {
       setPhase('inactive')
-      return () => { generation.current += 1; monitor?.cancelEvents() }
+      return () => { generation.current += 1; void monitor?.cancelEvents().catch(reportDesktopFailure) }
     }
     const current = viewRef.current
     // Activation restores the successful page; only a new explicit request changes its cursor.
@@ -178,13 +186,13 @@ export default function EventsView({ snapshot, enabled, active, view, onViewChan
         page, history: request.history, pageNumber: request.pageNumber, request: null, error: null, readAt: new Date().toISOString() }))
       setPhase('ready')
     }, fail)
-    return () => { generation.current += 1; monitor.cancelEvents() }
+    return () => { generation.current += 1; void monitor.cancelEvents().catch(reportDesktopFailure) }
   }, [canRead, view.requestId, onViewChange])
 
   function requestPage(request: EventRequest) {
     if (!canRead) return
     generation.current += 1
-    window.monitor?.cancelEvents()
+    void window.monitor?.cancelEvents().catch(reportDesktopFailure)
     setPhase('loading')
     onViewChange(previous => ({ ...previous, request, requestId: previous.requestId + 1, error: null }))
   }
@@ -237,7 +245,7 @@ export default function EventsView({ snapshot, enabled, active, view, onViewChan
   }, [snapshot, page, view.draft.sourceId, view.applied.sourceId])
   const limitedCoverage = coverage?.filter(item => item.state !== 'observing' || item.lastGap).length ?? 0
 
-  return <section className="events-view" aria-label={t('事件', 'Events')} aria-busy={busy}>
+  return <section className="events-view" aria-label={t('事件', 'Events')} aria-busy={busy} data-event-request-id={view.requestId}>
     <form className="event-filters" onSubmit={event => { event.preventDefault(); if (!unavailable) apply(view.draft, 'apply') }}>
       <div className="event-filter event-filter-source">
         <label htmlFor="event-source-filter">{t('来源 ID', 'Source ID')}</label>
@@ -273,10 +281,10 @@ export default function EventsView({ snapshot, enabled, active, view, onViewChan
     </p>
 
     <div className="event-feedback" role="status" aria-live="polite" aria-atomic="true">
-      {!enabled && <p>{page ? t('本地事件已停用。已取消读取，保留上次成功页；重新启用后再读取。', 'Local events are disabled. Reads are cancelled; the last successful page is retained until enabled again.') : t('本地事件未启用，尚无读取数据。可在数据来源页开启本地事件。', 'Local events are disabled; no page has been read. Enable local events in Sources.')}</p>}
-      {enabled && !canRead && <p>{page ? t('显示已暂停，保留当前页；后台事件采集仍可继续。', 'Display paused; the current page is retained. Background event collection can continue.') : t('显示已暂停，尚未读取事件。恢复显示后读取第一页。', 'Display paused; events have not been read. Resume to read the first page.')}</p>}
-      {busy && <p>{page ? t('正在读取；下方仍为上次成功页。', 'Reading; the last successful page remains below.') : t('正在读取事件…', 'Reading events…')}</p>}
-      {newer && <p>{t('有新记录。当前页保持不变；点击“查看最新”时更新。新记录可能不符合当前筛选。', 'New records are available. This page stays unchanged until you choose “View latest”; new records may not match these filters.')}</p>}
+      <EventFeedbackMessage visible={!enabled}>{page ? t('本地事件已停用。已取消读取，保留上次成功页；重新启用后再读取。', 'Local events are disabled. Reads are cancelled; the last successful page is retained until enabled again.') : t('本地事件未启用，尚无读取数据。可在数据来源页开启本地事件。', 'Local events are disabled; no page has been read. Enable local events in Sources.')}</EventFeedbackMessage>
+      <EventFeedbackMessage visible={enabled && !canRead}>{page ? t('显示已暂停，保留当前页；后台事件采集仍可继续。', 'Display paused; the current page is retained. Background event collection can continue.') : t('显示已暂停，尚未读取事件。恢复显示后读取第一页。', 'Display paused; events have not been read. Resume to read the first page.')}</EventFeedbackMessage>
+      <EventFeedbackMessage visible={busy}>{page ? t('正在读取；下方仍为上次成功页。', 'Reading; the last successful page remains below.') : t('正在读取事件…', 'Reading events…')}</EventFeedbackMessage>
+      <EventFeedbackMessage visible={newer} newer>{t('有新记录。当前页保持不变；点击“查看最新”时更新。新记录可能不符合当前筛选。', 'New records are available. This page stays unchanged until you choose “View latest”; new records may not match these filters.')}</EventFeedbackMessage>
     </div>
     {view.error && <div className="event-error" role="alert">
       <p><strong>{t('事件读取失败。', 'Event read failed.')}</strong> {page ? t('下方保留上次成功页，失败请求没有替换列表或游标。', 'The last successful page remains below; the failed request did not replace the list or cursor.') : t('尚无成功读取结果，不能判定没有事件。', 'No successful result is available; this does not mean there are no events.')}</p>

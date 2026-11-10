@@ -9,6 +9,15 @@ const row = id => `${ROWS}[data-event-id=${JSON.stringify(id)}]`
 const idsExpression = `Array.from(document.querySelectorAll(${JSON.stringify(ROWS)}), element => element.dataset.eventId)`
 const settled = `${$(ROOT)}?.getAttribute('aria-busy') === 'false' && !${$('.event-error')}`
 
+async function requestPage(ui, name) {
+  const requestId = await ui.evaluate(`Number(${$(ROOT)}.dataset.eventRequestId)`)
+  assert.ok(Number.isSafeInteger(requestId), 'event view must expose its request acknowledgement')
+  await ui.click(action(name))
+  // AppKit acknowledges input dispatch before WebKit necessarily handles it.
+  // Waiting only for idle + 50 rows can therefore read the previous page.
+  await ui.dom(`event ${name} request acknowledged`, `Number(${$(ROOT)}?.dataset.eventRequestId) === ${requestId + 1}`)
+}
+
 async function page(ui, count = 50) {
   await ui.dom(`event page settles with ${count} rows`, `${settled} && document.querySelectorAll(${JSON.stringify(ROWS)}).length === ${count}`)
   const ids = await ui.evaluate(idsExpression)
@@ -19,36 +28,32 @@ async function page(ui, count = 50) {
 async function source(ui, renderer, value) {
   await ui.click($('#event-source-filter'))
   // Headless macOS has no active application menu to handle Command-A.
-  await renderer.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, modifiers: 4, commands: ['selectAll'] }, RPC_MS)
-  await renderer.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, modifiers: 4 }, RPC_MS)
+  await renderer.selectAll()
   await ui.dom('source text is fully selected before replacement', `(() => { const input = ${$('#event-source-filter')}; return input.selectionStart === 0 && input.selectionEnd === input.value.length; })()`)
   await ui.key('Backspace', 'Backspace', 8)
-  if (value) await renderer.call('Input.insertText', { text: value }, RPC_MS)
-  await ui.dom('exact source draft entered through CDP', `${$('#event-source-filter')}?.value === ${JSON.stringify(value)}`)
+  if (value) await renderer.text(value)
+  await ui.dom('exact source draft entered through AppKit text input', `${$('#event-source-filter')}?.value === ${JSON.stringify(value)}`)
 }
 
-// Tab still exercises real focus. macOS native popup input requires a visible window;
-// select options with DOM automation, then verify React state and the real IPC query.
+// Native popup and Tab navigation require a visible window. Use explicit DOM
+// focus and option selection here, then verify React state and the real IPC query.
 async function select(ui, id, value) {
-  await ui.click($('#event-source-filter'))
-  await ui.key('Tab', 'Tab', 9)
-  if (id === 'event-range-filter') await ui.key('Tab', 'Tab', 9)
-  assert.equal(await ui.evaluate('document.activeElement?.id'), id)
   await ui.evaluate(`(() => {
     const element = ${$(`#${id}`)}, value = ${JSON.stringify(value)};
     if (!(element instanceof HTMLSelectElement) || !Array.from(element.options).some(option => option.value === value))
       throw new Error('Requested event filter option is unavailable');
+    element.focus({ preventScroll: true });
+    if (document.activeElement !== element) throw new Error('Event filter did not take DOM focus');
     element.value = value;
     element.dispatchEvent(new Event('input', {bubbles:true}));
     element.dispatchEvent(new Event('change', {bubbles:true}));
     return true;
   })()`)
-  await ui.key('Tab', 'Tab', 9)
   await ui.dom('select draft selected through DOM automation', `${$(`#${id}`)}?.value === ${JSON.stringify(value)}`)
 }
 
 async function queryForRows(ui, main) {
-  const info = await main.evaluate('globalThis.__ocSmokeControl.info()', RPC_MS)
+  const info = await main.host('info')
   const query = info.eventQueries.recent.at(-1)
   assert.ok(query && info.eventQueries.active === 0, 'a completed real event IPC request must exist')
   const result = await ui.evaluate(`window.monitor.events(${JSON.stringify(query)})`)
@@ -70,25 +75,30 @@ export async function exerciseEmptyEvents(ui) {
 export async function exerciseEvents({ ui, main, renderer, capture, appendExecution, lockHistory, lockEvents }) {
   let seed, first, second
   await ui.stage('events-5000-bounded-pagination', async () => {
-    seed = await main.evaluate('globalThis.__ocSmokeControl.seedEvents()', 90_000)
-    assert.equal(seed.count, 5000)
-    assert.equal(seed.batches, 50)
+    let written = 0
+    for (let start = 0; start < 5000; start += 100) {
+      seed = await main.host('seed-events', { start, count: 100, final: start === 4900 })
+      assert.equal(seed.batchSize, 100)
+      written += seed.batchSize
+      assert.equal(seed.count, written, 'native seed cumulative count must match committed batches')
+    }
+    assert.equal(written, 5000)
     assert.ok(seed.retention.count >= 5003, 'F04 records must survive the F05 seed')
     assert.ok(seed.retention.diskBytes <= 20 * 1024 * 1024)
     await ui.navigate('事件', 'Events')
-    await ui.click(action('latest'))
+    await requestPage(ui, 'latest')
     first = await page(ui)
     assert.ok(first.includes(seed.validId) && first.includes(seed.obsoleteId) && first.includes(seed.nullId))
     const firstPage = await queryForRows(ui, main)
-    await ui.click(action('next'))
+    await requestPage(ui, 'next')
     second = await page(ui)
     assert.equal(new Set([...first, ...second]).size, 100, 'stable cursor pages must not overlap')
     const nextPage = await queryForRows(ui, main)
     assert.equal(nextPage.query.before, firstPage.result.next)
     assert.equal(nextPage.query.upper, firstPage.result.upper)
-    await ui.click(action('previous'))
+    await requestPage(ui, 'previous')
     assert.deepEqual(await page(ui), first, 'previous must return the same page')
-    await ui.click(action('refresh'))
+    await requestPage(ui, 'refresh')
     assert.deepEqual(await page(ui), first, 'same-page refresh must preserve the upper cursor')
     return { seed, mountedRows: 50, first: [first[0], first.at(-1)], second: [second[0], second.at(-1)] }
   })
@@ -99,7 +109,7 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     await select(ui, 'event-type-filter', 'execution-failed')
     await select(ui, 'event-range-filter', '1h')
     assert.equal((await ui.info()).eventQueries.total, before, 'draft editing must not query events')
-    await ui.click(action('apply'))
+    await requestPage(ui, 'apply')
     await page(ui)
     const filtered = await queryForRows(ui, main)
     assert.equal(filtered.query.sourceId, 'smoke-events-a')
@@ -108,7 +118,7 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     assert.ok(filtered.result.entries.every(entry => entry.sourceId === 'smoke-events-a' && entry.type === 'execution-failed' && entry.observedAt >= filtered.query.from && entry.observedAt <= filtered.query.to))
     assert.ok(filtered.result.entries.some(entry => entry.occurredAt < filtered.query.from), 'discovery-time filter must retain older occurrence times')
     await ui.dom('occurrence and discovery have separate labels', `Array.from(document.querySelectorAll('.event-metadata dt')).some(e => /发生时间|Occurred/.test(e.textContent)) && Array.from(document.querySelectorAll('.event-metadata dt')).some(e => /发现时间|Discovered/.test(e.textContent))`)
-    await ui.click(action('next'))
+    await requestPage(ui, 'next')
     const saved = await page(ui)
     await ui.evaluate(`${$(ROWS)}.querySelector('[data-event-action="target"]').scrollIntoView({block:'center',inline:'nearest',behavior:'instant'})`)
     await ui.frames()
@@ -122,21 +132,21 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     await ui.dom('returning from target restores event scroll', `Math.abs(${$('.main-content')}.scrollTop - ${savedScroll}) <= 1`)
     assert.deepEqual(await ui.evaluate(`[${$('#event-source-filter')}.value,${$('#event-type-filter')}.value,${$('#event-range-filter')}.value]`), ['smoke-events-a', 'execution-failed', '1h'])
     await source(ui, renderer, 'smoke-events-no-such-source')
-    await ui.click(action('apply'))
+    await requestPage(ui, 'apply')
     await page(ui, 0)
     await ui.dom('no matches differs from empty store', `/没有匹配的事件|No matching events/.test(${$('.event-empty')}?.textContent ?? '')`)
-    await ui.click(action('clear'))
+    await requestPage(ui, 'clear')
     assert.deepEqual(await page(ui), first)
     assert.deepEqual(await ui.evaluate(`[${$('#event-source-filter')}.value,${$('#event-type-filter')}.value,${$('#event-range-filter')}.value]`), ['', 'all', 'all'])
     for (const [range, duration] of [['24h', 86_400_000], ['7d', 604_800_000]]) {
       await select(ui, 'event-range-filter', range)
-      await ui.click(action('apply'))
+      await requestPage(ui, 'apply')
       await page(ui)
       const ranged = await queryForRows(ui, main)
       assert.equal(Date.parse(ranged.query.to) - Date.parse(ranged.query.from), duration)
       assert.ok(ranged.result.entries.every(entry => entry.observedAt >= ranged.query.from && entry.observedAt <= ranged.query.to))
     }
-    await ui.click(action('clear'))
+    await requestPage(ui, 'clear')
     assert.deepEqual(await page(ui), first)
     return { filters: filtered.query, realHistory: true, preservedPage: saved[0], cleared: true,
       selectInput: 'DOM option selection with input/change; native popup keyboard not exercised' }
@@ -145,7 +155,7 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
   await ui.stage('events-identity-and-background-new-record', async () => {
     await ui.dom('changed identity remains visible without navigation', `${$(row(seed.obsoleteId))}?.textContent.includes(${JSON.stringify(seed.target.id)}) && /身份已变化|different identity/.test(${`${$(row(seed.obsoleteId))}?.querySelector('.event-target-reason')?.textContent`} ?? '') && !${$(row(seed.obsoleteId))}?.querySelector('[data-event-action="target"]')`)
     await ui.dom('null targets never fabricate navigation', `/没有可导航目标|no navigation target/.test(${$(row(seed.nullId))}?.textContent ?? '') && !${$(row(seed.nullId))}?.querySelector('[data-event-action="target"]')`)
-    await ui.click(action('next'))
+    await requestPage(ui, 'next')
     assert.deepEqual(await page(ui), second)
     await ui.click($('#event-source-filter'))
     // Close native datalist suggestions without moving input focus before scrolling.
@@ -177,7 +187,7 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     assert.equal(after.anchor.id, before.anchor.id, 'background updates must retain the same visible event')
     assert.ok(Math.abs(after.anchor.top - before.anchor.top) <= 1, `background updates moved the reading position: ${JSON.stringify({before, after})}`)
     assert.equal((await ui.info()).eventQueries.total, queryCount, 'background collection must not automatically query a replacement page')
-    await ui.click(action('latest'))
+    await requestPage(ui, 'latest')
     const latest = await page(ui)
     assert.notDeepEqual(latest, first)
     const actual = await queryForRows(ui, main)
@@ -190,31 +200,31 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     const original = await page(ui)
     let failure
     try {
-      await main.evaluate('globalThis.__ocSmokeControl.faultEvents(true)', RPC_MS)
-      await ui.click(action('next'))
-      await ui.dom('actual missing events IPC handler is visible', `${$(ROOT)}?.getAttribute('aria-busy') === 'false' && ${$('.event-error')}?.textContent.includes('monitor:events')`)
+      await main.host('fault-command', { targetCommand: 'monitor_events', enabled: true })
+      await requestPage(ui, 'next')
+      await ui.dom('real native events rejection is visible', `${$(ROOT)}?.getAttribute('aria-busy') === 'false' && ${$('.event-error')}?.textContent.includes('OC_ACCEPTANCE_REJECTION')`)
       assert.deepEqual(await ui.evaluate(idsExpression), original, 'failed page request must preserve successful rows')
       await capture('events-real-ipc-failure')
-      await main.evaluate('globalThis.__ocSmokeControl.faultEvents(false)', RPC_MS)
-      await ui.click(action('retry'))
+      await main.host('fault-command', { targetCommand: 'monitor_events', enabled: false })
+      await requestPage(ui, 'retry')
       const recovered = await page(ui)
       assert.notDeepEqual(recovered, original, 'retry must complete the failed next-page request')
-      await ui.click(action('previous'))
+      await requestPage(ui, 'previous')
       assert.deepEqual(await page(ui), original)
-      await main.evaluate('globalThis.__ocSmokeControl.faultEvents(true)', RPC_MS)
-      await ui.click(action('next'))
-      await ui.dom('second next-page failure retains its error', `${$(ROOT)}?.getAttribute('aria-busy') === 'false' && ${$('.event-error')}?.textContent.includes('monitor:events')`)
-      await main.evaluate('globalThis.__ocSmokeControl.faultEvents(false)', RPC_MS)
+      await main.host('fault-command', { targetCommand: 'monitor_events', enabled: true })
+      await requestPage(ui, 'next')
+      await ui.dom('second next-page failure retains its error', `${$(ROOT)}?.getAttribute('aria-busy') === 'false' && ${$('.event-error')}?.textContent.includes('OC_ACCEPTANCE_REJECTION')`)
+      await main.host('fault-command', { targetCommand: 'monitor_events', enabled: false })
       await ui.navigate('本机概览', 'Overview')
       await ui.navigate('事件', 'Events')
       assert.deepEqual(await page(ui), original, 'reactivation must refresh the last successful page instead of replaying failed next')
-      await ui.click(action('next'))
+      await requestPage(ui, 'next')
       assert.deepEqual(await page(ui), recovered, 'only an explicit next action may leave the restored successful page')
-      await ui.click(action('previous'))
+      await requestPage(ui, 'previous')
       assert.deepEqual(await page(ui), original)
     } catch (error) { failure = error; throw error }
     finally {
-      try { await main.evaluate('globalThis.__ocSmokeControl.faultEvents(false)', RPC_MS) }
+      try { await main.host('fault-command', { targetCommand: 'monitor_events', enabled: false }) }
       catch (error) { throw new AggregateError([failure, error].filter(Boolean), 'Events IPC handler restoration failed') }
     }
     await ui.click($('#event-source-filter'))
@@ -229,49 +239,52 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     const release = await lockEvents()
     let cancellationFailure, pending, cancelled, pauseDispatchMs
     try {
-      pending = renderer.evaluate('window.monitor.events().then(() => ({rejected:false}), error => ({rejected:true,error:String(error)}))', RPC_MS)
-        .then(value => ({ value }), error => ({ protocolError: error }))
+      pending = await renderer.evaluate('(() => { if (window.__ocAcceptancePending) throw new Error("Pending request already exists"); window.__ocAcceptancePending = window.monitor.events().then(() => ({rejected:false}), error => ({rejected:true,error:String(error)})); return true; })()', RPC_MS)
       await ui.expect('event store admits the real query before cancellation', async () => (await ui.info()).eventQueries.active === 1, 2_000)
-      await ui.evaluate('window.monitor.cancelEvents(); true')
-      const outcome = await pending
-      if (outcome.protocolError) throw outcome.protocolError
-      cancelled = outcome.value
+      await ui.evaluate('window.monitor.cancelEvents().then(() => true)')
+      cancelled = await renderer.evaluate('window.__ocAcceptancePending', RPC_MS)
       assert.equal(cancelled.rejected, true, 'actual event request must reject when cancelled')
       await ui.expect('real events IPC cancellation drains', async () => {
         const info = await ui.info()
         return info.eventQueries.active === 0 && info.eventQueries.cancelled > before.cancelled
       }, 2_000)
-      const afterDirect = (await ui.info()).eventQueries.cancelled
+      const afterDirectInfo = await ui.info()
+      const afterDirect = afterDirectInfo.eventQueries.cancelled
+      const afterDirectResources = afterDirectInfo.resources.sources.find(item => item.source === 'events')
+      assert.ok(afterDirectResources, 'real event resource accounting must exist')
       const began = performance.now()
       await ui.click(action('refresh'))
       await ui.expect('UI refresh admits a real events query', async () => (await ui.info()).eventQueries.active === 1, 2_000)
       // Its header position is stable during list reads. Avoid scrolling/assertion round trips
       // after admission: SQLite deliberately rejects a lock after only 500 ms.
-      await renderer.call('Input.dispatchMouseEvent', { type: 'mousePressed', ...pausePoint, button: 'left', clickCount: 1 }, RPC_MS)
-      await renderer.call('Input.dispatchMouseEvent', { type: 'mouseReleased', ...pausePoint, button: 'left', clickCount: 1 }, RPC_MS)
+      await renderer.mouse('down', pausePoint.x, pausePoint.y)
+      await renderer.mouse('up', pausePoint.x, pausePoint.y)
       pauseDispatchMs = performance.now() - began
       await ui.dom('real pause click freezes display', `${$('.page-actions button[aria-pressed]')}?.getAttribute('aria-pressed') === 'true'`)
       await ui.expect('UI pause cancels and drains its real event query', async () => {
         const info = await ui.info()
-        return info.eventQueries.active === 0 && info.eventQueries.cancelled > afterDirect &&
-          info.resources.sources.filter(item => item.source === 'event-store').every(item => Object.values(item.current).every(value => value === 0))
+        const events = info.resources.sources.find(item => item.source === 'events')
+        assert.ok(events, 'real event resource accounting must exist')
+        // Pausing the view leaves background event collection running in this
+        // resource bucket. The cancelled query must finish and release its lease.
+        return info.eventQueries.active === 0 && info.eventQueries.cancelled > afterDirect && events.cancelled > afterDirectResources.cancelled
       }, 2_000)
       assert.deepEqual(await ui.evaluate(idsExpression), original, 'UI cancellation must preserve its successful page')
     } catch (error) { cancellationFailure = error; throw error }
     finally {
-      const cleanup = await Promise.allSettled([ui.evaluate('window.monitor.cancelEvents(); true'), release()])
+      const cleanup = await Promise.allSettled([ui.evaluate('window.monitor.cancelEvents().then(() => true)'), release()])
       if (pending) {
-        const outcome = await pending
-        if (outcome.protocolError) cleanup.push({ status: 'rejected', reason: outcome.protocolError })
+        try { await renderer.evaluate('window.__ocAcceptancePending.then(() => {delete window.__ocAcceptancePending; return true;})', RPC_MS) }
+        catch (error) { cleanup.push({ status: 'rejected', reason: error }) }
       }
       const errors = cleanup.filter(result => result.status === 'rejected').map(result => result.reason)
       if (errors.length) throw new AggregateError([cancellationFailure, ...errors].filter(Boolean), 'Event cancellation/lock cleanup failed')
     }
     await ui.click($('.page-actions button[aria-pressed]'))
     await ui.dom('resuming events allows requests again', `${action('refresh')}?.getAttribute('aria-disabled') === 'false'`)
-    await ui.click(action('refresh'))
+    await requestPage(ui, 'refresh')
     assert.deepEqual(await page(ui), original, 'UI must successfully query again after pause cancellation and lock release')
-    return { channel: 'monitor:events', restored: true, cancellation: cancelled, uiCancellationRecovered: true, pauseDispatchMs }
+    return { channel: 'monitor_events', restored: true, cancellation: cancelled, uiCancellationRecovered: true, pauseDispatchMs }
   })
 
   await ui.stage('events-pause-disable-and-coverage', async () => {
@@ -293,7 +306,9 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     assert.equal(await ui.evaluate('window.monitor.events().then(() => false, () => true)'), true)
     await ui.expect('disabled events release all resources', async () => {
       const info = await ui.info()
-      return info.eventQueries.active === 0 && info.resources.sources.filter(item => ['event-store', 'hermes-events'].includes(item.source)).every(item => Object.values(item.current).every(value => value === 0))
+      const events = info.resources.sources.find(item => item.source === 'events')
+      assert.ok(events, 'real event resource accounting must exist')
+      return info.eventQueries.active === 0 && Object.values(events.current).every(value => value === 0)
     })
     await ui.navigate('数据来源', 'Data sources')
     await ui.click($('[data-source-section="events"] [role="switch"]'))
@@ -306,7 +321,7 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
       await renderer.evaluate('window.monitor.refresh("events")', 20_000)
       const snapshot = await ui.evaluate('window.monitor.snapshot()')
       assert.ok(snapshot.events.data.coverage.some(item => item.sourceId === 'hermes-events' && item.state === 'unavailable' && item.lastGap), 'real locked history must produce unavailable coverage and a persistent gap')
-      await ui.click(action('refresh'))
+      await requestPage(ui, 'refresh')
       await page(ui)
       await ui.click($('.event-coverage summary'))
       await ui.dom('coverage gap and retention deletion range are rendered', `${$('.event-coverage')}.open && !!${$('.event-gap')} && !!${$('[data-coverage-state="unavailable"]')} && /删除截至发现时间|Deleted through discovery time/.test(${$('.event-retention-metadata')}.textContent)`)
@@ -315,14 +330,14 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
       try { await release() } catch (error) { throw new AggregateError([coverageFailure, error].filter(Boolean), 'Event coverage lock release failed') }
     }
     await renderer.evaluate('window.monitor.refresh("events")', 20_000)
-    await ui.click(action('refresh'))
+    await requestPage(ui, 'refresh')
     await page(ui)
     await ui.dom('restored observation retains historical gap disclosure', `!!${$('[data-coverage-state="observing"]')} && !!${$('.event-gap')}`)
     return { pauseRetained: true, disabledRetained: true, coverage: 'real SQLite lock -> unavailable -> observing with lastGap' }
   })
 
   await ui.stage('events-responsive-long-metadata-and-text-scale', async () => {
-    await ui.click(action('latest'))
+    await requestPage(ui, 'latest')
     await page(ui)
     const originalScale = await ui.evaluate(`document.documentElement.style.getPropertyValue('--font-scale')`)
     const originalMetrics = await ui.evaluate('({width:innerWidth,height:innerHeight,deviceScaleFactor:devicePixelRatio})')
@@ -331,7 +346,7 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     let failure
     try {
       for (const [width, height, scale] of [[1280, 860, 1], [880, 640, 1], [880, 640, 2]]) {
-        await renderer.call('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false }, RPC_MS)
+        await renderer.resize(width, height)
         await ui.evaluate(`document.documentElement.style.setProperty('--font-scale', ${JSON.stringify(String(scale))})`)
         await ui.frames()
         await ui.click($('#event-source-filter'))
@@ -357,7 +372,7 @@ export async function exerciseEvents({ ui, main, renderer, capture, appendExecut
     finally {
       const errors = []
       try { await ui.evaluate(`document.documentElement.style.setProperty('--font-scale', ${JSON.stringify(originalScale)})`) } catch (error) { errors.push(error) }
-      try { await renderer.call('Emulation.setDeviceMetricsOverride', { ...originalMetrics, mobile: false }, RPC_MS) } catch (error) { errors.push(error) }
+      try { await renderer.resize(originalMetrics.width, originalMetrics.height) } catch (error) { errors.push(error) }
       if (errors.length) throw new AggregateError([failure, ...errors].filter(Boolean), 'Event viewport/scale restoration failed')
     }
     return { results, nativeWindowAcceptance: false }

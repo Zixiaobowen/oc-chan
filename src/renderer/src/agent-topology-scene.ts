@@ -9,6 +9,7 @@ import type { TopologyGraph, TopologyNode } from './agent-topology'
 import { buildOfficeLayout, MAX_3D_EDGES, MAX_3D_NODES, type OfficeBuilding, type OfficeFloor, type Point3D } from './agent-topology-3d-layout'
 import { createEmployeeGeometry, createWorkstationGeometry } from './agent-office-employee'
 import { createEntranceGeometry, createFacadeGeometry, createFloorFrameGeometry, createMainOfficeGeometry, createRoofGeometry } from './agent-office-building'
+import { isDesktopDocumentVisible, isHeadlessDesktop, scheduleDesktopUpdate, type DesktopUpdate } from './desktop-visibility'
 
 export interface Topology3DSession {
   // x/z stay relative to the office centre, so project repacking preserves manual seats.
@@ -102,12 +103,13 @@ export class TopologyScene {
   private hovered: string | null = null
   private evidenceCurrent = true
   private t: Translate = zh => zh
-  private frame = 0
+  private pendingUpdate: DesktopUpdate | null = null
   private visible = true
   private disposed = false
   private failed = false
   private width = 1
   private height = 1
+  private pixelRatio = 0
   private pointerStart: { x: number; y: number; id: string | null; floorId: string | null; pointerId: number } | null = null
   private dragged = false
   private colors = { node: new Color(), active: new Color(), edge: new Color(), warning: new Color(), context: new Color(), ground: new Color(), surface: new Color() }
@@ -198,11 +200,12 @@ export class TopologyScene {
     canvas.addEventListener('keydown', this.keyDown)
     canvas.addEventListener('webglcontextlost', this.contextLost)
     document.addEventListener('visibilitychange', this.visibilityChange)
+    window.addEventListener('resize', this.resize)
     this.observer = new ResizeObserver(this.resize)
     this.observer.observe(host)
     this.intersection = new IntersectionObserver(([entry]) => {
       this.visible = entry.isIntersecting
-      if (!this.visible) this.cancelFrame()
+      if (!this.visible && !isHeadlessDesktop()) this.cancelUpdate()
       else this.invalidate()
     })
     this.intersection.observe(host)
@@ -466,22 +469,44 @@ export class TopologyScene {
   }
 
   private readonly resize = (): void => {
-    this.width = Math.max(1, this.host.clientWidth)
-    this.height = Math.max(1, this.host.clientHeight)
-    const ratio = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(PIXEL_BUDGET / (this.width * this.height)))
-    this.renderer.setPixelRatio(ratio)
-    this.renderer.setSize(this.width, this.height)
-    this.camera.aspect = this.width / this.height
-    this.camera.updateProjectionMatrix()
+    if (this.disposed || this.failed) return
+    if (!this.host.isConnected || this.host.clientWidth <= 0 || this.host.clientHeight <= 0) {
+      this.cancelUpdate()
+      return
+    }
+    this.syncSize()
     this.invalidate()
   }
 
+  private syncSize(): void {
+    const width = this.host.clientWidth
+    const height = this.host.clientHeight
+    const ratio = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(PIXEL_BUDGET / (width * height)))
+    if (width === this.width && height === this.height && ratio === this.pixelRatio) return
+    this.width = width
+    this.height = height
+    if (ratio !== this.pixelRatio) {
+      this.pixelRatio = ratio
+      this.renderer.setPixelRatio(ratio)
+    }
+    this.renderer.setSize(width, height)
+    this.camera.aspect = width / height
+    this.camera.updateProjectionMatrix()
+  }
+
+  private canDraw(): boolean {
+    return !this.disposed && !this.failed && isDesktopDocumentVisible() && this.host.isConnected
+      && this.host.clientWidth > 0 && this.host.clientHeight > 0
+      && (isHeadlessDesktop() || this.visible)
+  }
+
   private readonly invalidate = (): void => {
-    if (this.disposed || this.failed || this.frame || document.hidden || !this.visible) return
-    this.frame = requestAnimationFrame(() => {
-      this.frame = 0
-      if (this.disposed || this.failed || document.hidden || !this.visible) return
+    if (this.pendingUpdate || !this.canDraw()) return
+    this.pendingUpdate = scheduleDesktopUpdate(() => {
+      this.pendingUpdate = null
+      if (!this.canDraw()) return
       try {
+        this.syncSize()
         this.renderer.render(this.scene, this.camera)
         this.projectLabels()
         if (this.graph?.nodes.length) this.session.camera = { position: this.camera.position.toArray(), target: this.controls.target.toArray() }
@@ -745,19 +770,20 @@ export class TopologyScene {
   private readonly contextLost = (event: Event): void => {
     event.preventDefault()
     this.failed = true
-    this.cancelFrame()
+    this.cancelUpdate()
     this.callbacks.error(this.t('3D 图形上下文已丢失，请重试 3D 视图。', 'The 3D graphics context was lost. Retry the 3D view.'))
   }
-  private readonly visibilityChange = (): void => { if (document.hidden) this.cancelFrame(); else this.invalidate() }
-  private cancelFrame(): void { if (this.frame) cancelAnimationFrame(this.frame); this.frame = 0 }
+  private readonly visibilityChange = (): void => { if (!isDesktopDocumentVisible()) this.cancelUpdate(); else this.invalidate() }
+  private cancelUpdate(): void { this.pendingUpdate?.cancel(); this.pendingUpdate = null }
 
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
-    this.cancelFrame()
+    this.cancelUpdate()
     this.observer.disconnect()
     this.intersection.disconnect()
     document.removeEventListener('visibilitychange', this.visibilityChange)
+    window.removeEventListener('resize', this.resize)
     const canvas = this.renderer.domElement
     canvas.removeEventListener('pointerdown', this.pointerDown, true)
     canvas.removeEventListener('pointermove', this.pointerMove)

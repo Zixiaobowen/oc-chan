@@ -7,7 +7,7 @@ import Search from 'kubai-icons-react/icons/search'
 import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react'
 import type { AgentInfo, SourceCapabilityId, SourceDiagnostic, SourceObservation, SourceStatus } from '../../shared/types'
 import { AGENT_ACTIVITY_WINDOW_MS } from '../../shared/types'
-import { sourceCapabilities } from '../../shared/source-capabilities'
+import { isScheduleDirectorySource, sourceCapabilities } from '../../shared/source-capabilities'
 import './sources.css'
 import type { ResolvedLanguage } from '../../shared/settings'
 import { useI18n } from './i18n'
@@ -208,7 +208,8 @@ function sourceDetail(source: SourceStatus): string {
     const count = value.match(operation === 'services' ? /已加载服务：(\d+) 项/ : /禁用覆盖：(\d+) 项/)
     return `${label}: ${count ? `${count[1]} entries` : 'unknown'}`
   }).join('; ')
-  if (source.id.startsWith('/')) return value
+  if (isScheduleDirectorySource(source.id)) return value
+    .replace('目录不存在（ENOENT）；未配置此可选调度来源 / Optional schedule directory is not configured', 'Directory does not exist (ENOENT); this optional schedule source is not configured.')
     .replace(/^(\d+) 个 plist；(\d+) 个非服务数据 \/ 空字典已跳过；(\d+) 个同域同 Label 重复已合并/, '$1 plist files; skipped $2 non-service data / empty dictionaries; merged $3 duplicates with the same domain and Label')
     .replace(/；(\d+) 个任务含未确认的日历扩展，任务已保留；/, '; $1 tasks contain unconfirmed calendar extensions and have been retained; ')
   return value

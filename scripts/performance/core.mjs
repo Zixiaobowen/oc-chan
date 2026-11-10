@@ -110,59 +110,6 @@ export class Distribution {
   }
 }
 
-export class Protocol {
-  constructor(socket) {
-    this.socket = socket
-    this.sequence = 0
-    this.pending = new Map()
-    this.events = new Map()
-    socket.addEventListener('message', event => {
-      try {
-        if (typeof event.data !== 'string' || event.data.length > 4 * 1024 * 1024) throw new Error('Protocol frame budget exceeded')
-        const message = JSON.parse(event.data)
-        const request = this.pending.get(message.id)
-        if (request) {
-          this.pending.delete(message.id)
-          clearTimeout(request.timer)
-          if (message.error) request.reject(new Error(JSON.stringify(message.error)))
-          else request.resolve(message.result)
-        } else if (message.method) this.events.get(message.method)?.(message.params)
-      } catch (error) { this.close(error) }
-    })
-    socket.addEventListener('close', () => this.close(new Error('Protocol connection closed')))
-    socket.addEventListener('error', () => this.close(new Error('Protocol connection failed')))
-  }
-  static async connect(url) {
-    const socket = new WebSocket(url)
-    const protocol = new Protocol(socket)
-    await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { socket.close(); reject(new Error('Protocol connection timed out')) }, 10000)
-      socket.addEventListener('open', () => { clearTimeout(timer); resolve() }, { once: true })
-      socket.addEventListener('error', () => { clearTimeout(timer); reject(new Error('Protocol connection failed')) }, { once: true })
-    })
-    return protocol
-  }
-  call(method, params = {}, timeout = 15000) {
-    if (this.socket.readyState !== WebSocket.OPEN || this.pending.size >= 32) return Promise.reject(new Error('Protocol unavailable or pending limit reached'))
-    return new Promise((resolve, reject) => {
-      const id = ++this.sequence
-      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error(`Protocol timeout: ${method}`)) }, timeout)
-      this.pending.set(id, { resolve, reject, timer })
-      this.socket.send(JSON.stringify({ id, method, params }))
-    })
-  }
-  async evaluate(expression, timeout = 15000) {
-    const response = await this.call('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, timeout)
-    if (response.exceptionDetails) throw new Error(response.exceptionDetails.exception?.description ?? response.exceptionDetails.text)
-    return response.result?.value
-  }
-  close(error = new Error('Protocol disconnected')) {
-    for (const entry of this.pending.values()) { clearTimeout(entry.timer); entry.reject(error) }
-    this.pending.clear()
-    this.events.clear()
-    if (this.socket.readyState < WebSocket.CLOSING) this.socket.close()
-  }
-}
 
 export function readLines(stream, consume, fail, maxLineBytes = 256 * 1024) {
   let pending = ''

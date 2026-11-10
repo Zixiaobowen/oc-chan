@@ -82,6 +82,10 @@ const system = capabilities({
 const metrics = capabilities({ navigation: systemNavigation })
 const none: readonly SourceCapability[] = []
 
+export function isScheduleDirectorySource(id: string): boolean {
+  return /^(?:launchagents:(?:user|local|system)|launchdaemons:(?:local|system)|launchdirectory:[0-9a-f]{64})$/.test(id)
+}
+
 /** Declared collector support is independent of its latest connection or sampling state. */
 export function sourceCapabilities(source: SourceStatus): readonly SourceCapability[] {
   switch (source.id) {
@@ -103,7 +107,6 @@ export function sourceCapabilities(source: SourceStatus): readonly SourceCapabil
     case 'network-interface': return metrics
   }
   if (/^launchctl:(?:system|(?:gui|user)\/\d+)$/.test(source.id)) return launchctl
-  if (/^\/(?:System\/)?Library\/Launch(?:Agents|Daemons)$/.test(source.id)
-    || /^\/.+\/Library\/LaunchAgents$/.test(source.id)) return plist
+  if (isScheduleDirectorySource(source.id)) return plist
   return none
 }

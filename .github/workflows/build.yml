@@ -17,17 +17,18 @@ concurrency:
 
 jobs:
   build:
-    name: macOS arm64
+    name: Rust arm64 and real WebKit acceptance
+    # Official arm64 macOS 26 image: https://github.com/actions/runner-images#available-images
+    # Native acceptance input needs macOS 26; the production deployment target stays 13.0.
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: 90
     defaults:
       run:
         shell: bash
     env:
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      TARGET_ARCH: arm64
-      MACHO_ARCH: arm64
-      APP_DIRECTORY: ${{ github.workspace }}/release/mac-arm64/OC Chan.app
+      RUSTUP_TOOLCHAIN: '1.99.0'
+      MACOSX_DEPLOYMENT_TARGET: '13.0'
+      APPLE_SIGNING_IDENTITY: '-'
 
     steps:
       - name: Check out source
@@ -43,136 +44,171 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      - name: Preflight signed release
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      - name: Verify native WebKit acceptance environment
         run: |
           node --input-type=module <<'NODE'
-          import { readFileSync } from 'node:fs'
-          const version = JSON.parse(readFileSync('package.json', 'utf8')).version
-          if (process.env.GITHUB_REF_NAME !== `v${version}`) throw new Error(`Release tag must match package version v${version}`)
-          const required = ['CSC_LINK', 'CSC_KEY_PASSWORD', 'APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID']
-          const missing = required.filter(name => !process.env[name]?.trim())
-          if (missing.length) throw new Error(`Missing required release secrets: ${missing.join(', ')}`)
+          import { execFileSync } from 'node:child_process'
+          if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('Native arm64 macOS runner required')
+          const major = Number(execFileSync('sw_vers', ['-productVersion'], { encoding: 'utf8' }).trim().split('.')[0])
+          if (!Number.isInteger(major) || major < 26) throw new Error('Real native WebKit input acceptance requires macOS 26; this does not change production macOS 13 support')
           NODE
-
-      - name: Verify native toolchain
-        run: |
-          node -e 'if (process.platform !== "darwin" || process.arch !== process.env.TARGET_ARCH) throw new Error(`Expected macOS ${process.env.TARGET_ARCH}, got ${process.platform} ${process.arch}`)'
           xcrun --find swiftc
           xcrun --find clang++
           xcrun --sdk macosx --show-sdk-version
+          rustup toolchain install 1.99.0 --profile minimal
+          cargo install cargo-audit --version 0.22.2 --locked --root "$RUNNER_TEMP/oc-audit-tools"
+          printf '%s\n' "$RUNNER_TEMP/oc-audit-tools/bin" >> "$GITHUB_PATH"
 
-      - name: Install dependencies
+      - name: Preflight signed release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: node --input-type=module -e 'import {packageReleaseInfo,requireReleaseEnvironment} from "./scripts/release-config.mjs";requireReleaseEnvironment(packageReleaseInfo())'
+
+      - name: Import release identity into a job-owned temporary keychain
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          oc_signing_key="$(openssl rand -hex 32)"
+          echo "::add-mask::$oc_signing_key"
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/oc-release.p12"
+          chmod 600 "$RUNNER_TEMP/oc-release.p12"
+          security create-keychain -p "$oc_signing_key" "$RUNNER_TEMP/oc-release.keychain-db"
+          security set-keychain-settings -lut 21600 "$RUNNER_TEMP/oc-release.keychain-db"
+          security unlock-keychain -p "$oc_signing_key" "$RUNNER_TEMP/oc-release.keychain-db"
+          security import "$RUNNER_TEMP/oc-release.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -k "$RUNNER_TEMP/oc-release.keychain-db"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$oc_signing_key" "$RUNNER_TEMP/oc-release.keychain-db"
+          security list-keychains -d user -s "$RUNNER_TEMP/oc-release.keychain-db" "$HOME/Library/Keychains/login.keychain-db"
+          rm "$RUNNER_TEMP/oc-release.p12"
+
+      - name: Install frontend and tooling dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Run affected behavior tests
+      - name: Check frontend IPC types
+        run: npm run typecheck
+
+      - name: Run affected Rust and JavaScript behavior tests
         id: behavior_tests
         env:
           OC_CHAN_CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: npm run test:ci
 
-      - name: Install locked Electron runtime
-        if: steps.behavior_tests.outputs.renderer_smoke == 'true'
-        run: npm exec -- install-electron
-
-      - name: Run isolated Electron renderer smoke
+      - name: Run isolated real WKWebView acceptance
         id: renderer_smoke
         if: steps.behavior_tests.outputs.renderer_smoke == 'true'
-        timeout-minutes: 8
+        timeout-minutes: 30
         run: npm run smoke:renderer -- --out "$RUNNER_TEMP/oc-chan-renderer-smoke"
 
-      - name: Upload renderer smoke evidence
+      - name: Upload real WebKit acceptance evidence
         if: ${{ !cancelled() && (steps.renderer_smoke.outcome == 'success' || steps.renderer_smoke.outcome == 'failure') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: oc-chan-renderer-smoke-${{ github.run_number }}
           path: ${{ runner.temp }}/oc-chan-renderer-smoke
           if-no-files-found: error
-          retention-days: 3
+          retention-days: 14
 
-      - name: Build unsigned DMG and ZIP
+      - name: Build ad-hoc signed Rust DMG and ZIP
         if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
-        run: npm run dist -- "--$TARGET_ARCH"
+        run: npm run dist -- --arm64
 
-      - name: Build signed and notarized DMG and ZIP
+      - name: Build Developer ID signed and notarized Rust DMG and ZIP
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npm run dist -- "--$TARGET_ARCH"
+        run: npm run dist -- --arm64
 
-      - name: Verify packaged application
+      - name: Bind artifact paths to the completed Rust distribution
+        id: distribution
         run: |
-          test -f "$APP_DIRECTORY/Contents/Resources/app.asar"
-          test -f "$APP_DIRECTORY/Contents/Resources/app-update.yml"
-          test -x "$APP_DIRECTORY/Contents/Resources/tern-navigation/present-window"
-          lipo "$APP_DIRECTORY/Contents/MacOS/OC Chan" -verify_arch "$MACHO_ARCH"
-          lipo "$APP_DIRECTORY/Contents/Resources/tern-navigation/present-window" -verify_arch "$MACHO_ARCH"
-          node --input-type=module -e 'import { access } from "node:fs/promises"; import { packageReleaseInfo } from "./scripts/release-config.mjs"; await access(`release/${packageReleaseInfo().metadataName}`)'
-      - name: Review dependency licenses and advisories
-        run: npm run audit:dependencies -- --output "release/dependency-review-$TARGET_ARCH.json"
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from 'node:fs'
+          import path from 'node:path'
+          import { ROOT, loadBuild, boundedJson } from './scripts/build-app.mjs'
+          const build = await loadBuild(), directory = path.join(ROOT, 'release/tauri', build.buildId)
+          const record = await boundedJson(path.join(directory, 'distribution.json'))
+          if (record.schema !== 2 || record.buildId !== build.buildId || record.destination !== directory || record.arch !== 'arm64' || record.version !== build.version) throw new Error('Distribution does not match this build')
+          appendFileSync(process.env.GITHUB_OUTPUT, `directory=${directory}\napp=${record.app}\n`)
+          NODE
 
-      - name: Verify package contents and frozen size budgets
-        run: npm run check:package -- --app "$APP_DIRECTORY" --arch "$TARGET_ARCH" --artifacts-dir release --output "release/package-manifest-$TARGET_ARCH.json"
+      - name: Review exact npm and Cargo locks, licenses and advisories
+        env:
+          DISTRIBUTION_DIRECTORY: ${{ steps.distribution.outputs.directory }}
+        run: npm run audit:dependencies -- --bundled-manifest out/renderer/bundled-dependencies.json --output "$DISTRIBUTION_DIRECTORY/dependency-review-arm64.json"
 
-      - name: Verify Developer ID signature and notarization
+      - name: Verify native package, complete licenses and absence of acceptance code
+        env:
+          APP_DIRECTORY: ${{ steps.distribution.outputs.app }}
+          DISTRIBUTION_DIRECTORY: ${{ steps.distribution.outputs.directory }}
+        run: npm run check:package -- --app "$APP_DIRECTORY" --arch arm64 --artifacts-dir "$DISTRIBUTION_DIRECTORY" --output "$DISTRIBUTION_DIRECTORY/package-manifest-arm64.json"
+
+      - name: Verify Developer ID team and notarization
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         env:
+          APP_DIRECTORY: ${{ steps.distribution.outputs.app }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          requirement="anchor apple generic and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = \"$APPLE_TEAM_ID\""
+          requirement="=anchor apple generic and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = \"$APPLE_TEAM_ID\""
           codesign --verify --deep --strict --verbose=2 "$APP_DIRECTORY"
           codesign --verify --strict --verbose=2 -R "$requirement" "$APP_DIRECTORY"
-          codesign --verify --strict --verbose=2 -R "$requirement" "$APP_DIRECTORY/Contents/Resources/tern-navigation/present-window"
-          codesign --verify --strict --verbose=2 -R "$requirement" "$APP_DIRECTORY/Contents/Resources/liquid-glass/liquid-glass.node"
-          codesign --verify --strict --verbose=2 -R "$requirement" "$APP_DIRECTORY/Contents/Resources/notification-permission/notification-permission.node"
+          for helper in oc-data-worker oc-installer tern-navigation/present-window; do
+            codesign --verify --strict --verbose=2 -R "$requirement" "$APP_DIRECTORY/Contents/Resources/$helper"
+          done
           xcrun stapler validate "$APP_DIRECTORY"
           spctl --assess --type execute --verbose=2 "$APP_DIRECTORY"
 
-      - name: Generate and verify checksums
-        working-directory: release
+      - name: Generate attachment checksums
+        env:
+          DISTRIBUTION_DIRECTORY: ${{ steps.distribution.outputs.directory }}
         run: |
-          shasum -a 256 ./*.dmg ./*.zip > SHA256SUMS.txt
-          shasum -a 256 -c SHA256SUMS.txt
+          node --input-type=module <<'NODE'
+          import { writeFile } from 'node:fs/promises'
+          import path from 'node:path'
+          import { packageReleaseInfo } from './scripts/release-config.mjs'
+          import { digestFile } from './scripts/build-app.mjs'
+          const {version} = packageReleaseInfo(), directory = process.env.DISTRIBUTION_DIRECTORY, lines = []
+          for (const extension of ['zip', 'dmg']) {
+            const name = `OC-Chan-${version}-mac-arm64.${extension}`
+            lines.push(`${(await digestFile(path.join(directory, name))).digest}  ${name}\n`)
+          }
+          await writeFile(path.join(directory, 'SHA256SUMS.txt'), lines.join(''), {flag: 'wx', mode: 0o600})
+          NODE
 
-      - name: Upload package verification evidence
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: oc-chan-package-checks-arm64-${{ github.run_number }}
-          path: |
-            release/SHA256SUMS.txt
-            release/package-manifest-arm64.json
-            release/dependency-review-arm64.json
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Upload build artifacts
-        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
+      - name: Upload checked Rust distribution
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: oc-chan-macos-arm64-${{ github.run_number }}
           path: |
-            release/*.dmg
-            release/*.zip
-            release/*-mac.yml
-            release/SHA256SUMS.txt
-            release/package-manifest-arm64.json
-            release/dependency-review-arm64.json
+            ${{ steps.distribution.outputs.directory }}/*.dmg
+            ${{ steps.distribution.outputs.directory }}/*.zip
+            ${{ steps.distribution.outputs.directory }}/latest.json
+            ${{ steps.distribution.outputs.directory }}/SHA256SUMS.txt
+            ${{ steps.distribution.outputs.directory }}/package-manifest-arm64.json
+            ${{ steps.distribution.outputs.directory }}/dependency-review-arm64.json
           if-no-files-found: error
-          retention-days: ${{ startsWith(github.ref, 'refs/tags/') && 7 || 3 }}
+          retention-days: 30
           compression-level: 0
 
+      - name: Remove only this job's signing material
+        if: always() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: |
+          if test -f "$RUNNER_TEMP/oc-release.p12"; then rm "$RUNNER_TEMP/oc-release.p12"; fi
+          if test -f "$RUNNER_TEMP/oc-release.keychain-db"; then security delete-keychain "$RUNNER_TEMP/oc-release.keychain-db"; fi
+
   release:
-    name: Publish public update release
+    name: Publish checked stable schema2 update
     needs: build
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
@@ -182,39 +218,32 @@ jobs:
     concurrency:
       group: oc-chan-public-release
       cancel-in-progress: false
-      queue: max
     defaults:
       run:
         shell: bash
     env:
       RELEASE_TAG: ${{ github.ref_name }}
-
     steps:
-      - name: Check out release preparation scripts
+      - name: Check out release scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: package-lock.json
-
-      - name: Install release script dependencies
+      - name: Install release tooling
         run: npm ci --ignore-scripts --no-audit --no-fund
-
-      - name: Download separate architecture artifacts
+      - name: Download checked arm64 artifact
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          pattern: oc-chan-macos-*-${{ github.run_number }}
+          pattern: oc-chan-macos-arm64-${{ github.run_number }}
           path: artifacts
           merge-multiple: false
-
-      - name: Validate and merge update metadata
+      - name: Rehash attachments and validate strict latest.json
         run: node scripts/prepare-release.mjs artifacts release-assets "$GITHUB_RUN_NUMBER" "$RELEASE_TAG"
-
       - name: Upload draft and publish complete release
         env:
           GH_TOKEN: ${{ github.token }}

@@ -1,16 +1,16 @@
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { constants } from 'node:fs'
-import { lstat, mkdir, open, opendir, realpath, writeFile } from 'node:fs/promises'
+import { lstat, open, opendir, realpath } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import { PACKAGE_SOURCE_FILES, readPackageSources } from './check-package.mjs'
+import { readBounded } from './rust-dependencies.mjs'
 
 const exec = promisify(execFile)
-const directories = ['src', 'scripts', 'resources']
+const directories = ['src', 'src-tauri', 'crates', 'native', 'scripts', 'resources', 'plugins']
 const requiredFiles = [
-  'electron.vite.config.ts', 'package.json', 'package-lock.json', 'tsconfig.json',
-  'docs/package-baseline.json', 'docs/dependency-review-policy.json'
+  'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'vite.config.ts', 'package.json', 'package-lock.json', 'tsconfig.json',
+  'docs/dependency-review-policy.json', 'docs/package-baseline.json'
 ]
 const maxFiles = 1024
 const maxEntries = 4096
@@ -21,6 +21,7 @@ const versionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]
 const statFields = ['dev', 'ino', 'mode', 'nlink', 'size', 'mtimeNs', 'ctimeNs']
 const sha256 = value => createHash('sha256').update(value).digest('hex')
 const comparePath = (a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0
+const cargoOutputs = new Set(['src-tauri/target', 'native/target', 'scripts/probes/wk/target'])
 
 function unchanged(before, after, name) {
   if (statFields.some(field => before[field] !== after[field])) {
@@ -128,6 +129,15 @@ export async function captureDeliverySource(root) {
     const directory = await opendir(path.join(base, relative), { bufferSize: 32 })
     for await (const entry of directory) {
       const child = `${relative}/${entry.name}`
+      if (child === 'src-tauri/gen' && entry.isDirectory()) continue
+      if (cargoOutputs.has(child)) {
+        if (!entry.isDirectory() || entry.isSymbolicLink()) throw new Error(`Cargo output path is not a real directory: ${child}`)
+        const manifest = readBounded(path.join(base, path.dirname(child), 'Cargo.toml'), 64 * 1024).toString('utf8')
+        const marker = readBounded(path.join(base, child, 'CACHEDIR.TAG'), 1024).toString('utf8')
+        const compiler = JSON.parse(readBounded(path.join(base, child, '.rustc_info.json'), 64 * 1024).toString('utf8'))
+        if (!/^\[package\]\s*$/m.test(manifest) || !marker.startsWith('Signature: 8a477f597d28d172789f06886806bc55\n') || !Number.isFinite(compiler.rustc_fingerprint) || !compiler.outputs || typeof compiler.outputs !== 'object') throw new Error(`Cargo output ownership evidence is invalid: ${child}`)
+        continue
+      }
       const stat = await inspect(child)
       if (stat.isDirectory()) await walk(child)
     }
@@ -193,56 +203,4 @@ export async function captureDeliverySource(root) {
     tag: selectTag(initialGit.tags, version), workspace: initialGit.workspace,
     digest: sha256(JSON.stringify(files)), files
   }
-}
-
-// Schema 2 deliveries retain data only: no snapshot JavaScript is imported or executed.
-export const VALIDATION_SOURCE_DIRECTORY = 'validation-source'
-
-function validationReferences(source) {
-  if (!Array.isArray(source?.files) || source.files.length === 0 || source.files.length > maxFiles ||
-    source.digest !== sha256(JSON.stringify(source.files))) throw new Error('Invalid delivery source manifest digest')
-  const entries = new Map()
-  let total = 0
-  for (const entry of source.files) {
-    if (!entry || typeof entry.path !== 'string' || entry.path.length > 1024 || /[\\\x00-\x1f\x7f]/.test(entry.path) ||
-      entry.path.split('/').some(part => !part || part === '.' || part === '..') || entries.has(entry.path) ||
-      !Number.isSafeInteger(entry.bytes) || entry.bytes < 0 || entry.bytes > maxFileBytes ||
-      !Number.isSafeInteger(entry.mode) || entry.mode < 0 || entry.mode > 0o7777 || !/^[a-f0-9]{64}$/.test(entry.sha256)) {
-      throw new Error('Invalid delivery source file reference')
-    }
-    total += entry.bytes
-    if (total > maxTotalBytes) throw new Error('Delivery source exceeds total 64 MiB')
-    entries.set(entry.path, entry)
-  }
-  for (const [name, maximum] of Object.entries(PACKAGE_SOURCE_FILES)) {
-    const entry = entries.get(name)
-    if (!entry || entry.bytes === 0 || entry.bytes > maximum) throw new Error(`Missing or oversized validation source reference: ${name}`)
-  }
-  return entries
-}
-
-export async function readDeliveryValidationSource(directory, source) {
-  const references = validationReferences(source)
-  const sources = await readPackageSources(directory)
-  for (const [name, bytes] of Object.entries(sources)) {
-    const expected = references.get(name)
-    if (bytes.length !== expected.bytes || sha256(bytes) !== expected.sha256) throw new Error(`Delivery validation source hash mismatch: ${name}`)
-  }
-  let manifest
-  try { manifest = JSON.parse(sources['package.json'].toString('utf8')) } catch (error) {
-    throw new Error('Invalid validation source package.json', { cause: error })
-  }
-  if (manifest.version !== source.version) throw new Error('Validation source version differs from source manifest')
-  return sources
-}
-
-export async function createDeliveryValidationSource(root, directory, source) {
-  const sources = await readDeliveryValidationSource(root, source)
-  await mkdir(directory, { mode: 0o700 })
-  for (const [name, bytes] of Object.entries(sources)) {
-    const target = path.join(directory, name)
-    await mkdir(path.dirname(target), { recursive: true, mode: 0o700 })
-    await writeFile(target, bytes, { flag: 'wx', mode: 0o600 })
-  }
-  return sources
 }

@@ -3,7 +3,6 @@ import { constants } from 'node:fs'
 import { open, opendir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import semver from 'semver'
 import { packageReleaseInfo, releaseInfo, releaseRepository } from './release-config.mjs'
 
 // The workflow must serialize every writer to this repository from Latest read
@@ -63,11 +62,11 @@ export async function publishRelease({ directory, version, tag, env = process.en
       throw new Error('Invalid current Latest release state')
     }
     const latest = releaseInfo(release.tag_name.slice(1))
-    if (latest.prerelease || latest.tag !== release.tag_name) throw new Error('Invalid current Latest release version')
+    if (latest.tag !== release.tag_name) throw new Error('Invalid current Latest release version')
     return { id: release.id, tag: latest.tag, version: latest.version }
   }
   function assertDifferentVersion(latest) {
-    if (latest && semver.eq(info.version, latest.version)) throw new Error(`Release version already exists as Latest: ${latest.tag}`)
+    if (latest && info.version === latest.version) throw new Error(`Release version already exists as Latest: ${latest.tag}`)
   }
 
   const names = ['SHA256SUMS.txt', info.metadataName, ...['dmg', 'zip'].map(extension => `OC-Chan-${info.version}-mac-arm64.${extension}`)].sort()
@@ -99,7 +98,7 @@ export async function publishRelease({ directory, version, tag, env = process.en
   }
 
   function verifyRelease(release, draft, id) {
-    if (!release || !Number.isSafeInteger(release.id) || release.id <= 0 || (id !== undefined && release.id !== id) || release.tag_name !== tag || release.draft !== draft || release.prerelease !== info.prerelease || !Array.isArray(release.assets) || release.assets.length !== expected.size) {
+    if (!release || !Number.isSafeInteger(release.id) || release.id <= 0 || (id !== undefined && release.id !== id) || release.tag_name !== tag || release.draft !== draft || release.prerelease !== false || !Array.isArray(release.assets) || release.assets.length !== expected.size) {
       throw new Error(`${draft ? 'Draft' : 'Published'} release state or asset count mismatch`)
     }
     const remaining = new Map(expected)
@@ -114,7 +113,7 @@ export async function publishRelease({ directory, version, tag, env = process.en
   let releaseId
   const url = `https://github.com/${releaseRepository}/releases/tag/${encodeURIComponent(tag)}`
   try {
-    gh(['release', 'create', tag, '--verify-tag', '--draft', '--title', `OC Chan ${tag}`, '--notes', `OC Chan ${tag}\n\nmacOS installers and signed application update packages for Apple Silicon.`, '--latest=false', ...(info.prerelease ? ['--prerelease'] : [])])
+    gh(['release', 'create', tag, '--verify-tag', '--draft', '--title', `OC Chan ${tag}`, '--notes', `OC Chan ${tag}\n\nmacOS installers and signed application update packages for Apple Silicon.`, '--latest=false'])
     stage = 'uploading assets'
     // No --clobber: any collision fails and leaves the draft for inspection.
     gh(['release', 'upload', tag, ...names.map(name => join(directory, name))])
@@ -127,9 +126,12 @@ export async function publishRelease({ directory, version, tag, env = process.en
     stage = 'reading current Latest before publication'
     const previousLatest = latestRelease()
     assertDifferentVersion(previousLatest)
-    const makeLatest = !info.prerelease && (!previousLatest || semver.gt(info.version, previousLatest.version))
+    const current = info.version.split('.').map(BigInt)
+    const previous = previousLatest?.version.split('.').map(BigInt)
+    const differing = previous ? current.findIndex((part, index) => part !== previous[index]) : -1
+    const makeLatest = !previous || (differing >= 0 && current[differing] > previous[differing])
     stage = 'publishing release (outcome may be unknown)'
-    gh(['release', 'edit', tag, '--draft=false', `--prerelease=${info.prerelease}`, `--latest=${makeLatest}`])
+    gh(['release', 'edit', tag, '--draft=false', '--prerelease=false', `--latest=${makeLatest}`])
     stage = 'verifying published release'
     verifyRelease(api(`releases/${releaseId}`), false, releaseId)
     const observedLatest = latestRelease()

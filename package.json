@@ -2,106 +2,50 @@
   "name": "oc-chan",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "本机 Agent、定时任务与系统运行监控",
-  "main": "out/main/index.js",
   "author": "bowen.sun",
   "license": "UNLICENSED",
   "scripts": {
     "dev": "node scripts/develop.mjs",
     "dev:window": "node scripts/develop.mjs --window",
     "typecheck": "tsc --noEmit",
-    "build:native": "node scripts/build-native.mjs",
-    "build:app": "npm run typecheck && electron-vite build && node scripts/build-plugin-market.mjs out/plugin-market",
-    "build": "npm run build:app && npm run build:native",
-    "start": "electron out/main/index.js",
-    "test": "tsx --test src/main/*.test.ts src/main/collectors/*.test.ts src/main/plugins/*.test.ts src/main/marketplace/*.test.ts src/main/events/*.test.ts src/plugins/*/main/*.test.ts src/renderer/src/*.test.ts src/shared/*.test.ts",
+    "build:frontend": "vite build",
+    "build:app": "node scripts/build-app.mjs",
+    "build": "npm run typecheck && npm run build:app",
+    "test": "node scripts/ci-tests.mjs",
     "test:ci": "node scripts/ci-tests.mjs",
-    "smoke": "tsx scripts/smoke.ts",
     "smoke:renderer": "node scripts/smoke-renderer.mjs",
-    "package": "node scripts/dist.mjs --dir",
-    "dist": "node scripts/dist.mjs",
+    "package": "npm run build:app && node scripts/dist.mjs --dir",
+    "dist": "npm run build:app && node scripts/dist.mjs",
     "test:release": "node --test scripts/prepare-release.test.mjs scripts/publish-release.test.mjs",
     "check:package": "node scripts/check-package.mjs",
     "delivery:local": "node scripts/local-delivery.mjs",
     "audit:dependencies": "node scripts/dependency-review.mjs",
-    "hooks:install": "git config --local core.hooksPath .githooks",
     "install:local": "node scripts/install-local.mjs",
-    "build:plugins": "node scripts/build-plugin-market.mjs out/plugin-market",
+    "build:plugins": "cargo build --release -p oc-system-monitor && node scripts/build-plugin-market-rust.mjs --collector target/release/collector --manifest plugins/system-monitor/manifest.json --out out/plugin-market",
     "cleanup:local": "node scripts/local-app-lifecycle.mjs",
     "push:main": "node scripts/push-main.mjs",
-    "test:install": "node --import tsx --test scripts/install-local.test.mjs scripts/local-app-lifecycle.test.mjs scripts/push-main.test.mjs src/main/installation-check.test.ts"
+    "test:install": "cargo test -p oc-installer --lib -- --test-threads=1",
+    "test:frontend": "tsx --test src/renderer/src/*.test.ts src/shared/*.test.ts"
   },
   "devDependencies": {
     "@dagrejs/dagre": "^3.1.3",
-    "@electron/asar": "3.4.1",
-    "@types/js-yaml": "^4.0.9",
+    "@tauri-apps/api": "^2.10.1",
+    "@tauri-apps/cli": "^2.10.1",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@types/semver": "^7.8.0",
     "@types/three": "0.187.0",
     "@vitejs/plugin-react": "^6.0.0",
     "@xyflow/react": "^12.12.0",
-    "electron": "^45.2.1",
-    "electron-builder": "^26.18.0",
-    "electron-vite": "^6.0.0",
-    "js-yaml": "^4.3.2",
     "kubai-icons-react": "0.2.1",
-    "node-api-headers": "1.9.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "semver": "^7.8.6",
     "three": "0.187.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
     "unzipper": "0.12.5",
     "vite": "^8.3.5"
-  },
-  "build": {
-    "appId": "local.oc-chan.desktop",
-    "productName": "OC Chan",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "out/**/*",
-      "package.json",
-      "!out/plugin-market/**/*",
-      "!**/*.map",
-      "!**/*.d.ts"
-    ],
-    "extraResources": [
-      {
-        "from": "resources/tern-navigation",
-        "to": "tern-navigation",
-        "filter": [
-          "plugin/plugin.toml",
-          "plugin/window.luau"
-        ]
-      },
-      {
-        "from": "out/plugin-market",
-        "to": "plugin-market",
-        "filter": ["catalog.json", "*.ocplugin"]
-      }
-    ],
-    "afterPack": "scripts/build-native.mjs",
-    "mac": {
-      "artifactName": "OC-Chan-${version}-mac-${arch}.${ext}",
-      "category": "public.app-category.developer-tools",
-      "icon": "resources/brand/oc-chan.icns",
-      "type": "distribution",
-      "hardenedRuntime": true,
-      "binaries": ["Resources/tern-navigation/present-window", "Resources/liquid-glass/liquid-glass.node", "Resources/notification-permission/notification-permission.node"]
-    },
-    "publish": {
-      "provider": "github",
-      "owner": "Zixiaobowen",
-      "repo": "oc-chan",
-      "releaseType": "draft",
-      "publishAutoUpdate": true
-    },
-    "generateUpdatesFilesForAllChannels": false,
-    "asar": true
   }
 }

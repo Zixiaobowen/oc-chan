@@ -15,6 +15,7 @@ import './tray.css'
 import type { NavigationTarget } from '../../shared/navigation'
 import { useSystemPlugin } from './marketplace'
 import SystemPluginNotice from './SystemPluginNotice'
+import { isDesktopDocumentVisible } from './desktop-visibility'
 import { CollectionStatus } from './components'
 
 const panelStorageKey = 'oc-chan.tray-panels'
@@ -28,13 +29,13 @@ export default function TrayView() {
   const [storedSnapshot, setSnapshot] = useState(createEmptySnapshot)
   const snapshot = systemInstalled === true ? storedSnapshot : { ...storedSnapshot, system: initial.system }
   const [selection, setSelection] = useState(() => parseTraySelection(null))
-  const [visible, setVisible] = useState(!document.hidden)
+  const [visible, setVisible] = useState(isDesktopDocumentVisible)
   const [error, setError] = useState<string | null>(null)
   const [preferenceError, setPreferenceError] = useState<string | null>(null)
   useEffect(() => {
     try { setSelection(parseTraySelection(localStorage.getItem(panelStorageKey))) }
     catch (cause) { setPreferenceError(String(cause)) }
-    const onVisibility = () => setVisible(!document.hidden)
+    const onVisibility = () => setVisible(isDesktopDocumentVisible())
     document.addEventListener('visibilitychange', onVisibility)
     return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [])
@@ -45,12 +46,12 @@ export default function TrayView() {
     let active = true
     const received = new Set<MonitorSection>()
     const unsubscribe = api.subscribe((update: MonitorUpdate) => {
-      if (!active || document.hidden || (update.section === 'system' && systemInstalled !== true)) return
+      if (!active || !isDesktopDocumentVisible() || (update.section === 'system' && systemInstalled !== true)) return
       received.add(update.section)
       setSnapshot(previous => ({ ...previous, [update.section]: update.state }))
     })
     void api.snapshot().then(value => {
-      if (!active || document.hidden) return
+      if (!active || !isDesktopDocumentVisible()) return
       setSnapshot(previous => Object.fromEntries(monitorSections.map(section => [section, section === 'system' && systemInstalled !== true ? initial.system : received.has(section) ? previous[section] : value[section]])) as MonitorSnapshot)
       setError(null)
     }).catch(cause => { if (active) setError(String(cause)) })
