@@ -13,7 +13,7 @@ import { cleanupDevelopmentInstance } from './local-app-lifecycle.mjs'
 import { createMarketFeed } from './smoke/marketplace-feed.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url)), exec = promisify(execFile)
-const limits = Object.freeze({ totalMs: 1200000, startupMs: 300000, scenarioMs: 360000, restartMs: 60000,
+const limits = Object.freeze({ totalMs: 1200000, buildMs: 600000, startupMs: 300000, scenarioMs: 360000, restartMs: 60000,
   logBytes: 8 * 1024 * 1024, records: 16384, screenshots: 64, screenshotBytes: 1024 * 1024, settingsBytes: 64 * 1024 })
 const options = {}
 for (let index = 2; index < process.argv.length; index += 2) {
@@ -90,7 +90,7 @@ async function processes() {
 }
 class Instance {
   constructor(label) { this.label = label; this.stopping = false; this.exited = false; this.evidence = { label }; result.runs.push(this.evidence) }
-  async start(settingsSeed, recovery = false, resumeInstance = null) {
+  async build(settingsSeed, recovery = false, resumeInstance = null) {
     this.keep = !recovery && scenario !== 'collectors'
     const env = { ...process.env, OC_CHAN_HEADLESS: '1', OC_CHAN_SMOKE: '1', OC_CHAN_HOME: manifest.home, OC_CHAN_ACCEPTANCE_RECOVERY: recovery ? '1' : '0' }
     delete env.OC_CHAN_ACCEPTANCE_SETTINGS
@@ -117,12 +117,25 @@ class Instance {
       if (line.startsWith('{')) {
         let value
         try { value = JSON.parse(line) } catch (error) { throw new Error('Invalid application JSON evidence', { cause: error }) }
+        if (value.developmentStage !== undefined) {
+          assert.equal(value.developmentStage, 'build-complete', 'Unknown development lifecycle signal')
+          assert.equal(value.instance, this.instance, 'Build completion must belong to this instance')
+          assert.equal(value.resumed, resumeInstance !== null, 'Build completion resume mode mismatch')
+          assert.equal(this.buildCompletedAt, undefined, 'Duplicate build completion')
+          this.buildCompletedAt = performance.now()
+          record('development-build-complete', value)
+        }
         if (value.driverDirectory) { assert(!this.receipt, 'Driver restarted unexpectedly'); this.receipt = value }
         if (value.shutdownReport) this.shutdownReport = value.shutdownReport
       }
       record('launcher', { line })
     }
     readLines(this.launcher.stdout, consume, fail); readLines(this.launcher.stderr, consume, fail)
+    // Match the existing performance harness's bounded cold-build budget.
+    await until(() => this.buildCompletedAt !== undefined, { timeout: limits.buildMs, signal: abort.signal })
+  }
+  async start(recovery = false) {
+    assert(this.buildCompletedAt !== undefined, 'Application startup requires verified build completion')
     await until(() => this.instance && this.receipt, { timeout: limits.startupMs, signal: abort.signal })
     this.driver = await Driver.open(this.receipt, record)
     this.renderer = this.driver.view(recovery ? 'recovery' : 'main')
@@ -201,7 +214,8 @@ try {
   record('fixture-identities', { home: manifest.home, agents: manifest.agentIds, pids: manifest.agentPids, historyRows: manifest.historyRows })
   if (['all','marketplace'].includes(scenario)) feed = await stage('build-signed-market-fixtures', 300000, () => createMarketFeed(path.join(work, 'market-fixtures'), { signal: abort.signal, record }))
   current = new Instance('first')
-  await stage('first-startup', limits.startupMs, () => current.start())
+  await stage('first-build', limits.buildMs, () => current.build())
+  await stage('first-startup', limits.startupMs - (performance.now() - current.buildCompletedAt), () => current.start())
   await capture('startup')
   const exercised = await stage('real-wk-scenarios', limits.scenarioMs, () => exerciseSmoke({ main: current.driver, renderer: current.renderer, manifest, record, capture, fault, scenario, feed }))
   assert(!fault, `Injected ${fault} fault did not fail its mandatory assertion`)
@@ -215,14 +229,16 @@ try {
     const first = current.instance
     await stage('first-exit', 30000, () => current.quit())
     current = new Instance('restart')
-    await stage('restart-startup', limits.startupMs, () => current.start(undefined, false, first))
+    await stage('restart-build', limits.buildMs, () => current.build(undefined, false, first))
+    await stage('restart-startup', limits.startupMs - (performance.now() - current.buildCompletedAt), () => current.start())
     assert.equal(current.instance, first, 'Restart must reopen the original profile and installed plugin identities')
     await stage('restart-state', limits.restartMs, () => verifyRestart({ main: current.driver, renderer: current.renderer, savedSettings: saved, record, capture, scenario }))
     await stage('restart-exit', 30000, () => current.quit())
     if (scenario === 'all') {
       const broken = path.join(work, 'broken-settings.json'); await writeFile(broken, '{"broken":', { flag: 'wx', mode: 0o600 })
       current = new Instance('recovery')
-      await stage('recovery-startup', limits.startupMs, () => current.start(broken, true))
+      await stage('recovery-build', limits.buildMs, () => current.build(broken, true))
+      await stage('recovery-startup', limits.startupMs - (performance.now() - current.buildCompletedAt), () => current.start(true))
       await stage('recovery-boundary-and-retry', 60000, () => exerciseRecovery({ driver: current.driver, profile: path.join(current.instance, 'profile'), bytes, capture }))
       await current.driver.host('shutdown-report')
       await stage('recovery-exit', 30000, () => current.quit())
