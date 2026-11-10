@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, ArrowUpRight, ChevronDown, Focus, Maximize, Minus, Plus, RotateCcw } from 'lucide-react'
 import type { TopologyGraph } from './agent-topology'
 import type { Topology3DSession, TopologyScene } from './agent-topology-scene'
-import { buildOfficeLayout, getAgentFloorId, MAX_3D_EDGES, MAX_3D_NODES } from './agent-topology-3d-layout'
+import { buildOfficeLayout, MAX_3D_EDGES, MAX_3D_NODES } from './agent-topology-3d-layout'
 import { NativeSelect } from './components'
 import AgentContextMenu, { type AgentMenuAnchor } from './AgentContextMenu'
 import { useI18n } from './i18n'
@@ -36,15 +36,15 @@ export default memo(function AgentTopology3D({ graph, selectedId, onSelect, onTo
   const [navigationError, setNavigationError] = useState<string | null>(null)
   const [picked, setPicked] = useState('')
   const [selectedFloorId, setSelectedFloorId] = useState<string | null>(session.floorId)
-  const latest = useRef({ graph, selectedId, onSelect, liveIds, t, evidenceCurrent, floorId: selectedFloorId, revealId, onRevealed, onNodesReady })
-  latest.current = { graph, selectedId, onSelect, liveIds, t, evidenceCurrent, floorId: selectedFloorId, revealId, onRevealed, onNodesReady }
   const overBudget = graph.nodes.length > MAX_3D_NODES || graph.edges.length > MAX_3D_EDGES
-  const { floors, layoutError } = useMemo(() => {
-    if (overBudget) return { floors: [], layoutError: null }
-    try { return { floors: buildOfficeLayout(graph).floors, layoutError: null } }
-    catch (error) { return { floors: [], layoutError: error instanceof Error ? error.message : String(error) } }
+  const { layout, layoutError } = useMemo(() => {
+    if (overBudget) return { layout: null, layoutError: null }
+    try { return { layout: buildOfficeLayout(graph), layoutError: null } }
+    catch (error) { return { layout: null, layoutError: error instanceof Error ? error.message : String(error) } }
   }, [graph, overBudget, attempt])
-  const activeFloor = floors.find(floor => floor.id === selectedFloorId)
+  const latest = useRef({ graph, layout, selectedId, onSelect, liveIds, t, evidenceCurrent, floorId: selectedFloorId, revealId, onRevealed, onNodesReady })
+  latest.current = { graph, layout, selectedId, onSelect, liveIds, t, evidenceCurrent, floorId: selectedFloorId, revealId, onRevealed, onNodesReady }
+  const activeFloor = layout?.floors.find(floor => floor.id === selectedFloorId)
   const missingFloor = selectedFloorId !== null && !activeFloor && !overBudget && !layoutError
   const displayError = layoutError || failure
   const sceneUnavailable = loading || !!displayError || overBudget
@@ -100,18 +100,19 @@ export default memo(function AgentTopology3D({ graph, selectedId, onSelect, onTo
 
   function revealRequested() {
     const current = latest.current
-    const node = current.graph.nodes.find(item => item.agent.id === current.revealId)
-    if (!node || !scene.current) return
-    selectFloor(getAgentFloorId(node.agent))
-    scene.current.focus(node.agent.id)
+    const floorId = current.revealId && current.layout?.floorByAgent.get(current.revealId)
+    if (!floorId || !scene.current || !current.revealId) return
+    selectFloor(floorId)
+    scene.current.focus(current.revealId)
     current.onRevealed()
   }
 
   function selectEmployee(id: string, focus: boolean) {
-    const node = latest.current.graph.nodes.find(item => item.agent.id === id)
-    if (!node) return
-    selectFloor(getAgentFloorId(node.agent))
-    latest.current.onSelect(id)
+    const current = latest.current
+    const floorId = current.layout?.floorByAgent.get(id)
+    if (!floorId) return
+    selectFloor(floorId)
+    current.onSelect(id)
     if (focus) {
       try { scene.current?.focus(id) }
       catch (error) { setFailure(error instanceof Error ? error.message : String(error)) }
@@ -138,11 +139,13 @@ export default memo(function AgentTopology3D({ graph, selectedId, onSelect, onTo
 
   return <div className="topology-3d" role="region" aria-label={t('3D 协作拓扑', '3D collaboration topology')}>
     <div className="topology-3d-toolbar">
-      <label className="topology-3d-picker">{t('工程楼层', 'Project floor')}
+      <label className="topology-3d-picker">{t('任务楼层', 'Task floor')}
         <NativeSelect value={selectedFloorId ?? ''} title={activeFloor?.cwd} disabled={overBudget || !!layoutError} onChange={event => selectFloor(event.target.value || null)}>
-          <option value="">{t('全部楼层', 'All floors')}</option>
+          <option value="">{t('全部项目与任务', 'All projects and tasks')}</option>
           {selectedFloorId !== null && !activeFloor && <option value={selectedFloorId}>{t('已选楼层（当前不可见）', 'Selected floor (currently unavailable)')}</option>}
-          {floors.map(floor => <option key={floor.id} value={floor.id} title={floor.cwd}>{floor.level} F / {floor.id === 'unknown' ? t('工程未识别', 'Unidentified project') : floor.name} / {t(`${floor.nodeIds.length} 人`, `${floor.nodeIds.length} employees`)}</option>)}
+          {layout?.buildings.map(building => <optgroup key={building.id} label={building.cwd ? building.name : t('项目未识别', 'Unidentified project')} title={building.cwd}>
+            {building.floors.map(floor => <option key={floor.id} value={floor.id} title={floor.cwd}>{floor.level} F / {floor.unresolved ? `${t('待归属', 'Unassigned')} · ` : ''}{floor.name} / {t(`${floor.nodeIds.length} 人`, `${floor.nodeIds.length} employees`)}</option>)}
+          </optgroup>)}
         </NativeSelect>
       </label>
       <label className="topology-3d-picker">{t('定位员工', 'Locate employee')}
@@ -152,12 +155,13 @@ export default memo(function AgentTopology3D({ graph, selectedId, onSelect, onTo
           if (id) selectEmployee(id, true)
         }}>
           <option value="">{t('选择员工（Agent）…', 'Choose an employee (agent)…')}</option>
-          {!overBudget && graph.nodes.map(node => <option key={node.agent.id} value={node.agent.id}>{(node.agent.summary || node.agent.name).slice(0, 160)} · {node.agent.pid}</option>)}
+          {!overBudget && graph.nodes.map(node => <option key={node.agent.id} value={node.agent.id} title={node.agent.cwd}>{node.agent.kind === 'main' ? t('主 Agent', 'Main agent') : t('子 Agent', 'Subagent')} · {(node.agent.summary || node.agent.name).slice(0, 160)} · {node.agent.pid}</option>)}
         </NativeSelect>
       </label>
       <span className="topology-3d-hint">{t('拖动旋转 · Shift 拖动平移 · 滚轮缩放', 'Drag to orbit · Shift-drag to pan · Scroll to zoom')}</span>
+      {layout && <span className="topology-3d-summary">{t(`${layout.buildings.length} 个项目 · ${layout.floors.length} 个任务楼层`, `${layout.buildings.length} projects · ${layout.floors.length} task floors`)}</span>}
     </div>
-    {missingFloor && <p className="topology-3d-note topology-3d-floor-status" role="status">{t('所选工程楼层不在当前筛选或折叠后的数据中，已保留选择；可调整筛选、展开分支，或显示全部楼层。', 'The selected project floor is absent from the current filtered or collapsed data. Its selection is preserved. Adjust filters, expand branches, or show all floors.')}</p>}
+    {missingFloor && <p className="topology-3d-note topology-3d-floor-status" role="status">{t('所选任务楼层不在当前筛选或折叠后的数据中，已保留选择；可调整筛选、展开分支，或显示全部楼层。', 'The selected task floor is absent from the current filtered or collapsed data. Its selection is preserved. Adjust filters, expand branches, or show all floors.')}</p>}
     <div className="topology-3d-viewport">
       <div ref={host} className="topology-3d-scene" />
       {(overBudget || displayError || loading) && <div className="topology-3d-message" role={displayError || overBudget ? 'alert' : 'status'}>
@@ -184,7 +188,7 @@ export default memo(function AgentTopology3D({ graph, selectedId, onSelect, onTo
         {selected.agent.runtime === 'OMP' && <button type="button" disabled={navigating} onClick={() => { void navigate(selected.agent.id) }}><ArrowUpRight size={15} />{navigating ? t('正在跳转…', 'Navigating…') : t('前往 Tern', 'Go to Tern')}</button>}
       </>}
     </div>
-    <p className="topology-3d-note">{t('楼层按完整工作目录分组，目录未知的员工单独归层。选层淡化其他层；拖动员工调整本层工位，箭头指向子代理。标签避让，员工菜单可访问全部 Agent。', 'Floors group employees by their full working directory; unknown directories have a separate floor. Select a floor to dim the others. Drag employees within their floor; arrows point to child agents. Labels avoid overlap; the employee picker includes every agent.')}</p>
+    <p className="topology-3d-note">{t('一栋楼对应一个项目，一层对应一个主会话任务。主 Agent 使用独立办公室，子 Agent 使用开放工位；父链缺失或异常时标为待归属。选层淡化其他任务；拖动员工调整本层工位，箭头指向子 Agent。完整项目路径可在楼层菜单提示中查看。', 'Each building is a project; each floor is a main-session task. Main agents have private offices and subagents use shared desks. Missing or invalid parent chains are marked unassigned. Selecting a floor dims other tasks; drag employees within their floor. Arrows point to subagents. Floor menu tooltips show full project paths.')}</p>
     {navigationError && <div className="topology-3d-navigation-error" role="alert"><span>{navigationError}</span><button className="button secondary" onClick={() => setNavigationError(null)}>{t('关闭提示', 'Dismiss')}</button></div>}
     {menu && <AgentContextMenu anchor={menu} busy={navigating} onClose={closeMenu} onNavigate={navigate} />}
   </div>

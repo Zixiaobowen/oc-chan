@@ -20,7 +20,7 @@ function fixture() {
     'node_modules/builder': { version: '1.0.0', license: 'MIT', dev: true }
   } }
   const bundled = { schema: 1, packages: [{ name: 'react', version: '19.3.1', license: 'MIT', renderedBytes: 100 }] }
-  const policy = { schema: 1, lockSha256: hash(JSON.stringify(lock)), allowedLicenses: ['MIT', 'ISC'], advisories: [{ id: advisoryId, scope: 'build-only', reason: 'Build patterns are maintained repository inputs. npm reports <11; upstream advisory states >=7,<11.0.1 at optimizationLevel>=2. No user/IPC patterns reach this dependency.', reviewedAt: '2026-11-05' }], dependencyChangeReason: 'Renderer dependencies are bundled, only systeminformation is externalized.' }
+  const policy = { schema: 2, lockSha256: hash(JSON.stringify(lock)), cargoLockSha256: 'c'.repeat(64), allowedLicenses: ['MIT', 'ISC'], allowedCargoLicenses: ['MIT'], advisories: [], dependencyChangeReason: 'Unit fixture distinguishes actual renderer bytes, external runtime dependencies and build tools; Rust uses its exact independent lock.' }
   const audit = { auditReportVersion: 2, vulnerabilities: {
     minimatch: { name: 'minimatch', severity: 'moderate', range: '<11', nodes: ['node_modules/minimatch'], via: [{ source: 123, name: 'minimatch', title: 'Pattern denial of service', severity: 'moderate', url: `https://github.com/advisories/${advisoryId}`, range: '<11' }] },
     builder: { name: 'builder', severity: 'moderate', range: '*', nodes: ['node_modules/builder'], via: ['minimatch'] }
@@ -65,15 +65,15 @@ test('a runtime dependency cannot be hidden by a dev flag, including nested and 
   assert.throws(() => assertManifestLock(manifest, lock), /Missing runtime dependency helper/)
 })
 
-test('policy pins exact lock bytes and requires a dated review and dependency rationale', () => {
+test('policy pins both exact lock files and rejects advisory exemptions', () => {
   const { lock, policy } = fixture()
-  assert.doesNotThrow(() => validatePolicy(policy, hash(JSON.stringify(lock))))
-  assert.throws(() => validatePolicy(policy, hash(JSON.stringify(lock) + '\n')), /lockSha256/)
-  policy.advisories[0].reviewedAt = 'not-a-date'
-  assert.throws(() => validatePolicy(policy, policy.lockSha256), /Invalid or duplicate/)
-  policy.advisories = []
-  policy.dependencyChangeReason = ''
-  assert.throws(() => validatePolicy(policy, policy.lockSha256), /rationale/)
+  assert.doesNotThrow(() => validatePolicy(policy, hash(JSON.stringify(lock)), policy.cargoLockSha256))
+  assert.throws(() => validatePolicy(policy, hash(JSON.stringify(lock) + '\n'), policy.cargoLockSha256), /lockSha256/)
+  assert.throws(() => validatePolicy(policy, policy.lockSha256, 'd'.repeat(64)), /cargoLockSha256/)
+  policy.advisories = [{ id: advisoryId, scope: 'build-only' }]
+  assert.throws(() => validatePolicy(policy, policy.lockSha256, policy.cargoLockSha256), /exemptions/)
+  policy.advisories = []; policy.dependencyChangeReason = ''
+  assert.throws(() => validatePolicy(policy, policy.lockSha256, policy.cargoLockSha256), /rationale/)
 })
 
 test('inventory classifies dev renderer code as bundled and distinguishes exact nested versions', () => {
@@ -103,11 +103,11 @@ test('inventory rejects traversal, linked packages, duplicate bundles and mismat
 })
 
 test('known advisories propagate through cyclic build dependencies without being treated as clean', () => {
-  const { lock, bundled, policy, audit } = fixture()
+  const { lock, bundled, audit } = fixture()
   audit.vulnerabilities.minimatch.via.push('builder')
-  const findings = reviewFindings(audit, licenseInventory(lock, bundled), policy)
+  const findings = reviewFindings(audit, licenseInventory(lock, bundled))
   assert.equal(findings.length, 2)
-  assert.ok(findings.every(item => item.decision === 'reviewed-build-only'))
+  assert.ok(findings.every(item => item.decision === 'rejected' && item.reason.includes('remediation')))
   const propagated = findings.find(item => item.name === 'builder')
   assert.equal(propagated.advisories[0].id, advisoryId)
   assert.equal(propagated.advisories[0].npmRange, '<11')
@@ -115,7 +115,6 @@ test('known advisories propagate through cyclic build dependencies without being
 
 test('review rejects new advisories, runtime exposure, bundled exposure and unknown lock nodes', () => {
   for (const change of [
-    data => { data.policy.advisories = [] },
     data => { delete data.lock.packages['node_modules/minimatch'].dev },
     data => { data.bundled.packages.push({ name: 'minimatch', version: '9.0.9', license: 'ISC', renderedBytes: 10 }) },
     data => { data.audit.vulnerabilities.minimatch.nodes.push('node_modules/missing') },
@@ -123,7 +122,7 @@ test('review rejects new advisories, runtime exposure, bundled exposure and unkn
   ]) {
     const data = fixture()
     change(data)
-    const findings = reviewFindings(data.audit, licenseInventory(data.lock, data.bundled), data.policy)
+    const findings = reviewFindings(data.audit, licenseInventory(data.lock, data.bundled))
     assert.equal(findings.find(item => item.name === 'minimatch').decision, 'rejected')
   }
 })
@@ -131,15 +130,15 @@ test('review rejects new advisories, runtime exposure, bundled exposure and unkn
 test('incomplete and cyclic advisory propagation cannot be treated as clean', () => {
   const data = fixture()
   data.audit.vulnerabilities.minimatch.via = ['builder']
-  assert.throws(() => reviewFindings(data.audit, licenseInventory(data.lock, data.bundled), data.policy))
+  assert.throws(() => reviewFindings(data.audit, licenseInventory(data.lock, data.bundled)))
   data.audit.vulnerabilities.minimatch.via = ['missing']
-  assert.throws(() => reviewFindings(data.audit, licenseInventory(data.lock, data.bundled), data.policy), /Unresolved/)
+  assert.throws(() => reviewFindings(data.audit, licenseInventory(data.lock, data.bundled)), /Unresolved/)
   data.audit.vulnerabilities.minimatch.nodes = []
-  assert.throws(() => reviewFindings(data.audit, licenseInventory(data.lock, data.bundled), data.policy), /Missing affected/)
+  assert.throws(() => reviewFindings(data.audit, licenseInventory(data.lock, data.bundled)), /Missing affected/)
 })
 
 test('dense advisory graphs stop at the traversal budget', () => {
-  const { lock, bundled, policy, audit } = fixture()
+  const { lock, bundled, audit } = fixture()
   const names = Array.from({ length: 350 }, (_, index) => `build-${index}`)
   const via = ['minimatch', ...names]
   for (const name of names) {
@@ -147,7 +146,7 @@ test('dense advisory graphs stop at the traversal budget', () => {
     lock.packages[location] = { version: '1.0.0', license: 'MIT', dev: true }
     audit.vulnerabilities[name] = { name, via, nodes: [location] }
   }
-  assert.throws(() => reviewFindings(audit, licenseInventory(lock, bundled), policy), /traversal budget/)
+  assert.throws(() => reviewFindings(audit, licenseInventory(lock, bundled)), /traversal budget/)
 })
 
 test('npm exit 1 with valid findings is verified evidence; malformed, transport and count failures are not', () => {
@@ -187,7 +186,7 @@ test('failed local preconditions produce an unverified report without changing e
   put(root, 'package.json', manifest)
   const lockFile = put(root, 'package-lock.json', lock)
   put(root, 'out/renderer/bundled-dependencies.json', bundled)
-  put(root, 'out/main/bundled-dependencies.json', bundled)
+  put(root, 'Cargo.lock', 'version = 4\n')
   put(root, 'docs/dependency-review-policy.json', { ...policy, lockSha256: '0'.repeat(64) })
   const before = readFileSync(lockFile)
   const report = reviewDependencies({ root })

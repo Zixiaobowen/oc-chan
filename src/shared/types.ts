@@ -204,9 +204,9 @@ export interface MonitorApi {
   retrySource(sourceId: string): Promise<void>
   focusAgentInTern(agentId: string): Promise<{ error: string | null }>
   scheduleHistory(jobId: string, offset?: number): Promise<ScheduleHistory>
-  cancelScheduleHistory(): void
+  cancelScheduleHistory(): Promise<void>
   events(query?: EventQuery): Promise<EventPage>
-  cancelEvents(): void
+  cancelEvents(): Promise<void>
   generateDiagnostics(): Promise<DiagnosticGenerateResult>
   copyDiagnostics(id: string): Promise<DiagnosticActionResult>
   saveDiagnostics(id: string): Promise<DiagnosticActionResult>

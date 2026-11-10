@@ -1,0 +1,42 @@
+[package]
+name = "oc-chan"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+build = "build.rs"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+acceptance = ["oc-core/acceptance", "oc-installer/acceptance", "dep:chrono"]
+
+[dependencies]
+oc-core = { path = "../crates/oc-core" }
+oc-installer = { path = "../crates/oc-installer" }
+oc-native-bridge = { path = "../native" }
+tauri = { version = "2.12.5", features = ["tray-icon", "image-png", "macos-private-api"] }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+futures-util.workspace = true
+uuid.workspace = true
+libc.workspace = true
+sha2.workspace = true
+base64.workspace = true
+chrono = { workspace = true, optional = true }
+objc2 = { version = "0.6", default-features = false, features = ["std"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWindow", "NSScreen", "NSEvent", "objc2-core-foundation"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSGeometry", "NSNotification", "NSOperation", "NSString", "NSObject", "block2"] }
+objc2-web-kit = { version = "0.3", default-features = false, features = ["std", "WKWebViewConfiguration", "WKPreferences"] }
+block2 = { version = "0.6", default-features = false, features = ["std"] }
+
+[build-dependencies]
+tauri-build = { version = "2.7.4", features = [] }
+serde_json.workspace = true
+sha2.workspace = true
+cc = "1"
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
 import { HISTORY_PAGE_SIZE, MAX_HISTORY_OFFSET, type ScheduleExecution, type ScheduleHistory as HistoryPage } from '../../shared/types'
 import { useI18n } from './i18n'
+import { reportDesktopFailure } from './desktop-api'
 
 const executionLabels: Record<ScheduleExecution['status'], [string, string]> = {
   claimed: ['已领取', 'Claimed'],
@@ -38,7 +39,7 @@ export default function ScheduleHistory({ jobId, enabled, active, offset, onOffs
   useLayoutEffect(() => {
     if (!enabled || !active) {
       restoreCachedPage.current = null
-      window.monitor?.cancelScheduleHistory()
+      void window.monitor?.cancelScheduleHistory().catch(reportDesktopFailure)
       setError(null)
       setPhase('inactive')
       return
@@ -80,7 +81,7 @@ export default function ScheduleHistory({ jobId, enabled, active, offset, onOffs
     })
     return () => {
       current = false
-      monitor.cancelScheduleHistory()
+      void monitor.cancelScheduleHistory().catch(reportDesktopFailure)
     }
   }, [jobId, enabled, active, offset, attempt])
 

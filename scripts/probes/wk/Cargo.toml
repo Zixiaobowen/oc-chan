@@ -1,0 +1,20 @@
+[package]
+name = "oc-wk-probe"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[workspace]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("acceptance"))'] }
+
+[dependencies]
+tauri = { version = "2", features = ["macos-private-api"] }
+serde_json = "1"
+tokio = { version = "1", features = ["sync"] }
+libc = "0.2"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+cc = "1"

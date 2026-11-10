@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { constants, createReadStream, createWriteStream } from 'node:fs'
-import { chmod, lstat, mkdir, mkdtemp, open, realpath, rm, writeFile } from 'node:fs/promises'
+import { chmod, copyFile, cp, lstat, mkdir, mkdtemp, open, realpath, rm, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -10,15 +10,16 @@ import { fileURLToPath } from 'node:url'
 import { inspectPackage } from './check-package.mjs'
 import { captureDeliverySource } from './delivery-source.mjs'
 import { verifyDeliveryZip } from './delivery-zip.mjs'
+import { boundedJson, within } from './build-app.mjs'
 
-const ROOT = fileURLToPath(new URL('..', import.meta.url))
-const MAX_ARTIFACT = 1024 ** 3
+const ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
+const MAX_ARTIFACT = 512 * 1024 ** 2
 const MAX_METADATA = 8 * 1024 ** 2
 const hash = bytes => createHash('sha256').update(bytes).digest('hex')
 function requireThat(condition, message) { if (!condition) throw new Error(message) }
 function sameFile(a, b) { return a.dev === b.dev && a.ino === b.ino && a.size === b.size && a.mtimeMs === b.mtimeMs && a.ctimeMs === b.ctimeMs }
 
-async function command(file, args, { cwd = ROOT, timeout = 30000, signal, allowFailure = false } = {}) {
+export async function command(file, args, { cwd = ROOT, timeout = 30000, signal, allowFailure = false } = {}) {
   signal?.throwIfAborted()
   return new Promise((resolve, reject) => {
     const child = spawn(file, args, { cwd, detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -128,9 +129,9 @@ async function verifyDmg(filename, expected, root, signal) {
   const mount = path.join(temporary, 'image')
   let failure, attached = false, result
   try {
-    await command('/usr/sbin/diskutil', ['image', 'attach', '--readOnly', '--nobrowse', '--mountPoint', mount, filename], { signal, timeout: 120000 })
+    await command('/usr/bin/hdiutil', ['attach', '-readonly', '-nobrowse', '-mountpoint', mount, filename], { signal, timeout: 120000 })
     attached = true
-    const inspected = await inspectPackage({ app: path.join(mount, 'OC Chan.app'), arch: 'arm64', root })
+    const inspected = await inspectPackage({ app: await realpath(path.join(mount, 'OC Chan.app')), arch: 'arm64', root })
     requireThat(JSON.stringify(inspected.entries) === JSON.stringify(expected.entries), 'DMG application differs from the directory package')
     result = { checksum: 'verified', application: 'matches-directory-package', readOnly: true }
   } catch (error) { failure = error }
@@ -159,59 +160,69 @@ export async function createLocalDelivery({ root = ROOT, out }) {
   requireThat(typeof out === 'string' && out.length > 0, 'Required --out NEW_DIRECTORY')
   root = await realpath(root)
   const requested = path.resolve(out)
+  requireThat(within(path.join(root, 'release/tauri'), requested), 'Local delivery must be inside this workspace release/tauri directory')
+  await mkdir(path.dirname(requested), { recursive: true, mode: 0o700 })
   const destination = path.join(await realpath(path.dirname(requested)), path.basename(requested))
+  requireThat(within(path.join(root, 'release/tauri'), destination), 'Delivery parent escaped the managed release directory')
   await mkdir(destination, { mode: 0o700 })
   const controller = new AbortController()
-  const interrupt = signal => controller.abort(new Error(`Local delivery cancelled: ${signal}`))
-  const onInt = () => interrupt('SIGINT'), onTerm = () => interrupt('SIGTERM')
+  const onInt = () => controller.abort(new Error('Local delivery cancelled: SIGINT'))
+  const onTerm = () => controller.abort(new Error('Local delivery cancelled: SIGTERM'))
   process.once('SIGINT', onInt); process.once('SIGTERM', onTerm)
-  let snapshot, failure, receipt
+  let failure, receipt
   try {
     const source = await captureDeliverySource(root)
-    snapshot = await mkdtemp(path.join(tmpdir(), 'oc-chan-delivery-source-'))
-    await snapshotSource(root, snapshot, source)
-    console.log(`Building local arm64 delivery ${source.version}; workspace source ${source.digest}`)
+    const snapshot = path.join(destination, 'source-snapshot')
+    await mkdir(snapshot, { mode: 0o700 }); await snapshotSource(root, snapshot, source)
+    console.log(`Building local Rust arm64 delivery ${source.version}; source ${source.digest}`)
     const install = await command('npm', ['ci', '--no-audit', '--no-fund'], { cwd: snapshot, signal: controller.signal, timeout: 600000 })
     await writeFile(path.join(destination, 'dependency-install.log'), install.stdout + install.stderr, { flag: 'wx', mode: 0o600 })
-    const build = await command('npm', ['run', 'dist', '--', `--config.directories.output=${destination}`], { cwd: snapshot, signal: controller.signal, timeout: 900000 })
+    const build = await command('npm', ['run', 'package:dist'], { cwd: snapshot, signal: controller.signal, timeout: 900000 })
     await writeFile(path.join(destination, 'build.log'), build.stdout + build.stderr, { flag: 'wx', mode: 0o600 })
-    await command('npm', ['run', 'audit:dependencies', '--', '--output', path.join(destination, 'dependency-review-arm64.json')], {
-      cwd: snapshot, signal: controller.signal, timeout: 120000
-    })
-    const app = path.join(destination, 'mac-arm64', 'OC Chan.app')
-    const inventory = await inspectPackage({ app, arch: 'arm64', artifactsDir: destination, root: snapshot })
-    const identity = await appIdentity(app, source.version, controller.signal)
-    const signature = await signatureStatus(app, controller.signal)
-    console.log('Checking ZIP members and read-only DMG contents')
-    const zip = inventory.artifacts.find(entry => entry.name.endsWith('.zip'))
-    const dmg = inventory.artifacts.find(entry => entry.name.endsWith('.dmg'))
-    const zipResult = await verifyDeliveryZip(path.join(destination, zip.name), inventory.entries.filter(entry => entry.kind !== 'asar'))
-    const dmgResult = await verifyDmg(path.join(destination, dmg.name), inventory, snapshot, controller.signal)
-    await verifyArtifactDigests(destination, source.version, inventory.artifacts)
-    const after = await captureDeliverySource(root)
-    requireThat(JSON.stringify(after) === JSON.stringify(source), 'Workspace source changed during build; no delivery receipt was generated')
+    await command('npm', ['run', 'audit:dependencies', '--', '--output', path.join(destination, 'dependency-review-arm64.json')], { cwd: snapshot, signal: controller.signal, timeout: 120000 })
+    const buildRecord = await boundedJson(path.join(snapshot, 'release/tauri/build.json'))
+    requireThat(buildRecord.schema === 2 && buildRecord.root === snapshot && buildRecord.mode === 'release' && buildRecord.version === source.version && /^[a-f0-9-]{36}$/.test(buildRecord.buildId), 'Build receipt differs from the captured source')
+    const distribution = await boundedJson(path.join(snapshot, 'release/tauri', buildRecord.buildId, 'distribution.json'))
+    requireThat(distribution.schema === 2 && distribution.buildId === buildRecord.buildId && distribution.version === source.version && distribution.arch === 'arm64' && within(path.join(snapshot, 'release/tauri'), distribution.app), 'Distribution receipt differs from the captured build')
+    const app = path.join(destination, 'OC Chan.app')
+    await cp(distribution.app, app, { recursive: true, dereference: false, verbatimSymlinks: true, errorOnExist: true, force: false })
+    const artifacts = []
+    for (const extension of ['zip', 'dmg']) {
+      const name = `OC-Chan-${source.version}-mac-arm64.${extension}`, input = distribution.artifacts?.[extension]?.path
+      requireThat(input === path.join(distribution.destination, name) && within(path.join(snapshot, 'release/tauri'), input), 'Distribution archive path escaped the build')
+      await copyFile(input, path.join(destination, name), constants.COPYFILE_EXCL)
+      artifacts.push(await artifactDigest(path.join(destination, name)))
+    }
+    const inventory = await inspectPackage({ app, arch: 'arm64', artifactsDir: destination, root: snapshot, buildRecord })
+    const identity = await appIdentity(app, source.version, controller.signal), signature = await signatureStatus(app, controller.signal)
+    requireThat(signature.verified && ['ad-hoc', 'developer-id'].includes(signature.kind), 'Local delivery requires verified ad-hoc or Developer ID code')
+    const zipResult = await verifyDeliveryZip(path.join(destination, artifacts.find(entry => entry.name.endsWith('.zip')).name), inventory.entries)
+    const dmgResult = await verifyDmg(path.join(destination, artifacts.find(entry => entry.name.endsWith('.dmg')).name), inventory, snapshot, controller.signal)
+    await verifyArtifactDigests(destination, source.version, artifacts)
+    requireThat(JSON.stringify(await captureDeliverySource(root)) === JSON.stringify(source), 'Workspace source changed during build; no delivery receipt was generated')
     controller.signal.throwIfAborted()
     const sourceFile = await metadata(path.join(destination, 'source-manifest.json'), source)
     const packageFile = await metadata(path.join(destination, 'package-manifest-arm64.json'), inventory)
+    const buildFile = await metadata(path.join(destination, 'build-manifest.json'), buildRecord)
     const dependencyFile = await artifactDigest(path.join(destination, 'dependency-review-arm64.json'))
-    receipt = { schema: 1, createdAt: new Date().toISOString(), scope: 'local-development-only', version: source.version, architecture: 'arm64',
-      source: { commit: source.commit, branch: source.branch, tag: source.tag, workspace: source.workspace, digest: source.digest, manifest: sourceFile, ciRun: null },
-      application: { path: 'mac-arm64/OC Chan.app', ...identity, signature, notarization: 'not-requested', gatekeeper: 'not-assessed', installed: false },
-      artifacts: inventory.artifacts, packageManifest: packageFile, dependencyReview: dependencyFile,
-      validation: { packageBudget: inventory.budget.status, dependencies: 'verified', zip: zipResult, dmg: dmgResult },
-      publication: { status: 'not-published', downloadUrl: null }, upgradeInstructions: 'README.md: 本地交付与手动升级' }
-    await writeFile(path.join(destination, 'SHA256SUMS.txt'), [...inventory.artifacts, sourceFile, packageFile, dependencyFile].map(entry => `${entry.sha256}  ${entry.name}`).join('\n') + '\n', { flag: 'wx', mode: 0o600 })
+    requireThat((await boundedJson(path.join(destination, dependencyFile.name), MAX_METADATA)).status === 'verified', 'Dependency review did not pass')
+    receipt = { schema: 2, createdAt: new Date().toISOString(), scope: 'local-development-only', version: source.version, architecture: 'arm64',
+      source: { commit: source.commit, branch: source.branch, tag: source.tag, workspace: source.workspace, digest: source.digest, manifest: sourceFile },
+      application: { path: 'OC Chan.app', ...identity, signature, installed: false },
+      artifacts, packageManifest: packageFile, buildManifest: buildFile, dependencyReview: dependencyFile,
+      validation: { package: 'verified', dependencies: 'verified', zip: zipResult, dmg: dmgResult }, publication: { status: 'not-published', downloadUrl: null } }
+    await writeFile(path.join(destination, 'SHA256SUMS.txt'), [...artifacts, sourceFile, packageFile, buildFile, dependencyFile].map(entry => `${entry.sha256}  ${entry.name}`).join('\n') + '\n', { flag: 'wx', mode: 0o600 })
   } catch (error) { failure = error }
-  try { if (snapshot) await rm(snapshot, { recursive: true }) } catch (error) {
-    failure = failure ? new AggregateError([failure, error], 'Delivery and source snapshot cleanup failed') : error
-  }
+  // Source snapshots, archives, logs and delivery evidence remain available for
+  // review and recovery. This operation never removes source worktrees.
   process.removeListener('SIGINT', onInt); process.removeListener('SIGTERM', onTerm)
   if (failure) {
-    await metadata(path.join(destination, 'failure.json'), { complete: false, error: String(failure), details: failure instanceof AggregateError ? failure.errors.map(String) : [], recordedAt: new Date().toISOString() })
+    try { await metadata(path.join(destination, 'failure.json'), { complete: false, error: String(failure), details: failure instanceof AggregateError ? failure.errors.map(String) : [], recordedAt: new Date().toISOString() }) }
+    catch (recording) { throw new AggregateError([failure, recording], 'Delivery and failure-evidence publication failed') }
     throw failure
   }
   await metadata(path.join(destination, 'delivery.json'), receipt)
-  console.log(`Verified local delivery: ${path.join(destination, 'delivery.json')}`)
+  console.log(`Verified local Rust delivery: ${path.join(destination, 'delivery.json')}`)
   return receipt
 }
 

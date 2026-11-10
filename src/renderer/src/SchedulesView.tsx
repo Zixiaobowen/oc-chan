@@ -9,6 +9,8 @@ import TaskNotificationSubscription from './TaskNotificationSubscription'
 import './schedule-details.css'
 import { scheduleTarget, type NavigationIntent, type NavigationTarget } from '../../shared/navigation'
 import { MAX_VIEW_QUERY_LENGTH, type ScheduleViewMemory, type ScheduleViewState, type ScrollPosition } from './view-state'
+import { reportDesktopFailure } from './desktop-api'
+import { isDesktopDocumentVisible } from './desktop-visibility'
 import './detail-source-reasons.css'
 
 const scheduleLabels: Record<string, string> = {
@@ -151,7 +153,7 @@ export default memo(function SchedulesView({ data, enabled, error, intent, onCon
   const revealPending = useRef<{ id: string; identity: string } | null>(null)
   const focusPending = useRef(false)
   const restoreDetail = useRef<ScrollPosition | null>(open && !unavailable ? { ...memory.detail } : null)
-  const [documentHidden, setDocumentHidden] = useState(document.hidden)
+  const [documentHidden, setDocumentHidden] = useState(() => !isDesktopDocumentVisible())
   const [retainedJob, setRetainedJob] = useState<ScheduledJob | undefined>(undefined)
   const searchRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLElement>(null)
@@ -193,7 +195,7 @@ export default memo(function SchedulesView({ data, enabled, error, intent, onCon
     saveDetailScroll()
   }
   const closeDetails = useCallback(() => {
-    window.monitor?.cancelScheduleHistory()
+    void window.monitor?.cancelScheduleHistory().catch(reportDesktopFailure)
     updateView({ open: false })
     const trigger = selectedVisible && selectedId
       ? listRef.current?.querySelector<HTMLButtonElement>(`[data-job-id="${CSS.escape(selectedId)}"] button`)
@@ -207,7 +209,7 @@ export default memo(function SchedulesView({ data, enabled, error, intent, onCon
       closeRef.current?.focus({ preventScroll: true })
       return
     }
-    window.monitor?.cancelScheduleHistory()
+    void window.monitor?.cancelScheduleHistory().catch(reportDesktopFailure)
     restoreDetail.current = null
     memory.detail.top = 0
     memory.detail.left = 0
@@ -219,7 +221,7 @@ export default memo(function SchedulesView({ data, enabled, error, intent, onCon
     consumed.current = intent.sequence
     revealPending.current = { id: intent.target.id, identity: intent.target.identity }
     if (!open || unavailable || selectedId !== intent.target.id || identity !== intent.target.identity) {
-      window.monitor?.cancelScheduleHistory()
+      void window.monitor?.cancelScheduleHistory().catch(reportDesktopFailure)
       restoreDetail.current = null
       memory.detail.top = 0
       memory.detail.left = 0
@@ -286,7 +288,7 @@ export default memo(function SchedulesView({ data, enabled, error, intent, onCon
       const x = bounds.left + bounds.width / 2
       const y = bounds.top + bounds.height / 2
       if (x >= panel.left && x < panel.right && y >= panel.top && y < panel.bottom) {
-        window.monitor?.cancelScheduleHistory()
+        void window.monitor?.cancelScheduleHistory().catch(reportDesktopFailure)
         updateView({ open: false })
       }
     }
@@ -295,13 +297,14 @@ export default memo(function SchedulesView({ data, enabled, error, intent, onCon
   }, [open, updateView])
   useEffect(() => {
     const onVisibility = () => {
-      if (document.hidden) window.monitor?.cancelScheduleHistory()
-      setDocumentHidden(document.hidden)
+      const hidden = !isDesktopDocumentVisible()
+      if (hidden) void window.monitor?.cancelScheduleHistory().catch(reportDesktopFailure)
+      setDocumentHidden(hidden)
     }
     document.addEventListener('visibilitychange', onVisibility)
     return () => {
       document.removeEventListener('visibilitychange', onVisibility)
-      window.monitor?.cancelScheduleHistory()
+      void window.monitor?.cancelScheduleHistory().catch(reportDesktopFailure)
     }
   }, [])
   function clearFilters() {

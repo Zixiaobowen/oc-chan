@@ -3,7 +3,8 @@ import type { MonitorSection } from './types'
 export interface PluginManifest {
   id: string
   version: string
-  apiVersion: 1
+  apiVersion: 2
+  target: 'aarch64-apple-darwin'
   name: string
   nameEn: string
   description: string
@@ -27,11 +28,6 @@ export interface PluginCatalog {
   plugins: PluginCatalogEntry[]
 }
 
-export interface PluginPackage {
-  schema: 1
-  manifest: PluginManifest
-  code: string
-}
 
 export interface MarketplaceItem {
   manifest: PluginManifest

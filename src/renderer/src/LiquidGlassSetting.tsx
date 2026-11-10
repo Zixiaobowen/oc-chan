@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { useI18n } from './i18n'
 import { useSettings } from './settings'
 import { SettingsDiagnosticDetails } from './SettingsSaveError'
+import { isDesktopDocumentVisible } from './desktop-visibility'
 
 const rangeKeys: Record<string, true> = { ArrowLeft: true, ArrowRight: true, ArrowUp: true, ArrowDown: true, Home: true, End: true, PageUp: true, PageDown: true }
 
@@ -25,7 +26,7 @@ export default function LiquidGlassSetting() {
     previewGlass(null)
   }, [previewGlass])
   useEffect(() => {
-    const onVisibility = () => { if (document.hidden) cancel() }
+    const onVisibility = () => { if (!isDesktopDocumentVisible()) cancel() }
     const onEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') cancel()
     }

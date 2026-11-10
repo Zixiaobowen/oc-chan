@@ -1,0 +1,32 @@
+{
+  "checkedAt": "2026-11-09T20:53:36.781Z",
+  "processCheck": {
+    "pids": [
+      2493,
+      13874,
+      22237,
+      31650,
+      54679
+    ],
+    "matchingRows": 0,
+    "command": "/bin/ps -ww -p 2493,13874,22237,31650,54679 -o pid=,ppid=,lstart=,command=",
+    "exitCode": 1
+  },
+  "results": [
+    {
+      "instance": "instance-3dLeVO",
+      "removed": false,
+      "error": "Error: 实例包含源码、证据或受保护文件，保留：/Users/zixiaobowen/myProjects/oc-chan-rust-migration-20261109/.dev-instances/instance-3dLeVO/cargo/aarch64-apple-darwin/debug/rust-dependencies/licenses/tracing-core-0.1.36/src"
+    },
+    {
+      "instance": "/Users/zixiaobowen/myProjects/oc-chan-rust-migration-20261109/.dev-instances/instance-ncdJNr",
+      "removed": true
+    }
+  ],
+  "retainedWithoutDrainReceipt": [
+    "instance-1f4M2Y",
+    "instance-nDNSNx",
+    "instance-K0ABJF"
+  ],
+  "scope": "Only this migration worktree; no application or other worktree changed"
+}

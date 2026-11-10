@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-monitor-retry-source"
+description = "Enables the monitor_retry_source command without any pre-configured scope."
+commands.allow = ["monitor_retry_source"]
+
+[[permission]]
+identifier = "deny-monitor-retry-source"
+description = "Denies the monitor_retry_source command without any pre-configured scope."
+commands.deny = ["monitor_retry_source"]

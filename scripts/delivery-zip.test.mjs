@@ -10,8 +10,8 @@ import { verifyDeliveryZip } from './delivery-zip.mjs'
 const ROOT = 'OC Chan.app/'
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
 const appFiles = [
-  { name: `${ROOT}Contents/MacOS/OC Chan`, data: Buffer.from('local delivery fixture\n'), mode: 0o100755, method: 8 },
-  { name: `${ROOT}Contents/Current`, data: Buffer.from('MacOS/OC Chan'), mode: 0o120777, method: 0 }
+  { name: `${ROOT}Contents/MacOS/oc-chan`, data: Buffer.from('local delivery fixture\n'), mode: 0o100755, method: 8 },
+  { name: `${ROOT}Contents/Current`, data: Buffer.from('MacOS/oc-chan'), mode: 0o120777, method: 0 }
 ]
 const expected = appFiles.map(item => ({ path: item.name.slice(ROOT.length), bytes: item.data.length, sha256: sha256(item.data), kind: item.mode === 0o120777 ? 'symlink' : 'file', mode: item.mode & 0o7777 }))
 const directories = ['OC Chan.app/', `${ROOT}Contents/`, `${ROOT}Contents/MacOS/`].map(name => ({ name, data: Buffer.alloc(0), mode: 0o040755, method: 0 }))
@@ -191,8 +191,8 @@ for (const [label, mutate, pattern] of [
   ['ZIP64 directory offset', a => a.bytes.writeUInt32LE(0xffffffff, a.eocd + 16), /ZIP64/],
   ['multi-disk archive', a => a.bytes.writeUInt16LE(1, a.eocd + 4), /Multi-disk/],
   ['multi-disk member', a => a.bytes.writeUInt16LE(1, a.records[0].central + 34), /Multi-disk/],
-  ['oversized directory', a => a.bytes.writeUInt32LE(8 * 1024 ** 2 + 1, a.eocd + 12), /directory exceeds bounds/],
-  ['oversized count', a => { a.bytes.writeUInt16LE(20001, a.eocd + 8); a.bytes.writeUInt16LE(20001, a.eocd + 10) }, /directory exceeds bounds/],
+  ['oversized directory', a => a.bytes.writeUInt32LE(2 * 1024 ** 2 + 1, a.eocd + 12), /directory exceeds bounds/],
+  ['oversized count', a => { a.bytes.writeUInt16LE(4097, a.eocd + 8); a.bytes.writeUInt16LE(4097, a.eocd + 10) }, /directory exceeds bounds/],
   ['bad central boundary', a => a.bytes.writeUInt32LE(a.directory - 1, a.eocd + 16), /boundary/],
   ['overlapping local offsets', a => a.bytes.writeUInt32LE(0, a.records[1].central + 42), /overlap|gaps/]
 ]) {
@@ -236,16 +236,16 @@ test('rejects filesystem symlink instead of regular ZIP input', async t => {
 })
 for (const [label, entries, pattern] of [
   ['empty expected list', [], /Expected ZIP entries/],
-  ['too many expected entries', Array(20001).fill(expected[0]), /Expected ZIP entries/],
+  ['too many expected entries', Array(4097).fill(expected[0]), /Expected ZIP entries/],
   ['duplicate expected paths', [expected[0], expected[0]], /Duplicate expected/],
   ['unsafe expected path', [{ ...expected[0], path: 'Contents/../escape' }], /Invalid expected/],
   ['invalid expected hash', [{ ...expected[0], sha256: 'not-a-hash' }], /SHA256/],
-  ['invalid expected kind', [{ ...expected[0], kind: 'asar' }], /kind/],
+  ['invalid expected kind', [{ ...expected[0], kind: 'device' }], /kind/],
   ['invalid expected size', [{ ...expected[0], bytes: NaN }], /bounds/],
   ['negative expected size', [{ ...expected[0], bytes: -1 }], /bounds/],
   ['oversized expected member', [{ ...expected[0], bytes: 512 * 1024 ** 2 + 1 }], /bounds/],
   ['oversized expected symlink', [{ ...expected[1], bytes: 1025 }], /bounds/],
-  ['oversized expected aggregate', ['a', 'b', 'c'].map(name => ({ ...expected[0], path: `Contents/${name}`, bytes: 512 * 1024 ** 2 })), /aggregate exceeds bounds/],
+  ['oversized expected aggregate', ['a', 'b', 'c', 'd', 'e'].map(name => ({ ...expected[0], path: `Contents/${name}`, bytes: 512 * 1024 ** 2 })), /aggregate exceeds bounds/],
   ['expected ancestor collision', [expected[0], { ...expected[1], path: 'Contents/MacOS' }], /also an ancestor/]
 ]) {
   test(`rejects ${label}`, async t => rejectFixture(t, zip(), pattern, entries))

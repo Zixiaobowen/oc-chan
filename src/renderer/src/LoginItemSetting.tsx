@@ -3,6 +3,7 @@ import { summarizeDiagnostic } from '../../shared/diagnostics'
 import { useI18n } from './i18n'
 import { useSettings } from './settings'
 import { SettingsDiagnosticDetails } from './SettingsSaveError'
+import { isDesktopDocumentVisible } from './desktop-visibility'
 
 type Failure = { details: string; rollbackFailed: boolean; intent?: boolean }
 
@@ -18,7 +19,7 @@ export default function LoginItemSetting() {
   useEffect(() => { setState(loginItem) }, [loginItem])
   useEffect(() => {
     alive.current = true
-    const refresh = () => { if (!document.hidden) void request(undefined, false) }
+    const refresh = () => { if (isDesktopDocumentVisible()) void request(undefined, false) }
     window.addEventListener('focus', refresh)
     document.addEventListener('visibilitychange', refresh)
     refresh()

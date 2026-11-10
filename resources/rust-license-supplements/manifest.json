@@ -1,0 +1,676 @@
+{
+  "schema": 1,
+  "reviewedAt": "2026-11-10",
+  "packages": [
+    {
+      "name": "alloc-stdlib",
+      "version": "0.3.0",
+      "checksum": "0b5c1865780388bfa186411ab5f247819487fc4864c6e9c3106611fa347586e1",
+      "license": "BSD-3-Clause",
+      "repository": "https://github.com/dropbox/rust-alloc-no-stdlib",
+      "commit": "0a81fd6928ea3b33c8cd484aa4575d50ffb98012",
+      "pathInVcs": "alloc-stdlib",
+      "sourceArchive": "https://crates.io/api/v1/crates/alloc-stdlib/0.3.0/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "bd73bb44d77b96ac83b93eed2e47d8c8cac86dc2df39602b67e783675ba01229"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "2bfc044805e0e75273a7e4d06c9d72f4e029a6cb926e4645c382bde160ecfd95"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/alloc-0a81fd6928ea3b33c8cd484aa4575d50ffb98012-LICENSE.txt",
+          "url": "https://raw.githubusercontent.com/dropbox/rust-alloc-no-stdlib/0a81fd6928ea3b33c8cd484aa4575d50ffb98012/LICENSE",
+          "sha256": "c0c56f26d9c051cac4d200c34c84e7ae9aaa853e01a982a1df08b09931e518ae",
+          "bytes": 1483,
+          "name": "LICENSE-BSD-3-Clause.txt",
+          "kind": "upstream-license"
+        }
+      ],
+      "reason": "The published crate subdirectory omits the repository root LICENSE; the exact published VCS commit contains the complete Dropbox BSD notice."
+    },
+    {
+      "name": "block2",
+      "version": "0.6.2",
+      "checksum": "cdeb9d870516001442e364c5220d3574d2da8dc765554b4a617230d33fa58ef5",
+      "license": "MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "commit": "b4167b582b2f75f9a1be75495c41b765344fd03c",
+      "pathInVcs": "crates/block2",
+      "sourceArchive": "https://crates.io/api/v1/crates/block2/0.6.2/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "e325c51f01145af3e11f2ee5ce7c47f10697d936c1d90b9ee81a0cf4f700f6d7"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "5b87885cad87999d141e83cc8af4b073192f584b2b92cea77e2d87636621a264"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/objc2-b4167b582b2f75f9a1be75495c41b765344fd03c-NOTICE.txt",
+          "url": "https://raw.githubusercontent.com/madsmtm/objc2/b4167b582b2f75f9a1be75495c41b765344fd03c/LICENSE.md",
+          "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+          "bytes": 1339,
+          "name": "NOTICE-upstream.txt",
+          "kind": "upstream-notice"
+        },
+        {
+          "path": "standard/MIT.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+          "bytes": 1078,
+          "name": "LICENSE-MIT.txt",
+          "kind": "linked-standard-license"
+        }
+      ],
+      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
+    },
+    {
+      "name": "dispatch2",
+      "version": "0.3.1",
+      "checksum": "1e0e367e4e7da84520dedcac1901e4da967309406d1e51017ae1abfb97adbd38",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "commit": "8852b424193ca41602281b3d7540d7c8ed51e49a",
+      "pathInVcs": "crates/dispatch2",
+      "sourceArchive": "https://crates.io/api/v1/crates/dispatch2/0.3.1/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "f246cf8997c346fdcabb8925ad5be967f397fd8b92630ef7bcc9bdce5d33f775"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "26f5e6d699ba3ce13b8eea253ad7a7f7feb9345e9da3c01bb9b9bd911a6a7dba"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/objc2-8852b424193ca41602281b3d7540d7c8ed51e49a-NOTICE.txt",
+          "url": "https://raw.githubusercontent.com/madsmtm/objc2/8852b424193ca41602281b3d7540d7c8ed51e49a/LICENSE.md",
+          "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+          "bytes": 1339,
+          "name": "NOTICE-upstream.txt",
+          "kind": "upstream-notice"
+        },
+        {
+          "path": "standard/Zlib.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Zlib.txt",
+          "sha256": "bfb1112d49db5b1daecdfef24bd7e2f3ea0bafb33aa67aa0ab51e2bf8407c03d",
+          "bytes": 838,
+          "name": "LICENSE-Zlib.txt",
+          "kind": "linked-standard-license"
+        },
+        {
+          "path": "standard/Apache-2.0.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Apache-2.0.txt",
+          "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff",
+          "bytes": 10280,
+          "name": "LICENSE-Apache-2.0.txt",
+          "kind": "linked-standard-license"
+        },
+        {
+          "path": "standard/MIT.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+          "bytes": 1078,
+          "name": "LICENSE-MIT.txt",
+          "kind": "linked-standard-license"
+        }
+      ],
+      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
+    },
+    {
+      "name": "objc2-app-kit",
+      "version": "0.3.2",
+      "checksum": "d49e936b501e5c5bf01fda3a9452ff86dc3ea98ad5f283e1455153142d97518c",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "commit": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+      "pathInVcs": "framework-crates/objc2-app-kit",
+      "sourceArchive": "https://crates.io/api/v1/crates/objc2-app-kit/0.3.2/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "11a761a52774ed9738fb854ba3eecb48fa360b6ce43dddc00c338346853717b5"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "07762c2a438c287ac124300928c9da0f96cefc1932ff8cadac13716fd1e195eb"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/objc2-7b1abfd750a2cacaea71d6a56ecfb83cb7de560b-NOTICE.txt",
+          "url": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+          "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+          "bytes": 1339,
+          "name": "NOTICE-upstream.txt",
+          "kind": "upstream-notice"
+        },
+        {
+          "path": "standard/Zlib.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Zlib.txt",
+          "sha256": "bfb1112d49db5b1daecdfef24bd7e2f3ea0bafb33aa67aa0ab51e2bf8407c03d",
+          "bytes": 838,
+          "name": "LICENSE-Zlib.txt",
+          "kind": "linked-standard-license"
+        },
+        {
+          "path": "standard/Apache-2.0.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Apache-2.0.txt",
+          "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff",
+          "bytes": 10280,
+          "name": "LICENSE-Apache-2.0.txt",
+          "kind": "linked-standard-license"
+        },
+        {
+          "path": "standard/MIT.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+          "bytes": 1078,
+          "name": "LICENSE-MIT.txt",
+          "kind": "linked-standard-license"
+        }
+      ],
+      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
+    },
+    {
+      "name": "objc2-core-foundation",
+      "version": "0.3.2",
+      "checksum": "2a180dd8642fa45cdb7dd721cd4c11b1cadd4929ce112ebd8b9f5803cc79d536",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "commit": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+      "pathInVcs": "framework-crates/objc2-core-foundation",
+      "sourceArchive": "https://crates.io/api/v1/crates/objc2-core-foundation/0.3.2/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "c0f54260fa1396923f2db4edf1e2d54e8ab09dea214af4b8ce37aaefa7185e60"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "1c1a87985a2bd25015f5e2413f4041379bea0172b2fce88dae3e6482b50aab26"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/objc2-7b1abfd750a2cacaea71d6a56ecfb83cb7de560b-NOTICE.txt",
+          "url": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+          "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+          "bytes": 1339,
+          "name": "NOTICE-upstream.txt",
+          "kind": "upstream-notice"
+        },
+        {
+          "path": "standard/Zlib.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Zlib.txt",
+          "sha256": "bfb1112d49db5b1daecdfef24bd7e2f3ea0bafb33aa67aa0ab51e2bf8407c03d",
+          "bytes": 838,
+          "name": "LICENSE-Zlib.txt",
+          "kind": "linked-standard-license"
+        },
+        {
+          "path": "standard/Apache-2.0.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Apache-2.0.txt",
+          "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff",
+          "bytes": 10280,
+          "name": "LICENSE-Apache-2.0.txt",
+          "kind": "linked-standard-license"
+        },
+        {
+          "path": "standard/MIT.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+          "bytes": 1078,
+          "name": "LICENSE-MIT.txt",
+          "kind": "linked-standard-license"
+        }
+      ],
+      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
+    },
+    {
+      "name": "objc2-core-graphics",
+      "version": "0.3.2",
+      "checksum": "e022c9d066895efa1345f8e33e584b9f958da2fd4cd116792e15e07e4720a807",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "commit": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+      "pathInVcs": "framework-crates/objc2-core-graphics",
+      "sourceArchive": "https://crates.io/api/v1/crates/objc2-core-graphics/0.3.2/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "9756d343dc626faf07cdef1cdef29a2b3efed0f6a2fc44ae35fd828e2f482dc1"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "264ea4e6453d508410c33c7e5c05ef71f067cac56efc06603862b36d1fe5dfc3"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/objc2-7b1abfd750a2cacaea71d6a56ecfb83cb7de560b-NOTICE.txt",
+          "url": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+          "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+          "bytes": 1339,
+          "name": "NOTICE-upstream.txt",
+          "kind": "upstream-notice"
+        },
+        {
+          "path": "standard/Zlib.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Zlib.txt",
+          "sha256": "bfb1112d49db5b1daecdfef24bd7e2f3ea0bafb33aa67aa0ab51e2bf8407c03d",
+          "bytes": 838,
+          "name": "LICENSE-Zlib.txt",
+          "kind": "linked-standard-license"
+        },
+        {
+          "path": "standard/Apache-2.0.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Apache-2.0.txt",
+          "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff",
+          "bytes": 10280,
+          "name": "LICENSE-Apache-2.0.txt",
+          "kind": "linked-standard-license"
+        },
+        {
+          "path": "standard/MIT.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+          "bytes": 1078,
+          "name": "LICENSE-MIT.txt",
+          "kind": "linked-standard-license"
+        }
+      ],
+      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
+    },
+    {
+      "name": "objc2-encode",
+      "version": "4.1.0",
+      "checksum": "ef25abbcd74fb2609453eb695bd2f860d389e457f67dc17cafc8b8cbc89d0c33",
+      "license": "MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "commit": "8d214f5477365ffcbcbb7de058c86ed9a518efb7",
+      "pathInVcs": "crates/objc2-encode",
+      "sourceArchive": "https://crates.io/api/v1/crates/objc2-encode/4.1.0/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "cf9a8cc812710344d7fe618a5e615530baeeceae5c2826b9d5bb557dc419f159"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "b23c761215887d90ac44e18b18c8b386f93139c65a4a14f110e22405830cb3f1"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/objc2-8d214f5477365ffcbcbb7de058c86ed9a518efb7-NOTICE.txt",
+          "url": "https://raw.githubusercontent.com/madsmtm/objc2/8d214f5477365ffcbcbb7de058c86ed9a518efb7/LICENSE.md",
+          "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+          "bytes": 1339,
+          "name": "NOTICE-upstream.txt",
+          "kind": "upstream-notice"
+        },
+        {
+          "path": "standard/MIT.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+          "bytes": 1078,
+          "name": "LICENSE-MIT.txt",
+          "kind": "linked-standard-license"
+        }
+      ],
+      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
+    },
+    {
+      "name": "objc2-exception-helper",
+      "version": "0.1.1",
+      "checksum": "c7a1c5fbb72d7735b076bb47b578523aedc40f3c439bea6dfd595c089d79d98a",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "commit": "8d214f5477365ffcbcbb7de058c86ed9a518efb7",
+      "pathInVcs": "crates/objc2-exception-helper",
+      "sourceArchive": "https://crates.io/api/v1/crates/objc2-exception-helper/0.1.1/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "11418770c4b19efe4ff9dcbc7a2aebfda1fb1f0eb4291e3225b20aed5c38a515"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "c7e239421c2f7dc6ec239f8d464ca656be3d325c801c780a341dfa99c79a0949"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/objc2-8d214f5477365ffcbcbb7de058c86ed9a518efb7-NOTICE.txt",
+          "url": "https://raw.githubusercontent.com/madsmtm/objc2/8d214f5477365ffcbcbb7de058c86ed9a518efb7/LICENSE.md",
+          "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+          "bytes": 1339,
+          "name": "NOTICE-upstream.txt",
+          "kind": "upstream-notice"
+        },
+        {
+          "path": "standard/Zlib.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Zlib.txt",
+          "sha256": "bfb1112d49db5b1daecdfef24bd7e2f3ea0bafb33aa67aa0ab51e2bf8407c03d",
+          "bytes": 838,
+          "name": "LICENSE-Zlib.txt",
+          "kind": "linked-standard-license"
+        },
+        {
+          "path": "standard/Apache-2.0.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Apache-2.0.txt",
+          "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff",
+          "bytes": 10280,
+          "name": "LICENSE-Apache-2.0.txt",
+          "kind": "linked-standard-license"
+        },
+        {
+          "path": "standard/MIT.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+          "bytes": 1078,
+          "name": "LICENSE-MIT.txt",
+          "kind": "linked-standard-license"
+        }
+      ],
+      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
+    },
+    {
+      "name": "objc2-foundation",
+      "version": "0.3.2",
+      "checksum": "e3e0adef53c21f888deb4fa59fc59f7eb17404926ee8a6f59f5df0fd7f9f3272",
+      "license": "MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "commit": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+      "pathInVcs": "framework-crates/objc2-foundation",
+      "sourceArchive": "https://crates.io/api/v1/crates/objc2-foundation/0.3.2/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "eabbe24e325c7b474c6f5de2e955f4f942ecd385608e4b6609b89a1f68ef39cc"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "de34f3c84d7cb1cafcedb4e83b7efdd64047872566827477b954f8a853536bb1"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/objc2-7b1abfd750a2cacaea71d6a56ecfb83cb7de560b-NOTICE.txt",
+          "url": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+          "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+          "bytes": 1339,
+          "name": "NOTICE-upstream.txt",
+          "kind": "upstream-notice"
+        },
+        {
+          "path": "standard/MIT.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+          "bytes": 1078,
+          "name": "LICENSE-MIT.txt",
+          "kind": "linked-standard-license"
+        }
+      ],
+      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
+    },
+    {
+      "name": "objc2-io-surface",
+      "version": "0.3.2",
+      "checksum": "180788110936d59bab6bd83b6060ffdfffb3b922ba1396b312ae795e1de9d81d",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "commit": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+      "pathInVcs": "framework-crates/objc2-io-surface",
+      "sourceArchive": "https://crates.io/api/v1/crates/objc2-io-surface/0.3.2/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "b42e1ba685611320fbd2f04586d2c1bda70807f93d127d241c0c5c716b76ec40"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "a68dbb39ef7cfef6062e3d2e49c59539c7a34d70d13c5bdf4a443d2475280011"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/objc2-7b1abfd750a2cacaea71d6a56ecfb83cb7de560b-NOTICE.txt",
+          "url": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+          "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+          "bytes": 1339,
+          "name": "NOTICE-upstream.txt",
+          "kind": "upstream-notice"
+        },
+        {
+          "path": "standard/Zlib.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Zlib.txt",
+          "sha256": "bfb1112d49db5b1daecdfef24bd7e2f3ea0bafb33aa67aa0ab51e2bf8407c03d",
+          "bytes": 838,
+          "name": "LICENSE-Zlib.txt",
+          "kind": "linked-standard-license"
+        },
+        {
+          "path": "standard/Apache-2.0.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Apache-2.0.txt",
+          "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff",
+          "bytes": 10280,
+          "name": "LICENSE-Apache-2.0.txt",
+          "kind": "linked-standard-license"
+        },
+        {
+          "path": "standard/MIT.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+          "bytes": 1078,
+          "name": "LICENSE-MIT.txt",
+          "kind": "linked-standard-license"
+        }
+      ],
+      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
+    },
+    {
+      "name": "objc2-quartz-core",
+      "version": "0.3.2",
+      "checksum": "96c1358452b371bf9f104e21ec536d37a650eb10f7ee379fff67d2e08d537f1f",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "commit": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+      "pathInVcs": "framework-crates/objc2-quartz-core",
+      "sourceArchive": "https://crates.io/api/v1/crates/objc2-quartz-core/0.3.2/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "7af27150fadd5ac0b3e86ec173b4e3e2b0dd42d614de963a0c9f0bf55cc7b4d9"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "d18b21bb115491577880f7f8c491ac10dd8d9947bd27fdc3f6dafcf4cf92b2e9"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/objc2-7b1abfd750a2cacaea71d6a56ecfb83cb7de560b-NOTICE.txt",
+          "url": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+          "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+          "bytes": 1339,
+          "name": "NOTICE-upstream.txt",
+          "kind": "upstream-notice"
+        },
+        {
+          "path": "standard/Zlib.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Zlib.txt",
+          "sha256": "bfb1112d49db5b1daecdfef24bd7e2f3ea0bafb33aa67aa0ab51e2bf8407c03d",
+          "bytes": 838,
+          "name": "LICENSE-Zlib.txt",
+          "kind": "linked-standard-license"
+        },
+        {
+          "path": "standard/Apache-2.0.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Apache-2.0.txt",
+          "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff",
+          "bytes": 10280,
+          "name": "LICENSE-Apache-2.0.txt",
+          "kind": "linked-standard-license"
+        },
+        {
+          "path": "standard/MIT.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+          "bytes": 1078,
+          "name": "LICENSE-MIT.txt",
+          "kind": "linked-standard-license"
+        }
+      ],
+      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
+    },
+    {
+      "name": "objc2-web-kit",
+      "version": "0.3.2",
+      "checksum": "b2e5aaab980c433cf470df9d7af96a7b46a9d892d521a2cbbb2f8a4c16751e7f",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "commit": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+      "pathInVcs": "framework-crates/objc2-web-kit",
+      "sourceArchive": "https://crates.io/api/v1/crates/objc2-web-kit/0.3.2/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "ea592b63600b5ccb95b557ac0b648d922b6da8a5d00992baa1e9e0c634cb3ab3"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "af77e35da92d2c30dde7cd40ff3723ce9f312cddb639a388ae447979af630a30"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/objc2-7b1abfd750a2cacaea71d6a56ecfb83cb7de560b-NOTICE.txt",
+          "url": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+          "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+          "bytes": 1339,
+          "name": "NOTICE-upstream.txt",
+          "kind": "upstream-notice"
+        },
+        {
+          "path": "standard/Zlib.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Zlib.txt",
+          "sha256": "bfb1112d49db5b1daecdfef24bd7e2f3ea0bafb33aa67aa0ab51e2bf8407c03d",
+          "bytes": 838,
+          "name": "LICENSE-Zlib.txt",
+          "kind": "linked-standard-license"
+        },
+        {
+          "path": "standard/Apache-2.0.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Apache-2.0.txt",
+          "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff",
+          "bytes": 10280,
+          "name": "LICENSE-Apache-2.0.txt",
+          "kind": "linked-standard-license"
+        },
+        {
+          "path": "standard/MIT.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+          "bytes": 1078,
+          "name": "LICENSE-MIT.txt",
+          "kind": "linked-standard-license"
+        }
+      ],
+      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
+    },
+    {
+      "name": "objc2",
+      "version": "0.6.5",
+      "checksum": "08849bbd4767dfae9457696856ae1c84fe4e0281bbe4a7abff2d0e06fb7981f8",
+      "license": "MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "commit": "d7d2fa23ceaa5e6096c923b081040e5d81b3b9df",
+      "pathInVcs": "crates/objc2",
+      "sourceArchive": "https://crates.io/api/v1/crates/objc2/0.6.5/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "5556dba493fc18e98ebf82f587011f76df6c8c26532613e4c8f904ee586d7cf0"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "5f7c8e095d3933c477ff1f71021b551cbfe497a62346a1dc8615debd9846e257"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/objc2-d7d2fa23ceaa5e6096c923b081040e5d81b3b9df-NOTICE.txt",
+          "url": "https://raw.githubusercontent.com/madsmtm/objc2/d7d2fa23ceaa5e6096c923b081040e5d81b3b9df/LICENSE.md",
+          "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+          "bytes": 1339,
+          "name": "NOTICE-upstream.txt",
+          "kind": "upstream-notice"
+        },
+        {
+          "path": "standard/MIT.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+          "bytes": 1078,
+          "name": "LICENSE-MIT.txt",
+          "kind": "linked-standard-license"
+        }
+      ],
+      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
+    },
+    {
+      "name": "selectors",
+      "version": "0.38.0",
+      "checksum": "8adfa1c298912827b8a28b223b3b874357397ae706e6190acd9bf28cee99114d",
+      "license": "MPL-2.0",
+      "repository": "https://github.com/servo/stylo",
+      "commit": "572ecba2d1600e7c3d490586692a209faf703baa",
+      "pathInVcs": "selectors",
+      "sourceArchive": "https://crates.io/api/v1/crates/selectors/0.38.0/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "83630f5e117638281303f757127dfffc3f621c8d2ff03f99ff7f7589748bacd8"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "1ddc4845786a1b1ebc7fb2f940878d9b923c4385d7d66841f25c765d1312fe74"
+        },
+        {
+          "path": "lib.rs",
+          "sha256": "d54c6e13e9e952dac17d209171df8657e3cae93beaddace4906150cdec8d02e9"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/selectors-572ecba2d1600e7c3d490586692a209faf703baa-NOTICE.txt",
+          "url": "https://raw.githubusercontent.com/servo/stylo/572ecba2d1600e7c3d490586692a209faf703baa/selectors/lib.rs",
+          "sha256": "766674381e88a468d55e07de3596987391cf0e8beebe51baf4fddf11078785b3",
+          "bytes": 206,
+          "name": "NOTICE-source-header.txt",
+          "kind": "archive-header"
+        },
+        {
+          "path": "standard/MPL-2.0.txt",
+          "url": "https://www.mozilla.org/media/MPL/2.0/index.txt",
+          "sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04",
+          "bytes": 16726,
+          "name": "LICENSE-MPL-2.0.txt",
+          "kind": "linked-standard-license"
+        }
+      ],
+      "reason": "The locked lib.rs header explicitly grants MPL 2.0 and links Mozilla; preserve that notice plus the full official versioned license."
+    }
+  ]
+}

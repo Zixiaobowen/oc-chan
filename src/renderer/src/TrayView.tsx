@@ -10,6 +10,7 @@ import './tray.css'
 import { agentTarget, scheduleTarget, type NavigationTarget } from '../../shared/navigation'
 import { useSystemPlugin } from './marketplace'
 import SystemPluginNotice from './SystemPluginNotice'
+import { isDesktopDocumentVisible } from './desktop-visibility'
 
 const panels = ['overview', 'cpu', 'memory', 'disk', 'network'] as const
 type TrayPanel = typeof panels[number]
@@ -72,7 +73,7 @@ export default function TrayView() {
   const systemReady = systemInstalled === true && (!systemItem?.error || systemItem.enabled)
   const [snapshot, setSnapshot] = useState(empty)
   const [selectedPanels, setSelectedPanels] = useState<TrayPanel[]>([...panels])
-  const [visible, setVisible] = useState(!document.hidden)
+  const [visible, setVisible] = useState(isDesktopDocumentVisible)
   const [error, setError] = useState<string | null>(null)
   const [preferenceError, setPreferenceError] = useState<string | null>(null)
   useEffect(() => {
@@ -85,7 +86,7 @@ export default function TrayView() {
         setSelectedPanels(panels.filter(panel => value.includes(panel)))
       }
     } catch (cause) { setPreferenceError(String(cause)) }
-    const onVisibility = () => setVisible(!document.hidden)
+    const onVisibility = () => setVisible(isDesktopDocumentVisible())
     document.addEventListener('visibilitychange', onVisibility)
     return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [])
@@ -96,12 +97,12 @@ export default function TrayView() {
     let active = true
     const received = new Set<MonitorSection>()
     const unsubscribe = api.subscribe((update: MonitorUpdate) => {
-      if (!active || document.hidden) return
+      if (!active || !isDesktopDocumentVisible()) return
       received.add(update.section)
       setSnapshot(previous => ({ ...previous, [update.section]: update.state }))
     })
     void api.snapshot().then(value => {
-      if (!active || document.hidden) return
+      if (!active || !isDesktopDocumentVisible()) return
       setSnapshot(previous => ({
         agents: received.has('agents') ? previous.agents : value.agents,
         schedules: received.has('schedules') ? previous.schedules : value.schedules,

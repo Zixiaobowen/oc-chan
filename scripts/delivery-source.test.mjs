@@ -11,16 +11,22 @@ import { captureDeliverySource } from './delivery-source.mjs'
 const exec = promisify(execFile)
 const sha256 = value => createHash('sha256').update(value).digest('hex')
 const initialFiles = {
-  'src/main/index.ts': 'export const answer = 42\n',
+  'src/renderer/index.ts': 'export const answer = 42\n',
   'scripts/build.mjs': 'console.log("build")\n',
   'resources/icon.txt': 'icon\n',
-  'plugins/system-monitor/index.ts': 'export const pluginVersion = "1.0.0"\n',
-  'electron.vite.config.ts': 'export default {}\n',
+  'plugins/system-monitor/src/main.rs': 'fn main() {}\n',
+  'vite.config.ts': 'export default {}\n',
+  'Cargo.toml': '[workspace]\n',
+  'Cargo.lock': 'version = 4\n',
+  'rust-toolchain.toml': '[toolchain]\nchannel="1.99.0"\nprofile="minimal"\n',
+  'src-tauri/Cargo.toml': '[package]\nname="host"\n',
+  'crates/oc-core/src/lib.rs': 'pub fn captured() {}\n',
+  'native/helper.swift': 'import Foundation\n',
   'package.json': '{"name":"delivery-fixture","version":"1.2.3"}\n',
   'package-lock.json': '{"name":"delivery-fixture","version":"1.2.3","lockfileVersion":3}\n',
   'tsconfig.json': '{}\n',
-  'docs/package-baseline.json': '{}\n',
-  'docs/dependency-review-policy.json': '{}\n'
+  'docs/dependency-review-policy.json': '{}\n',
+  'docs/package-baseline.json': '{}\n'
 }
 
 async function put(root, relative, content) {
@@ -87,7 +93,7 @@ test('captures actual HEAD, sorted scoped paths, permissions, lengths and conten
 test('dirty modifications and untracked additions change digest without inventing a commit', async t => {
   const root = await fixture(t)
   const before = await captureDeliverySource(root)
-  await put(root, 'src/main/index.ts', 'export const answer = 43\n')
+  await put(root, 'src/renderer/index.ts', 'export const answer = 43\n')
   const modified = await captureDeliverySource(root)
   assert.equal(modified.commit, before.commit)
   assert.equal(modified.workspace.dirty, true)
@@ -129,6 +135,20 @@ test('scopes file contents, includes ignored build inputs, and reports workspace
   assert.ok(ignored.files.some(file => file.path === 'src/ignored.ts'))
 })
 
+test('only declared Cargo output roots with real Cargo markers are excluded', async t => {
+  const root = await fixture(t)
+  await put(root, 'native/Cargo.toml', '[package]\nname="native"\n')
+  const before = await captureDeliverySource(root)
+  await put(root, 'native/target/CACHEDIR.TAG', 'Signature: 8a477f597d28d172789f06886806bc55\n# cargo cache\n')
+  await put(root, 'native/target/.rustc_info.json', '{"rustc_fingerprint":1,"outputs":{}}')
+  await sparse(root, 'native/target/debug/large.rlib', 20 * 1024 * 1024)
+  assert.equal((await captureDeliverySource(root)).digest, before.digest)
+  await put(root, 'src/target/owned-source.rs', 'pub fn real_source() {}\n')
+  assert.ok((await captureDeliverySource(root)).files.some(file => file.path === 'src/target/owned-source.rs'))
+  await put(root, 'native/target/CACHEDIR.TAG', 'not Cargo evidence')
+  await assert.rejects(captureDeliverySource(root), /ownership evidence/)
+})
+
 test('HEAD version tags include annotated tags and prefer the v alias', async t => {
   const root = await fixture(t)
   await git(root, 'tag', 'unrelated-label')
@@ -168,7 +188,7 @@ test('uses only HEAD tags and accepts SemVer prereleases and build metadata', as
 })
 
 test('rejects missing inputs and incorrect required input types', async t => {
-  for (const input of ['src', 'scripts', 'resources', 'plugins', ...Object.keys(initialFiles).filter(name => !/^(src|scripts|resources|plugins)\//.test(name))]) {
+  for (const input of ['src', 'src-tauri', 'crates', 'native', 'scripts', 'resources', 'plugins', ...Object.keys(initialFiles).filter(name => !/^(src|src-tauri|crates|native|scripts|resources|plugins)\//.test(name))]) {
     await t.test(input, async t => {
       const root = await fixture(t)
       await rm(path.join(root, input), { recursive: true })
@@ -218,7 +238,7 @@ test('rejects directory symlinks, external escapes, and a symlink root', async t
 
 test('rejects source hard links', async t => {
   const root = await fixture(t)
-  await link(path.join(root, 'src/main/index.ts'), path.join(root, 'src/alias.ts'))
+  await link(path.join(root, 'src/renderer/index.ts'), path.join(root, 'src/alias.ts'))
   await assert.rejects(captureDeliverySource(root), /hard link/)
 })
 

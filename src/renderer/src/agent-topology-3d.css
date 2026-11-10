@@ -2,10 +2,12 @@
 .topology-mode > span { font-size: calc(12px * var(--font-scale)); color: var(--muted); }
 .topology-3d { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; background: var(--ground); color: var(--ink); -webkit-app-region: no-drag; }
 .topology-3d-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
-.topology-3d-picker { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; max-width: 100%; font-size: calc(12px * var(--font-scale)); }
+.topology-3d-picker { display: flex; flex: 1 1 280px; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; max-width: 100%; font-size: calc(12px * var(--font-scale)); }
 .topology-3d-picker .select-control { flex: 1 1 170px; min-width: 0; width: 210px; max-width: 100%; }
 .topology-3d-picker select { width: 100%; min-width: 0; text-overflow: ellipsis; }
-.topology-3d-hint, .topology-3d-note { color: var(--muted); font-size: calc(11px * var(--font-scale)); line-height: 1.6; }
+.topology-3d-hint, .topology-3d-summary, .topology-3d-note { color: var(--muted); font-size: calc(11px * var(--font-scale)); line-height: 1.6; }
+.topology-3d-hint { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+.topology-3d-summary { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .topology-3d-viewport { flex: 1; position: relative; min-height: clamp(240px, 36vh, 480px); min-width: 0; overflow: hidden; }
 .topology-3d-scene { position: absolute; inset: 0; overflow: hidden; }
 .topology-3d-webgl { display: block; touch-action: none; width: 100%; height: 100%; }
@@ -39,7 +41,7 @@
 .topology-stage:has(.topology-3d) { display: flex; flex-direction: column; container-type: inline-size; }
 @container (max-width: 440px) {
   .topology-3d-hint { width: 100%; }
-  .topology-3d-picker { width: 100%; }
+  .topology-3d-picker { flex-basis: 100%; width: 100%; }
   .topology-3d-picker .select-control { flex: 1; }
 }
 .agent-topology-workspace:has(.topology-3d) { height: auto; min-height: max(480px, calc(100vh - 340px)); }

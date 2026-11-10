@@ -7,10 +7,11 @@ import { crc32 } from 'node:zlib'
 import unzipper from 'unzipper'
 
 const ROOT = 'OC Chan.app/'
-const MAX_ARCHIVE = 1024 ** 3
+const MAX_ARCHIVE = 512 * 1024 ** 2
+const MAX_EXPANDED = 2 * 1024 ** 3
 const MAX_MEMBER = 512 * 1024 ** 2
-const MAX_DIRECTORY = 8 * 1024 ** 2
-const MAX_ENTRIES = 20_000
+const MAX_DIRECTORY = 2 * 1024 ** 2
+const MAX_ENTRIES = 4096
 const WORKER = 'oc-chan-delivery-zip'
 const EMPTY_HASH = createHash('sha256').digest('hex')
 
@@ -19,7 +20,7 @@ function requireThat(condition, message) {
 }
 function safePath(value) {
   return typeof value === 'string' && value.length > 0 && Buffer.byteLength(value) <= 1024 &&
-    !/[\\\x00-\x1f\x7f-\x9f]/u.test(value) && value.split('/').length <= 32 &&
+    !/[\\\x00-\x1f\x7f-\x9f]/u.test(value) && value.split('/').length <= 64 &&
     value.split('/').every(part => part !== '' && part !== '.' && part !== '..')
 }
 function expectedMap(entries) {
@@ -42,7 +43,7 @@ function expectedMap(entries) {
     if (entry.kind === 'directory') directories.add(name)
     total += entry.bytes
     metadata += Buffer.byteLength(name) + 80
-    requireThat(total <= MAX_ARCHIVE && metadata <= MAX_DIRECTORY, 'Expected ZIP aggregate exceeds bounds')
+    requireThat(total <= MAX_EXPANDED && metadata <= MAX_DIRECTORY, 'Expected ZIP aggregate exceeds bounds')
     let ancestor = name.slice(0, name.lastIndexOf('/'))
     while (ancestor) {
       directories.add(ancestor)
@@ -147,7 +148,7 @@ async function preflight(handle, size, expected) {
     }
     if (wanted) requireThat(((header.readUInt32LE(38) >>> 16) & 0o7777) === wanted.mode, `ZIP permissions differ from the application: ${name}`)
     total += uncompressed
-    requireThat(total <= MAX_ARCHIVE, 'ZIP aggregate uncompressed size exceeds bounds')
+    requireThat(total <= MAX_EXPANDED, 'ZIP aggregate uncompressed size exceeds bounds')
     checkExtra(bytes.subarray(offset + 46 + nameLength, offset + 46 + nameLength + extraLength))
     records.push({ name, nameBytes, header, flags, method, compressed, uncompressed, localOffset, crc: header.readUInt32LE(16), sha256: directory ? EMPTY_HASH : wanted.sha256 })
     offset = next
@@ -214,7 +215,7 @@ async function verifyInWorker(filename, entries, initialIdentity) {
         for await (const chunk of stream) {
           seen += chunk.length
           total += chunk.length
-          requireThat(seen <= record.uncompressed && seen <= MAX_MEMBER && total <= MAX_ARCHIVE, 'ZIP streamed payload exceeds bounds')
+          requireThat(seen <= record.uncompressed && seen <= MAX_MEMBER && total <= MAX_EXPANDED, 'ZIP streamed payload exceeds bounds')
           crc = crc32(chunk, crc)
           hash.update(chunk)
         }

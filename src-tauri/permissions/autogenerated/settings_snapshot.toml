@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-settings-snapshot"
+description = "Enables the settings_snapshot command without any pre-configured scope."
+commands.allow = ["settings_snapshot"]
+
+[[permission]]
+identifier = "deny-settings-snapshot"
+description = "Denies the settings_snapshot command without any pre-configured scope."
+commands.deny = ["settings_snapshot"]

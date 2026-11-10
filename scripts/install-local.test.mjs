@@ -4,36 +4,13 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSyn
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import { deliveryCleanupRoot, pushedCommit, replaceBundle } from './install-local.mjs'
+import { deliveryCleanupRoot, installOptions, replaceBundle as replaceTransaction } from './install-local.mjs'
 import { acquireInstallLock, checkInstallSpace, checkInstallTarget, installationJson } from './install-validation.mjs'
 
-const sha = 'a'.repeat(40)
-const other = 'b'.repeat(40)
-const zero = '0'.repeat(40)
-const remote = 'https://github.com/Zixiaobowen/oc-chan.git'
-const ref = (local = sha, target = 'refs/heads/feature') => `refs/heads/feature ${local} ${target} ${zero}\n`
-
-test('GitHub branch pushes select the pushed commit across supported URL forms', () => {
-  for (const url of [remote, 'https://github.com/Zixiaobowen/oc-chan', 'git@github.com:Zixiaobowen/oc-chan.git', 'ssh://git@github.com/Zixiaobowen/oc-chan.git']) {
-    assert.equal(pushedCommit(url, ref()), sha)
-  }
-  assert.equal(pushedCommit(remote, ref() + ref(sha, 'refs/heads/second')), sha)
-})
-
-test('unrelated remotes, tag-only pushes, deletion and empty pushes never install', () => {
-  for (const url of ['https://github.com/example/oc-chan.git', 'https://github.com.evil.test/Zixiaobowen/oc-chan.git', '/tmp/oc-chan.git']) {
-    assert.equal(pushedCommit(url, ref()), null)
-  }
-  for (const input of ['', '\n', ref(sha, 'refs/tags/v1'), `(delete) ${zero} refs/heads/feature ${sha}\n`]) {
-    assert.equal(pushedCommit(remote, input), null)
-  }
-})
-
-test('ambiguous or malformed branch pushes fail before installation', () => {
-  assert.throws(() => pushedCommit(remote, ref() + ref(other, 'refs/heads/second')), /多个分支/)
-  for (const input of ['bad input', ref('not-a-sha'), `${ref().trim()} extra`]) {
-    assert.throws(() => pushedCommit(remote, input), /无效/)
-  }
+test('installation is explicit and rejects the removed pre-push entry', () => {
+  assert.deepEqual(installOptions([]), { mode: 'current' })
+  assert.deepEqual(installOptions(['--check-delivery', '/delivery']), { mode: 'check', directory: '/delivery' })
+  assert.throws(() => installOptions(['--pre-push', 'origin', 'https://github.com/Zixiaobowen/oc-chan.git']), /Usage/)
 })
 
 function fixture(t, installed = true) {
@@ -54,12 +31,14 @@ function fixture(t, installed = true) {
   return { dir, target, staging, staged, settings }
 }
 const noAction = () => {}
+const replaceBundle = (staged, target, callbacks) => replaceTransaction(staged, target, { restart: noAction, validate: noAction, ...callbacks })
 
 test('successful replacement removes obsolete bundle files and keeps user settings', async t => {
   const { target, staging, staged, settings } = fixture(t)
   await replaceBundle(staged, target, { stop: noAction, start: () => assert.equal(readFileSync(path.join(target, 'version'), 'utf8'), 'new') })
   assert.deepEqual(readdirSync(target), ['version'])
-  assert.deepEqual(readdirSync(staging), [])
+  assert.deepEqual(readdirSync(staging), ['replace-journal.json'])
+  assert.equal(JSON.parse(readFileSync(path.join(staging, 'replace-journal.json'), 'utf8')).phase, 'committed')
   assert.equal(readFileSync(settings, 'utf8'), '{"language":"en"}')
 })
 
@@ -71,6 +50,24 @@ test('launch failure restores the entire old bundle and retains failed new bundl
   assert.equal(readFileSync(path.join(staged, 'version'), 'utf8'), 'new')
 })
 
+test('failed readiness restores and restarts the old application', async t => {
+  const { target, staged } = fixture(t); let restarted = false
+  await assert.rejects(replaceBundle(staged, target, {
+    stop: noAction, start: () => { throw new Error('actual readiness failed') },
+    restart: () => { assert.equal(readFileSync(path.join(target, 'version'), 'utf8'), 'old'); restarted = true }
+  }), /旧应用已还原/)
+  assert.equal(restarted, true)
+})
+test('post-drain validation failure keeps the original target and resumes it', async t => {
+  const { target, staged } = fixture(t); let restarted = false, started = false
+  await assert.rejects(replaceBundle(staged, target, {
+    stop: noAction, start: () => { started = true }, restart: () => { restarted = true },
+    validate: () => { throw new Error('candidate changed after drain') }
+  }), /candidate changed/)
+  assert.equal(restarted, true); assert.equal(started, false)
+  assert.equal(readFileSync(path.join(target, 'version'), 'utf8'), 'old')
+  assert.equal(readFileSync(path.join(staged, 'version'), 'utf8'), 'new')
+})
 test('an app that refuses to quit is never removed', async t => {
   const { target, staged } = fixture(t)
   await assert.rejects(replaceBundle(staged, target, { stop: () => { throw new Error('quit refused') }, start: noAction }), /quit refused/)
@@ -110,7 +107,7 @@ test('an occupied backup location is preserved before any stop or replacement', 
   mkdirSync(path.join(staging, 'previous.app'))
   writeFileSync(path.join(staging, 'previous.app/evidence'), 'older failed transaction')
   let stops = 0
-  await assert.rejects(replaceBundle(staged, target, { stop: () => { stops++ }, start: noAction }), /还原位置已存在/)
+  await assert.rejects(replaceBundle(staged, target, { stop: () => { stops++ }, start: noAction }), /还原位置.*已存在/)
   assert.equal(stops, 0)
   assert.equal(readFileSync(path.join(staging, 'previous.app/evidence'), 'utf8'), 'older failed transaction')
   assert.equal(readFileSync(path.join(target, 'version'), 'utf8'), 'old')
@@ -188,7 +185,7 @@ test('delivery cleanup resolves the actual registered worktree containing releas
   const { dir, root, git } = deliveryRepository(t)
   const worktree = path.join(realpathSync(dir), 'delivery worktree')
   git(root, 'worktree', 'add', '-b', 'delivery', worktree)
-  const application = path.join(worktree, 'release/local-delivery/mac-arm64/OC Chan.app')
+  const application = path.join(worktree, 'release/tauri/local-delivery/OC Chan.app')
   mkdirSync(application, { recursive: true })
   assert.equal(deliveryCleanupRoot({ root, application }), worktree)
   assert.equal(existsSync(application), true)
@@ -212,7 +209,7 @@ test('delivery cleanup refuses an unrelated repository release tree', t => {
   const foreign = path.join(dir, 'foreign')
   mkdirSync(foreign)
   git(foreign, 'init', '-b', 'main')
-  const application = path.join(foreign, 'release/mac-arm64/OC Chan.app')
+  const application = path.join(foreign, 'release/tauri/package/OC Chan.app')
   mkdirSync(application, { recursive: true })
   assert.throws(() => deliveryCleanupRoot({ root, application }), /不属于本仓库/)
   assert.equal(existsSync(application), true)

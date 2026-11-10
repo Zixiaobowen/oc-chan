@@ -1,7 +1,8 @@
 {
   "id": "system",
   "version": "1.0.0",
-  "apiVersion": 1,
+  "apiVersion": 2,
+  "target": "aarch64-apple-darwin",
   "name": "系统监控",
   "nameEn": "System Monitor",
   "description": "采集本机 CPU、内存、磁盘、默认网络接口速率与进程排名。插件停用或卸载时取消采集并释放资源。",

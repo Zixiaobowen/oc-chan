@@ -65,27 +65,3 @@ export interface EventPage {
   retention: EventRetention
   coverage: EventCoverage[]
 }
-
-export function parseEventQuery(value: unknown): EventQuery {
-  if (value === undefined) return {}
-  if (!value || typeof value !== 'object' || Array.isArray(value) ||
-      (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null)) throw new Error('事件查询无效 / Invalid event query')
-  const result: EventQuery = {}
-  for (const [key, entry] of Object.entries(value)) {
-    if (key === 'sourceId') {
-      if (typeof entry !== 'string' || !entry || entry.length > 128 || /[\u0000-\u001f\u007f]/.test(entry)) throw new Error('事件来源无效 / Invalid event source')
-      result.sourceId = entry
-    } else if (key === 'type') {
-      if (!EVENT_TYPES.includes(entry as LocalEventType)) throw new Error('事件类型无效 / Invalid event type')
-      result.type = entry as LocalEventType
-    } else if (key === 'from' || key === 'to') {
-      if (typeof entry !== 'string' || entry.length !== 24 || !Number.isFinite(Date.parse(entry)) || new Date(entry).toISOString() !== entry) throw new Error('事件时间无效 / Invalid event time')
-      result[key] = entry
-    } else if (key === 'before' || key === 'upper') {
-      if (!Number.isSafeInteger(entry) || (entry as number) < 0) throw new Error('事件游标无效 / Invalid event cursor')
-      result[key] = entry as number
-    } else throw new Error('未知事件查询字段 / Unknown event query field')
-  }
-  if (result.from && result.to && result.from > result.to) throw new Error('事件时间范围无效 / Invalid event time range')
-  return result
-}

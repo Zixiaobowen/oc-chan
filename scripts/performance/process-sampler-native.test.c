@@ -50,6 +50,24 @@ int main(void) {
     classify();
     check(nodes[1].group == APP && find_known(300)->id.sec == 4,
           "previously admitted identity was lost on reparenting");
+    /* Explicit XPC identities cannot authorize descendants or survive lease
+     * expiry/PID reuse as valid resource observations. */
+    knownCount = 0;
+    associatedCount = 1;
+    associated[0] = (Association){ .id = {getpid(), 1, 0}, .admitted = monotonic_ns() - UINT64_C(3000000000) };
+    outputSize = 0;
+    ObservedCoverage expired = emit_associated();
+    output[outputSize] = 0;
+    check(expired.processes == 1 && expired.rss == 0 && expired.cpu == 0 && expired.fd == 0,
+          "expired XPC lease supplied resources");
+    check(strstr(output, "\"rssBytes\":null") && strstr(output, "\"cpuNs\":null"), "missing XPC values were zero-filled");
+    struct proc_bsdinfo live;
+    check(read_bsd(getpid(), &live), "test process identity unavailable");
+    associated[0].id = identity(&live); associated[0].id.sec++;
+    associated[0].admitted = monotonic_ns(); outputSize = 0;
+    ObservedCoverage reused = emit_associated();
+    check(reused.rss == 0 && reused.cpu == 0 && reused.fd == 0, "reused XPC PID supplied resources");
+    check(!find_known(getpid()), "explicit XPC association polluted ancestry authorization");
     puts("ancestry authorization boundaries passed");
     return EXIT_SUCCESS;
 }

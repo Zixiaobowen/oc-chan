@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-marketplace-check"
+description = "Enables the marketplace_check command without any pre-configured scope."
+commands.allow = ["marketplace_check"]
+
+[[permission]]
+identifier = "deny-marketplace-check"
+description = "Denies the marketplace_check command without any pre-configured scope."
+commands.deny = ["marketplace_check"]

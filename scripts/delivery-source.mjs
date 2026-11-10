@@ -4,12 +4,13 @@ import { constants } from 'node:fs'
 import { lstat, open, opendir, realpath } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
+import { readBounded } from './rust-dependencies.mjs'
 
 const exec = promisify(execFile)
-const directories = ['src', 'scripts', 'resources', 'plugins']
+const directories = ['src', 'src-tauri', 'crates', 'native', 'scripts', 'resources', 'plugins']
 const requiredFiles = [
-  'electron.vite.config.ts', 'package.json', 'package-lock.json', 'tsconfig.json',
-  'docs/package-baseline.json', 'docs/dependency-review-policy.json'
+  'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'vite.config.ts', 'package.json', 'package-lock.json', 'tsconfig.json',
+  'docs/dependency-review-policy.json', 'docs/package-baseline.json'
 ]
 const maxFiles = 1024
 const maxEntries = 4096
@@ -20,6 +21,7 @@ const versionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]
 const statFields = ['dev', 'ino', 'mode', 'nlink', 'size', 'mtimeNs', 'ctimeNs']
 const sha256 = value => createHash('sha256').update(value).digest('hex')
 const comparePath = (a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0
+const cargoOutputs = new Set(['src-tauri/target', 'native/target', 'scripts/probes/wk/target'])
 
 function unchanged(before, after, name) {
   if (statFields.some(field => before[field] !== after[field])) {
@@ -127,6 +129,15 @@ export async function captureDeliverySource(root) {
     const directory = await opendir(path.join(base, relative), { bufferSize: 32 })
     for await (const entry of directory) {
       const child = `${relative}/${entry.name}`
+      if (child === 'src-tauri/gen' && entry.isDirectory()) continue
+      if (cargoOutputs.has(child)) {
+        if (!entry.isDirectory() || entry.isSymbolicLink()) throw new Error(`Cargo output path is not a real directory: ${child}`)
+        const manifest = readBounded(path.join(base, path.dirname(child), 'Cargo.toml'), 64 * 1024).toString('utf8')
+        const marker = readBounded(path.join(base, child, 'CACHEDIR.TAG'), 1024).toString('utf8')
+        const compiler = JSON.parse(readBounded(path.join(base, child, '.rustc_info.json'), 64 * 1024).toString('utf8'))
+        if (!/^\[package\]\s*$/m.test(manifest) || !marker.startsWith('Signature: 8a477f597d28d172789f06886806bc55\n') || !Number.isFinite(compiler.rustc_fingerprint) || !compiler.outputs || typeof compiler.outputs !== 'object') throw new Error(`Cargo output ownership evidence is invalid: ${child}`)
+        continue
+      }
       const stat = await inspect(child)
       if (stat.isDirectory()) await walk(child)
     }
