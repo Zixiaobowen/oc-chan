@@ -72,7 +72,7 @@ npm run typecheck
 npm run test:frontend
 cargo build -p oc-core --bin oc-data-worker --features acceptance
 OC_DATA_WORKER_TEST_EXECUTABLE="$PWD/target/debug/oc-data-worker" cargo test -p oc-core --features acceptance --lib -- --test-threads=1
-cargo test -p oc-chan --features acceptance -- --test-threads=1
+node --input-type=module -e "import { runRustTests } from './scripts/ci-tests.mjs'; process.exitCode = runRustTests(['host'])"
 cargo test -p oc-installer --lib -- --test-threads=1
 node --test scripts/develop.test.mjs
 node --test scripts/performance/*.test.mjs
@@ -80,6 +80,14 @@ npm run test:release
 ```
 
 需要实际worker或签名fixture的显式忽略测试必须单独配置环境并执行，不能把默认忽略当通过。CI选择器根据变更路径映射Rust包和前端/脚本行为测试，未映射代码或测试明确报错。测试选择方案可用 `npm run test:ci -- --plan src/renderer/src/AgentTopology.tsx` 查看。
+
+宿主组在全新 checkout 中也必须先生成真实构建输入：选择器先构建 release 系统 collector，复用原生市场构建器签名打包，再用 Vite 构建前端。目录由本次运行独立创建，经 `OC_CHAN_RESOURCE_DIR` 和 `TAURI_CONFIG` 传给宿主，在成功或失败后回收；任一前置步骤失败即停止，保留原始错误输出。其他 Rust 组不执行这些宿主前置步骤。直接运行 `cargo test -p oc-chan` 需要调用方自行提供已生成的市场 catalog 和前端。
+
+路径映射按模块覆盖原生市场验收夹具、WK 探针以及已删除的 Electron 入口；旧入口仅允许删除状态，映射到当前替代模块，不把未知删除路径转成全量测试。市场夹具、WK 探针和原生迁移入口触发真实 renderer smoke。检查完整 PR 差异时需保留删除状态，并将重命名展开为两侧路径；下列命令只输出计划，不构建或运行测试：
+
+```sh
+node --input-type=module -e "import { execFileSync } from 'node:child_process'; import { changedFiles, selectTests } from './scripts/ci-tests.mjs'; const base = execFileSync('git', ['merge-base', 'origin/main', 'HEAD'], { encoding: 'utf8' }).trim(); const changes = changedFiles(base); console.log(JSON.stringify({ files: changes.files.length, removed: changes.removed.length, plan: selectTests(changes.files, undefined, changes.removed) }, null, 2))"
+```
 
 ## 资源与性能
 
