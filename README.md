@@ -5,6 +5,10 @@
 <h1 align="center">OC Chan</h1>
 
 <p align="center">
+  <strong>简体中文</strong> · <a href="README.en.md">English</a>
+</p>
+
+<p align="center">
   <strong>看清 Mac 上的 Agent、定时任务与系统状态。</strong>
 </p>
 
