@@ -37,3 +37,12 @@
 - 外部审查记录：/Users/zvf003/tmp/merge-pr/oc-chan-rust-20261110/review.md。
 
 恢复提示：先读本文件与外部review.md，核对真实PR/远端main及安装回执，不重复已有适用检查。原工作区有用户改动，勿checkout/reset/stash/clean。集成产物位于独立worktree的release/tauri/merge-20261110。
+
+## 后续执行回执
+
+- 已推送集成提交a490928并创建PR https://github.com/Zixiaobowen/oc-chan/pull/4；Git与GitHub分页文件集合443项完全相同。
+- 提交后重新计算构建输入digest仍为cec56ee7d402968f57e7968a9d117893598370bf7efc24376176f22b3df4aa7a，证明交付包含整合修复而非原df3bbad裸树。
+- 正式安装已成功：PID46999，React commit/IPC/agents/events/schedules均ready，Hermes历史available/25条，system未安装。安装证据位于release/tauri/installations/installation-qjhMso/；otool确认系统WebKit链接，无Electron运行时。交付目录中的来源app已由安装器清理。
+- GitHub第一轮run42750138461在行为测试前失败：build-marketplace-fixtures未映射。已按全部差异补市场夹具/WK探针映射，退役入口按模块映射且未知路径仍失败；修复host组冷checkout缺少catalog/前端产物的前置条件。
+- CI修复本机验证：选择器16项通过，真实PR差异--plan通过；独立临时catalog/前端生成后的真实host组28项通过。只改CI脚本/测试与开发文档，不改变已验收安装包的生产实现。
+- PR尚需新一轮GitHub检查及SHA条件合并，完成后记录最终平台回执。源码worktree、ZIP/DMG和source-snapshot证据保留；嵌套源码快照中的构建产物受现有清理规则保护，未绕过删除。
