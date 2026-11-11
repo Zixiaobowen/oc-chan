@@ -123,3 +123,58 @@ async fn command_timeout_kills_pipe_holding_descendant_after_leader_exit() {
     }).await.expect("descendant must exit and be reaped");
     assert_eq!(io.resources().snapshot().global.current.commands, 0); io.shutdown().await.unwrap();
 }
+
+#[cfg(target_os = "macos")]
+fn wait_for_unreaped_exit(pid: u32) {
+    let mut info = std::mem::MaybeUninit::<libc::siginfo_t>::uninit();
+    assert_eq!(unsafe { libc::waitid(libc::P_PID, pid, info.as_mut_ptr(), libc::WEXITED | libc::WNOWAIT) }, 0,
+        "waitid: {}", std::io::Error::last_os_error());
+}
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn command_cancel_after_exit_accepts_proven_zombie_group_and_reaps() {
+    let root = tempfile::tempdir().unwrap(); let pid_file = root.path().join("pid");
+    let io = BoundedIo::new(ResourceBudget::default()); let cancel = CancellationToken::new();
+    let mut spec = CommandSpec::new("/bin/sh", vec![OsString::from("-c"), OsString::from("printf '%s' $$ > \"$1\"; printf x; exit 0"), OsString::from("io-test"), pid_file.as_os_str().to_owned()], 4096, Duration::from_secs(3));
+    let observed_pid = Arc::new(std::sync::atomic::AtomicU32::new(0));
+    spec.stdout_observer = Some(Arc::new({
+        let cancel = cancel.clone(); let observed_pid = observed_pid.clone();
+        move |_| {
+            let pid = fs::read_to_string(&pid_file).unwrap().parse::<u32>().unwrap();
+            wait_for_unreaped_exit(pid);
+            observed_pid.store(pid, std::sync::atomic::Ordering::Relaxed);
+            assert!(command_group_is_zombies(pid).unwrap());
+            // Reproduce the kernel result before the command's cancellation cleanup.
+            assert_eq!(unsafe { libc::kill(-(pid as i32), libc::SIGKILL) }, -1);
+            assert_eq!(std::io::Error::last_os_error().raw_os_error(), Some(libc::EPERM));
+            cancel.cancel(); Err(Error::cancelled())
+        }
+    }));
+    let error = io.command("events", spec, &cancel).await.unwrap_err();
+    assert_eq!(error.code, "ABORT_ERR", "{error}");
+    let pid = observed_pid.load(std::sync::atomic::Ordering::Relaxed); assert_ne!(pid, 0);
+    let mut status = 0; assert_eq!(unsafe { libc::waitpid(pid as i32, &mut status, libc::WNOHANG) }, -1);
+    assert_eq!(std::io::Error::last_os_error().raw_os_error(), Some(libc::ECHILD));
+    assert_eq!(io.resources().snapshot().global.current.commands, 0);
+    io.shutdown().await.unwrap();
+}
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn command_zombie_leader_does_not_hide_live_group_descendants() {
+    use std::os::unix::process::CommandExt;
+    let root = tempfile::tempdir().unwrap(); let pid_file = root.path().join("descendant");
+    let mut child = std::process::Command::new("/bin/sh").args(["-c", "/bin/sleep 30 & printf '%s' $! > \"$1\"; exit 0", "io-test"])
+        .arg(&pid_file).process_group(0).spawn().unwrap();
+    let pid = child.id(); wait_for_unreaped_exit(pid);
+    let zombie_only = command_group_is_zombies(pid);
+    let cleanup = kill_command_group(pid);
+    child.wait().unwrap();
+    assert!(!zombie_only.unwrap(), "live descendant must prevent accepting EPERM");
+    cleanup.unwrap();
+    let descendant = fs::read_to_string(pid_file).unwrap().parse::<u32>().unwrap();
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while crate::process::ProcessIdentity::read(descendant).is_ok() { tokio::time::sleep(Duration::from_millis(5)).await; }
+    }).await.expect("live descendant must be killed");
+}
