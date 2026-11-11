@@ -41,12 +41,26 @@
 - Git 删除和检查之间仍存在 TOCTOU，无法阻止不合作的外部并发写入；操作前须确认目标会话与任务退出，期间不得启动新工作。
 - lsof 的成功结果只覆盖当前用户可观察的进程；检测到查询失败则拒绝。实际删除只支持 macOS。
 - 交接存在且已推送不自动证明其中引用的原始证据已妥善保存；操作者必须核验目标外副本，不能将全部 ignored 清单机械转换为 discard。
-- 本次提交/推送及真实收尾已获用户授权，执行结果在后续回执中记录；当前 `main-menu-fix` 工作区及其历史安装材料继续保留，不把它误当本任务新建临时目录删除。未授权安装、手动发布、删除分支或清理其他工作树。
+- 本次实现已正常推送 GitHub main，并完成获批临时交付工作树的真实收尾，结果见下文。`main-menu-fix` 工作区及其历史安装材料继续保留；未安装、手动发布、删除分支或清理其他工作树。
 
-后续具体动作：
+本轮执行顺序（均已执行，结果见下方）：
 
 1. 仅提交上述任务文件，将完整提交快进至本次临时交付工作树；推送前运行 closeout 预检，确认未合入内容被拒绝且目录保留。
 2. 从临时工作树正常推送 `HEAD:main` 并回读 GitHub SHA；随后从保留工作树执行 closeout 预检及 apply，核对目录和登记移除、分支保留、receiptPath 可读。
 3. 将实际远端与收尾结果补入本交接并推送文档回执；保留原始主仓、sidebar/rust、main-menu-fix 和所有既有安装材料，不扩大清理范围。
 
-恢复提示：在 `/Users/zvf003/ZStack/oc-chan-main-menu-fix-20261110` 的 `chore/task-closeout-20261111` 继续。实现与三份定向测试已通过；用户已授权本次提交到 GitHub main，并以 `oc-chan-task-closeout-20261111` 验证真实收尾。先读取本文件最后的实际执行记录，不重复已通过且仍适用的检查；只有这份新建交付工作树属于本轮 apply 范围。
+恢复提示：本次收尾实现和真实交付闭环已完成，继续时先读下方回执。保留工作区为 `/Users/zvf003/ZStack/oc-chan-main-menu-fix-20261110`，实现分支 `chore/task-closeout-20261111`；本轮临时交付工作树已移除，不要重新创建它或重跑删除。其他任务目录不属于本轮范围。
+
+## GitHub 交付与真实收尾回执
+
+- 功能提交：`005d49dd03d2a90ad88a91d2131701b407ed7c5f`，`feat: close out delivered task worktrees`，仅包含本任务 12 个文件。
+- 交付期间远端并行新增 `e6a26d880621bf37d300390f27336a32f36b3804` 的侧栏修正；在临时交付分支正常 merge，无冲突，保留双方 README 和开发文档。收尾脚本、测试、GitHub helper、CI 映射、package、规则与本交接内容均未被并行整合改变，因此未重复仍适用的 52 项定向验证。
+- 实际推送：`e6a26d8..dac5580 HEAD -> main`。GitHub API 回读完整 SHA `dac5580e2a7c81863dd16a1a9769319d9dfc0b11`，与临时交付 HEAD 一致；提交链接：https://github.com/Zixiaobowen/oc-chan/commit/dac5580e2a7c81863dd16a1a9769319d9dfc0b11 。全程正常推送，未强推。
+- 真实预检和执行均从保留工作区调用 `npm run --silent closeout:task -- --worktree /Users/zvf003/ZStack/oc-chan-task-closeout-20261111 --handoff docs/codex-handoffs/2026-11-11-task-closeout.md`，最后一次增加 `--apply`。
+- 推送前预检：exit 1，`blockers=[unmerged]`；目标 HEAD 为 `005d49d`，现场远端为 `e6a26d8`，`removed=false`，实际目录保留。
+- 推送后预检：exit 0，目标和远端均为 `dac5580`；交接 blob `6801ed246b1c7f68d07e3df9661f643bdf9a2570`，dirty/ignored/protectedIndex/inUse/blockers 均为空；`stage=checked`、`removed=false`，证明默认报告不删除。
+- 实际 apply：exit 0，`stage=removed`、`removed=true`、`directoryPresent=false`、`registered=false`。未传 discard；此新建交付工作树没有需要另行处置的 ignored 材料。
+- 主代理回读本地持久回执并检查目录确实不存在；分支 `integrate/task-closeout-20261111` 仍指向 `dac5580e2a7c81863dd16a1a9769319d9dfc0b11`。保留工作区、原始主仓和其他任务目录未执行 apply。
+- 持久回执：`/Users/zvf003/ZStack/oc-chan/.git/task-closeouts/09f04ee1-a432-432f-ab74-faac4fc254dd.json`。回执绑定的是执行当时的交接 blob；本节属于随后补交的执行记录。
+- 查询时 GitHub Build macOS run `42953691493` 为 pending：https://github.com/Zixiaobowen/oc-chan/actions/runs/42953691493 。本地定向验证、推送和真实收尾成功不代表云端构建或预览发布已经完成。
+- 中英文 README 已同步新命令并复核；本次补交仅记录实际执行结果，不改变功能或命令，无需再次修改 README。本轮未运行全仓测试、应用构建或安装。
