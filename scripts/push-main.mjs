@@ -97,6 +97,11 @@ function remoteMain(root, allowMissing = false) {
   return remote
 }
 
+export function verifiedGithubMain(root) {
+  validateOrigin(root)
+  return remoteMain(root)
+}
+
 export async function pushMain({ root = ROOT, cleanup = cleanupLocalWorktree, report = console.log } = {}) {
   root = realpathSync(root)
   if (realpathSync(git(root, ['rev-parse', '--show-toplevel']).trim()) !== root) throw new Error('入口必须位于 Git 工作区根目录')

@@ -136,3 +136,39 @@ npm run dist
 `build`执行类型检查及Rust/Tauri release构建；`package`生成目录应用，`dist`生成DMG、ZIP和schema2的`latest.json`。产物、构建摘要及资源清单位于`release/tauri/`，实际路径以`build.json`和对应`distribution.json`为准。构建时生成并验证前端与Rust依赖许可证，包内没有Node/Electron运行时。
 
 本地默认ad-hoc签名，不代表Developer ID、公证或正式安装验收。打包不替换`/Applications/OC Chan.app`；安装、发布和推送的授权与回执分别处理。完整门禁和清理要求见[安装、构建与发布](distribution.md)。
+
+## 任务收尾
+
+并行任务的完成条件包括源码交付、证据保全和临时 worktree 收尾。新建临时目录一律使用唯一命名的任务/集成分支，通过 `HEAD:main` 推送；main/master 只检出在保留工作区。创建时在交接中记录绝对路径、用途及完成后清理约定；已有目录、其他任务、长期工作区和用户要求保留的目录不自动纳入。仅做本地提交或任务未完成时保留目录。
+
+先将实现、验证结果和任务交接提交并推送 GitHub main。交接放在 `docs/codex-handoffs/`，列明本任务目录、实际检查结果、安装/发布的独立状态、原始证据位置和保留方式。必要的脱敏摘要入库；原始日志、截图、安装回执、源码快照、ZIP/DMG 先在目标 worktree 之外保存并核对内容。凭据与个人数据不能为满足收尾门禁而提交。
+
+从同仓一个保留的工作区运行，替换为本任务实际路径：
+
+```sh
+npm run closeout:task -- --worktree /absolute/path/to/oc-chan-task --handoff docs/codex-handoffs/YYYY-MM-DD-topic.md
+```
+
+默认输出 JSON 报告，不删除工作树材料；为核验实时远端会执行 `ls-remote` 和 `fetch`。目标 HEAD 必须在 GitHub main 的祖先链中；交接必须已提交，保留工作区中的版本与远端 main 的常规 blob 一致。工具不以旧 `origin/main` 缓存、相似补丁或文件内容大致相同替代合入证明。
+
+所有暂存、未暂存和未跟踪内容都会阻止删除，包括文档、技能和未入库交接。ignored 清单单独报告，默认也阻止删除。逐项检查其内容后，只有可重建产物、或必要材料已在目标外保存且核验的条目，才能显式传入可重复的 `--discard <精确相对路径>`，例如确认后添加 `--discard node_modules`。参数只匹配报告中的精确条目，不接受通配符或父目录泛匹配；不能将报告全部自动转成 `--discard`。`out/`、`release/` 或 `.dev-instances/` 的名字本身不是可丢弃证明。
+
+`assume-unchanged` 和 `skip-worktree` 可能隐藏本地改动；发现这些索引标记也会拒绝收尾，工具不会自动取消标记或重置文件。报告中的 `dirty` 列出状态与路径，不读取或公开文件正文。
+
+本任务会话及进程退出、预检无阻塞后，对同一目标和已审阅参数加 `--apply`：
+
+```sh
+npm run closeout:task -- --worktree /absolute/path/to/oc-chan-task --handoff docs/codex-handoffs/YYYY-MM-DD-topic.md --apply
+```
+
+执行前重新核验路径身份、HEAD、全部改动、ignored 清单、实时远端及交接，并通过 macOS `lsof` 检查目标中的打开文件和工作目录。主仓、执行者所在树、main/master、锁定或失效登记、外仓、符号链接祖先和在用目录均拒绝；不发送停止信号，不删除分支，不使用 `--force`、`reset`、`stash` 或 `clean` 绕过。
+
+收尾使用普通 `git worktree remove`，随后核对目录不存在且注册记录消失。`--apply` 将本地计划及结果保存在 Git common dir 的私有 `task-closeouts/` 下，报告返回 `receiptPath`，目标移除后仍能读取；原始证据仍位于事先保全的位置，工具不会自动移动或归档它们。阻塞与错误返回非零；最终交付须区分“已推送、收尾完成”和“已推送、收尾阻塞”，记录剩余目录及具体原因。
+
+这些检查不能对不合作的外部并发写入提供原子保证。收尾期间不得在目标中新启动会话或构建；已检测到的远端/进程查询失败（包括权限报错）会保留目录。成功的 `lsof` 查询仅覆盖当前用户可观察的进程，不能独立证明所有会话和进程均已退出，退出确认仍是操作者前置责任。该入口的进程门禁针对 macOS；其他平台不执行删除。
+
+定向回归使用隔离的临时 Git 仓库与本地 bare remote，不访问真实 GitHub、不删除工程工作树：
+
+```sh
+node --test scripts/closeout-task.test.mjs scripts/push-main.test.mjs scripts/ci-tests.test.mjs
+```

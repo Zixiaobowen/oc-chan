@@ -101,7 +101,7 @@ npm run check:package -- --app /absolute/path/to/OC-Chan.app --arch arm64 --outp
 
 Git推送不再通过`pre-push`隐式替换正式应用。安装使用上文明确入口，并有对应授权；不恢复旧自动安装hook或Electron构建路径。
 
-合并到本地main后使用`npm run push:main`。入口核对本仓库origin和当前main，只有GitHub接收提交并现场确认远端main后，才清理本次归属明确的调试应用和开发实例。未合入、包含未提交产品源码、其他任务运行中或归属未知的资源保留并报告。推送成功与清理成功分别记录。
+合并到本地 main 后可使用 `npm run push:main`；集成分支也可按项目提交技能正常推送 `HEAD:main` 并回读远端。`push:main` 在 GitHub 接收提交并确认远端后清理符合条件的调试应用和开发实例，但不移除源码 worktree。推送、应用清理与下述任务收尾分别记录，不能相互代替。
 
 ```sh
 npm run cleanup:local
@@ -110,4 +110,6 @@ npm run cleanup:local -- --apply
 
 第一条只报告；第二条执行受管清理。先复验launcher的出生身份与工作目录，等待它及确认后代退出，再删除本任务临时目录；不跟随符号链接，不凭进程名批量终止。失败保留现场，不把未处理目录称为已清理。
 
-本机永久应用只保留`/Applications/OC Chan.app`。源码worktree、分支、未提交改动、个人数据库、ZIP/DMG和交付证据均保留，删除它们需要独立授权。无头测试只覆盖软件链路，正式安装、Dock、物理托盘、VoiceOver和可见动画仍须独立验收。
+本机永久应用只保留 `/Applications/OC Chan.app`。分支、未提交改动、个人数据库和必要交付证据继续保留。完整任务交付还须执行 [任务收尾](development.md#任务收尾)：先把交接提交到 GitHub main，将原始证据保全到目标外，再从保留工作区用 `npm run closeout:task -- --worktree <任务临时目录> --handoff <已推送交接>` 预检；逐项审阅 ignored 材料并明确可丢弃条目，无阻塞后加 `--apply` 移除本任务临时 worktree。已有目录和其他任务不能自动纳入，任何未提交材料或在用状态都阻止删除。收尾回执保存在 Git common dir 的 `task-closeouts/`，不随目标消失。
+
+无头测试只覆盖软件链路，正式安装、Dock、物理托盘、VoiceOver和可见动画仍须独立验收；任务收尾也不代表这些验收已经完成。

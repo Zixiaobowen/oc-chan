@@ -104,6 +104,8 @@ npm run dev:window
 
 开发实例使用独立配置、Cargo 构建目录和认证 Unix socket，不读取或改写正式应用的个人设置。按 Ctrl+C 退出并排空本实例。Node 仅用于构建和开发工具，生产后台由 Rust 执行。无头调试、定向验收和打包命令见[开发文档](docs/development.md)。
 
+并行任务交付后，还需完成[任务收尾](docs/development.md#任务收尾)：交接进入 GitHub main、必要证据保全到任务目录外，再从保留工作区使用 `npm run closeout:task` 检查并移除本任务临时 worktree。未提交材料、未经审阅的忽略内容或在用目录会阻止删除；默认仅报告，`--apply` 才执行，分支保留。
+
 ## 文档
 
 - [功能、操作与数据边界](docs/features.md)：拓扑、任务历史、本地事件、通知和设置。

@@ -104,6 +104,8 @@ npm run dev:window
 
 Development instances use isolated settings, Cargo build directories, and authenticated Unix sockets. They do not read or overwrite the installed app's personal settings. Press Ctrl+C to exit and drain the instance. Node is used only for build and development tools; the production backend runs in Rust. See the [development guide (Chinese)](docs/development.md) for headless debugging, targeted validation, and packaging commands.
 
+After delivering a parallel task, complete [task closeout (Chinese)](docs/development.md#任务收尾): push the handoff to GitHub main, preserve required evidence outside the task directory, then run `npm run closeout:task` from a retained worktree to inspect and remove that task's temporary worktree. Uncommitted files, unreviewed ignored content, or active use block removal. The default only reports; `--apply` performs removal and retains branches.
+
 ## Documentation
 
 The following documents are currently in Chinese:

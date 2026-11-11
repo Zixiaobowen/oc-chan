@@ -26,6 +26,7 @@
     "build:plugins": "cargo build --release -p oc-system-monitor && node scripts/build-plugin-market-rust.mjs --collector target/release/collector --manifest plugins/system-monitor/manifest.json --out out/plugin-market",
     "cleanup:local": "node scripts/local-app-lifecycle.mjs",
     "push:main": "node scripts/push-main.mjs",
+    "closeout:task": "node scripts/closeout-task.mjs",
     "test:install": "cargo test -p oc-installer --lib -- --test-threads=1",
     "test:frontend": "tsx --test src/renderer/src/*.test.ts src/shared/*.test.ts"
   },
