@@ -52,3 +52,15 @@ env PATH="/Users/zvf003/.cargo/bin:$PATH" npm run smoke:renderer -- --scenario s
 功能提交 `e6a26d880621bf37d300390f27336a32f36b3804` 已推送GitHub main并回读确认；`npm run install:local` 成功，安装器报告真实React/IPC/采集/历史就绪，PID82717。正式应用窗口1693可见截图 `/tmp/oc-chan-installed-alignment-visible-20261111.png` 已查看：侧栏图标与原生红绿灯同一水平线，一级导航仅一个「插件」。首次隐藏窗口截图只有空白背景，不作为验收证据。
 
 可见窗口同时发现系统监控插件 `OC_PLUGIN_TRUST: Installed bundled package id is not trusted by this build`，采集处于停用。安装回执不等于该插件健康；当前任务未变更插件信任/重新安装插件，后续应单独定位，不能宣称所有插件正常。原工作区和个人数据保留。此补记只改handoff，已核对中英文README无需再改。
+
+## 后续品牌上移与侧栏功能化（待主代理验收）
+
+用户要求把 OC Chan 上移到标题栏，移除侧栏「OC Chan / 本机运行观察」和左下角「此 Mac / 本地采集 · 只读访问」。本次采用紧凑纯字标，固定 left120/top2/height28/font12，与按钮中心同为16px；不保留35px图标或副标题。展开/收起位置一致，收起顶栏从200px开始避让字标，沿用横向滚动与窄窗图标入口，未新增顶栏行。紧凑导航模式字标放left84，导航按钮仍在标题栏下。
+
+侧栏上内边距从66px降到40px，紧贴拖动区域下沿开始功能导航；删除旧brand专用样式和短窗覆盖，下内边距12px使设置入口贴近窗口底部。删除唯一Device插槽调用、RendererSlot联合成员、RendererContribution属性、系统插件Device组件/注册及专用CSS；系统插件Footer、托盘主机信息、来源和设置入口保持原行为。
+
+已有sidebar smoke扩展真实几何断言：三档字号×展开/收起，品牌中心对原生close中心误差≤0.5pt、品牌边界稳定、品牌与按钮/首导航互不覆盖、展开首导航在drag区域下方且设置靠近底部；880px大字号英文下逐个滚动并真实点击顶栏入口，检查命中与视口边界；640px下检查菜单按钮及弹出菜单首项/设置可达。没有加入源码或文案快照测试。
+
+本次子代理仅完成修改，未运行build/test/lint/formatter、安装、提交。以上新断言尚未执行，前文通过回执属于修改前版本。主代理最窄验证为 `npm run typecheck` 和 `npm run smoke:renderer -- --scenario sidebar --out <新目录>`；原生窗口可见截图再确认字标/红绿灯对齐。本次已读取impeccable context/layout/craft-floor，按明确委派直接推导窄范围布局，未新增视觉世界或子代理；检测器按禁止子代理验证的任务边界留给主代理。
+
+主代理验证：类型检查通过；`/tmp/oc-chan-titlebar-brand-diagnosed-20261111/result.json` 为 `complete:true, errors:[]`，已查看重启截图，品牌位于顶部，菜单从40px开始，设备块移除且设置贴底。首次 `/tmp/oc-chan-titlebar-brand-20261111` 的六组合对齐通过，但后续导航click缺目标且失败诊断被command group EPERM覆盖；补充精确click表达式及保留原错误的诊断后同场景通过。首次缺目标的具体原因未确认，不将诊断补强称为产品修复。仅本次布局验收通过，不将采集来源错误当作已修复。

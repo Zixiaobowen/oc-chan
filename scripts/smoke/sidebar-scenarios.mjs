@@ -5,9 +5,25 @@ const shell = 'document.querySelector(".app-shell")'
 const toggle = 'document.querySelector(".sidebar-toggle")'
 const handle = 'document.querySelector(".sidebar-resize-handle")'
 
+async function assertReachable(ui, selector) {
+  const geometry = await ui.evaluate(`(() => {
+    const element = ${selector};
+    element.scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'});
+    const r = element.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    return { width:r.width, height:r.height, left:r.left, right:r.right, top:r.top, bottom:r.bottom,
+      viewportWidth:innerWidth, viewportHeight:innerHeight, reachable:element === hit || element.contains(hit) };
+  })()`)
+  assert.ok(geometry.width > 0 && geometry.height > 0 && geometry.left >= 0 && geometry.top >= 0
+    && geometry.right <= geometry.viewportWidth && geometry.bottom <= geometry.viewportHeight && geometry.reachable,
+  `Navigation must be visible and hit-testable: ${selector}, ${JSON.stringify(geometry)}`)
+  return geometry
+}
+
 export async function exerciseSidebar({ ui, renderer }) {
   await ui.stage('sidebar-native-traffic-light-alignment', async () => {
     await renderer.resize(1280, 860)
+    assert.equal((await ui.evaluate('window.desktopSettings.update({sidebarWidth:188})')).ok, true)
     const measurements = []
     for (const textSize of ['small', 'default', 'large']) {
       for (const sidebarCollapsed of [false, true]) {
@@ -18,7 +34,26 @@ export async function exerciseSidebar({ ui, renderer }) {
         const geometry = (await renderer.inspect()).geometry
         const delta = geometry.obscuredContentInsets.top + center * geometry.pageZoom - geometry.windowButtons.close.centerYFromWebview
         assert.ok(Number.isFinite(delta) && Math.abs(delta) <= 0.5, `Sidebar toggle must align with native traffic lights: ${textSize}, collapsed=${sidebarCollapsed}, delta=${delta}`)
-        measurements.push({ textSize, sidebarCollapsed, delta })
+        const brand = await ui.evaluate(`(() => {
+          const r = document.querySelector('.titlebar-brand').getBoundingClientRect();
+          const button = ${toggle}.getBoundingClientRect();
+          const entry = document.querySelector(${JSON.stringify(sidebarCollapsed ? '.topbar-tabs button' : '.sidebar nav button')});
+          const navigation = entry.getBoundingClientRect();
+          const drag = document.querySelector('.window-drag').getBoundingClientRect();
+          return {x:r.x,y:r.y,width:r.width,height:r.height,center:r.y+r.height/2,
+            afterToggle:r.left >= button.right + 4, navigationClear:${sidebarCollapsed}
+              ? navigation.left >= r.right + 8 : navigation.top >= drag.bottom && navigation.top <= drag.bottom + 8};
+        })()`)
+        const brandDelta = geometry.obscuredContentInsets.top + brand.center * geometry.pageZoom - geometry.windowButtons.close.centerYFromWebview
+        assert.ok(Math.abs(brandDelta) <= 0.5 && brand.afterToggle && brand.navigationClear, `Brand alignment and navigation clearance: ${JSON.stringify(brand)}`)
+        const previous = measurements.at(-1)
+        if (sidebarCollapsed) assert.deepEqual({x:brand.x,y:brand.y,width:brand.width,height:brand.height}, previous.brandBounds)
+        if (!sidebarCollapsed) {
+          await assertReachable(ui, 'document.querySelector(".sidebar nav button")')
+          const settings = await assertReachable(ui, 'document.querySelector(".sidebar-bottom button:last-child")')
+          assert.ok(settings.viewportHeight - settings.bottom <= 16, 'Settings stays at the bottom without a device block below it')
+        }
+        measurements.push({ textSize, sidebarCollapsed, delta, brandDelta, brandBounds:{x:brand.x,y:brand.y,width:brand.width,height:brand.height} })
       }
     }
     assert.equal((await ui.evaluate('window.desktopSettings.update({textSize:"default",sidebarCollapsed:false})')).ok, true)
@@ -92,11 +127,26 @@ export async function exerciseSidebar({ ui, renderer }) {
     assert.equal((await ui.evaluate('window.desktopSettings.update({textSize:"large",language:"en"})')).ok, true)
     await ui.dom('large English topbar ready', 'document.documentElement.lang === "en"')
     assert.equal(await ui.evaluate('Array.from(document.querySelectorAll(".topbar-tabs button,.topbar-icon")).every(b=>!!b.getAttribute("aria-label"))'), true)
+    const tabCount = await ui.evaluate('document.querySelectorAll(".topbar-tabs button").length')
+    for (let index = 0; index < tabCount; index++) {
+      const selector = `document.querySelectorAll('.topbar-tabs button')[${index}]`
+      const rect = await assertReachable(ui, selector)
+      const brandRight = await ui.evaluate('document.querySelector(".titlebar-brand").getBoundingClientRect().right')
+      assert.ok(rect.left >= brandRight + 8, 'Narrow topbar navigation clears the titlebar brand')
+      await ui.click(selector)
+      await ui.dom('narrow topbar destination opens', `${selector}.getAttribute('aria-current') === 'page'`)
+    }
+    for (let index = 0; index < 2; index++) await assertReachable(ui, `document.querySelectorAll('.topbar-icon')[${index}]`)
     // Resize actual WK content: CSS zoom does not change media queries.
     await renderer.resize(640, 640)
     await ui.dom('compact navigation reachable', `${shell}.dataset.compactNavigation === 'true'`)
+    const compactToggle = await assertReachable(ui, 'document.querySelector(".navigation-toggle")')
+    const brandBottom = await ui.evaluate('document.querySelector(".titlebar-brand").getBoundingClientRect().bottom')
+    assert.ok(compactToggle.top >= brandBottom, 'Compact navigation remains below the titlebar brand')
     await ui.click('document.querySelector(".navigation-toggle")')
     await ui.dom('compact menu opens', 'document.querySelector("#main-navigation").matches(":popover-open")')
+    await assertReachable(ui, 'document.querySelector(".sidebar nav button")')
+    await assertReachable(ui, 'document.querySelector(".sidebar-bottom button:last-child")')
     await ui.navigate('设置', 'Settings')
     await renderer.resize(1280, 860)
     await ui.dom('saved collapsed preference survives compact mode', `${shell}.dataset.compactNavigation === 'false' && ${shell}.dataset.sidebarCollapsed === 'true'`)

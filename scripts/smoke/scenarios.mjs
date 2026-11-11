@@ -38,7 +38,7 @@ function controls({ main, renderer, record, capture }) {
     await renderer.key(key, code, modifiers)
   }
   async function click(expression) {
-    await dom('click target exists and is enabled', `(() => {
+    await dom(`click target exists and is enabled: ${expression}`, `(() => {
       const element = ${expression};
       return !!element && !element.disabled && element.getAttribute('aria-disabled') !== 'true' && !element.closest('[inert]');
     })()`)
@@ -80,9 +80,28 @@ function controls({ main, renderer, record, capture }) {
       return details
     } catch (error) {
       record(name, { status: 'failed', error: failureEvidence(error) })
+      const diagnosticErrors = []
+      try {
+        record('renderer-failure-navigation', await evaluate(`(() => ({
+          sidebarCollapsed: document.querySelector('.app-shell')?.dataset.sidebarCollapsed,
+          compactNavigation: document.querySelector('.app-shell')?.dataset.compactNavigation,
+          controls: Array.from(document.querySelectorAll('.sidebar-toggle,.navigation-toggle,.topbar-tabs button,.topbar-icon'), element => ({
+            className: element.className, label: element.getAttribute('aria-label'), disabled: element.disabled,
+            ariaDisabled: element.getAttribute('aria-disabled'), inert: !!element.closest('[inert]'),
+            rect: element.getBoundingClientRect().toJSON()
+          })), rootText: document.getElementById('root')?.innerText.slice(0, 2048)
+        }))()`))
       record('renderer-failure-state', await evaluate(`(async () => ({ errors: window.__ocSmokeRendererErrors, hidden: document.hidden, visibilityState: document.visibilityState, displayLive: document.querySelector('.app-shell')?.dataset.displayLive, rootChildren: document.getElementById('root')?.childElementCount, topology: { floor: document.querySelector('.topology-3d-picker select')?.value ?? null, visibleEmployees: Array.from(document.querySelectorAll('.topology-3d-label:not([hidden])'), label => label.dataset.id).slice(0, 32), canvas: (() => { const canvas = document.querySelector('.topology-3d-webgl'); return canvas ? { width: canvas.width, height: canvas.height, clientWidth: canvas.clientWidth, clientHeight: canvas.clientHeight } : null; })() }, sources: Object.fromEntries(Object.entries(await window.monitor.snapshot()).map(([section, state]) => [section, state.data?.sources.map(({id, state, capabilities, diagnostics}) => ({id, state, capabilities, diagnostics}))])) }))()`))
+      } catch (diagnosticError) {
+        diagnosticErrors.push(diagnosticError)
+        record('renderer-failure-diagnostics-error', failureEvidence(diagnosticError))
+      }
       try { await capture(`${name}-failed`) }
-      catch (captureError) { throw new AggregateError([error, captureError], `${name}: assertion and screenshot failed`) }
+      catch (captureError) {
+        diagnosticErrors.push(captureError)
+        record('renderer-failure-capture-error', failureEvidence(captureError))
+      }
+      if (diagnosticErrors.length) throw new AggregateError([error, ...diagnosticErrors], `${name}: ${String(error)}; failure diagnostics also failed`)
       throw error
     }
   }

@@ -37,7 +37,6 @@ export interface RendererContribution {
   Summary?: ComponentType<RendererContext>
   Overview?: ComponentType<RendererContext>
   OverviewAfter?: ComponentType<RendererContext>
-  Device?: ComponentType<RendererContext>
   Footer?: ComponentType<RendererContext>
   TrayHeading?: ComponentType<RendererContext>
   TrayFooter?: ComponentType<RendererContext>

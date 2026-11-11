@@ -36,7 +36,7 @@ export function useRendererPlugins(enabled: PluginSettings, systemInstalled: boo
   const contributions = state.contributions.filter(plugin => available[plugin.section] || plugin.retainWhenDisabled)
   return { contributions, errors: state.errors, retry: () => registry.retry() }
 }
-export type RendererSlot = 'Summary' | 'Overview' | 'OverviewAfter' | 'Device' | 'Footer' | 'TrayHeading' | 'TrayFooter'
+export type RendererSlot = 'Summary' | 'Overview' | 'OverviewAfter' | 'Footer' | 'TrayHeading' | 'TrayFooter'
 export function PluginSlot({ contributions, slot, context }: {
   contributions: readonly RendererContribution[]; slot: RendererSlot; context: RendererContext
 }) {
