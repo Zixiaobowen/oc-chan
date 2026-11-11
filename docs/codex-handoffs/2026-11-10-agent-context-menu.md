@@ -51,3 +51,11 @@
 - 本次用户授权包括 GitHub 推送和 skill，不包含安装、发布及跨工作树应用清理；`push-main.mjs` 会捆绑跨工作树清理，因此仅执行显式 Git push 与 GitHub 回读，保留其他任务工作树。
 
 恢复提示：本节优先于上文阶段性状态。原生验证和项目 skill 已完成，下一步完成 rebase、将 skill 独立提交、正常推送 `HEAD:main` 并用 GitHub API 核对提交。不要重复通过的验证；原始工作区产品改动保留，未安装或发布。
+
+## 补存的最终 GitHub 回执（2026-11-10 历史状态）
+
+原工作区后续回执记录：菜单修复 `5722d23` 与技能提交 `1a777785f70b68dbdc916e3c29752518f5f235bd` 已推送到 GitHub main，API 回读与当时 HEAD 一致；未安装或发布。此前“下一步推送”为阶段状态。
+
+当时原生 topology 验收证据为 `/var/folders/0w/k5qp70m100z50z8_yzgcdb980000gn/T/oc-chan-smoke-evidence-FRx9lc/result.json`，记录 `complete=true`、`errors=[]`。本次仅补存记录，没有重新运行或确认临时附件仍存在。
+
+Actions 运行 `42775275844` 在当时回执中为 `in_progress`，不是当前 CI 状态；后续结果见 `2026-11-10-github-release-automation.md`。历史 SHA 在身份修正后已变化，对照同目录 `2026-11-11-git-identity-commit-map.tsv`：菜单提交对应 `d7bc8cada5852cb8732d759f1285732f36cf3aa3`，技能提交对应 `873fdfacd50a75c2346c7a6ca40f2914872c0e81`。

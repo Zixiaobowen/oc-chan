@@ -1,0 +1,22 @@
+module,files,lines,reviewed,not_applicable,unreviewed,machine_ids
+(root),3,128,0,3,0,[]
+.githooks,1,3,0,1,0,[]
+.github/workflows,1,171,1,0,0,"[""ISM-048""]"
+resources/tern-navigation/plugin,2,15,1,1,0,"[""ISM-028""]"
+scripts,27,4522,8,19,0,"[""ISM-044"", ""ISM-045"", ""ISM-046"", ""ISM-047"", ""ISM-048""]"
+scripts/performance,19,3745,0,19,0,[]
+scripts/smoke,6,1574,0,6,0,[]
+src/main,43,9802,20,23,0,"[""ISM-001"", ""ISM-002"", ""ISM-003"", ""ISM-005"", ""ISM-006"", ""ISM-007"", ""ISM-008"", ""ISM-009"", ""ISM-010"", ""ISM-011"", ""ISM-013"", ""ISM-014"", ""ISM-015"", ""ISM-023"", ""ISM-024"", ""ISM-028"", ""ISM-033"", ""ISM-045""]"
+src/main/collectors,12,4252,5,7,0,"[""ISM-011"", ""ISM-023"", ""ISM-025"", ""ISM-026""]"
+src/main/events,14,3683,6,8,0,"[""ISM-016"", ""ISM-017"", ""ISM-018"", ""ISM-019"", ""ISM-020"", ""ISM-021"", ""ISM-022""]"
+src/main/plugins,15,2511,5,10,0,"[""ISM-004"", ""ISM-007"", ""ISM-012""]"
+src/native,2,464,2,0,0,"[""ISM-015"", ""ISM-018""]"
+src/plugins/system-monitor,2,61,0,2,0,[]
+src/plugins/system-monitor/main,5,553,2,3,0,"[""ISM-027""]"
+src/plugins/system-monitor/renderer,8,395,2,6,0,[]
+src/preload,1,90,1,0,0,"[""ISM-006"", ""ISM-032""]"
+src/renderer,1,13,1,0,0,[]
+src/renderer/src,55,8405,39,16,0,"[""ISM-010"", ""ISM-011"", ""ISM-013"", ""ISM-015"", ""ISM-029"", ""ISM-030"", ""ISM-031"", ""ISM-032"", ""ISM-033"", ""ISM-034"", ""ISM-035"", ""ISM-036"", ""ISM-037"", ""ISM-038"", ""ISM-039"", ""ISM-041"", ""ISM-042"", ""ISM-043""]"
+src/renderer/src/plugins,5,248,4,1,0,"[""ISM-040"", ""ISM-043""]"
+src/renderer/src/plugins/builtin,3,68,0,3,0,[]
+src/shared,15,1362,1,14,0,"[""ISM-029""]"

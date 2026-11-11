@@ -1,0 +1,2585 @@
+[
+  {
+    "path": ".githooks/pre-push",
+    "lines": 3,
+    "sha256": "5a7339b59da449404cbd5920b7203d31e1cac21f5a728c49f72f164852a40e67",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": ".githooks",
+    "candidate_lines": 0
+  },
+  {
+    "path": ".github/workflows/build.yml",
+    "lines": 171,
+    "sha256": "b6480ee7135a1533a2687e7d36d633777bb9bd17abef15be4b93565f930eb80b",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-048"
+    ],
+    "module": ".github/workflows",
+    "candidate_lines": 1
+  },
+  {
+    "path": "electron.vite.config.ts",
+    "lines": 22,
+    "sha256": "d40e1f4454729cde9946bfe1214b3283e039dd0145c6b5974036f92bbe3e844d",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "(root)",
+    "candidate_lines": 0
+  },
+  {
+    "path": "package.json",
+    "lines": 90,
+    "sha256": "c647eb6aac4e59541b4079da63dfe5eaf5df432df755d5233dd69413ec82eb14",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "(root)",
+    "candidate_lines": 1
+  },
+  {
+    "path": "resources/tern-navigation/plugin/plugin.toml",
+    "lines": 6,
+    "sha256": "16030fddd13a4f54268e99d2dd237f279ae9aac6fd02f451dd7a2360c822dc34",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "resources/tern-navigation/plugin",
+    "candidate_lines": 0
+  },
+  {
+    "path": "resources/tern-navigation/plugin/window.luau",
+    "lines": 9,
+    "sha256": "ba0282155dad6f64da69bc4afdab6b5de3afca509c79bb1c1a5cb01190079fde",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-028"
+    ],
+    "module": "resources/tern-navigation/plugin",
+    "candidate_lines": 0
+  },
+  {
+    "path": "scripts/build-glass.mjs",
+    "lines": 32,
+    "sha256": "5f893500548b5008b028d09a999f3b32ed5793f98906252af12dce6a88a398b2",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "scripts",
+    "candidate_lines": 0
+  },
+  {
+    "path": "scripts/build-native.mjs",
+    "lines": 52,
+    "sha256": "968d2a985f9bdb43d61e9e892fe0abdb2294f4cb9c65872fd72aa1b0ceb4918b",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "scripts",
+    "candidate_lines": 0
+  },
+  {
+    "path": "scripts/build-notifications.mjs",
+    "lines": 32,
+    "sha256": "1a089a477d0db827e97b4fba7c0eeffe69a7548ee7ae2835cc8097362596a1a7",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "scripts",
+    "candidate_lines": 0
+  },
+  {
+    "path": "scripts/bundled-licenses.ts",
+    "lines": 124,
+    "sha256": "6b74e17207fba4fd11026179d33563232cfa50105dec1a2886350acb4935fd20",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "scripts",
+    "candidate_lines": 6
+  },
+  {
+    "path": "scripts/check-package.mjs",
+    "lines": 439,
+    "sha256": "200ae2b924f0dc76763444a63118eb70707e6a3b5bafc284470b63a934de91d9",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "scripts",
+    "candidate_lines": 6
+  },
+  {
+    "path": "scripts/check-package.test.mjs",
+    "lines": 322,
+    "sha256": "a20128332f93d481301bf51b70061a55c4a72d01e10760dd7a3b482099d16811",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "scripts",
+    "candidate_lines": 1
+  },
+  {
+    "path": "scripts/ci-tests.mjs",
+    "lines": 175,
+    "sha256": "80c7ebca6c9cdf8f4a9485a056ded30512d85adacfd54bedbffcf78075acfdec",
+    "status": "不适用",
+    "reason": "开发验收/性能采样工具，非产品运行路径；已核对入口边界与候选，未把测试驱动器计为应用状态机",
+    "machine_ids": [],
+    "module": "scripts",
+    "candidate_lines": 0
+  },
+  {
+    "path": "scripts/ci-tests.test.mjs",
+    "lines": 131,
+    "sha256": "de5517f0a67b410cfc4977c33613e9fa4389bbb8c7f77358b910533268914edd",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "scripts",
+    "candidate_lines": 0
+  },
+  {
+    "path": "scripts/delivery-source.mjs",
+    "lines": 195,
+    "sha256": "869682ffdd216d170af225d55c225a25d461044e96addc98bf45ad43597c742e",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-046"
+    ],
+    "module": "scripts",
+    "candidate_lines": 3
+  },
+  {
+    "path": "scripts/delivery-source.test.mjs",
+    "lines": 301,
+    "sha256": "ff0faf4e61f21beb642711e63ad055f742b633533bef7ad5a729edf0d9078af2",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "scripts",
+    "candidate_lines": 6
+  },
+  {
+    "path": "scripts/delivery-zip.mjs",
+    "lines": 275,
+    "sha256": "f5eaad746e953746384e68ca44577025b70df10100e345d6ef8ba87b17aff7e4",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-047"
+    ],
+    "module": "scripts",
+    "candidate_lines": 11
+  },
+  {
+    "path": "scripts/delivery-zip.test.mjs",
+    "lines": 252,
+    "sha256": "a5b24b7c698cb72d932cdbfd900c31a3d89ae1d9500e4be9ae6d98b48c702ab5",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "scripts",
+    "candidate_lines": 2
+  },
+  {
+    "path": "scripts/dependency-review.mjs",
+    "lines": 262,
+    "sha256": "0a26fcb12fb2fa39ade3674363a3baffd68b9b289078a7a8adfc63a366cc3746",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "scripts",
+    "candidate_lines": 11
+  },
+  {
+    "path": "scripts/dependency-review.test.mjs",
+    "lines": 253,
+    "sha256": "d19f638bcfed545b77a107a8ee665b987473b83b37a32296f23526d881aefb11",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "scripts",
+    "candidate_lines": 1
+  },
+  {
+    "path": "scripts/develop.mjs",
+    "lines": 152,
+    "sha256": "ab80e58f35d464889d7025a6d27b8a8e2bc590bc75edda88bf0f6984346cf3f4",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-044"
+    ],
+    "module": "scripts",
+    "candidate_lines": 7
+  },
+  {
+    "path": "scripts/dist.mjs",
+    "lines": 25,
+    "sha256": "52ceb743eab5360e6d4d73f69fbdcbecfe25f2be186c8062db7a65cd3bce3ec6",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "scripts",
+    "candidate_lines": 0
+  },
+  {
+    "path": "scripts/install-local.mjs",
+    "lines": 217,
+    "sha256": "81331df7847c0fc38c7bc054dede05d547ca9acd5fea8736a54fc8ddb3d1de26",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-045"
+    ],
+    "module": "scripts",
+    "candidate_lines": 4
+  },
+  {
+    "path": "scripts/install-local.test.mjs",
+    "lines": 170,
+    "sha256": "8ffd589b8c72eae98b3103c08d6539a4160b50fdab92ca6ed4e0c3343632b395",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "scripts",
+    "candidate_lines": 1
+  },
+  {
+    "path": "scripts/install-validation.mjs",
+    "lines": 117,
+    "sha256": "986bbb549d76d6a6561f0ae8249a62ac8b09d79d6f3706aeda06c566389df4c5",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-045"
+    ],
+    "module": "scripts",
+    "candidate_lines": 1
+  },
+  {
+    "path": "scripts/local-delivery.mjs",
+    "lines": 222,
+    "sha256": "5b0f87db28ba0470aa8b4c1f9f9f213002b619baee8b254c890677262a7fb9f3",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-046"
+    ],
+    "module": "scripts",
+    "candidate_lines": 12
+  },
+  {
+    "path": "scripts/local-delivery.test.mjs",
+    "lines": 49,
+    "sha256": "55ac8378edeca22dde65f19d24c6417ce2dfaebb48008fb03c390d13065e985e",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "scripts",
+    "candidate_lines": 1
+  },
+  {
+    "path": "scripts/performance/core.mjs",
+    "lines": 201,
+    "sha256": "566f4933de2800ca2f8908ce9b1dd4bf52d006ef28d3e9c7e3cdc428a7a8fde1",
+    "status": "不适用",
+    "reason": "开发验收/性能采样工具，非产品运行路径；已核对入口边界与候选，未把测试驱动器计为应用状态机",
+    "machine_ids": [],
+    "module": "scripts/performance",
+    "candidate_lines": 26
+  },
+  {
+    "path": "scripts/performance/core.test.mjs",
+    "lines": 165,
+    "sha256": "a7d1739b41cd8baf1b153df6896ea1800faf6c7adf3f7dc65e8d7e3ba4106e74",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "scripts/performance",
+    "candidate_lines": 4
+  },
+  {
+    "path": "scripts/performance/event-keys.mjs",
+    "lines": 18,
+    "sha256": "45979e1c8ecdf77ecfc2158b91006680caa4492c81bd60c3e8c45fe332096cc2",
+    "status": "不适用",
+    "reason": "开发验收/性能采样工具，非产品运行路径；已核对入口边界与候选，未把测试驱动器计为应用状态机",
+    "machine_ids": [],
+    "module": "scripts/performance",
+    "candidate_lines": 0
+  },
+  {
+    "path": "scripts/performance/fixture-plugin.mjs",
+    "lines": 122,
+    "sha256": "f0f37db4ef6e351cdc8cfa755bc41f8ced69a17e048dd9194352c59897a78666",
+    "status": "不适用",
+    "reason": "开发验收/性能采样工具，非产品运行路径；已核对入口边界与候选，未把测试驱动器计为应用状态机",
+    "machine_ids": [],
+    "module": "scripts/performance",
+    "candidate_lines": 0
+  },
+  {
+    "path": "scripts/performance/fixtures.mjs",
+    "lines": 448,
+    "sha256": "ef7c72e1fe29a6c641156e592ca3e87a9876e9f5be81cbd7e601f4232bc8b5da",
+    "status": "不适用",
+    "reason": "开发验收/性能采样工具，非产品运行路径；已核对入口边界与候选，未把测试驱动器计为应用状态机",
+    "machine_ids": [],
+    "module": "scripts/performance",
+    "candidate_lines": 20
+  },
+  {
+    "path": "scripts/performance/fixtures.test.mjs",
+    "lines": 192,
+    "sha256": "fb7a974e83c1bb0398fd15a143b43a1a70c1ebc0730ac19907244a6b63410852",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "scripts/performance",
+    "candidate_lines": 15
+  },
+  {
+    "path": "scripts/performance/main-probe.mjs",
+    "lines": 193,
+    "sha256": "cde9011f7ab417a9a2eb808a308bb192c4559ff391b180464d85fad7996661b8",
+    "status": "不适用",
+    "reason": "开发验收/性能采样工具，非产品运行路径；已核对入口边界与候选，未把测试驱动器计为应用状态机",
+    "machine_ids": [],
+    "module": "scripts/performance",
+    "candidate_lines": 7
+  },
+  {
+    "path": "scripts/performance/measurement.mjs",
+    "lines": 152,
+    "sha256": "8ad792f89b04e2c414746b604bde75b17130d4f4970f34fa3fe4818370150f73",
+    "status": "不适用",
+    "reason": "开发验收/性能采样工具，非产品运行路径；已核对入口边界与候选，未把测试驱动器计为应用状态机",
+    "machine_ids": [],
+    "module": "scripts/performance",
+    "candidate_lines": 6
+  },
+  {
+    "path": "scripts/performance/measurement.test.mjs",
+    "lines": 54,
+    "sha256": "b61a029f717589b4c693040a3c1f8dcbff99af8cf341b59574cfca26130ad95f",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "scripts/performance",
+    "candidate_lines": 0
+  },
+  {
+    "path": "scripts/performance/preload-probe.mjs",
+    "lines": 30,
+    "sha256": "10b2f75b2c1136bf54f231e2a1346636d710663358c628ff7900e30ec405f396",
+    "status": "不适用",
+    "reason": "开发验收/性能采样工具，非产品运行路径；已核对入口边界与候选，未把测试驱动器计为应用状态机",
+    "machine_ids": [],
+    "module": "scripts/performance",
+    "candidate_lines": 0
+  },
+  {
+    "path": "scripts/performance/process-sampler-native.test.c",
+    "lines": 55,
+    "sha256": "4eba1aa8c18eac891a5cfc30cc64d0473e9ade9dd6b5814f99adb8a88bc80041",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "scripts/performance",
+    "candidate_lines": 0
+  },
+  {
+    "path": "scripts/performance/process-sampler.c",
+    "lines": 661,
+    "sha256": "9d9e8cc920f06856b6e2211a8799f841133c8597257c0f801522e288dfee3daa",
+    "status": "不适用",
+    "reason": "开发验收/性能采样工具，非产品运行路径；已核对入口边界与候选，未把测试驱动器计为应用状态机",
+    "machine_ids": [],
+    "module": "scripts/performance",
+    "candidate_lines": 3
+  },
+  {
+    "path": "scripts/performance/renderer-probe.mjs",
+    "lines": 69,
+    "sha256": "476edd7213979fb805cf9df79a8f2db4dc036e747b7a0c9797ea7ed606b92319",
+    "status": "不适用",
+    "reason": "开发验收/性能采样工具，非产品运行路径；已核对入口边界与候选，未把测试驱动器计为应用状态机",
+    "machine_ids": [],
+    "module": "scripts/performance",
+    "candidate_lines": 0
+  },
+  {
+    "path": "scripts/performance/run.mjs",
+    "lines": 510,
+    "sha256": "5a28815753a9b8a23db24bf83a950e6a36465cba29d6cd3a739f7bbf7eb63f46",
+    "status": "不适用",
+    "reason": "开发验收/性能采样工具，非产品运行路径；已核对入口边界与候选，未把测试驱动器计为应用状态机",
+    "machine_ids": [],
+    "module": "scripts/performance",
+    "candidate_lines": 48
+  },
+  {
+    "path": "scripts/performance/sampler.mjs",
+    "lines": 249,
+    "sha256": "6c8c494ba83badf868c1a7263f7bc0e51ace2a0ffea0253957af6271c339dd41",
+    "status": "不适用",
+    "reason": "开发验收/性能采样工具，非产品运行路径；已核对入口边界与候选，未把测试驱动器计为应用状态机",
+    "machine_ids": [],
+    "module": "scripts/performance",
+    "candidate_lines": 34
+  },
+  {
+    "path": "scripts/performance/sampler.test.mjs",
+    "lines": 181,
+    "sha256": "5b491be52f27db2d0e526f044fce5805c287b59b7947a00cabc4266cc064fb4d",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "scripts/performance",
+    "candidate_lines": 23
+  },
+  {
+    "path": "scripts/performance/soak-scenario.mjs",
+    "lines": 363,
+    "sha256": "7e272511e211a38e5ab617c3b5734e3afce7e2592b7b1155353e4144cac2ba54",
+    "status": "不适用",
+    "reason": "开发验收/性能采样工具，非产品运行路径；已核对入口边界与候选，未把测试驱动器计为应用状态机",
+    "machine_ids": [],
+    "module": "scripts/performance",
+    "candidate_lines": 36
+  },
+  {
+    "path": "scripts/performance/soak-scenario.test.mjs",
+    "lines": 41,
+    "sha256": "845924429164ffc109a63e36428d68e3d2ba101a7e1226aa96e83849658dac52",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "scripts/performance",
+    "candidate_lines": 0
+  },
+  {
+    "path": "scripts/performance/vite.config.mjs",
+    "lines": 41,
+    "sha256": "f312d0e134ceecbe897073880495c7624e5d7b33ad513be8a9321ebabdb6c0a8",
+    "status": "不适用",
+    "reason": "开发验收/性能采样工具，非产品运行路径；已核对入口边界与候选，未把测试驱动器计为应用状态机",
+    "machine_ids": [],
+    "module": "scripts/performance",
+    "candidate_lines": 0
+  },
+  {
+    "path": "scripts/prepare-release.mjs",
+    "lines": 89,
+    "sha256": "a80e34877a1c3429d0376a7f42029d206cdb337495d07070da48e23b223105f5",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-048"
+    ],
+    "module": "scripts",
+    "candidate_lines": 0
+  },
+  {
+    "path": "scripts/prepare-release.test.mjs",
+    "lines": 162,
+    "sha256": "2ac869beefec972ee0551a97a8b214241a0e33d4dba16a9256a03f51e5342912",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "scripts",
+    "candidate_lines": 1
+  },
+  {
+    "path": "scripts/publish-release.mjs",
+    "lines": 54,
+    "sha256": "b6848ff7f3e97fa2bd770b6695ba55000f3749bae3c56ea2e68781b39c4df8ca",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-048"
+    ],
+    "module": "scripts",
+    "candidate_lines": 1
+  },
+  {
+    "path": "scripts/release-config.mjs",
+    "lines": 21,
+    "sha256": "50df46931c40d98f96deb472d6e1448ea04d41f16fd9f003ab541e74816f1547",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "scripts",
+    "candidate_lines": 0
+  },
+  {
+    "path": "scripts/smoke-renderer.mjs",
+    "lines": 370,
+    "sha256": "04fdac10a63a1ab7f2b585b18932965f2f51f32ff27b60621e5f33f37f40464b",
+    "status": "不适用",
+    "reason": "开发验收/性能采样工具，非产品运行路径；已核对入口边界与候选，未把测试驱动器计为应用状态机",
+    "machine_ids": [],
+    "module": "scripts",
+    "candidate_lines": 15
+  },
+  {
+    "path": "scripts/smoke.ts",
+    "lines": 29,
+    "sha256": "d1dbd84e589d530d08cfb4b624e8c72487c1ca1d335a58df4110f253cde7dc0a",
+    "status": "不适用",
+    "reason": "开发验收/性能采样工具，非产品运行路径；已核对入口边界与候选，未把测试驱动器计为应用状态机",
+    "machine_ids": [],
+    "module": "scripts",
+    "candidate_lines": 1
+  },
+  {
+    "path": "scripts/smoke/events-scenarios.mjs",
+    "lines": 365,
+    "sha256": "89d92067a6799c6ff06c02797250fced1c30920a1b621870ec2c9364e099d507",
+    "status": "不适用",
+    "reason": "开发验收/性能采样工具，非产品运行路径；已核对入口边界与候选，未把测试驱动器计为应用状态机",
+    "machine_ids": [],
+    "module": "scripts/smoke",
+    "candidate_lines": 12
+  },
+  {
+    "path": "scripts/smoke/main-probe.mjs",
+    "lines": 183,
+    "sha256": "a9fd0e8bd2d74c236958b88a5d0c7de5d4b7715f79096090e5ef59ca96eb12af",
+    "status": "不适用",
+    "reason": "开发验收/性能采样工具，非产品运行路径；已核对入口边界与候选，未把测试驱动器计为应用状态机",
+    "machine_ids": [],
+    "module": "scripts/smoke",
+    "candidate_lines": 5
+  },
+  {
+    "path": "scripts/smoke/notification-scenarios.mjs",
+    "lines": 373,
+    "sha256": "4361d6142c1f81031af5339c6cf914771f16f3b595107302f4ab42c83cf9cf0b",
+    "status": "不适用",
+    "reason": "开发验收/性能采样工具，非产品运行路径；已核对入口边界与候选，未把测试驱动器计为应用状态机",
+    "machine_ids": [],
+    "module": "scripts/smoke",
+    "candidate_lines": 23
+  },
+  {
+    "path": "scripts/smoke/scenarios.mjs",
+    "lines": 532,
+    "sha256": "cf4260c62002f5dd2afdeb7d7ecdaa8019110d1b9761e8c7d8dc1f31d3837f29",
+    "status": "不适用",
+    "reason": "开发验收/性能采样工具，非产品运行路径；已核对入口边界与候选，未把测试驱动器计为应用状态机",
+    "machine_ids": [],
+    "module": "scripts/smoke",
+    "candidate_lines": 26
+  },
+  {
+    "path": "scripts/smoke/topology-scenarios.mjs",
+    "lines": 97,
+    "sha256": "3be1359ea74e844f2fecc603d4aab4aa032e27ece495497e7fecbf3529fe2b86",
+    "status": "不适用",
+    "reason": "开发验收/性能采样工具，非产品运行路径；已核对入口边界与候选，未把测试驱动器计为应用状态机",
+    "machine_ids": [],
+    "module": "scripts/smoke",
+    "candidate_lines": 0
+  },
+  {
+    "path": "scripts/smoke/vite.config.mjs",
+    "lines": 24,
+    "sha256": "6f585a24e9a1c97319b4aa4a8c647a8259945152ea924595295fdd1460dfb11c",
+    "status": "不适用",
+    "reason": "开发验收/性能采样工具，非产品运行路径；已核对入口边界与候选，未把测试驱动器计为应用状态机",
+    "machine_ids": [],
+    "module": "scripts/smoke",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/main/app-updates.test.ts",
+    "lines": 281,
+    "sha256": "d58c42ea4b8c71b9d9ac4ed4304095ce2ba01b11bdb2423467071870a15fd051",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 37
+  },
+  {
+    "path": "src/main/collection-limits.test.ts",
+    "lines": 115,
+    "sha256": "a08642b4f9a3a3e4d561aa16c88272d4b159dc35673b63e3d0813e134235fe86",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 2
+  },
+  {
+    "path": "src/main/collection-limits.ts",
+    "lines": 45,
+    "sha256": "f7b28d62b9af3690f36e551eb92413fdb407a7b3ce7b0a9a5dec4c0bf26f6a51",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-023"
+    ],
+    "module": "src/main",
+    "candidate_lines": 1
+  },
+  {
+    "path": "src/main/collectors/agent-activity.ts",
+    "lines": 193,
+    "sha256": "e2235e48d0a8b18a173539ad722728e9070f031eef3a423cda1300ea62f95e55",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-025"
+    ],
+    "module": "src/main/collectors",
+    "candidate_lines": 7
+  },
+  {
+    "path": "src/main/collectors/agents.test.ts",
+    "lines": 735,
+    "sha256": "e318cf50fd6aab1b982aa1545393f643d20262c8e01c729a7933c1d928683b5b",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main/collectors",
+    "candidate_lines": 31
+  },
+  {
+    "path": "src/main/collectors/agents.ts",
+    "lines": 629,
+    "sha256": "ae3cf87c71289f8078e059b7da293be39f111c117eac1747f9d1b53f86fe91f5",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-023"
+    ],
+    "module": "src/main/collectors",
+    "candidate_lines": 9
+  },
+  {
+    "path": "src/main/collectors/codex-sessions.test.ts",
+    "lines": 154,
+    "sha256": "d5c3bbd34a47512e33402f04a2c9e88ffdcc0e6c59aabdda55fb0755c8742a6a",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main/collectors",
+    "candidate_lines": 1
+  },
+  {
+    "path": "src/main/collectors/codex-sessions.ts",
+    "lines": 174,
+    "sha256": "363177338cb1abd3cb50c32195ab31cf9f3ced9e4546bfd5c22e5fb8a7ffb607",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/main/collectors",
+    "candidate_lines": 2
+  },
+  {
+    "path": "src/main/collectors/hermes-history.test.ts",
+    "lines": 277,
+    "sha256": "7cb0e53fa4879deb19503246e584c55aa0d0b5ae84e305b87be02a85ff277b02",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main/collectors",
+    "candidate_lines": 24
+  },
+  {
+    "path": "src/main/collectors/hermes-history.ts",
+    "lines": 131,
+    "sha256": "466e37ccd2cc79c10cf33efea189520980e3ebd26aa230e886e4bb6a78f5601a",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-011"
+    ],
+    "module": "src/main/collectors",
+    "candidate_lines": 2
+  },
+  {
+    "path": "src/main/collectors/hermes-runtime.test.ts",
+    "lines": 257,
+    "sha256": "145f625cc852913c520d8f3c62570a06e23c2a786b7be45e820d2eee4d5a6f06",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main/collectors",
+    "candidate_lines": 11
+  },
+  {
+    "path": "src/main/collectors/hermes-runtime.ts",
+    "lines": 226,
+    "sha256": "9b858ae97f9f1ef9cb36082119589cca3a24e653f33dd318e78cb415e441d67e",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/main/collectors",
+    "candidate_lines": 2
+  },
+  {
+    "path": "src/main/collectors/launchd.ts",
+    "lines": 163,
+    "sha256": "a0b67724bc14a5d120a00b1ac65f8de0b4637376b44bf6d3acc5db8bfc9dc00f",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-026"
+    ],
+    "module": "src/main/collectors",
+    "candidate_lines": 2
+  },
+  {
+    "path": "src/main/collectors/schedules.test.ts",
+    "lines": 698,
+    "sha256": "1fef6bab28b728bdaa5daaa485c072cf0ac1f3f5b5a6aa2f8132cad14aa6fcf5",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main/collectors",
+    "candidate_lines": 50
+  },
+  {
+    "path": "src/main/collectors/schedules.ts",
+    "lines": 615,
+    "sha256": "f42b35b3899a7e97a5dd61897144fa43219649d51d0d632a9ad4eceaf996a3cb",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-026"
+    ],
+    "module": "src/main/collectors",
+    "candidate_lines": 14
+  },
+  {
+    "path": "src/main/desktop-settings.ts",
+    "lines": 74,
+    "sha256": "b964f5d32cf912d9413f824bf6576ae0823ddd09f4f75cb3f9ef525a11dcc2dd",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-014"
+    ],
+    "module": "src/main",
+    "candidate_lines": 5
+  },
+  {
+    "path": "src/main/diagnostic-report.test.ts",
+    "lines": 318,
+    "sha256": "a14d944a6daee57700f364e4bcfe71b8d46701495e633dce367206bc1db3cbac",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 2
+  },
+  {
+    "path": "src/main/diagnostic-report.ts",
+    "lines": 244,
+    "sha256": "f693de7e76ca225f66ed2f175a1657ed49136c2e50d1767718f0bda446802406",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 1
+  },
+  {
+    "path": "src/main/diagnostics.test.ts",
+    "lines": 176,
+    "sha256": "8debfb68fc102bf4fccb925162d90e8ba4db4ea15e76a4c1cff122ce9778129b",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 21
+  },
+  {
+    "path": "src/main/diagnostics.ts",
+    "lines": 166,
+    "sha256": "07695ad5948c1eb9393a31f44ec10d54a517e52dda65c3c9e2ac4c0bde575cff",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-010"
+    ],
+    "module": "src/main",
+    "candidate_lines": 24
+  },
+  {
+    "path": "src/main/events/collector.test.ts",
+    "lines": 174,
+    "sha256": "79e1fb76e825d2dea2dc188360b5e4f52b3af96c64b22423f20e6b09e5c678e9",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main/events",
+    "candidate_lines": 10
+  },
+  {
+    "path": "src/main/events/collector.ts",
+    "lines": 207,
+    "sha256": "8a551288caaa22f985f90b2fc21cc32d3bea780a56c0247f34c010e4db05544c",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-017",
+      "ISM-020",
+      "ISM-021"
+    ],
+    "module": "src/main/events",
+    "candidate_lines": 21
+  },
+  {
+    "path": "src/main/events/contracts.ts",
+    "lines": 57,
+    "sha256": "179aa2e31ea7a5d7e05aa4eb3ab8975e8c763f79d5ada84a4fc5182b689a95de",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/main/events",
+    "candidate_lines": 3
+  },
+  {
+    "path": "src/main/events/hermes.test.ts",
+    "lines": 330,
+    "sha256": "1412b2c578e7508c6fed4dedde94558949d16ee67ea5cd7c20cec90f8948567b",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main/events",
+    "candidate_lines": 43
+  },
+  {
+    "path": "src/main/events/hermes.ts",
+    "lines": 226,
+    "sha256": "bd9cd0534a25e13f3e4f969e39df2b6ee822331966d609b3f4a10037c6de2bcb",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-021"
+    ],
+    "module": "src/main/events",
+    "candidate_lines": 16
+  },
+  {
+    "path": "src/main/events/native-notifications.test.ts",
+    "lines": 434,
+    "sha256": "07260df66c6dce0e4b4832b20a2e80afdd1e93184d0283965cc5a13f8a28c60a",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main/events",
+    "candidate_lines": 28
+  },
+  {
+    "path": "src/main/events/native-notifications.ts",
+    "lines": 224,
+    "sha256": "6efbe860a8ebdd8c32efc029ef1999cd33ad60e7aa7d829dcddbe67eea0819b8",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-018",
+      "ISM-019"
+    ],
+    "module": "src/main/events",
+    "candidate_lines": 32
+  },
+  {
+    "path": "src/main/events/notification-contracts.ts",
+    "lines": 40,
+    "sha256": "253f26ed7d858f130ddf4af652a6ace616f2cb2937de02359334db0cf27dcc61",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/main/events",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/main/events/notification-journal.test.ts",
+    "lines": 107,
+    "sha256": "68ade17fabd1725993030e8c422070ea628918adfa5f048246a15045bebf9b97",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main/events",
+    "candidate_lines": 4
+  },
+  {
+    "path": "src/main/events/notification-journal.ts",
+    "lines": 131,
+    "sha256": "a401a6368b3977df079143fe098084564c4a38afbe78bc7c055f9ada49563e6a",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-017"
+    ],
+    "module": "src/main/events",
+    "candidate_lines": 8
+  },
+  {
+    "path": "src/main/events/notifications.test.ts",
+    "lines": 443,
+    "sha256": "86b5211dd79f3672b8c254691e28093be9dbde98b3fee647c1c3b5f9b45b5105",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main/events",
+    "candidate_lines": 43
+  },
+  {
+    "path": "src/main/events/notifications.ts",
+    "lines": 368,
+    "sha256": "d2e06fac802fc98bab4c362334f64221a690c9449d362c6300cb10d838b9518a",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-016",
+      "ISM-017"
+    ],
+    "module": "src/main/events",
+    "candidate_lines": 51
+  },
+  {
+    "path": "src/main/events/store.test.ts",
+    "lines": 437,
+    "sha256": "c82dc5a53cc49b1b75920b840c66e4924a33f7bbd57ae28a8eb681b188311ef0",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main/events",
+    "candidate_lines": 44
+  },
+  {
+    "path": "src/main/events/store.ts",
+    "lines": 505,
+    "sha256": "82c6ba768bd9dc3dd2fbce3efc853cee5bfda3768bf110b8a717d0abb5162ddd",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-022"
+    ],
+    "module": "src/main/events",
+    "candidate_lines": 41
+  },
+  {
+    "path": "src/main/index.ts",
+    "lines": 665,
+    "sha256": "66bf4e487b4583a77718c8741f2f53ddfabad5271862a02bea88b68890c3ee60",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-001",
+      "ISM-002",
+      "ISM-003",
+      "ISM-007",
+      "ISM-010",
+      "ISM-015",
+      "ISM-033"
+    ],
+    "module": "src/main",
+    "candidate_lines": 64
+  },
+  {
+    "path": "src/main/installation-check.mts",
+    "lines": 206,
+    "sha256": "72cd39c875c02976ae1cecc8ea31d0e48f35e35e76228c1de045454ef763cb2d",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-045"
+    ],
+    "module": "src/main",
+    "candidate_lines": 10
+  },
+  {
+    "path": "src/main/installation-check.test.ts",
+    "lines": 100,
+    "sha256": "b78faac289a7d48d60349d81a065e7fd4c8d5597830820a184b1ded34109c5d6",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 7
+  },
+  {
+    "path": "src/main/ipc-boundary.test.ts",
+    "lines": 220,
+    "sha256": "91daee842cce031f7600f4e9d8a74f2ed58147b2b58f6510098630cbd4f8b956",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 20
+  },
+  {
+    "path": "src/main/ipc-boundary.ts",
+    "lines": 181,
+    "sha256": "037cdf1a2b6f9476318cf42e21c0a773ed50b047c71a60b50e882fcad8615cf6",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 11
+  },
+  {
+    "path": "src/main/liquid-glass.ts",
+    "lines": 48,
+    "sha256": "16116b7aa38616c6815ac98383702253696adfe1f23402a9bfcfd93734367ac3",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-015"
+    ],
+    "module": "src/main",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/main/live-agents.test.ts",
+    "lines": 699,
+    "sha256": "1eff50a8ebfb4b7f493c5089689f6c79a629bbaf6c4a4e9271e297f344e9da77",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 34
+  },
+  {
+    "path": "src/main/live-agents.ts",
+    "lines": 315,
+    "sha256": "4e06068d714ba8495461430c59b539f700f5cf7b331a3e2ffe146ab9fbdd08c7",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-024"
+    ],
+    "module": "src/main",
+    "candidate_lines": 69
+  },
+  {
+    "path": "src/main/login-items.test.ts",
+    "lines": 164,
+    "sha256": "64b48eecbb33d8ef16fc77f04d59bc01bdb2dc77f91de23190e99a50613866af",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 9
+  },
+  {
+    "path": "src/main/login-items.ts",
+    "lines": 83,
+    "sha256": "57e50a0bfc93a1b00184d0ec716301bb9937acf37710888001a2e214912b5fa3",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-013"
+    ],
+    "module": "src/main",
+    "candidate_lines": 2
+  },
+  {
+    "path": "src/main/monitor-subscriptions.test.ts",
+    "lines": 140,
+    "sha256": "9f0eb00f75154739021ae2566503d880cc38d99a4f155730aefabe09b690da8c",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 7
+  },
+  {
+    "path": "src/main/monitor-subscriptions.ts",
+    "lines": 69,
+    "sha256": "7fcf0f4609cb697e1dabbe7468d3758e1a63eeba8fb4d470700452ce3c8b4255",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-006"
+    ],
+    "module": "src/main",
+    "candidate_lines": 12
+  },
+  {
+    "path": "src/main/monitor.test.ts",
+    "lines": 748,
+    "sha256": "2c27758a28bf567d1cbe302f6fd72fdbff167e15d9253339a166c2a1511eb160",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 69
+  },
+  {
+    "path": "src/main/monitor.ts",
+    "lines": 238,
+    "sha256": "07800ab367443f913e681ef5f438a7a3859d4499109083640857109316598483",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-005"
+    ],
+    "module": "src/main",
+    "candidate_lines": 38
+  },
+  {
+    "path": "src/main/navigation.test.ts",
+    "lines": 41,
+    "sha256": "d72aa20f1e41629b687535879397bd51d1d55b236c3fc28d20013782df915c71",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 11
+  },
+  {
+    "path": "src/main/plugins/agents.test.ts",
+    "lines": 116,
+    "sha256": "7358a5a75d95e569e916ed7bc9a44770b76362a7457f411f126e915e46964a6c",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main/plugins",
+    "candidate_lines": 15
+  },
+  {
+    "path": "src/main/plugins/agents.ts",
+    "lines": 39,
+    "sha256": "2cbc635685857c6941377e00163dd0bd18885f70af0343f49dcde095729fc04f",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/main/plugins",
+    "candidate_lines": 5
+  },
+  {
+    "path": "src/main/plugins/app-updates.ts",
+    "lines": 104,
+    "sha256": "33372a8ec2536fe1fcef8a3d65676f34c955c8f218edddd086744fa477649523",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-007"
+    ],
+    "module": "src/main/plugins",
+    "candidate_lines": 16
+  },
+  {
+    "path": "src/main/plugins/catalog.ts",
+    "lines": 22,
+    "sha256": "a0472500ed780c40bcc8be23b4fc3ff6fd2bf0b48393d821d6007d547fcb700d",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/main/plugins",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/main/plugins/contracts.ts",
+    "lines": 60,
+    "sha256": "628bb73a930ed152830f81cc7f0ca6f3ecad54d7ee0817e9e24266889f05f63b",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/main/plugins",
+    "candidate_lines": 3
+  },
+  {
+    "path": "src/main/plugins/events.ts",
+    "lines": 35,
+    "sha256": "a6dccb35a81d48a7755b623b7e88685e0a4f56d286a6c9fb7f6d1cc89209107c",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/main/plugins",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/main/plugins/lazy.test.ts",
+    "lines": 116,
+    "sha256": "579a3c601ad5178ce43bf8621e4402edc4cc9f183783778a642b6df79277096b",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main/plugins",
+    "candidate_lines": 8
+  },
+  {
+    "path": "src/main/plugins/lazy.ts",
+    "lines": 19,
+    "sha256": "7690bfba1a0622c1056b6c124bdaef2e1acd00e9fb9e3397c13dff9dc5fdf66e",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/main/plugins",
+    "candidate_lines": 1
+  },
+  {
+    "path": "src/main/plugins/native-update.ts",
+    "lines": 87,
+    "sha256": "2280b6bf1c4a08ebc48111b5a908fa8b638cf4cd4a902bf94480b717b6424e44",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-012"
+    ],
+    "module": "src/main/plugins",
+    "candidate_lines": 6
+  },
+  {
+    "path": "src/main/plugins/registry.test.ts",
+    "lines": 888,
+    "sha256": "3b4afb3b8b165d5813bb3a07e5c12eef973ed3285662b3e0269ce08c848899ac",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main/plugins",
+    "candidate_lines": 66
+  },
+  {
+    "path": "src/main/plugins/registry.ts",
+    "lines": 553,
+    "sha256": "6d9d8300e5411f234543e69038caf0a1ff7cfcf7b1c4afc184a626cfa407b2bd",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-004"
+    ],
+    "module": "src/main/plugins",
+    "candidate_lines": 70
+  },
+  {
+    "path": "src/main/plugins/schedules.test.ts",
+    "lines": 128,
+    "sha256": "88ba29b10052b19448817b71a980669d714f98f7d3c5f3c056de3d7846d82e83",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main/plugins",
+    "candidate_lines": 25
+  },
+  {
+    "path": "src/main/plugins/schedules.ts",
+    "lines": 64,
+    "sha256": "c345f2bc9360f5eae9ceca76b6b3dae131ecc6a0de88b8d83fd03045442e0fae",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/main/plugins",
+    "candidate_lines": 6
+  },
+  {
+    "path": "src/main/plugins/update-controller.ts",
+    "lines": 133,
+    "sha256": "487011f860c15baef88aa2dd0f8ed87a8f34b67336905cf43b9d0079e5371dbd",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-007"
+    ],
+    "module": "src/main/plugins",
+    "candidate_lines": 30
+  },
+  {
+    "path": "src/main/plugins/update-source.ts",
+    "lines": 147,
+    "sha256": "8042b954154af5c301e6ab6c5ae29ee97b7489db379e45f83fdf89c17b3a2205",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-007"
+    ],
+    "module": "src/main/plugins",
+    "candidate_lines": 9
+  },
+  {
+    "path": "src/main/resource-budget.test.ts",
+    "lines": 341,
+    "sha256": "0167d520007ad3d9707e413349c567ee8f9ba745ad403c53d2a70ffa39108e3f",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 20
+  },
+  {
+    "path": "src/main/resource-budget.ts",
+    "lines": 360,
+    "sha256": "bd93d8e9cb7c7a8e00435aebf10c4f226beb0d8ced968f35e5cd6f22956f6305",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-023"
+    ],
+    "module": "src/main",
+    "candidate_lines": 26
+  },
+  {
+    "path": "src/main/resource-io.test.ts",
+    "lines": 269,
+    "sha256": "057f533ad2b7db241a5e131efd5f45512344ef5b9ddb9c76eb1940014905e4cd",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 10
+  },
+  {
+    "path": "src/main/resource-io.ts",
+    "lines": 91,
+    "sha256": "ad21d3b28a8a00492ffd0948c000b86002c67a7a16ffba42ab1ffb8af5d49a8c",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-023"
+    ],
+    "module": "src/main",
+    "candidate_lines": 4
+  },
+  {
+    "path": "src/main/schedule-history.test.ts",
+    "lines": 262,
+    "sha256": "7c3420a404f1283270739ba27665ca66733201b82cfc63cb7b0b3967bba34edf",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 27
+  },
+  {
+    "path": "src/main/schedule-history.ts",
+    "lines": 120,
+    "sha256": "7161c120312000b5c3b8fb0ff9d22f59685f9cc560f745b604b518f94ff3f36a",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-011"
+    ],
+    "module": "src/main",
+    "candidate_lines": 27
+  },
+  {
+    "path": "src/main/settings.test.ts",
+    "lines": 467,
+    "sha256": "3c33b68acdfd05696841c0c4394d5f6ad14c86e80b52ff49736ab72a9173c212",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 7
+  },
+  {
+    "path": "src/main/settings.ts",
+    "lines": 330,
+    "sha256": "7a8ab889e730b5608c6e17b097de0b61d9a5480bcc134e5676ea1ff6f031986b",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-002"
+    ],
+    "module": "src/main",
+    "candidate_lines": 13
+  },
+  {
+    "path": "src/main/shutdown.test.ts",
+    "lines": 110,
+    "sha256": "37fa9ea588e4149cc6dc6e5e1e84ab427bda762822aadd4d135b9bd441f49b02",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 7
+  },
+  {
+    "path": "src/main/shutdown.ts",
+    "lines": 41,
+    "sha256": "6f0d7adec477e4ec66673bb1ae383aa1af4f8342d9f5ba49a2577c2faff71a3a",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-001"
+    ],
+    "module": "src/main",
+    "candidate_lines": 5
+  },
+  {
+    "path": "src/main/startup-recovery.test.ts",
+    "lines": 101,
+    "sha256": "c5c975f048d3a8389382d94e67fabe88698d60a03f57c7cd67aa4a674c047e2c",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 12
+  },
+  {
+    "path": "src/main/startup-recovery.ts",
+    "lines": 56,
+    "sha256": "51df927f05a049dce2f98ee371e69128b1b6a32e2f0be141453888bc19dd9918",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-003"
+    ],
+    "module": "src/main",
+    "candidate_lines": 15
+  },
+  {
+    "path": "src/main/tern-navigation.test.ts",
+    "lines": 545,
+    "sha256": "b6e29e873e18d86f6fc1764ff0a4c28fc84f3ccc9bbf9369664269d806fb2e52",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 24
+  },
+  {
+    "path": "src/main/tern-navigation.ts",
+    "lines": 291,
+    "sha256": "1e156b9ff155bb46281f44972b919ffc8190d501dfd638998e02925fa1f9cfcf",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-028"
+    ],
+    "module": "src/main",
+    "candidate_lines": 15
+  },
+  {
+    "path": "src/main/tern-present.swift",
+    "lines": 356,
+    "sha256": "056d142eea2a3d1fafbc98f70274e23bddb517149feea66d154238ae47811dcd",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-028"
+    ],
+    "module": "src/main",
+    "candidate_lines": 3
+  },
+  {
+    "path": "src/main/tern-present.test.ts",
+    "lines": 104,
+    "sha256": "5161024d8ed248a1728c87f1f34cf7608a9586135b78f0bb3acc0bd4726adf10",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 3
+  },
+  {
+    "path": "src/main/tray-window.test.ts",
+    "lines": 169,
+    "sha256": "c45177bb72545c89966c01ca7e0204504cbb158f24e054682fb76ae9e46927d5",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 14
+  },
+  {
+    "path": "src/main/tray-window.ts",
+    "lines": 116,
+    "sha256": "085d734e687853661d73b12a9612946167e96130257582daaa9f9111ebd0c357",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-008"
+    ],
+    "module": "src/main",
+    "candidate_lines": 39
+  },
+  {
+    "path": "src/main/window-geometry.test.ts",
+    "lines": 173,
+    "sha256": "2c9d58b78f56e708efa4c15ae5b3f6f5096f62e99ae145929f439f31307af5a4",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/main",
+    "candidate_lines": 13
+  },
+  {
+    "path": "src/main/window-geometry.ts",
+    "lines": 164,
+    "sha256": "5ebd2830bc15d0a58ecc4e6f42ef1d47367a4004a8580d4b5bd62ac62d5a2f96",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-009"
+    ],
+    "module": "src/main",
+    "candidate_lines": 43
+  },
+  {
+    "path": "src/native/liquid-glass.mm",
+    "lines": 167,
+    "sha256": "8b594a79b5c3f53bccf7866d729428907c4126dc0e326f89dfbf39f04bfa56f7",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-015"
+    ],
+    "module": "src/native",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/native/notification-permission.mm",
+    "lines": 297,
+    "sha256": "3fdc12d5b2c2a959447570361ea0166f2b50c42c67ffe6a6429c81914bfb9f70",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-018"
+    ],
+    "module": "src/native",
+    "candidate_lines": 2
+  },
+  {
+    "path": "src/plugins/system-monitor/main/index.ts",
+    "lines": 22,
+    "sha256": "df17dbfb611dac65bbc3531e250b74f5475e076426d12cdc730da3a460b0c47e",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/plugins/system-monitor/main",
+    "candidate_lines": 2
+  },
+  {
+    "path": "src/plugins/system-monitor/main/network.test.ts",
+    "lines": 85,
+    "sha256": "932f4ea4f691eec574390dcdd229011d7363ab1a08716640fb9c0b7fbefabbec",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/plugins/system-monitor/main",
+    "candidate_lines": 4
+  },
+  {
+    "path": "src/plugins/system-monitor/main/network.ts",
+    "lines": 73,
+    "sha256": "77f7559d223cc60c931bdd0ac07be936f2fc7d4acff9c9cd8b3830a222bf137e",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-027"
+    ],
+    "module": "src/plugins/system-monitor/main",
+    "candidate_lines": 5
+  },
+  {
+    "path": "src/plugins/system-monitor/main/system.test.ts",
+    "lines": 194,
+    "sha256": "523636b1f7ab789e35549600a5b11df66a5929f5d3434ed156cb1451e1c75b37",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/plugins/system-monitor/main",
+    "candidate_lines": 11
+  },
+  {
+    "path": "src/plugins/system-monitor/main/system.ts",
+    "lines": 179,
+    "sha256": "95b163322111f2063f3a6f6e6d7993065ce7959ca927153d9910db1cb21c46c5",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-027"
+    ],
+    "module": "src/plugins/system-monitor/main",
+    "candidate_lines": 8
+  },
+  {
+    "path": "src/plugins/system-monitor/manifest.ts",
+    "lines": 15,
+    "sha256": "66d581d962df2a502fba5a516b919cf378002cd12d1d77edded110083391740d",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/plugins/system-monitor",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/plugins/system-monitor/renderer/Chart.tsx",
+    "lines": 25,
+    "sha256": "934a20dc34577949b8efa3456b5c2cb43245f40028a37bad8313965d3c6c4f92",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/plugins/system-monitor/renderer",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/plugins/system-monitor/renderer/SystemMetrics.tsx",
+    "lines": 68,
+    "sha256": "8e12f1e14e729c8906f606d5dc22b69bbac3ca8777d0f24edfa5bee3317b0d64",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/plugins/system-monitor/renderer",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/plugins/system-monitor/renderer/SystemSources.tsx",
+    "lines": 21,
+    "sha256": "074d67835f9eccd27781055360539d268a58e7b4e8f7b22ebc439cd3a0212095",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/plugins/system-monitor/renderer",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/plugins/system-monitor/renderer/SystemView.tsx",
+    "lines": 50,
+    "sha256": "275953afbc49aac4bfb27b6bfb868f50f3894516e92be6503c9fc8e79b9790a4",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/plugins/system-monitor/renderer",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/plugins/system-monitor/renderer/TrayMetrics.tsx",
+    "lines": 57,
+    "sha256": "05ab2cca597bbe6f204fce88171de8f069a8666184e697446c85f8640645f748",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/plugins/system-monitor/renderer",
+    "candidate_lines": 2
+  },
+  {
+    "path": "src/plugins/system-monitor/renderer/index.tsx",
+    "lines": 53,
+    "sha256": "8bafee57a92b036577b49f353265f116a381c3355e237d86e78bb9b56f152fca",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/plugins/system-monitor/renderer",
+    "candidate_lines": 2
+  },
+  {
+    "path": "src/plugins/system-monitor/renderer/layout.css",
+    "lines": 87,
+    "sha256": "ece775439da113b26c1e04d7295a5d6aba2e376b391c3ec3654d5650a85916cb",
+    "status": "已审",
+    "reason": "样式/HTML候选检查；动效可见性与抽屉状态附属于对应UI对象，无独立数据转换",
+    "machine_ids": [],
+    "module": "src/plugins/system-monitor/renderer",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/plugins/system-monitor/renderer/system-metrics.css",
+    "lines": 34,
+    "sha256": "07b1fd93749fd6e0ac5cf549d376fe21676b302491aa5a0f4eee1a93c74881c0",
+    "status": "已审",
+    "reason": "样式/HTML候选检查；动效可见性与抽屉状态附属于对应UI对象，无独立数据转换",
+    "machine_ids": [],
+    "module": "src/plugins/system-monitor/renderer",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/plugins/system-monitor/types.ts",
+    "lines": 46,
+    "sha256": "ef82cb7fcae06cab65c93d05dd457fe03a6e62ffd83a07c3a0f9924f3baa5d22",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/plugins/system-monitor",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/preload/index.ts",
+    "lines": 90,
+    "sha256": "1a91413efdb663daa69402f831b9de9daeb87083bc57ccae2f1c135987a6070b",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-006",
+      "ISM-032"
+    ],
+    "module": "src/preload",
+    "candidate_lines": 11
+  },
+  {
+    "path": "src/renderer/index.html",
+    "lines": 13,
+    "sha256": "55bd50d4ded8085cd100eb48eeb20458847be7877410b755116a01d1a72f84a3",
+    "status": "已审",
+    "reason": "样式/HTML候选检查；动效可见性与抽屉状态附属于对应UI对象，无独立数据转换",
+    "machine_ids": [],
+    "module": "src/renderer",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/AccessibilitySetting.tsx",
+    "lines": 81,
+    "sha256": "416c78b1b195775d59340ac6180a40867d633085eb4f9d01f72876850e2afd2e",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-039"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 11
+  },
+  {
+    "path": "src/renderer/src/AgentContextMenu.tsx",
+    "lines": 51,
+    "sha256": "b19165b7b5baeeb46c506c0e39118882c77fe38935a9338d0b3453fc7b97448b",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 4
+  },
+  {
+    "path": "src/renderer/src/AgentTopology.tsx",
+    "lines": 616,
+    "sha256": "0e8a6cd83437899e62fcb7fba0096b80dee32117ddc535abd5a54a090bc0773a",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-035",
+      "ISM-042"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 35
+  },
+  {
+    "path": "src/renderer/src/AgentTopology3D.tsx",
+    "lines": 198,
+    "sha256": "29e3acc4dc34a336623ad1b178b01acd778a5b2e0bdcc394b0037cd977272b34",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-036"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 17
+  },
+  {
+    "path": "src/renderer/src/AgentsView.tsx",
+    "lines": 246,
+    "sha256": "a90e2252c12b270833b16aa668684be25a757d765ac13df5b135da0a56e5c6f9",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-029"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 18
+  },
+  {
+    "path": "src/renderer/src/App.tsx",
+    "lines": 288,
+    "sha256": "282b519f06f9270d7990eea56b8b27d03b78ceb90579085b95e6a296bbdf76b0",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-029",
+      "ISM-032"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 38
+  },
+  {
+    "path": "src/renderer/src/DiagnosticPanel.tsx",
+    "lines": 216,
+    "sha256": "c66d883ab3ad942c116ef600c12e14062800c52570e7f45467a482263b8b1824",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-010"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 39
+  },
+  {
+    "path": "src/renderer/src/EventsView.tsx",
+    "lines": 355,
+    "sha256": "4a27102f0becb4967be191b7fa93d734436300d8a6755cc779ea240ad6a5885a",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-033"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 20
+  },
+  {
+    "path": "src/renderer/src/LiquidGlassSetting.tsx",
+    "lines": 106,
+    "sha256": "596696cff4b64ead0bf6e56bfa0009e8393998ae68b097b9f99aef8e9ddd5689",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-015"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 22
+  },
+  {
+    "path": "src/renderer/src/LoginItemSetting.tsx",
+    "lines": 105,
+    "sha256": "1c6fef140c8899e3d6d7a410f1cdfff6221948be23280eabea2b1645292e62e5",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-013"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 14
+  },
+  {
+    "path": "src/renderer/src/NotificationSettings.tsx",
+    "lines": 222,
+    "sha256": "86382a136d2ebdca810baebfe13e4182d3527f392816f6aee0a459d9b8ba659f",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-039"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 23
+  },
+  {
+    "path": "src/renderer/src/ScheduleHistory.tsx",
+    "lines": 162,
+    "sha256": "3d55d35865eb6a4cf0be5301591d93f6882304f69e7dddac736dc88d00298833",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-011",
+      "ISM-034"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 30
+  },
+  {
+    "path": "src/renderer/src/SchedulesView.tsx",
+    "lines": 392,
+    "sha256": "b905b29f1cf969131773b51f124bad88e5731fa298eb1d9eb07705e4005b4bfb",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-029",
+      "ISM-034"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 26
+  },
+  {
+    "path": "src/renderer/src/SettingsSaveError.tsx",
+    "lines": 142,
+    "sha256": "7312b6f9f1bfda5505579defa95ecef8969780335edb0b04c71c195a3c1b0b17",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-030"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 25
+  },
+  {
+    "path": "src/renderer/src/SettingsView.tsx",
+    "lines": 103,
+    "sha256": "f1c0437aeb39219c5ffac42ddb94de9204f8345b588b1907f41673b4ce61fabe",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/SidebarResizeHandle.tsx",
+    "lines": 152,
+    "sha256": "d0b400141a3fe3398d5f0eb791a0d1c5c2df2e7d94bc0e1d8499afdf8bdc4898",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-038"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 17
+  },
+  {
+    "path": "src/renderer/src/SourcePanels.tsx",
+    "lines": 119,
+    "sha256": "f4560e165dd2e1161a31d48c9fce2ea7285fd782f0be2411b26bbce289119688",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-032",
+      "ISM-041"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 15
+  },
+  {
+    "path": "src/renderer/src/StartupRecoveryView.tsx",
+    "lines": 121,
+    "sha256": "ee38108d9f8a165c2d6800bd8c1a45c91dae57db280a8a9a7fd3387ee229dc4b",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 17
+  },
+  {
+    "path": "src/renderer/src/TaskNotificationSubscription.tsx",
+    "lines": 39,
+    "sha256": "cc22be1743ebdd475c295b4f2fe2ea233afd37f1c120d356dd1237779880543c",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/ThemePicker.tsx",
+    "lines": 45,
+    "sha256": "a39135303c5d79ed0717d73ec6a92a8ac845ba7a5b69d86da89598ff3e9c517f",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-030"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 2
+  },
+  {
+    "path": "src/renderer/src/TrayView.tsx",
+    "lines": 97,
+    "sha256": "6a83bb7604ce5fd45925cfd06b8bedda35d0d6aa91d599733a15356de594f4d4",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-032",
+      "ISM-043"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 9
+  },
+  {
+    "path": "src/renderer/src/UpdateSettings.tsx",
+    "lines": 83,
+    "sha256": "4769371f700e68764a55dce205652a9e3593fbd2e6815dd8f4923228d559ca1f",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-031"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 18
+  },
+  {
+    "path": "src/renderer/src/agent-office-building.ts",
+    "lines": 181,
+    "sha256": "fe5af0bfe3568c02023f1adaacb191d3f3b45783cf207ea9c686af4685e8deae",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 2
+  },
+  {
+    "path": "src/renderer/src/agent-office-employee.ts",
+    "lines": 172,
+    "sha256": "586f2837267a1e8aa4312a4ca840b050b94e25d9d926f1c4e70351106a2c68d5",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 7
+  },
+  {
+    "path": "src/renderer/src/agent-topology-3d-layout.test.ts",
+    "lines": 189,
+    "sha256": "1c853b4321f2ef380c5e19a4e05a07490dcd15787545bf11c394db514b405cb3",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/agent-topology-3d-layout.ts",
+    "lines": 115,
+    "sha256": "9e62bc1e50e38ed437d403b5c9f431fd1ae439bc375b19563db30c82727ba641",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/agent-topology-3d.css",
+    "lines": 48,
+    "sha256": "36232a88a2441fc32e26f82edc02add6a3950d69d75a152c08c8560a29cbefcb",
+    "status": "已审",
+    "reason": "样式/HTML候选检查；动效可见性与抽屉状态附属于对应UI对象，无独立数据转换",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/agent-topology-scene.ts",
+    "lines": 708,
+    "sha256": "86bf94783708c5ac4ffc09623ea290d5bd4d8e0dff858ca70b780e7db347f970",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-036",
+      "ISM-037"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 89
+  },
+  {
+    "path": "src/renderer/src/agent-topology.css",
+    "lines": 382,
+    "sha256": "cb84bb45c57dd1d7b022a8f9ddd993bfc529b3f62a19d1dc3ce53a72b8f8a6bb",
+    "status": "已审",
+    "reason": "样式/HTML候选检查；动效可见性与抽屉状态附属于对应UI对象，无独立数据转换",
+    "machine_ids": [
+      "ISM-042"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/agent-topology.test.ts",
+    "lines": 482,
+    "sha256": "3d2e44e9bcaa7acec85882dcb4e34d3b6b77c1ed0d2cf65f4de685b9d3049f80",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/agent-topology.ts",
+    "lines": 329,
+    "sha256": "9d271882dd59186fcee3cf9ae126b964965e4907e1b71d7da58254884d26845c",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 4
+  },
+  {
+    "path": "src/renderer/src/components.tsx",
+    "lines": 302,
+    "sha256": "99f37e2dc82cd4ba1162e107d5f28166d4056b978d7208999ea663e368da22a7",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-041",
+      "ISM-042"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 23
+  },
+  {
+    "path": "src/renderer/src/detail-source-reasons.css",
+    "lines": 27,
+    "sha256": "b441ed0369921b0da85530803c85e01e99850e07571e50e6a6cc77691a7d7827",
+    "status": "已审",
+    "reason": "样式/HTML候选检查；动效可见性与抽屉状态附属于对应UI对象，无独立数据转换",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/diagnostic-panel.css",
+    "lines": 24,
+    "sha256": "bf0a4edb53c571607b2fcb0ef76ea9badead886ce22881b19a5c7327ab90a01b",
+    "status": "已审",
+    "reason": "样式/HTML候选检查；动效可见性与抽屉状态附属于对应UI对象，无独立数据转换",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/env.d.ts",
+    "lines": 8,
+    "sha256": "a6e95822e2a00561cabe5710eca36255ea3bd5dce8f478399b071d52fe5643c8",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/events.css",
+    "lines": 67,
+    "sha256": "8c3bbc27ed0d32148fa114648b8116adc5bd47afd4d1b8f860c163b97a258a5b",
+    "status": "已审",
+    "reason": "样式/HTML候选检查；动效可见性与抽屉状态附属于对应UI对象，无独立数据转换",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/i18n.tsx",
+    "lines": 12,
+    "sha256": "e209bcf3b9b71e92d3ce24d77f26cf2ee41034d8adb87d64a50cc04ac1bd6085",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/liquid-glass.css",
+    "lines": 20,
+    "sha256": "c1097473bb37cdcb6e666bc889a3a9928b19bce75f7ee8e9cccb3208d60c00a2",
+    "status": "已审",
+    "reason": "样式/HTML候选检查；动效可见性与抽屉状态附属于对应UI对象，无独立数据转换",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/main.tsx",
+    "lines": 13,
+    "sha256": "678d26374ceecdc127b16e91dda2047efe58aeea7cf7b292b8aec166c5d7567e",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/notification-settings.css",
+    "lines": 32,
+    "sha256": "bdb2ca09eb04cdf4dbf8ac45f846d9d9a96adad372cad424e5a7cba4be3d42ee",
+    "status": "已审",
+    "reason": "样式/HTML候选检查；动效可见性与抽屉状态附属于对应UI对象，无独立数据转换",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 1
+  },
+  {
+    "path": "src/renderer/src/plugin-registry.test.ts",
+    "lines": 100,
+    "sha256": "6432ba481b9dde3428c2e00d63df7f3d255657fdc9bdd01929e31086944aee9d",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 13
+  },
+  {
+    "path": "src/renderer/src/plugins/ContributionBoundary.tsx",
+    "lines": 17,
+    "sha256": "de3160e89e6817ff1524c5e96912e79f027e608c0eefdbc9c9bfbc7addd258d9",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-040"
+    ],
+    "module": "src/renderer/src/plugins",
+    "candidate_lines": 4
+  },
+  {
+    "path": "src/renderer/src/plugins/builtin/agents.tsx",
+    "lines": 41,
+    "sha256": "da8de37b0e8184f11119839c28a21a28597852138a6ad4a39e41267ceffdad79",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/renderer/src/plugins/builtin",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/plugins/builtin/events.tsx",
+    "lines": 6,
+    "sha256": "60faecc88a7d4310527f67908afcb3e1c461f35065dd79dfffeb4f93c857edf1",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/renderer/src/plugins/builtin",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/plugins/builtin/schedules.tsx",
+    "lines": 21,
+    "sha256": "ac5ae6d9e56823fe4a1fb7d84e8520dac1edea89857d4d1c6f065bb92fe19d3f",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/renderer/src/plugins/builtin",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/plugins/index.tsx",
+    "lines": 57,
+    "sha256": "5e234c64bc750435d4b34c3bdeca0ffe73798a579de9afd01d06a9ac27da4545",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-040"
+    ],
+    "module": "src/renderer/src/plugins",
+    "candidate_lines": 11
+  },
+  {
+    "path": "src/renderer/src/plugins/registry.ts",
+    "lines": 99,
+    "sha256": "16950e90b71430c11dd1c4ea57d6ad16bde7a478b0a302100f889da6111b452d",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-040"
+    ],
+    "module": "src/renderer/src/plugins",
+    "candidate_lines": 19
+  },
+  {
+    "path": "src/renderer/src/plugins/tray-selection.ts",
+    "lines": 26,
+    "sha256": "1835d974b644edbd24c92ebfdb4f3551b27681218ac5639e01fd25b82320112d",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-043"
+    ],
+    "module": "src/renderer/src/plugins",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/plugins/types.ts",
+    "lines": 49,
+    "sha256": "815f4d5d2d91d2ba15675983e2d55c36ee6838b6e8638603957ff04b6e8fd0dc",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/renderer/src/plugins",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/schedule-details.css",
+    "lines": 96,
+    "sha256": "08bdf2b8e48dc54c9927f3ea594da9c31454250ccccc9e6a6d5cc7ddebbb7ac0",
+    "status": "已审",
+    "reason": "样式/HTML候选检查；动效可见性与抽屉状态附属于对应UI对象，无独立数据转换",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 1
+  },
+  {
+    "path": "src/renderer/src/settings-error.css",
+    "lines": 84,
+    "sha256": "34c622627ee3881ae3348488b78c4f5de93faea3ca9e216814fc1fe5eaec42f2",
+    "status": "已审",
+    "reason": "样式/HTML候选检查；动效可见性与抽屉状态附属于对应UI对象，无独立数据转换",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 4
+  },
+  {
+    "path": "src/renderer/src/settings.css",
+    "lines": 79,
+    "sha256": "cb74036f71c0f30c2312e761da8b66d53170a648cab69add990d9acec4cc112a",
+    "status": "已审",
+    "reason": "样式/HTML候选检查；动效可见性与抽屉状态附属于对应UI对象，无独立数据转换",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/settings.tsx",
+    "lines": 265,
+    "sha256": "52f4b36a8eaa56c97f36a7eff500b6f21a57247433aef8d262bb1cd8b611f7d8",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-015",
+      "ISM-030"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 49
+  },
+  {
+    "path": "src/renderer/src/sources.css",
+    "lines": 50,
+    "sha256": "660b6de5a9f2f1090be7d8afc57006b823e51967105bf93a0afa2420d0bb6128",
+    "status": "已审",
+    "reason": "样式/HTML候选检查；动效可见性与抽屉状态附属于对应UI对象，无独立数据转换",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 1
+  },
+  {
+    "path": "src/renderer/src/startup-recovery.css",
+    "lines": 18,
+    "sha256": "e27dc4f4e59f054d295cb8589f8524b6a03464117e77c6b64b2bd0adb4ef2fc0",
+    "status": "已审",
+    "reason": "样式/HTML候选检查；动效可见性与抽屉状态附属于对应UI对象，无独立数据转换",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/styles.css",
+    "lines": 245,
+    "sha256": "e92ad80a9c1e3327115d91ce07264cc11f54185ce2d251005858aa410c35c9d9",
+    "status": "已审",
+    "reason": "样式/HTML候选检查；动效可见性与抽屉状态附属于对应UI对象，无独立数据转换",
+    "machine_ids": [
+      "ISM-042"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/tokens.css",
+    "lines": 8,
+    "sha256": "9dbf4eee9d27e65d1acc41a74ed165cda8815659872a916bd0a9daeeb7667af6",
+    "status": "已审",
+    "reason": "样式/HTML候选检查；动效可见性与抽屉状态附属于对应UI对象，无独立数据转换",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/tray-selection.test.ts",
+    "lines": 47,
+    "sha256": "7af1363eb57d99cde7531db1acc02af22c66356e9772fd828f6e35f6a66cdae7",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/tray.css",
+    "lines": 40,
+    "sha256": "0a27c1092e6df6b9f629c0abe8e2e4612a56626a1fa59ca0e90955000d8b9c6a",
+    "status": "已审",
+    "reason": "样式/HTML候选检查；动效可见性与抽屉状态附属于对应UI对象，无独立数据转换",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/updates.css",
+    "lines": 27,
+    "sha256": "4117638dfc990cd989a93695c4113d4eba54c6a7932faf04a59aef236fe23aa5",
+    "status": "已审",
+    "reason": "样式/HTML候选检查；动效可见性与抽屉状态附属于对应UI对象，无独立数据转换",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/renderer/src/updates.tsx",
+    "lines": 98,
+    "sha256": "43273e96059c08bb37c53a535a7b8cd93f76cdc50705774a0401b4771ba18ce7",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-031"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 29
+  },
+  {
+    "path": "src/renderer/src/view-state.test.ts",
+    "lines": 100,
+    "sha256": "b61402cb2fb6d32765613f2f5d97260435a66eab90128805bc266233c6ea6570",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/renderer/src",
+    "candidate_lines": 4
+  },
+  {
+    "path": "src/renderer/src/view-state.ts",
+    "lines": 98,
+    "sha256": "5754f460720279406f3fb8733e6146ccd97b5fe931c064c045119602872d4e71",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-029",
+      "ISM-035"
+    ],
+    "module": "src/renderer/src",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/shared/diagnostic-report.ts",
+    "lines": 27,
+    "sha256": "39ea01effff8d1852ca27d389d18d492948ffebb2e792884b32ab2cd2115c463",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/shared",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/shared/diagnostics.test.ts",
+    "lines": 81,
+    "sha256": "d8766c8a10aea676abb3303e09be6938e361033ffab6f7857063cd54c569b0f7",
+    "status": "不适用",
+    "reason": "测试实现不计应用状态机；已建立用例/断言证据索引，未运行现有套件",
+    "machine_ids": [],
+    "module": "src/shared",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/shared/diagnostics.ts",
+    "lines": 174,
+    "sha256": "622dda82715b9e1182692bbdbb05e41379a6574c357a65f73b225c31c32bfb2c",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/shared",
+    "candidate_lines": 13
+  },
+  {
+    "path": "src/shared/events.ts",
+    "lines": 91,
+    "sha256": "f4aa34e98cee1ae8c5f5f8f0442770da1d2bf2750e223714eed31aa5e89bbe99",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/shared",
+    "candidate_lines": 2
+  },
+  {
+    "path": "src/shared/navigation.ts",
+    "lines": 50,
+    "sha256": "4189d0ad4c97c76d650b6a2520cd0ebe2dc485c8b69d0f98e30ab3bc03003a8b",
+    "status": "已审",
+    "reason": "状态字段、守卫、异步返回与清理路径定向审阅；证据锚点见inventory，非逐行形式化证明",
+    "machine_ids": [
+      "ISM-029"
+    ],
+    "module": "src/shared",
+    "candidate_lines": 2
+  },
+  {
+    "path": "src/shared/notifications.ts",
+    "lines": 31,
+    "sha256": "10e008c1b2aa4ca23ff23bea578314b3ca03d12ecac9a01f92834ae42fc686d1",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/shared",
+    "candidate_lines": 2
+  },
+  {
+    "path": "src/shared/plugin-catalog.ts",
+    "lines": 35,
+    "sha256": "b2e9bacc4a9f53910ab9628981892b93316005f6ae85c1da4effe2f73cbb1aa8",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/shared",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/shared/plugins.ts",
+    "lines": 5,
+    "sha256": "2cd16a41e61bc39723e0251beca5773bca3cfe1f82e929eefbcf9715e6813a0f",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/shared",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/shared/resources.ts",
+    "lines": 46,
+    "sha256": "dead0e5729963367b1c821f5a67eec2d3ab2cf64fcdae59a5ccd5909e618d7ce",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/shared",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/shared/settings.ts",
+    "lines": 102,
+    "sha256": "89c40dc69ae5ad00a651fd978393505f9163850355228bb1fb299db2a3cbdbc6",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/shared",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/shared/source-capabilities.ts",
+    "lines": 109,
+    "sha256": "61e1bc2a586b1082e755c542da692718d466ce1c6bff24766b2c62190fb73604",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/shared",
+    "candidate_lines": 1
+  },
+  {
+    "path": "src/shared/startup-recovery.ts",
+    "lines": 16,
+    "sha256": "eb745b7cd11e8645369879af49e32f75148e137532e8ada1dd8861c436455796",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/shared",
+    "candidate_lines": 1
+  },
+  {
+    "path": "src/shared/themes.ts",
+    "lines": 396,
+    "sha256": "762b25f6b98d7437e9480f71a4c361ad06e1341db98cdf260ae40c5afa7af7f7",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/shared",
+    "candidate_lines": 0
+  },
+  {
+    "path": "src/shared/types.ts",
+    "lines": 177,
+    "sha256": "c4034cfda4d4ba5356e68fb8bd2d882cfab8dd01a889fc5a06b4439d8479bc6f",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/shared",
+    "candidate_lines": 1
+  },
+  {
+    "path": "src/shared/updates.ts",
+    "lines": 22,
+    "sha256": "751e4fdb00da8bb9facf09db992b3eb16c9c037d76f4bf4c95197b12eb76ac2f",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "src/shared",
+    "candidate_lines": 3
+  },
+  {
+    "path": "tsconfig.json",
+    "lines": 16,
+    "sha256": "c2b3586e61a428ba16b7e9c5dcd36e92f460b0d7b7ad4b2ab1aca658653c9986",
+    "status": "不适用",
+    "reason": "已审候选：类型/纯投影/校验/装配/局部算法或既有生命周期委托；无独立跨事件状态所有权",
+    "machine_ids": [],
+    "module": "(root)",
+    "candidate_lines": 0
+  }
+]

@@ -1,0 +1,3130 @@
+[
+  {
+    "id": "ISM-008",
+    "name": "托盘窗口加载与最新显示意图",
+    "kind": "implicit",
+    "files": [
+      "src/main/tray-window.ts:12"
+    ],
+    "states": [
+      "current/pending/cancelLoad/requested/stopped"
+    ],
+    "transitions": [
+      "toggle翻转requested；ensure合并加载",
+      "ready+load完成且requested→present",
+      "blur/Escape/close→hide；gone→destroy→下次重建"
+    ],
+    "lifecycle": "10秒加载期限；dispose取消并销毁",
+    "dependencies": [
+      "ISM-006",
+      "ISM-043"
+    ],
+    "risk": "未识别具体缺陷；静态审计不证明不存在风险",
+    "risk_level": "低",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/tray-window.test.ts"
+    ],
+    "test_gap": "所列测试仅为相关源码证据，不表示本次执行通过；建议复核本文转换表中的失败、重复事件和卸载后返回边界。",
+    "responsibility": "托盘窗口加载与最新显示意图",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "保留现有局部状态；用类型约束、命名清晰的转换函数和取消/清理不变量即可，不必引入状态机库。",
+    "test_evidence": [
+      {
+        "path": "src/main/tray-window.test.ts",
+        "cases": [
+          {
+            "line": 43,
+            "text": "test('no panel is allocated before a request; concurrent opens share one load and one window', async () => {"
+          },
+          {
+            "line": 58,
+            "text": "test('hide and repeated clicks during load preserve the latest intent without reopening or duplicating the panel', async () => {"
+          },
+          {
+            "line": 76,
+            "text": "test('painting does not present an unfinished load; failure releases the window and one later click retries', async () => {"
+          },
+          {
+            "line": 101,
+            "text": "test('an unready panel times out and releases its listeners so a new request can succeed', async context => {"
+          },
+          {
+            "line": 118,
+            "text": "test('shutdown cancels an in-flight load and prevents a late ready event from showing or recreating the panel', async () => {"
+          },
+          {
+            "line": 136,
+            "text": "test('external destruction while loading rejects the request and releases its slot for retry', async () => {"
+          },
+          {
+            "line": 151,
+            "text": "test('a crashed loaded renderer is released and reported once, and the next click creates a usable replacement', async () => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/tray-window.ts",
+        "line": 12,
+        "excerpt": "export class TrayWindowController {",
+        "sha256": "085d734e687853661d73b12a9612946167e96130257582daaa9f9111ebd0c357"
+      }
+    ],
+    "state_owner": "TrayWindowController",
+    "writers": [
+      "ensure/createAndLoad",
+      "toggle",
+      "hide",
+      "gone",
+      "closed",
+      "dispose"
+    ],
+    "readers": [
+      "present",
+      "pending guard"
+    ],
+    "initialization": "current/pending空、requested=false",
+    "termination": "dispose取消load并destroy",
+    "recovery": "加载/renderer失败销毁；下一toggle重新创建"
+  },
+  {
+    "id": "ISM-009",
+    "name": "窗口位置延迟保存",
+    "kind": "implicit",
+    "files": [
+      "src/main/window-geometry.ts:36"
+    ],
+    "states": [
+      "timer/pending/active/lastNormal/saved/error/stopping/detached/disposal"
+    ],
+    "transitions": [
+      "move/resize→覆盖pending→250ms flush",
+      "save成功更新saved；失败保留error可retry",
+      "dispose→capture→detach→flush"
+    ],
+    "lifecycle": "仅正常窗口记录；跨显示器恢复夹取；设置队列为提交边界",
+    "dependencies": [
+      "ISM-002"
+    ],
+    "risk": "未识别具体缺陷；静态审计不证明不存在风险",
+    "risk_level": "低",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/window-geometry.test.ts"
+    ],
+    "test_gap": "所列测试仅为相关源码证据，不表示本次执行通过；建议复核本文转换表中的失败、重复事件和卸载后返回边界。",
+    "responsibility": "窗口位置延迟保存",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "保留现有局部状态；用类型约束、命名清晰的转换函数和取消/清理不变量即可，不必引入状态机库。",
+    "test_evidence": [
+      {
+        "path": "src/main/window-geometry.test.ts",
+        "cases": [
+          {
+            "line": 29,
+            "text": "test('geometry validation rejects unsafe sizes and preserves independent durable preferences', async t => {"
+          },
+          {
+            "line": 60,
+            "text": "test('restore keeps valid secondary-screen coordinates and clamps detached or smaller displays', () => {"
+          },
+          {
+            "line": 75,
+            "text": "test('100 resize events retain only the last pending bounds and shutdown drains real atomic writes', async t => {"
+          },
+          {
+            "line": 111,
+            "text": "test('returning to saved bounds cancels an obsolete pending resize and non-normal states never replace it', async t => {"
+          },
+          {
+            "line": 133,
+            "text": "test('display removal repositions on return from fullscreen and repeated lifecycles release listeners', async () => {"
+          },
+          {
+            "line": 153,
+            "text": "test('a real path conflict is reported without claiming saved bounds and retry saves the current position', async t => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/window-geometry.ts",
+        "line": 36,
+        "excerpt": "export class WindowGeometry {",
+        "sha256": "5ebd2830bc15d0a58ecc4e6f42ef1d47367a4004a8580d4b5bd62ac62d5a2f96"
+      }
+    ],
+    "state_owner": "WindowGeometry",
+    "writers": [
+      "capture",
+      "save",
+      "flush",
+      "retry",
+      "detach",
+      "dispose"
+    ],
+    "readers": [
+      "normal",
+      "settingsSnapshot",
+      "geometryError"
+    ],
+    "initialization": "读取normal bounds与settings保存值",
+    "termination": "dispose detach并flush最后pending",
+    "recovery": "retry重新保存lastNormal"
+  },
+  {
+    "id": "ISM-010",
+    "name": "诊断预览及保存事务",
+    "kind": "implicit",
+    "files": [
+      "src/main/diagnostics.ts:43",
+      "src/main/diagnostics.ts:74",
+      "src/renderer/src/DiagnosticPanel.tsx:37",
+      "src/main/index.ts:103"
+    ],
+    "states": [
+      "preview/expires/active/closed/cleanupFailure",
+      "renderer.operation/revision/mounted/releaseBarrier"
+    ],
+    "transitions": [
+      "generate→TTL预览；copy/save检查ID和单操作",
+      "save:选择文件→临时文件sync→link提交→unlink",
+      "cancel/卸载→abort/drain；cleanup失败锁定"
+    ],
+    "lifecycle": "10分钟预览；5秒IO期限不覆盖原生选文件；关窗销毁dialog owner",
+    "dependencies": [
+      "ISM-001",
+      "ISM-023"
+    ],
+    "risk": "未识别具体缺陷；静态审计不证明不存在风险",
+    "risk_level": "中",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/diagnostics.test.ts"
+    ],
+    "test_gap": "所列测试仅为相关源码证据，不表示本次执行通过；建议复核本文转换表中的失败、重复事件和卸载后返回边界。",
+    "responsibility": "诊断预览及保存事务",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "保留现有局部状态；用类型约束、命名清晰的转换函数和取消/清理不变量即可，不必引入状态机库。",
+    "test_evidence": [
+      {
+        "path": "src/main/diagnostics.test.ts",
+        "cases": [
+          {
+            "line": 25,
+            "text": "test('only an existing preview can copy or open the save dialog; replacing and releasing invalidate IDs', async t => {"
+          },
+          {
+            "line": 42,
+            "text": "test('generation can be cancelled before sampling and does not revive a released report', async () => {"
+          },
+          {
+            "line": 53,
+            "text": "test('cancel waits for the real owner to release and concurrent generation remains rejected', async () => {"
+          },
+          {
+            "line": 78,
+            "text": "test('preview expiration revokes writes and closing the service prevents reopening', async t => {"
+          },
+          {
+            "line": 93,
+            "text": "test('dialog cancellation creates no file and failed copy never returns success or private content', async t => {"
+          },
+          {
+            "line": 107,
+            "text": "test('real export preserves UTF-8 bytes, private permissions, and does not replace existing files or symlinks', async t => {"
+          },
+          {
+            "line": 122,
+            "text": "test('cancel during a partially written export removes owned temporary data and never creates destination', async t => {"
+          },
+          {
+            "line": 135,
+            "text": "test('write failure cleans a real temporary file and exposes its errno without a success receipt', async t => {"
+          },
+          {
+            "line": 153,
+            "text": "test('cleanup failure is distinct from cancellation and cancel cannot acknowledge a successful release', async () => {"
+          },
+          {
+            "line": 171,
+            "text": "test('oversized reports reject before a file is opened, including multibyte boundaries', async t => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/diagnostics.ts",
+        "line": 43,
+        "excerpt": "export async function saveDiagnosticReport(filename: string, text: string, signal: AbortSignal,",
+        "sha256": "07695ad5948c1eb9393a31f44ec10d54a517e52dda65c3c9e2ac4c0bde575cff"
+      },
+      {
+        "path": "src/main/diagnostics.ts",
+        "line": 74,
+        "excerpt": "export class Diagnostics {",
+        "sha256": "07695ad5948c1eb9393a31f44ec10d54a517e52dda65c3c9e2ac4c0bde575cff"
+      },
+      {
+        "path": "src/renderer/src/DiagnosticPanel.tsx",
+        "line": 37,
+        "excerpt": "let releaseBarrier: Promise<DiagnosticFailure | null> = Promise.resolve(null)",
+        "sha256": "c66d883ab3ad942c116ef600c12e14062800c52570e7f45467a482263b8b1824"
+      },
+      {
+        "path": "src/main/index.ts",
+        "line": 103,
+        "excerpt": "const diagnostics = new Diagnostics({",
+        "sha256": "66bf4e487b4583a77718c8741f2f53ddfabad5271862a02bea88b68890c3ee60"
+      }
+    ],
+    "state_owner": "Diagnostics + DiagnosticPanel",
+    "writers": [
+      "run",
+      "clear",
+      "generate",
+      "cancel",
+      "close",
+      "saveDiagnosticReport",
+      "panel revision"
+    ],
+    "readers": [
+      "current",
+      "act",
+      "isCurrent",
+      "preview rendering"
+    ],
+    "initialization": "无preview和active",
+    "termination": "cancel清预览并等待active；close永久关闭",
+    "recovery": "expired需generate；cleanupFailure锁定"
+  },
+  {
+    "id": "ISM-011",
+    "name": "历史读取替换与排空",
+    "kind": "implicit",
+    "files": [
+      "src/main/schedule-history.ts:28",
+      "src/main/collectors/hermes-history.ts:88",
+      "src/renderer/src/ScheduleHistory.tsx:22"
+    ],
+    "states": [
+      "active/pending/closed/drainFailure/idleWaiter",
+      "renderer.phase/page/current/offset/restoreCachedPage"
+    ],
+    "transitions": [
+      "新请求取消active并替换一个pending",
+      "provider释放后才启动下一请求",
+      "卸载/隐藏/取消→reject+abort→idle；身份offset校验接受结果"
+    ],
+    "lifecycle": "只允许一个provider；close等实际释放；历史读取器不执行上游任务",
+    "dependencies": [
+      "ISM-004",
+      "ISM-023",
+      "ISM-034"
+    ],
+    "risk": "未识别具体缺陷；静态审计不证明不存在风险",
+    "risk_level": "中",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/schedule-history.test.ts",
+      "src/main/collectors/hermes-history.test.ts"
+    ],
+    "test_gap": "所列测试仅为相关源码证据，不表示本次执行通过；建议复核本文转换表中的失败、重复事件和卸载后返回边界。",
+    "responsibility": "历史读取替换与排空",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "保留现有局部状态；用类型约束、命名清晰的转换函数和取消/清理不变量即可，不必引入状态机库。",
+    "test_evidence": [
+      {
+        "path": "src/main/schedule-history.test.ts",
+        "cases": [
+          {
+            "line": 38,
+            "text": "test('unsupported launchd and cron histories stay unavailable despite exit codes', async () => {"
+          },
+          {
+            "line": 49,
+            "text": "test('a burst retains only the latest pending request and never overlaps provider cleanup', async () => {"
+          },
+          {
+            "line": 70,
+            "text": "test('cancel settles active and pending callers, waits for release, and supports repeated reuse', async () => {"
+          },
+          {
+            "line": 93,
+            "text": "test('invalid offsets and job identifiers fail before starting a provider', async () => {"
+          },
+          {
+            "line": 102,
+            "text": "test('read failure rejects instead of being represented as empty or unsupported history', async () => {"
+          },
+          {
+            "line": 109,
+            "text": "test('idle waits through active release and the latest replacement without cancelling it', async () => {"
+          },
+          {
+            "line": 133,
+            "text": "test('close permanently closes admission, shares one promise and drains late provider results', async () => {"
+          },
+          {
+            "line": 157,
+            "text": "test('one hundred independent start/close cycles release providers without overlap or reusable admission', async () => {"
+          },
+          {
+            "line": 176,
+            "text": "test('non-cancellation provider failure during release reaches idle and close after caller cancellation', async () => {"
+          },
+          {
+            "line": 194,
+            "text": "test('cleanup failure is retained even when no idle observer existed at the time', async () => {"
+          },
+          {
+            "line": 207,
+            "text": "test('ordinary read errors reach the caller while idle and close still confirm resource release', async () => {"
+          },
+          {
+            "line": 219,
+            "text": "test('empty and unsupported readers close immediately with stable promise identity', async () => {"
+          },
+          {
+            "line": 229,
+            "text": "test('resource cleanup failures reject shutdown even when no cancellation was requested', async () => {"
+          },
+          {
+            "line": 241,
+            "text": "test('nested abort and cleanup errors retain cleanup evidence instead of becoming expected cancellation', async () => {"
+          },
+          {
+            "line": 254,
+            "text": "test('an aggregate containing only real aborts drains successfully', async () => {"
+          }
+        ]
+      },
+      {
+        "path": "src/main/collectors/hermes-history.test.ts",
+        "cases": [
+          {
+            "line": 39,
+            "text": "test('SQLite pages use real instants across offsets, sub-milliseconds and stable ID ties', async t => {"
+          },
+          {
+            "line": 67,
+            "text": "test('execution and delivery outcomes remain separate, with absent starts never inferred from process birth', async t => {"
+          },
+          {
+            "line": 94,
+            "text": "test('only the bound task is read; long private bodies never appear in output', async t => {"
+          },
+          {
+            "line": 109,
+            "text": "test('missing, damaged and incompatible databases reject; an empty real history succeeds', async t => {"
+          },
+          {
+            "line": 127,
+            "text": "test('overlong metadata is rejected instead of silently truncating fields', async t => {"
+          },
+          {
+            "line": 142,
+            "text": "test('invalid calendar values, timezone-free timestamps and reversed time sequences are rejected', async t => {"
+          },
+          {
+            "line": 160,
+            "text": "test('provider cancellation kills its child, settles after close, and permits immediate reuse', async t => {"
+          },
+          {
+            "line": 178,
+            "text": "test('history cancelled while waiting for shared commands settles before admission and permits reuse', async t => {"
+          },
+          {
+            "line": 203,
+            "text": "test('reader close drains a queued SQLite request without waiting for unrelated command owners', async t => {"
+          },
+          {
+            "line": 237,
+            "text": "test('reader close waits for a real SQLite helper to close and release its command budget', async t => {"
+          },
+          {
+            "line": 258,
+            "text": "test('schedule plugin cancellation drains an actual SQLite helper before a replacement reads', async t => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/schedule-history.ts",
+        "line": 28,
+        "excerpt": "export class ScheduleHistoryReader {",
+        "sha256": "7161c120312000b5c3b8fb0ff9d22f59685f9cc560f745b604b518f94ff3f36a"
+      },
+      {
+        "path": "src/main/collectors/hermes-history.ts",
+        "line": 88,
+        "excerpt": "export class HermesHistoryProvider implements ScheduleHistoryProvider {",
+        "sha256": "466e37ccd2cc79c10cf33efea189520980e3ebd26aa230e886e4bb6a78f5601a"
+      },
+      {
+        "path": "src/renderer/src/ScheduleHistory.tsx",
+        "line": 22,
+        "excerpt": "export default function ScheduleHistory({ jobId, enabled, active, offset, onOffsetChange, onSettled }: {",
+        "sha256": "3d55d35865eb6a4cf0be5301591d93f6882304f69e7dddac736dc88d00298833"
+      }
+    ],
+    "state_owner": "ScheduleHistoryReader + ScheduleHistory",
+    "writers": [
+      "read",
+      "cancel",
+      "execute.finally",
+      "close",
+      "effect cleanup"
+    ],
+    "readers": [
+      "idle",
+      "diagnostics",
+      "provider supports",
+      "renderer page identity"
+    ],
+    "initialization": "无active/pending、closed=false",
+    "termination": "close取消并idle排空",
+    "recovery": "普通失败下一read；新请求替换pending；排空失败保留"
+  },
+  {
+    "id": "ISM-012",
+    "name": "原生更新暂存与回执",
+    "kind": "implicit",
+    "files": [
+      "src/main/plugins/native-update.ts:18"
+    ],
+    "states": [
+      "server/baseUrl/finished",
+      "signal/native events"
+    ],
+    "transitions": [
+      "stat→listen loopback→register listeners→checkForUpdates",
+      "downloaded→cleanup→resolve；error/unavailable/abort→cleanup→reject"
+    ],
+    "lifecycle": "最多2连接；外层安装120秒期限；不等同安装成功",
+    "dependencies": [
+      "ISM-007"
+    ],
+    "risk": "未识别具体缺陷；静态审计不证明不存在风险",
+    "risk_level": "中",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/app-updates.test.ts"
+    ],
+    "test_gap": "所列测试仅为相关源码证据，不表示本次执行通过；建议复核本文转换表中的失败、重复事件和卸载后返回边界。",
+    "responsibility": "原生更新暂存与回执",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "保留现有局部状态；用类型约束、命名清晰的转换函数和取消/清理不变量即可，不必引入状态机库。",
+    "test_evidence": [
+      {
+        "path": "src/main/app-updates.test.ts",
+        "cases": [
+          {
+            "line": 16,
+            "text": "test('stable update selection respects semver and machine architecture', () => {"
+          },
+          {
+            "line": 25,
+            "text": "test('rejects nonstable releases and malformed tags', () => {"
+          },
+          {
+            "line": 35,
+            "text": "test('rejects missing or duplicate architecture and untrusted release assets', () => {"
+          },
+          {
+            "line": 54,
+            "text": "test('GitHub API uses versioned JSON headers and reports unavailable releases', async () => {"
+          },
+          {
+            "line": 65,
+            "text": "test('an unavailable GitHub Release is an error rather than an up-to-date result', async () => {"
+          },
+          {
+            "line": 78,
+            "text": "test('metadata rejects oversized responses before retaining the overflow chunk', async () => {"
+          },
+          {
+            "line": 90,
+            "text": "test('redirects cannot escape HTTPS GitHub release hosts', async () => {"
+          },
+          {
+            "line": 99,
+            "text": "test('download publishes only a complete checksum-verified file and removes failures', async () => {"
+          },
+          {
+            "line": 112,
+            "text": "test('concurrent checks coalesce and cannot auto-download or install', async () => {"
+          },
+          {
+            "line": 139,
+            "text": "test('download cancellation interrupts the read, preserves offer, and releases its partial file', async () => {"
+          },
+          {
+            "line": 168,
+            "text": "test('unsigned and development builds allow manual checks but never download or install', async context => {"
+          },
+          {
+            "line": 203,
+            "text": "test('a manual check postpones the startup check so errors remain visible', async context => {"
+          },
+          {
+            "line": 220,
+            "text": "test('signature and check errors remain visible without automatic checks and allow manual retry', async context => {"
+          },
+          {
+            "line": 259,
+            "text": "test('unsupported platforms never check, download or install even after an error', async context => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/plugins/native-update.ts",
+        "line": 18,
+        "excerpt": "export async function stageNativeUpdate(native: NativeUpdater, file: string, asset: UpdateAsset, signal: AbortSignal): Promise<void> {",
+        "sha256": "2280b6bf1c4a08ebc48111b5a908fa8b638cf4cd4a902bf94480b717b6424e44"
+      }
+    ],
+    "state_owner": "stageNativeUpdate closure",
+    "writers": [
+      "server.listen",
+      "native event callbacks",
+      "cleanup"
+    ],
+    "readers": [
+      "finished guard",
+      "host install await"
+    ],
+    "initialization": "验证本地包后创建loopback server",
+    "termination": "任一终态移除监听并关server",
+    "recovery": "上层重试下载/安装；此调用一次性"
+  },
+  {
+    "id": "ISM-013",
+    "name": "登录启动系统状态与回滚",
+    "kind": "hybrid",
+    "files": [
+      "src/main/login-items.ts:19",
+      "src/renderer/src/LoginItemSetting.tsx:9",
+      "src/renderer/src/LoginItemSetting.tsx:32"
+    ],
+    "states": [
+      "OS.status/openAtLogin/availability",
+      "before/state/rollbackFailed"
+    ],
+    "transitions": [
+      "read→验证一致性；write→readback",
+      "失败且状态改变→write(before)→验证回滚"
+    ],
+    "lifecycle": "OS持久化为权威；requires-approval不是enabled；开发不可操作",
+    "dependencies": [
+      "ISM-001",
+      "ISM-039"
+    ],
+    "risk": "未识别具体缺陷；静态审计不证明不存在风险",
+    "risk_level": "中",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/login-items.test.ts"
+    ],
+    "test_gap": "所列测试仅为相关源码证据，不表示本次执行通过；建议复核本文转换表中的失败、重复事件和卸载后返回边界。",
+    "responsibility": "登录启动系统状态与回滚",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "保留现有局部状态；用类型约束、命名清晰的转换函数和取消/清理不变量即可，不必引入状态机库。",
+    "test_evidence": [
+      {
+        "path": "src/main/login-items.test.ts",
+        "cases": [
+          {
+            "line": 24,
+            "text": "test('startup never registers a login item and system changes are authoritative', () => {"
+          },
+          {
+            "line": 39,
+            "text": "test('pending approval remains pending and can be cancelled without claiming activation', () => {"
+          },
+          {
+            "line": 49,
+            "text": "test('development, headless and unsupported platforms never access native login items', () => {"
+          },
+          {
+            "line": 63,
+            "text": "test('a moved application exposes system status but cannot change the installed registration', () => {"
+          },
+          {
+            "line": 74,
+            "text": "test('a denied change retains the old state and reports bounded redacted diagnostics', () => {"
+          },
+          {
+            "line": 86,
+            "text": "test('a native partial failure is rolled back before reporting failure', () => {"
+          },
+          {
+            "line": 98,
+            "text": "test('a rollback failure reports the actual changed state and both failure stages', () => {"
+          },
+          {
+            "line": 116,
+            "text": "test('a silently ignored native write is a failure, not an optimistic enabled state', () => {"
+          },
+          {
+            "line": 126,
+            "text": "test('unknown or contradictory system state stays unknown and prevents mutation', () => {"
+          },
+          {
+            "line": 143,
+            "text": "test('native read failure is visible and cannot fall through to foreground startup', () => {"
+          },
+          {
+            "line": 153,
+            "text": "test('failure to read after a change restores the previous state and retains the read cause', () => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/login-items.ts",
+        "line": 19,
+        "excerpt": "export class LoginItems {",
+        "sha256": "57e50a0bfc93a1b00184d0ec716301bb9937acf37710888001a2e214912b5fa3"
+      },
+      {
+        "path": "src/renderer/src/LoginItemSetting.tsx",
+        "line": 9,
+        "excerpt": "export default function LoginItemSetting() {",
+        "sha256": "1c6fef140c8899e3d6d7a410f1cdfff6221948be23280eabea2b1645292e62e5"
+      },
+      {
+        "path": "src/renderer/src/LoginItemSetting.tsx",
+        "line": 32,
+        "excerpt": "  async function request(enabled?: boolean, manual = true) {",
+        "sha256": "1c6fef140c8899e3d6d7a410f1cdfff6221948be23280eabea2b1645292e62e5"
+      }
+    ],
+    "state_owner": "LoginItems + LoginItemSetting",
+    "writers": [
+      "OS write",
+      "rollback",
+      "request result"
+    ],
+    "readers": [
+      "readState",
+      "snapshot",
+      "wasOpenedAtLogin",
+      "page UI"
+    ],
+    "initialization": "OS读取权威状态，未知明确返回",
+    "termination": "页面卸载不接受迟到返回；系统登记跨应用退出保留",
+    "recovery": "write失败回滚；requires-approval等用户系统操作"
+  },
+  {
+    "id": "ISM-014",
+    "name": "桌面休眠阻止器生命周期",
+    "kind": "implicit",
+    "files": [
+      "src/main/desktop-settings.ts:20"
+    ],
+    "states": [
+      "blocker",
+      "settings.preventSleep/headless"
+    ],
+    "transitions": [
+      "开启→start并核验",
+      "关闭/dispose→stop并核验→清句柄"
+    ],
+    "lifecycle": "设置回滚调用apply(previous)；退出在设置排空之后释放",
+    "dependencies": [
+      "ISM-002"
+    ],
+    "risk": "未识别具体缺陷；静态审计不证明不存在风险",
+    "risk_level": "低",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [],
+    "test_gap": "所列测试仅为相关源码证据，不表示本次执行通过；建议复核本文转换表中的失败、重复事件和卸载后返回边界。",
+    "responsibility": "桌面休眠阻止器生命周期",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "保留现有局部状态；用类型约束、命名清晰的转换函数和取消/清理不变量即可，不必引入状态机库。",
+    "test_evidence": [],
+    "evidence": [
+      {
+        "path": "src/main/desktop-settings.ts",
+        "line": 20,
+        "excerpt": "export class DesktopSettings {",
+        "sha256": "b964f5d32cf912d9413f824bf6576ae0823ddd09f4f75cb3f9ef525a11dcc2dd"
+      }
+    ],
+    "state_owner": "DesktopSettings",
+    "writers": [
+      "apply",
+      "dispose"
+    ],
+    "readers": [
+      "blocker guard",
+      "powerSaveBlocker.isStarted"
+    ],
+    "initialization": "blocker undefined",
+    "termination": "dispose核验stop后清句柄",
+    "recovery": "SettingsStore回滚重新apply previous"
+  },
+  {
+    "id": "ISM-015",
+    "name": "玻璃预览、提交与原生视图所有权",
+    "kind": "implicit",
+    "files": [
+      "src/renderer/src/settings.tsx:49",
+      "src/main/index.ts:216",
+      "src/main/index.ts:480",
+      "src/main/liquid-glass.ts:11",
+      "src/native/liquid-glass.mm:123",
+      "src/renderer/src/LiquidGlassSetting.tsx:11"
+    ],
+    "states": [
+      "glassRequest/Worker/Revision/Failure/Active",
+      "main.glassPreview/applied WeakMap",
+      "native关联glass view"
+    ],
+    "transitions": [
+      "slider→最新值合并串行IPC→revision校验",
+      "保存等待预览→设置事务→取消预览",
+      "blur/hide/accessibility→cancel；intensity=0移除native view"
+    ],
+    "lifecycle": "每窗口一个原生glass；主线程；窗口归属校验；卸载取消",
+    "dependencies": [
+      "ISM-002",
+      "ISM-030"
+    ],
+    "risk": "未识别具体缺陷；静态审计不证明不存在风险",
+    "risk_level": "中",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [],
+    "test_gap": "所列测试仅为相关源码证据，不表示本次执行通过；建议复核本文转换表中的失败、重复事件和卸载后返回边界。",
+    "responsibility": "玻璃预览、提交与原生视图所有权",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "保留现有局部状态；用类型约束、命名清晰的转换函数和取消/清理不变量即可，不必引入状态机库。",
+    "test_evidence": [],
+    "evidence": [
+      {
+        "path": "src/renderer/src/settings.tsx",
+        "line": 49,
+        "excerpt": "  const [glassPreview, setGlassPreview] = useState<number | null>(null)",
+        "sha256": "52f4b36a8eaa56c97f36a7eff500b6f21a57247433aef8d262bb1cd8b611f7d8"
+      },
+      {
+        "path": "src/main/index.ts",
+        "line": 216,
+        "excerpt": "  const cancelGlassPreview = () => {",
+        "sha256": "66bf4e487b4583a77718c8741f2f53ddfabad5271862a02bea88b68890c3ee60"
+      },
+      {
+        "path": "src/main/index.ts",
+        "line": 480,
+        "excerpt": "    handle('settings:preview-glass', intensity => {",
+        "sha256": "66bf4e487b4583a77718c8741f2f53ddfabad5271862a02bea88b68890c3ee60"
+      },
+      {
+        "path": "src/main/liquid-glass.ts",
+        "line": 11,
+        "excerpt": "let native: NativeGlass | undefined",
+        "sha256": "16116b7aa38616c6815ac98383702253696adfe1f23402a9bfcfd93734367ac3"
+      },
+      {
+        "path": "src/native/liquid-glass.mm",
+        "line": 123,
+        "excerpt": "      if (intensity == 0) {",
+        "sha256": "8b594a79b5c3f53bccf7866d729428907c4126dc0e326f89dfbf39f04bfa56f7"
+      },
+      {
+        "path": "src/renderer/src/LiquidGlassSetting.tsx",
+        "line": 11,
+        "excerpt": "  const timer = useRef<number | undefined>(undefined)",
+        "sha256": "596696cff4b64ead0bf6e56bfa0009e8393998ae68b097b9f99aef8e9ddd5689"
+      }
+    ],
+    "state_owner": "SettingsProvider + main + NativeGlass",
+    "writers": [
+      "previewGlass/flushGlass/save",
+      "cancelGlassPreview/applyWindowMaterial",
+      "SetGlass"
+    ],
+    "readers": [
+      "revision checks",
+      "settings.isUpdating",
+      "applied WeakMap",
+      "native associated view"
+    ],
+    "initialization": "预览空、原生无glass或按保存强度设置",
+    "termination": "blur/hidden/unmount取消；强度0移除原生view",
+    "recovery": "预览失败显式retry；保存后取消预览"
+  },
+  {
+    "id": "ISM-016",
+    "name": "通知服务调度与启停",
+    "kind": "hybrid",
+    "files": [
+      "src/main/events/notifications.ts:16",
+      "src/main/events/notifications.ts:126"
+    ],
+    "states": [
+      "active/sleeping/operation/pendingRefresh/pendingPermission/pendingBatch/processingBatch",
+      "controller/native/journal/blocked/cleanupPending"
+    ],
+    "transitions": [
+      "drive优先停用→refresh→permission→batch",
+      "初始化读取journal与权限；错误blocked",
+      "stop→abort→native.close→清摘要→释放；cleanup失败保留重试"
+    ],
+    "lifecycle": "一批最多100行；同刻只接一批；phase是派生快照",
+    "dependencies": [
+      "ISM-017",
+      "ISM-018",
+      "ISM-019",
+      "ISM-022"
+    ],
+    "risk": "permission或batch正在运行时停用→abort→drive再执行release；native.close或journal写清摘要失败→cleanupPending阻止安全重启。需避免UI off被理解为已清理。",
+    "risk_level": "高",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/events/notifications.test.ts"
+    ],
+    "test_gap": "已有停用/清理失败单测；独立检查permission与batch交错、重复start不同signal。",
+    "responsibility": "通知服务调度与启停",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "将运行控制、权限和清理失败拆成正交状态，保留drive串行执行。",
+    "test_evidence": [
+      {
+        "path": "src/main/events/notifications.test.ts",
+        "cases": [
+          {
+            "line": 56,
+            "text": "test('construction and disabled operation never touch preferences, adapter or journal', async t => {"
+          },
+          {
+            "line": 75,
+            "text": "test('claim is durable before show; duplicate sequences never deliver again and empty batches do not emit unchanged state', async t => {"
+          },
+          {
+            "line": 93,
+            "text": "test('100 failures produce at most three deliveries per rolling minute including the later summary', async t => {"
+          },
+          {
+            "line": 118,
+            "text": "test('quiet hours span midnight, release one summary, and a backwards clock never replays claimed rows', async t => {"
+          },
+          {
+            "line": 142,
+            "text": "test('backwards wall clock retains rate and cooldown windows; timezone change only changes quiet eligibility', async t => {"
+          },
+          {
+            "line": 163,
+            "text": "test('recovery clears matching failure cooldown even when recovery notifications are not subscribed', async t => {"
+          },
+          {
+            "line": 180,
+            "text": "test('source or full task identity subscription and type filter protect task reuse; names require explicit opt-in', async t => {"
+          },
+          {
+            "line": 202,
+            "text": "test('journal write failure refuses delivery and exposes an error without rejecting collection', async t => {"
+          },
+          {
+            "line": 214,
+            "text": "test('failed delivery remains unconfirmed across restart and the claimed batch is never replayed', async t => {"
+          },
+          {
+            "line": 232,
+            "text": "test('database replacement resets its cursor explicitly while preserving the global rolling rate limit', async t => {"
+          },
+          {
+            "line": 245,
+            "text": "test('sleep accumulates counts and waking sends a single summary on the next committed tick', async t => {"
+          },
+          {
+            "line": 261,
+            "text": "test('permission queries never prompt; only explicit request authorizes and denied events remain observable', async t => {"
+          },
+          {
+            "line": 277,
+            "text": "test('disabling aborts in-flight show immediately, rejects overlapping batches, clears summary and permits reuse', async t => {"
+          },
+          {
+            "line": 312,
+            "text": "test('parent abort cancels work and cleanup failures stay visible and retryable', async t => {"
+          },
+          {
+            "line": 330,
+            "text": "test('sleep during a batch aggregates only not-yet-attempted notifications and never retries the interrupted show', async t => {"
+          },
+          {
+            "line": 359,
+            "text": "test('permission pending survives AbortError and shutdown without pretending the system request ended', async t => {"
+          },
+          {
+            "line": 376,
+            "text": "test('permission timeout keeps authorization unconfirmed and does not fall through to generic storage advice', async t => {"
+          },
+          {
+            "line": 388,
+            "text": "test('summary overflow rejects the batch visibly without truncating its count or claiming its cursor', async t => {"
+          },
+          {
+            "line": 406,
+            "text": "test('collection remains isolated when simultaneous shutdown reports a genuine cleanup failure', async t => {"
+          },
+          {
+            "line": 425,
+            "text": "test('refresh after saved disable reports cleanup error without rejecting successful settings, while stop still rejects', async t => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/events/notifications.ts",
+        "line": 16,
+        "excerpt": "export class EventNotifications implements EventNotificationService {",
+        "sha256": "d2e06fac802fc98bab4c362334f64221a690c9449d362c6300cb10d838b9518a"
+      },
+      {
+        "path": "src/main/events/notifications.ts",
+        "line": 126,
+        "excerpt": "  private drive(): Promise<void> {",
+        "sha256": "d2e06fac802fc98bab4c362334f64221a690c9449d362c6300cb10d838b9518a"
+      }
+    ],
+    "state_owner": "EventNotifications service",
+    "writers": [
+      "start/refresh/requestPermission/stop/drive/initialize/release/recordFailure"
+    ],
+    "readers": [
+      "availability",
+      "preferences",
+      "snapshot"
+    ],
+    "initialization": "active=false、初始notification state",
+    "termination": "stop abort→release；失败保留cleanupPending",
+    "recovery": "refresh初始化journal/native；cleanupPending先重试release"
+  },
+  {
+    "id": "ISM-017",
+    "name": "通知认领、抑制、发送确认和恢复",
+    "kind": "implicit",
+    "files": [
+      "src/main/events/notifications.ts:255",
+      "src/main/events/notification-journal.ts:90",
+      "src/main/events/collector.ts:173"
+    ],
+    "states": [
+      "identity/cursor(sequence,unconfirmed)/summaryCount/cooldowns/sentAt",
+      "lastClock/showController/attempted"
+    ],
+    "transitions": [
+      "数据库commit→onCommitted；新序号→筛选/冷却/限频→journal先写认领",
+      "最多3条/分钟、64冷却key；quiet/sleep合并摘要",
+      "show全部确认→unconfirmed=false落盘；未确认不重放",
+      "数据库身份变化重置cursor；时间倒退调整窗口"
+    ],
+    "lifecycle": "8秒发送批次期限；恢复读取journal；持久化失败阻止发送",
+    "dependencies": [
+      "ISM-016",
+      "ISM-020",
+      "ISM-021",
+      "ISM-022"
+    ],
+    "risk": "静态可达丢失窗口：store.commit已成功但onCommitted前取消/崩溃；下轮added仅新插入行，不会重发该批。认领后崩溃也按设计不重放。需确认产品接受at-most-once语义；未复现。",
+    "risk_level": "高",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/events/notifications.test.ts",
+      "src/main/events/notification-journal.test.ts",
+      "src/main/events/collector.test.ts"
+    ],
+    "test_gap": "现有测试覆盖claim先写与restart不重放；commit→onCommitted间崩溃窗口需单独验证。",
+    "responsibility": "通知认领、抑制、发送确认和恢复",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "显式记录事件提交与通知认领的提交点；文档确认允许漏发的at-most-once语义，再决定是否需要持久化待处理出站记录。",
+    "test_evidence": [
+      {
+        "path": "src/main/events/notifications.test.ts",
+        "cases": [
+          {
+            "line": 56,
+            "text": "test('construction and disabled operation never touch preferences, adapter or journal', async t => {"
+          },
+          {
+            "line": 75,
+            "text": "test('claim is durable before show; duplicate sequences never deliver again and empty batches do not emit unchanged state', async t => {"
+          },
+          {
+            "line": 93,
+            "text": "test('100 failures produce at most three deliveries per rolling minute including the later summary', async t => {"
+          },
+          {
+            "line": 118,
+            "text": "test('quiet hours span midnight, release one summary, and a backwards clock never replays claimed rows', async t => {"
+          },
+          {
+            "line": 142,
+            "text": "test('backwards wall clock retains rate and cooldown windows; timezone change only changes quiet eligibility', async t => {"
+          },
+          {
+            "line": 163,
+            "text": "test('recovery clears matching failure cooldown even when recovery notifications are not subscribed', async t => {"
+          },
+          {
+            "line": 180,
+            "text": "test('source or full task identity subscription and type filter protect task reuse; names require explicit opt-in', async t => {"
+          },
+          {
+            "line": 202,
+            "text": "test('journal write failure refuses delivery and exposes an error without rejecting collection', async t => {"
+          },
+          {
+            "line": 214,
+            "text": "test('failed delivery remains unconfirmed across restart and the claimed batch is never replayed', async t => {"
+          },
+          {
+            "line": 232,
+            "text": "test('database replacement resets its cursor explicitly while preserving the global rolling rate limit', async t => {"
+          },
+          {
+            "line": 245,
+            "text": "test('sleep accumulates counts and waking sends a single summary on the next committed tick', async t => {"
+          },
+          {
+            "line": 261,
+            "text": "test('permission queries never prompt; only explicit request authorizes and denied events remain observable', async t => {"
+          },
+          {
+            "line": 277,
+            "text": "test('disabling aborts in-flight show immediately, rejects overlapping batches, clears summary and permits reuse', async t => {"
+          },
+          {
+            "line": 312,
+            "text": "test('parent abort cancels work and cleanup failures stay visible and retryable', async t => {"
+          },
+          {
+            "line": 330,
+            "text": "test('sleep during a batch aggregates only not-yet-attempted notifications and never retries the interrupted show', async t => {"
+          },
+          {
+            "line": 359,
+            "text": "test('permission pending survives AbortError and shutdown without pretending the system request ended', async t => {"
+          },
+          {
+            "line": 376,
+            "text": "test('permission timeout keeps authorization unconfirmed and does not fall through to generic storage advice', async t => {"
+          },
+          {
+            "line": 388,
+            "text": "test('summary overflow rejects the batch visibly without truncating its count or claiming its cursor', async t => {"
+          },
+          {
+            "line": 406,
+            "text": "test('collection remains isolated when simultaneous shutdown reports a genuine cleanup failure', async t => {"
+          },
+          {
+            "line": 425,
+            "text": "test('refresh after saved disable reports cleanup error without rejecting successful settings, while stop still rejects', async t => {"
+          }
+        ]
+      },
+      {
+        "path": "src/main/events/notification-journal.test.ts",
+        "cases": [
+          {
+            "line": 9,
+            "text": "test('notification journal writes private bounded metadata atomically and releases file leases', async t => {"
+          },
+          {
+            "line": 30,
+            "text": "test('journal refuses symlinks, directories, oversized files and invalid encoding without replacing them', async t => {"
+          },
+          {
+            "line": 50,
+            "text": "test('invalid persisted cardinality is rejected instead of replaying an empty journal', async t => {"
+          },
+          {
+            "line": 67,
+            "text": "test('unsafe existing permissions and hardlinks are rejected without changing mode, inode or contents', async t => {"
+          },
+          {
+            "line": 93,
+            "text": "test('a different process owner cannot read or replace the journal and its directory', async t => {"
+          }
+        ]
+      },
+      {
+        "path": "src/main/events/collector.test.ts",
+        "cases": [
+          {
+            "line": 21,
+            "text": "test('one sustained outage and one recovery survive repeated samples and persisted state', () => {"
+          },
+          {
+            "line": 37,
+            "text": "test('reused snapshots, deliberate disable and sleep do not manufacture outages', () => {"
+          },
+          {
+            "line": 49,
+            "text": "test('partial evidence neither recovers a known outage nor announces it again', () => {"
+          },
+          {
+            "line": 58,
+            "text": "test('source burst is backpressured without losing deferred transitions or reusing episode ids', () => {"
+          },
+          {
+            "line": 75,
+            "text": "test('real plugin records fresh failures once, preserves baseline, restarts and releases on disable', async t => {"
+          },
+          {
+            "line": 134,
+            "text": "test('upstream errors retain cursor and remain visible while store errors fail the section', async t => {"
+          },
+          {
+            "line": 156,
+            "text": "test('source samples arriving during checkpoint I/O are not treated as future observations', async t => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/events/notifications.ts",
+        "line": 255,
+        "excerpt": "  private async consume(batch: NotificationBatch, signal: AbortSignal): Promise<void> {",
+        "sha256": "d2e06fac802fc98bab4c362334f64221a690c9449d362c6300cb10d838b9518a"
+      },
+      {
+        "path": "src/main/events/notification-journal.ts",
+        "line": 90,
+        "excerpt": "/** The claim is fsynced before delivery. A crash after this point never replays that claim. */",
+        "sha256": "a401a6368b3977df079143fe098084564c4a38afbe78bc7c055f9ada49563e6a"
+      },
+      {
+        "path": "src/main/events/collector.ts",
+        "line": 173,
+        "excerpt": "    const saved = await this.store.commit({ revision: loaded.revision, checkpoint: next, events, now }, signal)",
+        "sha256": "8a551288caaa22f985f90b2fc21cc32d3bea780a56c0247f34c010e4db05544c"
+      }
+    ],
+    "state_owner": "EventNotifications journal",
+    "writers": [
+      "consume/writeNotificationJournal",
+      "native.show acknowledgement"
+    ],
+    "readers": [
+      "cursor comparison",
+      "selected",
+      "cooldown+rate guards",
+      "initialize"
+    ],
+    "initialization": "读journal或empty journal",
+    "termination": "每次发送认领先持久化；服务stop清summary",
+    "recovery": "重启不重放unconfirmed；DB identity变更重置cursor"
+  },
+  {
+    "id": "ISM-018",
+    "name": "通知权限跨JS与OS回调释放",
+    "kind": "implicit",
+    "files": [
+      "src/main/events/native-notifications.ts:67",
+      "src/native/notification-permission.mm:10",
+      "src/native/notification-permission.mm:43",
+      "src/native/notification-permission.mm:235"
+    ],
+    "states": [
+      "JS.cancelPermission/settled/token/cleanupError",
+      "native.active/osPending/authorizationPending/cancelled/finalized/callback/stopping"
+    ],
+    "transitions": [
+      "query→OS settings；显式request且not-determined→授权→重新查询",
+      "timeout/abort释放JS回调；OS槽仍等待完成",
+      "仅!osPending && finalized才Retire；env cleanup终止JS访问"
+    ],
+    "lifecycle": "一次仅一native操作；查询2秒/请求30秒；不可关闭OS弹窗",
+    "dependencies": [
+      "ISM-016",
+      "ISM-019"
+    ],
+    "risk": "取消后重试可能仍ERR_NOTIFICATION_PERMISSION_PENDING；这是OS未完成前的保护，不是泄露的复现证据。需覆盖JS finalize先/后于OS回调两种顺序。",
+    "risk_level": "高",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/events/native-notifications.test.ts"
+    ],
+    "test_gap": "现有adapter测试使用替身；原生N-API finalize与真实OS回调顺序未在本次运行验证。",
+    "responsibility": "通知权限跨JS与OS回调释放",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "画清JS-owned、OS-pending、finalized三方所有权；Retire不变量保留。",
+    "test_evidence": [
+      {
+        "path": "src/main/events/native-notifications.test.ts",
+        "cases": [
+          {
+            "line": 153,
+            "text": "test('module import and headless adapters never access Electron capabilities, native bindings or power listeners', async t => {"
+          },
+          {
+            "line": 168,
+            "text": "test('show waits for actual confirmation and navigates once with the original identity only on click', darwin, async t => {"
+          },
+          {
+            "line": 197,
+            "text": "test('unconfirmed show expires at three seconds and releases its notification, timer and abort listener', darwin, async t => {"
+          },
+          {
+            "line": 218,
+            "text": "test(`abort releases a ${confirmed ? 'confirmed' : 'pending'} notification without navigation`, darwin, async t => {"
+          },
+          {
+            "line": 235,
+            "text": "test(`${event} before confirmation rejects and releases the notification`, darwin, async t => {"
+          },
+          {
+            "line": 247,
+            "text": "test('one hundred confirmed deliveries retain at most eight objects and eviction detaches old click handlers', darwin, async t => {"
+          },
+          {
+            "line": 270,
+            "text": "test('failed eviction retains the handle, blocks new work and close retries the failure', darwin, async t => {"
+          },
+          {
+            "line": 293,
+            "text": "test('close cleans other objects after a failure, removes listeners and can be retried', darwin, async t => {"
+          },
+          {
+            "line": 318,
+            "text": "test(`${request ? 'permission request' : 'permission query'} has a fixed timeout and releases JS ownership while OS remains pending`, darwin, async t => {"
+          },
+          {
+            "line": 343,
+            "text": "test(`${action} during a system authorization request preserves the pending code and releases JS resources`, darwin, async t => {"
+          },
+          {
+            "line": 365,
+            "text": "test('native completion failures remain explicit and do not authorize notification display', darwin, async t => {"
+          },
+          {
+            "line": 380,
+            "text": "test('failed native cancellation removes JS listeners, blocks new work and is released by close retry', darwin, async t => {"
+          },
+          {
+            "line": 399,
+            "text": "test('one hundred adapter create/close cycles do not accumulate power listeners or initialize permissions', darwin, async t => {"
+          },
+          {
+            "line": 418,
+            "text": "test('close cancels an unconfirmed display and a permission query together without retaining JS resources', darwin, async t => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/events/native-notifications.ts",
+        "line": 67,
+        "excerpt": "  async function permission(request: boolean, signal: AbortSignal): Promise<NotificationPermission> {",
+        "sha256": "6efbe860a8ebdd8c32efc029ef1999cd33ad60e7aa7d829dcddbe67eea0819b8"
+      },
+      {
+        "path": "src/native/notification-permission.mm",
+        "line": 10,
+        "excerpt": "struct Operation {",
+        "sha256": "3fdc12d5b2c2a959447570361ea0166f2b50c42c67ffe6a6429c81914bfb9f70"
+      },
+      {
+        "path": "src/native/notification-permission.mm",
+        "line": 43,
+        "excerpt": "// Caller holds state.mutex. Cancellation does not free the OS slot: Apple's",
+        "sha256": "3fdc12d5b2c2a959447570361ea0166f2b50c42c67ffe6a6429c81914bfb9f70"
+      },
+      {
+        "path": "src/native/notification-permission.mm",
+        "line": 235,
+        "excerpt": "napi_value Cancel(napi_env env, napi_callback_info info) {",
+        "sha256": "3fdc12d5b2c2a959447570361ea0166f2b50c42c67ffe6a6429c81914bfb9f70"
+      }
+    ],
+    "state_owner": "Native permission JS and C++",
+    "writers": [
+      "permission.finish/cancel",
+      "Start/Finish/FinalizeCallback/Cancel/Cleanup"
+    ],
+    "readers": [
+      "assertOpen",
+      "Retire",
+      "CallJS",
+      "state.active guard"
+    ],
+    "initialization": "JS未加载binding、native.active空",
+    "termination": "JS cancel释放回调；OS完成+finalized后Retire",
+    "recovery": "OS pending拒绝重试；槽释放后可查询；cleanup重试"
+  },
+  {
+    "id": "ISM-019",
+    "name": "原生通知显示与句柄释放",
+    "kind": "implicit",
+    "files": [
+      "src/main/events/native-notifications.ts:128"
+    ],
+    "states": [
+      "live/settled/disposed/cleanupError/lastPermission"
+    ],
+    "transitions": [
+      "show→等待实际show确认；failed/close/click/abort/3s timeout→dispose",
+      "点击保存的target导航；超过8条释放最旧",
+      "close失败保留无监听句柄给close重试"
+    ],
+    "lifecycle": "adapter关闭移除power监听及所有live句柄",
+    "dependencies": [
+      "ISM-018",
+      "ISM-029"
+    ],
+    "risk": "未识别具体缺陷；静态审计不证明不存在风险",
+    "risk_level": "中",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/events/native-notifications.test.ts"
+    ],
+    "test_gap": "所列测试仅为相关源码证据，不表示本次执行通过；建议复核本文转换表中的失败、重复事件和卸载后返回边界。",
+    "responsibility": "原生通知显示与句柄释放",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "保留现有局部状态；用类型约束、命名清晰的转换函数和取消/清理不变量即可，不必引入状态机库。",
+    "test_evidence": [
+      {
+        "path": "src/main/events/native-notifications.test.ts",
+        "cases": [
+          {
+            "line": 153,
+            "text": "test('module import and headless adapters never access Electron capabilities, native bindings or power listeners', async t => {"
+          },
+          {
+            "line": 168,
+            "text": "test('show waits for actual confirmation and navigates once with the original identity only on click', darwin, async t => {"
+          },
+          {
+            "line": 197,
+            "text": "test('unconfirmed show expires at three seconds and releases its notification, timer and abort listener', darwin, async t => {"
+          },
+          {
+            "line": 218,
+            "text": "test(`abort releases a ${confirmed ? 'confirmed' : 'pending'} notification without navigation`, darwin, async t => {"
+          },
+          {
+            "line": 235,
+            "text": "test(`${event} before confirmation rejects and releases the notification`, darwin, async t => {"
+          },
+          {
+            "line": 247,
+            "text": "test('one hundred confirmed deliveries retain at most eight objects and eviction detaches old click handlers', darwin, async t => {"
+          },
+          {
+            "line": 270,
+            "text": "test('failed eviction retains the handle, blocks new work and close retries the failure', darwin, async t => {"
+          },
+          {
+            "line": 293,
+            "text": "test('close cleans other objects after a failure, removes listeners and can be retried', darwin, async t => {"
+          },
+          {
+            "line": 318,
+            "text": "test(`${request ? 'permission request' : 'permission query'} has a fixed timeout and releases JS ownership while OS remains pending`, darwin, async t => {"
+          },
+          {
+            "line": 343,
+            "text": "test(`${action} during a system authorization request preserves the pending code and releases JS resources`, darwin, async t => {"
+          },
+          {
+            "line": 365,
+            "text": "test('native completion failures remain explicit and do not authorize notification display', darwin, async t => {"
+          },
+          {
+            "line": 380,
+            "text": "test('failed native cancellation removes JS listeners, blocks new work and is released by close retry', darwin, async t => {"
+          },
+          {
+            "line": 399,
+            "text": "test('one hundred adapter create/close cycles do not accumulate power listeners or initialize permissions', darwin, async t => {"
+          },
+          {
+            "line": 418,
+            "text": "test('close cancels an unconfirmed display and a permission query together without retaining JS resources', darwin, async t => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/events/native-notifications.ts",
+        "line": 128,
+        "excerpt": "  async function show(message: NativeNotificationMessage, signal: AbortSignal): Promise<void> {",
+        "sha256": "6efbe860a8ebdd8c32efc029ef1999cd33ad60e7aa7d829dcddbe67eea0819b8"
+      }
+    ],
+    "state_owner": "Native live notification entries",
+    "writers": [
+      "show/settle/dispose/onClick/close"
+    ],
+    "readers": [
+      "live limit",
+      "disposed+closed",
+      "lastPermission"
+    ],
+    "initialization": "live空、lastPermission unknown",
+    "termination": "每entry dispose；adapter.close清所有",
+    "recovery": "关闭失败保留handle给close再试，错误期间拒绝新工作"
+  },
+  {
+    "id": "ISM-020",
+    "name": "来源不可用持续时间和恢复事件",
+    "kind": "implicit",
+    "files": [
+      "src/main/events/collector.ts:23"
+    ],
+    "states": [
+      "state/unavailableSince/announced/generation/observedAt"
+    ],
+    "transitions": [
+      "明确error持续60秒→announced+generation→unavailable",
+      "healthy且announced→recovered；partial保留故障",
+      "观测倒退/间隔>120秒重建持续窗口；每轮16事件其余延期"
+    ],
+    "lifecycle": "cursor持久化；disabled/缺失不推断失败",
+    "dependencies": [
+      "ISM-021",
+      "ISM-022"
+    ],
+    "risk": "未识别具体缺陷；静态审计不证明不存在风险",
+    "risk_level": "中",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/events/collector.test.ts"
+    ],
+    "test_gap": "所列测试仅为相关源码证据，不表示本次执行通过；建议复核本文转换表中的失败、重复事件和卸载后返回边界。",
+    "responsibility": "来源不可用持续时间和恢复事件",
+    "verification_status": "隔离探针通过指定转换；不是生产故障复现",
+    "modeling_recommendation": "保留现有局部状态；用类型约束、命名清晰的转换函数和取消/清理不变量即可，不必引入状态机库。",
+    "test_evidence": [
+      {
+        "path": "src/main/events/collector.test.ts",
+        "cases": [
+          {
+            "line": 21,
+            "text": "test('one sustained outage and one recovery survive repeated samples and persisted state', () => {"
+          },
+          {
+            "line": 37,
+            "text": "test('reused snapshots, deliberate disable and sleep do not manufacture outages', () => {"
+          },
+          {
+            "line": 49,
+            "text": "test('partial evidence neither recovers a known outage nor announces it again', () => {"
+          },
+          {
+            "line": 58,
+            "text": "test('source burst is backpressured without losing deferred transitions or reusing episode ids', () => {"
+          },
+          {
+            "line": 75,
+            "text": "test('real plugin records fresh failures once, preserves baseline, restarts and releases on disable', async t => {"
+          },
+          {
+            "line": 134,
+            "text": "test('upstream errors retain cursor and remain visible while store errors fail the section', async t => {"
+          },
+          {
+            "line": 156,
+            "text": "test('source samples arriving during checkpoint I/O are not treated as future observations', async t => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/events/collector.ts",
+        "line": 23,
+        "excerpt": "export function observeSourceEvents(previous: SourceEventCursor[], observations: EventObservation[], now: string): {",
+        "sha256": "8a551288caaa22f985f90b2fc21cc32d3bea780a56c0247f34c010e4db05544c"
+      }
+    ],
+    "state_owner": "SourceEventCursor reducer",
+    "writers": [
+      "observeSourceEvents"
+    ],
+    "readers": [
+      "EventCollector",
+      "persisted checkpoint"
+    ],
+    "initialization": "无前序cursor、announced=false",
+    "termination": "不健康状态转换保留/清故障；服务停止checkpoint留存",
+    "recovery": "后续healthy生成recovered；间隔断档重置持续时间"
+  },
+  {
+    "id": "ISM-021",
+    "name": "事件增量游标与迟写回查",
+    "kind": "hybrid",
+    "files": [
+      "src/main/events/hermes.ts:73",
+      "src/main/events/collector.ts:118"
+    ],
+    "states": [
+      "identity/baseline/high/revisit/floor/pending/pendingIndex",
+      "collector.pending/closing/controller"
+    ],
+    "transitions": [
+      "首次/DB替换→baseline不重放旧完成记录",
+      "每次16 append+16 revisit+8基线pending轮询",
+      "失败保留cursor；commit成功才接受；close取消并排空"
+    ],
+    "lifecycle": "最多128基线未完成记录；7日保留范围；状态明确gap/catching-up",
+    "dependencies": [
+      "ISM-020",
+      "ISM-022",
+      "ISM-023"
+    ],
+    "risk": "执行行先running后failed/投递迟写→append/revisit/pending轮询；数据库换inode或rowid回退→baseline重建。覆盖断档/保留水位升高会排除旧行；不能把observing解释为所有历史均完整。",
+    "risk_level": "高",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/events/hermes.test.ts",
+      "src/main/events/collector.test.ts"
+    ],
+    "test_gap": "已有基线/轮询/替换相关测试索引；独立验证迟写与floor提升相遇。",
+    "responsibility": "事件增量游标与迟写回查",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "把cursor推进/重置/排除水位作为集中转换函数，显式输出coverage原因。",
+    "test_evidence": [
+      {
+        "path": "src/main/events/hermes.test.ts",
+        "cases": [
+          {
+            "line": 42,
+            "text": "test('first read baselines failures without historical alerts and preserves database bytes', async t => {"
+          },
+          {
+            "line": 56,
+            "text": "test('rowid catches new older and tied timestamps, without reading private execution bodies', async t => {"
+          },
+          {
+            "line": 69,
+            "text": "test('baseline pending keeps original failure state through completion and late delivery', async t => {"
+          },
+          {
+            "line": 88,
+            "text": "test('pending polling rotates beyond eight and handles removals without starvation', async t => {"
+          },
+          {
+            "line": 106,
+            "text": "test('late status and delivery changes are revisited after a serialized cursor resumes', async t => {"
+          },
+          {
+            "line": 128,
+            "text": "test('file replacement and a decreased max rowid rebaseline with an explicit gap', async t => {"
+          },
+          {
+            "line": 147,
+            "text": "test('seven day exclusions and disappeared pending rows report coverage gaps', async t => {"
+          },
+          {
+            "line": 158,
+            "text": "test('missing pending rows release their slot only with an explicit gap', async t => {"
+          },
+          {
+            "line": 169,
+            "text": "test('retention excludes newly appended old executions and marks long observation interruptions', async t => {"
+          },
+          {
+            "line": 181,
+            "text": "test('baseline accepts exactly 128 unfinished rows and rejects 129 without a partial cursor', async t => {"
+          },
+          {
+            "line": 190,
+            "text": "test('bounded metadata rejects controls, NUL suffixes, overlong fields, timestamps and unknown states', async t => {"
+          },
+          {
+            "line": 211,
+            "text": "test('missing, nonregular, symlinked, malformed and incompatible databases fail with safe errors', async t => {"
+          },
+          {
+            "line": 230,
+            "text": "test('invalid cursor and time reject before resource admission', async t => {"
+          },
+          {
+            "line": 238,
+            "text": "test('abort drains the finite SQLite child and permits immediate reuse', async t => {"
+          },
+          {
+            "line": 250,
+            "text": "test('append, rotating revisit and baseline pending share a strict forty row response', async t => {"
+          },
+          {
+            "line": 264,
+            "text": "test('late finished_at never extends retention and expired baseline pending is removed with a gap', async t => {"
+          },
+          {
+            "line": 278,
+            "text": "test('persisted floor excludes rewritten old executions on every revisit without blocking new rows', async t => {"
+          },
+          {
+            "line": 297,
+            "text": "test('floor removes all excluded baseline pending entries and keeps the surviving ring usable', async t => {"
+          },
+          {
+            "line": 313,
+            "text": "test('a source reset clears the previous identity floor and invalid floors reject', async t => {"
+          }
+        ]
+      },
+      {
+        "path": "src/main/events/collector.test.ts",
+        "cases": [
+          {
+            "line": 21,
+            "text": "test('one sustained outage and one recovery survive repeated samples and persisted state', () => {"
+          },
+          {
+            "line": 37,
+            "text": "test('reused snapshots, deliberate disable and sleep do not manufacture outages', () => {"
+          },
+          {
+            "line": 49,
+            "text": "test('partial evidence neither recovers a known outage nor announces it again', () => {"
+          },
+          {
+            "line": 58,
+            "text": "test('source burst is backpressured without losing deferred transitions or reusing episode ids', () => {"
+          },
+          {
+            "line": 75,
+            "text": "test('real plugin records fresh failures once, preserves baseline, restarts and releases on disable', async t => {"
+          },
+          {
+            "line": 134,
+            "text": "test('upstream errors retain cursor and remain visible while store errors fail the section', async t => {"
+          },
+          {
+            "line": 156,
+            "text": "test('source samples arriving during checkpoint I/O are not treated as future observations', async t => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/events/hermes.ts",
+        "line": 73,
+        "excerpt": "  const reset = previous !== null && (previous.identity !== fileIdentity || maximum < previous.high);",
+        "sha256": "bd9cd0534a25e13f3e4f969e39df2b6ee822331966d609b3f4a10037c6de2bcb"
+      },
+      {
+        "path": "src/main/events/collector.ts",
+        "line": 118,
+        "excerpt": "export class EventCollector {",
+        "sha256": "8a551288caaa22f985f90b2fc21cc32d3bea780a56c0247f34c010e4db05544c"
+      }
+    ],
+    "state_owner": "HermesEventReader cursor + EventCollector",
+    "writers": [
+      "readerScript baseline/append/revisit",
+      "collectOnce",
+      "close"
+    ],
+    "readers": [
+      "validateCursor",
+      "executionEvents",
+      "next poll"
+    ],
+    "initialization": "null cursor建立baseline，排除历史完成事件",
+    "termination": "collector.close abort→pending排空→store.close",
+    "recovery": "DB替换/水位回退重建；失败保留旧checkpoint"
+  },
+  {
+    "id": "ISM-022",
+    "name": "事件存储队列、事务和去重保留",
+    "kind": "implicit",
+    "files": [
+      "src/main/events/store.ts:122",
+      "src/main/events/store.ts:205",
+      "src/main/events/store.ts:361"
+    ],
+    "states": [
+      "queue/active/pendingEvents/closed/drained",
+      "DB revision/checkpoint/tombstones/floor/inTransaction"
+    ],
+    "transitions": [
+      "enqueue限量→独立Node SQLite事务→revision CAS→commit/rollback",
+      "删除行→墓碑；墓碑容量超限→提升floor并记录gap",
+      "close拒绝排队项→abort active→drained"
+    ],
+    "lifecycle": "数据库20MiB、10000条、7天；查询upper固定水位；关闭子进程后释放资源",
+    "dependencies": [
+      "ISM-021",
+      "ISM-023",
+      "ISM-033"
+    ],
+    "risk": "分页query也可能按年龄清理并提升revision/floor；旧collector commit随后CAS拒绝→重试load。若把query当纯读或去掉CAS，会让旧checkpoint覆盖水位。当前CAS与事务防护存在。",
+    "risk_level": "高",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/events/store.test.ts"
+    ],
+    "test_gap": "现有query-time pruning/stale writer测试；独立核对close在队列准入与child close阶段。",
+    "responsibility": "事件存储队列、事务和去重保留",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "明确query-pruning提交与collector提交共享revision，保留原子事件+checkpoint不变量。",
+    "test_evidence": [
+      {
+        "path": "src/main/events/store.test.ts",
+        "cases": [
+          {
+            "line": 86,
+            "text": "test('100 duplicate samples persist once; distinct executions and event types remain distinct', async t => {"
+          },
+          {
+            "line": 128,
+            "text": "test('checkpoint and events roll back together on stale revision and SQLite write failure', async t => {"
+          },
+          {
+            "line": 147,
+            "text": "test('descending keyset pages remain stable across insertion and support all metadata filters', async t => {"
+          },
+          {
+            "line": 174,
+            "text": "test('10000-record retention and seven-day age retention are independent and durable', async t => {"
+          },
+          {
+            "line": 193,
+            "text": "test('payload retention prunes deterministically before the database reaches its physical cap', async t => {"
+          },
+          {
+            "line": 220,
+            "text": "test('oversize records, batches, checkpoints and private extra fields reject before any SQL', async t => {"
+          },
+          {
+            "line": 246,
+            "text": "test('corrupt, oversize, symlink, unsafe-permission and unknown-sidecar files are preserved', async t => {"
+          },
+          {
+            "line": 277,
+            "text": "test('locked database rejects within the finite deadline and succeeds after release', async t => {"
+          },
+          {
+            "line": 290,
+            "text": "test('queue is capped at sixteen; cancellation removes waiting requests and close drains real children', async t => {"
+          },
+          {
+            "line": 316,
+            "text": "test('close also aborts admission waits without waiting for unrelated resource owners', async t => {"
+          },
+          {
+            "line": 336,
+            "text": "test('count-pruned Hermes IDs survive restart; age expiry advances a durable floor before source rewrites', async t => {"
+          },
+          {
+            "line": 361,
+            "text": "test('tombstone capacity advances the floor atomically, filters pending rows, and keeps collecting', async t => {"
+          },
+          {
+            "line": 387,
+            "text": "test('a genuinely full SQLite file reports a safe error and leaves checkpoint/events atomic', async t => {"
+          },
+          {
+            "line": 404,
+            "text": "test('query-time age pruning persists its floor and revision before a stale writer can overwrite it', async t => {"
+          },
+          {
+            "line": 425,
+            "text": "test('pending event records share a 100-record budget that is released before completion returns', async t => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/events/store.ts",
+        "line": 122,
+        "excerpt": "let db, inTransaction = false, result, errorCode;",
+        "sha256": "82c6ba768bd9dc3dd2fbce3efc853cee5bfda3768bf110b8a717d0abb5162ddd"
+      },
+      {
+        "path": "src/main/events/store.ts",
+        "line": 205,
+        "excerpt": "  function advance(rowid, observedAt) {",
+        "sha256": "82c6ba768bd9dc3dd2fbce3efc853cee5bfda3768bf110b8a717d0abb5162ddd"
+      },
+      {
+        "path": "src/main/events/store.ts",
+        "line": 361,
+        "excerpt": "export class EventStore {",
+        "sha256": "82c6ba768bd9dc3dd2fbce3efc853cee5bfda3768bf110b8a717d0abb5162ddd"
+      }
+    ],
+    "state_owner": "EventStore + SQLite transaction",
+    "writers": [
+      "enqueue/pump/execute/close",
+      "prune/advance/COMMIT/ROLLBACK"
+    ],
+    "readers": [
+      "load/query/commit revision checks",
+      "notification added rows"
+    ],
+    "initialization": "queue空，SQLite按版本校验/初始化",
+    "termination": "close拒绝排队、取消active并等子进程关闭",
+    "recovery": "事务失败rollback；新load获得revision；损坏不重建掩盖"
+  },
+  {
+    "id": "ISM-023",
+    "name": "资源预算排队、租约和取消",
+    "kind": "implicit",
+    "files": [
+      "src/main/resource-budget.ts:135",
+      "src/main/resource-io.ts:48",
+      "src/main/collectors/agents.ts:362",
+      "src/main/collection-limits.ts:18"
+    ],
+    "states": [
+      "queues/source order/draining/waitingSignals",
+      "lease.active/current计数；child callback/close result/cancelled"
+    ],
+    "transitions": [
+      "请求验证→admit或queue→容量释放drain",
+      "排队abort/超时→移除并扣计数；lease release幂等",
+      "command在child close之后resolve/reject；socket在close后结算"
+    ],
+    "lifecycle": "全局与来源预算；禁止嵌套租约；失败释放；有限队列",
+    "dependencies": [
+      "ISM-004",
+      "ISM-024",
+      "ISM-026",
+      "ISM-027"
+    ],
+    "risk": "command带inputFile同时占命令/文件预算→两队列按order仲裁；取消在排队、执行和child close三个时点发生。错误释放会重复扣账或提前准入。当前lease幂等和close结算提供保护。",
+    "risk_level": "高",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/resource-budget.test.ts",
+      "src/main/resource-io.test.ts"
+    ],
+    "test_gap": "已有资源预算/IO边界测试；复核复合请求取消与子进程异常关闭。",
+    "responsibility": "资源预算排队、租约和取消",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "保留简单队列；将queued/admitted/releasing/released状态与计费不变量集中断言。",
+    "test_evidence": [
+      {
+        "path": "src/main/resource-budget.test.ts",
+        "cases": [
+          {
+            "line": 9,
+            "text": "test('raw stream reservations and slots are charged atomically and returned once', async () => {"
+          },
+          {
+            "line": 29,
+            "text": "test('sources alternate turns and a large request cannot be starved by smaller arrivals', async () => {"
+          },
+          {
+            "line": 57,
+            "text": "test('128 queued reads share one abort listener and cancellation starts no IO', async () => {"
+          },
+          {
+            "line": 75,
+            "text": "test('global and per-source queues reject before invoking work and retain no rejected payload', async () => {"
+          },
+          {
+            "line": 93,
+            "text": "test('queue expiry is separate from execution and the resource remains owned until release', async t => {"
+          },
+          {
+            "line": 113,
+            "text": "test('oversized, cancelled and nested work cannot start or deadlock', async () => {"
+          },
+          {
+            "line": 128,
+            "text": "test('queued requests and diagnostics cannot be mutated to change charged capacity', async () => {"
+          },
+          {
+            "line": 144,
+            "text": "test('command input waits for both resource kinds without holding a partial reservation', async t => {"
+          },
+          {
+            "line": 167,
+            "text": "test('command input reserves independent byte budgets and returns both exactly once on failure', async () => {"
+          },
+          {
+            "line": 185,
+            "text": "test('a waiting compound command cannot be starved by later small file arrivals', async t => {"
+          },
+          {
+            "line": 219,
+            "text": "test('queued compound requests snapshot input bytes before callers mutate them', async t => {"
+          },
+          {
+            "line": 238,
+            "text": "test('an earlier file waiter keeps priority over a later compound command', async t => {"
+          },
+          {
+            "line": 263,
+            "text": "test('cancelling a compound waiter removes its file priority immediately', async t => {"
+          },
+          {
+            "line": 285,
+            "text": "test('expiry of a compound waiter removes its file priority before later requests expire', async t => {"
+          },
+          {
+            "line": 307,
+            "text": "test('an I/O cleanup failure remains failed even when cancellation has already arrived', async () => {"
+          },
+          {
+            "line": 321,
+            "text": "test('a failed branch cannot complete its owner while a sibling still holds a lease', async () => {"
+          }
+        ]
+      },
+      {
+        "path": "src/main/resource-io.test.ts",
+        "cases": [
+          {
+            "line": 15,
+            "text": "test('execution timeout starts after admission rather than while queued', async () => {"
+          },
+          {
+            "line": 26,
+            "text": "test('spawn failure, output overflow and execution timeout all drain their reservation', async () => {"
+          },
+          {
+            "line": 35,
+            "text": "test('abort settles only after the actual owned command exits', async t => {"
+          },
+          {
+            "line": 72,
+            "text": "test('real cat receives the complete 1 MiB input boundary through stdin', async t => {"
+          },
+          {
+            "line": 85,
+            "text": "test('oversized input rejects before command execution and releases both resource budgets', async t => {"
+          },
+          {
+            "line": 96,
+            "text": "test('growth at the first read rejects before execution and closes the real file descriptor', async t => {"
+          },
+          {
+            "line": 121,
+            "text": "test('same-size replacement while queued rejects the captured identity before execution', async t => {"
+          },
+          {
+            "line": 141,
+            "text": "test('queued options cannot redirect input, enlarge its reservation or change the identity snapshot', async t => {"
+          },
+          {
+            "line": 179,
+            "text": "test('real FIFO and directory inputs are rejected without blocking or spawning a consumer', { timeout: 5000 }, async t => {"
+          },
+          {
+            "line": 193,
+            "text": "test('input reservations drain on spawn failure and queued cancellation starts no consumer', async t => {"
+          },
+          {
+            "line": 212,
+            "text": "test('post-read identity change rejects even when byte count and size are unchanged', async t => {"
+          },
+          {
+            "line": 244,
+            "text": "test('input close failure is preserved when cancellation arrives at the close boundary', async t => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/resource-budget.ts",
+        "line": 135,
+        "excerpt": "export class ResourceBudget {",
+        "sha256": "bd93d8e9cb7c7a8e00435aebf10c4f226beb0d8ced968f35e5cd6f22956f6305"
+      },
+      {
+        "path": "src/main/resource-io.ts",
+        "line": 48,
+        "excerpt": "export function runBudgetedCommand(source: string, file: string, args: readonly string[], options: BudgetedCommandOptions,",
+        "sha256": "ad21d3b28a8a00492ffd0948c000b86002c67a7a16ffba42ab1ffb8af5d49a8c"
+      },
+      {
+        "path": "src/main/collectors/agents.ts",
+        "line": 362,
+        "excerpt": "export async function socketSnapshot(host: CollabHost, signal?: AbortSignal): Promise<Record<string, unknown>> {",
+        "sha256": "ae3cf87c71289f8078e059b7da293be39f111c117eac1747f9d1b53f86fe91f5"
+      },
+      {
+        "path": "src/main/collection-limits.ts",
+        "line": 18,
+        "excerpt": "export class DirectoryScan {",
+        "sha256": "f7b28d62b9af3690f36e551eb92413fdb407a7b3ce7b0a9a5dec4c0bf26f6a51"
+      }
+    ],
+    "state_owner": "ResourceBudget + IO ownership",
+    "writers": [
+      "acquire/admit/remove/unqueue/drain/release",
+      "child close",
+      "socket close"
+    ],
+    "readers": [
+      "fits",
+      "AsyncLocalStorage active",
+      "budget snapshots"
+    ],
+    "initialization": "计数0、空队列",
+    "termination": "每租约release一次；取消队列移除；IO关闭后结算",
+    "recovery": "配额释放后drain；超限拒绝需调用方重试"
+  },
+  {
+    "id": "ISM-024",
+    "name": "活跃会话发现、文件监听与增量发布",
+    "kind": "implicit",
+    "files": [
+      "src/main/live-agents.ts:41",
+      "src/main/live-agents.ts:153",
+      "src/main/live-agents.ts:229"
+    ],
+    "states": [
+      "entries/bySession/base/pending/stopped",
+      "entry.active/dirty/reading/revision/watcher/closing/controller",
+      "publishTimer/reads/closing"
+    ],
+    "transitions": [
+      "发现会话→attach→文件事件合并→read→revision校验→publish",
+      "rename/error→drain→下一次发现重挂",
+      "stop→abort所有→等待read/watch close→清引用"
+    ],
+    "lifecycle": "仅当前进程持有会话；128会话与128KiB/文件上限",
+    "dependencies": [
+      "ISM-004",
+      "ISM-025"
+    ],
+    "risk": "文件rename/error与在途read相遇→revision改变+drain→后续发现重挂；旧read或旧watcher close晚到可能影响新挂载。当前identity/revision/closing集合防护存在。",
+    "risk_level": "高",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/live-agents.test.ts"
+    ],
+    "test_gap": "已有真实watcher/100次启停等测试源码；本次未重跑这些系统IO场景。",
+    "responsibility": "活跃会话发现、文件监听与增量发布",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "集中SessionWatch状态与generation；明确watcher关闭和read结束的双重排空。",
+    "test_evidence": [
+      {
+        "path": "src/main/live-agents.test.ts",
+        "cases": [
+          {
+            "line": 68,
+            "text": "test('real append pushes within the discovery interval and bursts deliver the final activity', async t => {"
+          },
+          {
+            "line": 91,
+            "text": "test('an in-flight session retains later events, does not block other files, and merges into newest discovery', async t => {"
+          },
+          {
+            "line": 129,
+            "text": "test('parent cancellation and stop close watchers and cancel pending reads and discovery', async t => {"
+          },
+          {
+            "line": 180,
+            "text": "test('watcher errors clear activity and surface source error until normal discovery reattaches', async t => {"
+          },
+          {
+            "line": 203,
+            "text": "test('replacement inode is reported and normal discovery binds the new file for later appends', async t => {"
+          },
+          {
+            "line": 217,
+            "text": "await seen.next(snapshot => /文件被截断或替换/.test(snapshot.sources.at(-1)!.detail), from)"
+          },
+          {
+            "line": 224,
+            "text": "test('a real read failure is surfaced even when the watch remains attached', async t => {"
+          },
+          {
+            "line": 243,
+            "text": "test('session removal cancels queued activity IO before capacity becomes available', async t => {"
+          },
+          {
+            "line": 297,
+            "text": "test('100 start/stop cycles await actual watchers and reads, remove listeners and reuse the stop promise', async t => {"
+          },
+          {
+            "line": 342,
+            "text": "test('stop waits for a cancelled real file read to settle and publishes no late result', async t => {"
+          },
+          {
+            "line": 382,
+            "text": "test('removed entries remain tracked until their real watcher closes and stop waits for them', async t => {"
+          },
+          {
+            "line": 420,
+            "text": "test('a failed watcher drains before reattachment while a healthy session still publishes', async t => {"
+          },
+          {
+            "line": 462,
+            "text": "test('pending discovery cancellation is expected but a non-abort failure rejects the retained stop promise', async () => {"
+          },
+          {
+            "line": 485,
+            "text": "test('watcher close failures survive parent cancellation after every actual watcher has closed', async t => {"
+          },
+          {
+            "line": 518,
+            "text": "test('real file close failure is retained without blocking healthy activity or leaking the descriptor', async t => {"
+          },
+          {
+            "line": 549,
+            "text": "test('abort cannot mask a real file close failure while an activity read is in flight', async t => {"
+          },
+          {
+            "line": 582,
+            "text": "test('128 completed session reads publish one batch and retain unchanged agent objects', { timeout: 10000 }, async t => {"
+          },
+          {
+            "line": 628,
+            "text": "test('later read completions cannot extend the first publication deadline', async t => {"
+          },
+          {
+            "line": 664,
+            "text": "test('stopping or removing a session cancels its completed but unpublished batch', async t => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/live-agents.ts",
+        "line": 41,
+        "excerpt": "export class LiveAgents {",
+        "sha256": "4e06068d714ba8495461430c59b539f700f5cf7b331a3e2ffe146ab9fbdd08c7"
+      },
+      {
+        "path": "src/main/live-agents.ts",
+        "line": 153,
+        "excerpt": "  private close(entry: SessionWatch): void {",
+        "sha256": "4e06068d714ba8495461430c59b539f700f5cf7b331a3e2ffe146ab9fbdd08c7"
+      },
+      {
+        "path": "src/main/live-agents.ts",
+        "line": 229,
+        "excerpt": "  private enqueue(entry: SessionWatch): void {",
+        "sha256": "4e06068d714ba8495461430c59b539f700f5cf7b331a3e2ffe146ab9fbdd08c7"
+      }
+    ],
+    "state_owner": "LiveAgents SessionWatch",
+    "writers": [
+      "reconcile/attach/enqueue/read/fail/drainEntry/close/stop"
+    ],
+    "readers": [
+      "emit",
+      "revision and active guards",
+      "diagnostics"
+    ],
+    "initialization": "空entries/base；reconcile发现当前会话",
+    "termination": "stop取消timer/watch/read并等待真实关闭",
+    "recovery": "watch失败drain后下一轮发现重挂"
+  },
+  {
+    "id": "ISM-025",
+    "name": "会话活动记录与文件游标",
+    "kind": "implicit",
+    "files": [
+      "src/main/collectors/agent-activity.ts:26",
+      "src/main/collectors/agent-activity.ts:95"
+    ],
+    "states": [
+      "calls/model",
+      "cache identity/size/modified/offset/state/issues；inFlight"
+    ],
+    "transitions": [
+      "tool start/model→记录；tool result/turn结束/user→清对应活动",
+      "6秒到期清理；文件替换/缩短/省略记录→重置",
+      "不完整尾行保留偏移下次再读；坏记录清状态"
+    ],
+    "lifecycle": "retainPaths清无关缓存/取消；最近活动不是忙闲状态",
+    "dependencies": [
+      "ISM-024",
+      "ISM-042"
+    ],
+    "risk": "未识别具体缺陷；静态审计不证明不存在风险",
+    "risk_level": "中",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/collectors/agents.test.ts"
+    ],
+    "test_gap": "所列测试仅为相关源码证据，不表示本次执行通过；建议复核本文转换表中的失败、重复事件和卸载后返回边界。",
+    "responsibility": "会话活动记录与文件游标",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "保留现有局部状态；用类型约束、命名清晰的转换函数和取消/清理不变量即可，不必引入状态机库。",
+    "test_evidence": [
+      {
+        "path": "src/main/collectors/agents.test.ts",
+        "cases": [
+          {
+            "line": 27,
+            "text": "test('shell prompts, search tools and arbitrary node scripts do not become agents', () => {"
+          },
+          {
+            "line": 40,
+            "text": "test('known CLI executables and package entry points are recognized', () => {"
+          },
+          {
+            "line": 47,
+            "text": "test('dead PIDs never survive process discovery and wrapper/native count once', () => {"
+          },
+          {
+            "line": 59,
+            "text": "test('process ancestry crosses an intermediate shell and does not create a wrapper self-parent', () => {"
+          },
+          {
+            "line": 72,
+            "text": "test('session header parsing returns only allowed metadata and ignores conversation payload', () => {"
+          },
+          {
+            "line": 83,
+            "text": "test('current title labels the owned session, follows renames and never revives a stale header title', () => {"
+          },
+          {
+            "line": 98,
+            "text": "test('same-PID child links use parentSession and retained children never count as running', () => {"
+          },
+          {
+            "line": 110,
+            "text": "test('history and an unmatched or released lease cannot create child agents', () => {"
+          },
+          {
+            "line": 118,
+            "text": "test('lsof descriptor parsing preserves PID/session association and ignores unrelated files', () => {"
+          },
+          {
+            "line": 127,
+            "text": "test('Tern working evidence updates only the exact live main session and exports no pane prompt', () => {"
+          },
+          {
+            "line": 147,
+            "text": "test('OMP internal worker entry points and worker argv0 never count as agents', () => {"
+          },
+          {
+            "line": 162,
+            "text": "test('Codex service subcommands after valued or boolean global options are excluded', () => {"
+          },
+          {
+            "line": 174,
+            "text": "test('helper words in option values or user prompts do not suppress real CLI sessions', () => {"
+          },
+          {
+            "line": 187,
+            "text": "test('root-level OMP forks remain main sessions with process resources and accept Tern busy evidence', () => {"
+          },
+          {
+            "line": 205,
+            "text": "test('independent OMP child processes retain ancestry after session enrichment without parentSession', () => {"
+          },
+          {
+            "line": 220,
+            "text": "test('task artifact location identifies a same-process seance even when parentSession points at its source fork', () => {"
+          },
+          {
+            "line": 231,
+            "text": "test('process consumer excludes Claude and OpenCode services without matching prompt words or option values', () => {"
+          },
+          {
+            "line": 264,
+            "text": "test('fresh structured tool/model evidence exports only whitelisted activity and expires after six seconds', () => {"
+          },
+          {
+            "line": 277,
+            "text": "test('assistant terminal events clear all pending calls; final text is never model activity', () => {"
+          },
+          {
+            "line": 288,
+            "text": "test('tool completion only clears its matching call and malformed/unsupported events suppress activity', () => {"
+          },
+          {
+            "line": 306,
+            "text": "test('incremental reader caches unchanged files, joins partial records, and never revives finished keepAlive calls', async t => {"
+          },
+          {
+            "line": 329,
+            "text": "test('tail reader bounds large files and reports malformed, oversized, truncated, rotated and missing data', async t => {"
+          },
+          {
+            "line": 361,
+            "text": "test('owned child call evidence preserves unknown state and old completed keepAlive sessions stay still', async t => {"
+          },
+          {
+            "line": 381,
+            "text": "test('a call written during asynchronous sampling remains visible on the next unchanged read', async t => {"
+          },
+          {
+            "line": 402,
+            "text": "test('Tern enumerates actual window keys including empty key, deduplicates clients and reports individual failures', async () => {"
+          },
+          {
+            "line": 423,
+            "text": "test('Tern window sampling limits both count and concurrency and rejects missing protocol', async () => {"
+          },
+          {
+            "line": 440,
+            "text": "test('observed composite toolCallId format matches completion without leaking identity', () => {"
+          },
+          {
+            "line": 450,
+            "text": "test('queued activity reads cancel before opening and retain removes pending session work', async t => {"
+          },
+          {
+            "line": 482,
+            "text": "test('socket responses accept the UTF8 byte boundary and decode split characters, but reject bytes beyond it', async t => {"
+          },
+          {
+            "line": 516,
+            "text": "test('socket admission cancels a queued connection and aborts the eight admitted connections', async t => {"
+          },
+          {
+            "line": 591,
+            "text": "test('collab counts filtered entries at 4096, rejects 4097 before sockets and releases cancelled directory scans', async t => {"
+          },
+          {
+            "line": 618,
+            "text": "test('collab contacts at most 32 hosts and makes incomplete coverage explicit', async t => {"
+          },
+          {
+            "line": 628,
+            "text": "test('collab refuses oversized records and fields before connecting, with exact byte boundary accepted', async t => {"
+          },
+          {
+            "line": 646,
+            "text": "test('collab preserves private registry, record permissions, symlink and host identity checks', async t => {"
+          },
+          {
+            "line": 668,
+            "text": "test('collab cancellation waits for every socket and queued read to release', async t => {"
+          },
+          {
+            "line": 679,
+            "text": "test('ownership bounds aggregate descriptors across processes and checks UTF8 fields before retaining paths', () => {"
+          },
+          {
+            "line": 693,
+            "text": "test('Tern rejects oversized host arrays before window inspection or pane association', async () => {"
+          },
+          {
+            "line": 703,
+            "text": "test('oversized collaboration metadata leaves the process unchanged and reports incomplete source', async t => {"
+          },
+          {
+            "line": 716,
+            "text": "test('activity coverage remains 128 owned sessions and explicitly reports the uncovered session', async t => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/collectors/agent-activity.ts",
+        "line": 26,
+        "excerpt": "export function createActivityState(): ActivityState { return { calls: new Map() } }",
+        "sha256": "e2235e48d0a8b18a173539ad722728e9070f031eef3a423cda1300ea62f95e55"
+      },
+      {
+        "path": "src/main/collectors/agent-activity.ts",
+        "line": 95,
+        "excerpt": "export class SessionActivityReader {",
+        "sha256": "e2235e48d0a8b18a173539ad722728e9070f031eef3a423cda1300ea62f95e55"
+      }
+    ],
+    "state_owner": "SessionActivityReader",
+    "writers": [
+      "consumeActivityRecord/recentActivity/readFile/retainPaths"
+    ],
+    "readers": [
+      "read cache identity",
+      "LiveAgents projection"
+    ],
+    "initialization": "每路径空cache与calls",
+    "termination": "retainPaths删离开路径并abort；reader生命周期由LiveAgents拥有",
+    "recovery": "文件身份变化/截断重置；不完整尾行下次补读"
+  },
+  {
+    "id": "ISM-026",
+    "name": "调度配置与launchd域重试缓存",
+    "kind": "implicit",
+    "files": [
+      "src/main/collectors/schedules.ts:495",
+      "src/main/collectors/launchd.ts:121"
+    ],
+    "states": [
+      "configuration/plistCache/disposed/controller",
+      "readings.services/disabled/loadedKnown/disabledKnown"
+    ],
+    "transitions": [
+      "完整配置+域读取→compose→缓存配置",
+      "域失败保留条目但known=false；单来源重试须已有完整配置",
+      "dispose abort并清缓存；迟到collect再次清理"
+    ],
+    "lifecycle": "实际任务运行状态为证据投影，不是本应用执行引擎",
+    "dependencies": [
+      "ISM-004",
+      "ISM-011",
+      "ISM-023"
+    ],
+    "risk": "未识别具体缺陷；静态审计不证明不存在风险",
+    "risk_level": "中",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/collectors/schedules.test.ts"
+    ],
+    "test_gap": "所列测试仅为相关源码证据，不表示本次执行通过；建议复核本文转换表中的失败、重复事件和卸载后返回边界。",
+    "responsibility": "调度配置与launchd域重试缓存",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "保留现有局部状态；用类型约束、命名清晰的转换函数和取消/清理不变量即可，不必引入状态机库。",
+    "test_evidence": [
+      {
+        "path": "src/main/collectors/schedules.test.ts",
+        "cases": [
+          {
+            "line": 13,
+            "text": "test('calendar 对象保留通配字段，Day 与 Weekday 按或匹配', () => {"
+          },
+          {
+            "line": 20,
+            "text": "test('calendar 数组代表多个独立触发条件', () => {"
+          },
+          {
+            "line": 28,
+            "text": "test('未确认的 Second 扩展保留原值与任务，并提供来源警告', () => {"
+          },
+          {
+            "line": 41,
+            "text": "test('interval 与 calendar 可以同时配置，不能丢失任何触发条件', () => {"
+          },
+          {
+            "line": 53,
+            "text": "test('KeepAlive 和 RunAtLoad 不计为定时任务', () => {"
+          },
+          {
+            "line": 60,
+            "text": "test('解析 launchctl 域表只取 PID、退出码和服务名', () => {"
+          },
+          {
+            "line": 70,
+            "text": "test('launchctl 第二列的状态标记不是退出码，保留真实运行 PID', () => {"
+          },
+          {
+            "line": 81,
+            "text": "test('空字典与 jetsam 数据不是服务，真正缺少 Label 的服务仍报错', () => {"
+          },
+          {
+            "line": 95,
+            "text": "test('disabled 解析支持 launchctl 文本布尔和 enabled/disabled', () => {"
+          },
+          {
+            "line": 101,
+            "text": "test('运行事实优先，显式 enable 覆盖 plist Disabled，读取失败不是 unloaded', () => {"
+          },
+          {
+            "line": 110,
+            "text": "test('OMP 元数据按 Label 与 launchd 合并，不重复计算任务', () => {"
+          },
+          {
+            "line": 123,
+            "text": "test('OMP 未安装 plist 的任务保留为 unloaded，已运行任务不被元数据覆盖', () => {"
+          },
+          {
+            "line": 138,
+            "text": "test('crontab 保留表达式语义并移除命令、环境、注释内容', () => {"
+          },
+          {
+            "line": 151,
+            "text": "test('无效 crontab 行不能将命令误当成调度字段输出', () => {"
+          },
+          {
+            "line": 160,
+            "text": "test('配置源失败不会被空 crontab 或重建的 runtime service 掩盖', () => {"
+          },
+          {
+            "line": 172,
+            "text": "test('完整配置可在运行状态未知或保留未知扩展时成功，不改变定时分类', () => {"
+          },
+          {
+            "line": 186,
+            "text": "test('不存在的目录和未配置任务允许真实空快照，多项配置错误一起报告', () => {"
+          },
+          {
+            "line": 197,
+            "text": "test('个人命名配置与主目录脚本可识别，包括安装到系统域的个人脚本', () => {"
+          },
+          {
+            "line": 207,
+            "text": "test('Python 的无参数开关不遮蔽个人脚本，内联代码和选项值不被当作入口', () => {"
+          },
+          {
+            "line": 217,
+            "text": "test('系统、应用更新器及调度器自身不属于个人任务，即使位于用户目录', () => {"
+          },
+          {
+            "line": 229,
+            "text": "test('非 Apple 名称和用户路径不足以把未知来源或命令参数当作个人任务', () => {"
+          },
+          {
+            "line": 241,
+            "text": "test('launchctl 问号只表示退出码未知，不丢失 PID 或相邻服务', () => {"
+          },
+          {
+            "line": 249,
+            "text": "test('命令、权限、超时、结构与行错误各自诊断且不泄露原始内容', async () => {"
+          },
+          {
+            "line": 285,
+            "text": "test('服务表与禁用表各自失败，旧条目不充当当前运行证据，恢复清除原因', async () => {"
+          },
+          {
+            "line": 321,
+            "text": "test('launchd 过量、重复、越界行拒绝整表，不能伪造完整结果', () => {"
+          },
+          {
+            "line": 333,
+            "text": "test('单域重试只重读该域，保留配置和健康来源，恢复后重新合并运行时条目', { skip: process.platform !== 'darwin' }, async () => {"
+          },
+          {
+            "line": 402,
+            "text": "test('共享命令槽耗尽时注入 plutil 排队取消不启动命令，释放后可以重用', async () => {"
+          },
+          {
+            "line": 482,
+            "text": "test('目录和缓存支持 0、1000、4096 项，未变文件不重复转换且上限有明确诊断', { skip: process.platform !== 'darwin' }, async () => {"
+          },
+          {
+            "line": 505,
+            "text": "test('跨用户和系统目录合计计数包含过滤项，第 4097 个非 plist 也拒绝整轮', { skip: process.platform !== 'darwin' }, async () => {"
+          },
+          {
+            "line": 521,
+            "text": "test('相同 size/mtime 替换 inode 会更新缓存，删除文件回收条目和投影额度', { skip: process.platform !== 'darwin' }, async () => {"
+          },
+          {
+            "line": 548,
+            "text": "test('单 plist、UTF-8 字段、日历数量与投影额度超限均明确失败而非丢任务', { skip: process.platform !== 'darwin' }, async () => {"
+          },
+          {
+            "line": 576,
+            "text": "test('缓存字节按投影与键的额度限制，未到 4096 项也会明确拒绝', { skip: process.platform !== 'darwin' }, async () => {"
+          },
+          {
+            "line": 591,
+            "text": "test('最终任务上限跨配置、三个 launchctl 域、OMP、Hermes 和 cron 合计执行', { skip: process.platform !== 'darwin' }, async () => {"
+          },
+          {
+            "line": 610,
+            "text": "test('最终任务投影字节跨配置与运行域累计，条数未超限也不得发布超量快照', { skip: process.platform !== 'darwin' }, async () => {"
+          },
+          {
+            "line": 622,
+            "text": "test('转换期间增长的配置明确失败，既有完整快照仍可用于来源重试', { skip: process.platform !== 'darwin' }, async () => {"
+          },
+          {
+            "line": 638,
+            "text": "test('dispose 在转换期间取消信号，晚到结果不得重新写入缓存或允许后续采样', { skip: process.platform !== 'darwin' }, async () => {"
+          },
+          {
+            "line": 660,
+            "text": "test('配置采集外部取消后共享命令、文件及字节额度全部归还', { skip: process.platform !== 'darwin' }, async () => {"
+          },
+          {
+            "line": 676,
+            "text": "test('单轮取消排空真实配置读取且下一轮可重用，预取消重试不得修改缓存', { skip: process.platform !== 'darwin' }, async () => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/collectors/schedules.ts",
+        "line": 495,
+        "excerpt": "export class ScheduleCollector {",
+        "sha256": "f42b35b3899a7e97a5dd61897144fa43219649d51d0d632a9ad4eceaf996a3cb"
+      },
+      {
+        "path": "src/main/collectors/launchd.ts",
+        "line": 121,
+        "excerpt": "export class LaunchdCollector {",
+        "sha256": "a0b67724bc14a5d120a00b1ac65f8de0b4637376b44bf6d3acc5db8bfc9dc00f"
+      }
+    ],
+    "state_owner": "ScheduleCollector and LaunchdCollector",
+    "writers": [
+      "readConfiguration/read/collect/retry/dispose"
+    ],
+    "readers": [
+      "compose",
+      "supports",
+      "launchState"
+    ],
+    "initialization": "无完整configuration与空域/文件cache",
+    "termination": "dispose abort并清缓存；迟到结果清理",
+    "recovery": "域失败known=false；有配置才可retrySource"
+  },
+  {
+    "id": "ISM-027",
+    "name": "系统采样基线与计数器连续性",
+    "kind": "implicit",
+    "files": [
+      "src/plugins/system-monitor/main/system.ts:109",
+      "src/plugins/system-monitor/main/network.ts:40"
+    ],
+    "states": [
+      "previousCpu/history/controller",
+      "network.previous(iface,counters,at)"
+    ],
+    "transitions": [
+      "首样本无速率；连续同接口且计数递增→差分",
+      "读取失败/计数回退/换接口→基线失效",
+      "dispose→abort/清基线与60条历史"
+    ],
+    "lifecycle": "经插件生命周期串行采集；纯指标显示不单列",
+    "dependencies": [
+      "ISM-004",
+      "ISM-023"
+    ],
+    "risk": "未识别具体缺陷；静态审计不证明不存在风险",
+    "risk_level": "低",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/plugins/system-monitor/main/system.test.ts",
+      "src/plugins/system-monitor/main/network.test.ts"
+    ],
+    "test_gap": "所列测试仅为相关源码证据，不表示本次执行通过；建议复核本文转换表中的失败、重复事件和卸载后返回边界。",
+    "responsibility": "系统采样基线与计数器连续性",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "保留现有局部状态；用类型约束、命名清晰的转换函数和取消/清理不变量即可，不必引入状态机库。",
+    "test_evidence": [
+      {
+        "path": "src/plugins/system-monitor/main/system.test.ts",
+        "cases": [
+          {
+            "line": 11,
+            "text": "test('Apple Silicon 的 16KB 页正确换算，扣除 purgeable 并计入 wired/compressed', () => {"
+          },
+          {
+            "line": 22,
+            "text": "test('缺失计数器不能伪装为零使用量', () => {"
+          },
+          {
+            "line": 28,
+            "text": "test('内存分项拒绝负 app、无效页大小和不安全计数', () => {"
+          },
+          {
+            "line": 42,
+            "text": "test('内存分项允许零和恰好用满物理内存', () => {"
+          },
+          {
+            "line": 51,
+            "text": "test('RSS 排名覆盖全系统，低 CPU 高内存进程不会被 CPU 前十过滤', () => {"
+          },
+          {
+            "line": 63,
+            "text": "test('两个进程排名在相同指标下保持原始顺序，并限制为十条', () => {"
+          },
+          {
+            "line": 83,
+            "text": "test('系统采集实例隔离 CPU、网络基线和历史，首次为空，连续采样才产生数值', async () => {"
+          },
+          {
+            "line": 107,
+            "text": "test('CPU 计数回退、无效增量与无效计数形成空值并重建连续基线', async () => {"
+          },
+          {
+            "line": 130,
+            "text": "test('IO 期间 dispose 取消采集，晚到结果不得写入 CPU 与历史', async () => {"
+          },
+          {
+            "line": 154,
+            "text": "test('持续采样仅保留最近六十条历史和 CPU、RSS 各十条排名', async () => {"
+          },
+          {
+            "line": 173,
+            "text": "test('默认采集路径全部使用宿主注入的预算命令服务', async () => {"
+          }
+        ]
+      },
+      {
+        "path": "src/plugins/system-monitor/main/network.test.ts",
+        "cases": [
+          {
+            "line": 11,
+            "text": "test('counts only the selected link row with and without a link address or Drop column', () => {"
+          },
+          {
+            "line": 18,
+            "text": "test('missing, duplicate, unsafe and ambiguous counters fail instead of reporting zero', () => {"
+          },
+          {
+            "line": 28,
+            "text": "test('rates need continuous counter evidence and recover explicitly after route changes and failures', async () => {"
+          },
+          {
+            "line": 54,
+            "text": "test('network instances do not share baselines and disposal rejects late IO before sampling', async () => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/plugins/system-monitor/main/system.ts",
+        "line": 109,
+        "excerpt": "export class SystemCollector {",
+        "sha256": "95b163322111f2063f3a6f6e6d7993065ce7959ca927153d9910db1cb21c46c5"
+      },
+      {
+        "path": "src/plugins/system-monitor/main/network.ts",
+        "line": 40,
+        "excerpt": "export class NetworkReader {",
+        "sha256": "77f7559d223cc60c931bdd0ac07be936f2fc7d4acff9c9cd8b3830a222bf137e"
+      }
+    ],
+    "state_owner": "SystemCollector + NetworkReader",
+    "writers": [
+      "collect/read/dispose"
+    ],
+    "readers": [
+      "counter continuity",
+      "diff sample",
+      "history rendering"
+    ],
+    "initialization": "无CPU/network前一采样，history空",
+    "termination": "dispose取消读取并清基线历史",
+    "recovery": "读取失败或计数不连续→下一样本重建基线"
+  },
+  {
+    "id": "ISM-028",
+    "name": "Tern导航验证、聚焦与取消",
+    "kind": "implicit",
+    "files": [
+      "src/main/tern-navigation.ts:192",
+      "src/main/tern-present.swift:181",
+      "src/main/tern-present.swift:273",
+      "resources/tern-navigation/plugin/window.luau:4"
+    ],
+    "states": [
+      "active/closed/controller/deadline/timedOut",
+      "helper remainingElements/focusedSince"
+    ],
+    "transitions": [
+      "验证资源→probe身份→inspect pane→必要时安装插件→重验身份和pane→focus→原生present回执",
+      "busy拒绝并发；cancel/close等待命令释放"
+    ],
+    "lifecycle": "总10秒期限；helper 6秒/2048元素；本次审计未执行任何导航/安装",
+    "dependencies": [
+      "ISM-023",
+      "ISM-029",
+      "ISM-035",
+      "ISM-036"
+    ],
+    "risk": "用户点定位后外部Tern重启或pane复用→前后probe/inspect身份不一致→拒绝；命令超时与原生聚焦可能交错。当前双重验证与总期限降低错窗风险。",
+    "risk_level": "高",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/tern-navigation.test.ts",
+      "src/main/tern-present.test.ts"
+    ],
+    "test_gap": "本次不执行外部窗口操作；需要独立阅读验证PID/会话路径与最终回执。",
+    "responsibility": "Tern导航验证、聚焦与取消",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "集中resolve/validate/focus/present/confirmed阶段，确认点必须是helper回执。",
+    "test_evidence": [
+      {
+        "path": "src/main/tern-navigation.test.ts",
+        "cases": [
+          {
+            "line": 77,
+            "text": "test('confirmed parent ownership inherits a target and a direct target takes precedence', () => {"
+          },
+          {
+            "line": 86,
+            "text": "test('invalid keys, panes and session paths reject before any command or resource I/O', async () => {"
+          },
+          {
+            "line": 100,
+            "text": "test('missing, duplicated, cyclic, oversized and non-OMP ownership cannot issue a command', async () => {"
+          },
+          {
+            "line": 116,
+            "text": "test('a valid unique chain reaches the verified native window, including an empty window key', async t => {"
+          },
+          {
+            "line": 128,
+            "text": "test('mutation of the snapshot after focus begins cannot redirect the captured target', async t => {"
+          },
+          {
+            "line": 145,
+            "text": "test('bad, missing and multiple probe identities reject before invoking a claimed executable', async t => {"
+          },
+          {
+            "line": 161,
+            "text": "test('closed, missing, reused or duplicate panes reject before focus and presentation', async t => {"
+          },
+          {
+            "line": 175,
+            "text": "test('identity or session changes during plugin checks stop before pane focus', async t => {"
+          },
+          {
+            "line": 193,
+            "text": "test('JSON and collection limits reject before any focus side effect', async t => {"
+          },
+          {
+            "line": 215,
+            "text": "test('a missing plugin installs only the fixed bundled directory and must become ready on re-read', async t => {"
+          },
+          {
+            "line": 241,
+            "text": "test('focus failure or an incorrect block never activates the native window', async t => {"
+          },
+          {
+            "line": 256,
+            "text": "test('presentation receipts require the same PID, exact prefix and bounded main-window title', async t => {"
+          },
+          {
+            "line": 269,
+            "text": "test('helper errors accept only a complete fixed code and diagnostics never disclose stderr', async t => {"
+          },
+          {
+            "line": 293,
+            "text": "test('tampered, oversized, symlinked and extra bundled resources never invoke any command', async t => {"
+          },
+          {
+            "line": 325,
+            "text": "test('a payload replaced after initial inspection is rejected before plugin installation', async t => {"
+          },
+          {
+            "line": 338,
+            "text": "test('read-time changes close the actual descriptor before rejecting resources', async t => {"
+          },
+          {
+            "line": 354,
+            "text": "test('concurrent requests reject immediately and cancellation retains ownership until execution drains', async t => {"
+          },
+          {
+            "line": 388,
+            "text": "test('the total deadline includes both resource-file and command admission queues', async t => {"
+          },
+          {
+            "line": 405,
+            "text": "test('file-close failures survive cancellation in focus, cancel and permanent close', async t => {"
+          },
+          {
+            "line": 455,
+            "text": "test('real owned children close on cancel and close before their resource reservation is released', { timeout: 10_000 }, async t => {"
+          },
+          {
+            "line": 471,
+            "text": "test('a real child exceeding the total deadline is killed and drained', { timeout: 5000 }, async t => {"
+          },
+          {
+            "line": 483,
+            "text": "test('real helper output overflow kills and drains the child without accepting a receipt', { timeout: 5000 }, async t => {"
+          },
+          {
+            "line": 492,
+            "text": "test('constructor deadlines are finite positive integers capped at ten seconds', () => {"
+          },
+          {
+            "line": 496,
+            "text": "test('closing while queued cancels admission without ever starting a command', async t => {"
+          },
+          {
+            "line": 512,
+            "text": "test('same-content replacement during reading fails identity validation and closes the old descriptor', async t => {"
+          },
+          {
+            "line": 530,
+            "text": "test('real helper failures expose only whitelisted codes and redact sensitive stderr', { timeout: 5000 }, async t => {"
+          }
+        ]
+      },
+      {
+        "path": "src/main/tern-present.test.ts",
+        "cases": [
+          {
+            "line": 11,
+            "text": "test('native Tern selection and process identity reject ambiguity and expired processes', {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/tern-navigation.ts",
+        "line": 192,
+        "excerpt": "export class TernNavigation {",
+        "sha256": "1e156b9ff155bb46281f44972b919ffc8190d501dfd638998e02925fa1f9cfcf"
+      },
+      {
+        "path": "src/main/tern-present.swift",
+        "line": 181,
+        "excerpt": "final class AccessibilityContext {",
+        "sha256": "056d142eea2a3d1fafbc98f70274e23bddb517149feea66d154238ae47811dcd"
+      },
+      {
+        "path": "src/main/tern-present.swift",
+        "line": 273,
+        "excerpt": "    guard AXIsProcessTrusted() else { throw NavigationError.accessibility }",
+        "sha256": "056d142eea2a3d1fafbc98f70274e23bddb517149feea66d154238ae47811dcd"
+      },
+      {
+        "path": "resources/tern-navigation/plugin/window.luau",
+        "line": 4,
+        "excerpt": "tern.timer(0, function(cx)",
+        "sha256": "ba0282155dad6f64da69bc4afdab6b5de3afca509c79bb1c1a5cb01190079fde"
+      }
+    ],
+    "state_owner": "TernNavigation + helper",
+    "writers": [
+      "focus/navigate/command/cancel/close",
+      "helper focus polling"
+    ],
+    "readers": [
+      "verifyResources/verifyPane/pluginReady",
+      "native identity checks"
+    ],
+    "initialization": "active空、closed=false",
+    "termination": "cancel等命令关闭；close永久拒绝",
+    "recovery": "失败后可再次focus；每次重验身份与资源"
+  },
+  {
+    "id": "ISM-029",
+    "name": "跨窗口导航意图与身份失效",
+    "kind": "implicit",
+    "files": [
+      "src/shared/navigation.ts:42",
+      "src/renderer/src/App.tsx:66",
+      "src/renderer/src/view-state.ts:61",
+      "src/renderer/src/AgentsView.tsx:144",
+      "src/renderer/src/SchedulesView.tsx:219",
+      "src/renderer/src/AgentsView.tsx:80"
+    ],
+    "states": [
+      "main.intent/sequence；receivedNavigation/consumed",
+      "selectedId/identity/open/unavailable/sourceTarget"
+    ],
+    "transitions": [
+      "put覆盖最新意图→renderer取并路由→按sequence ack",
+      "对象身份不匹配→失效说明而非跳转到复用ID",
+      "重复意图去重；旧ack不可删除新意图"
+    ],
+    "lifecycle": "导航只定位对象；身份来自当前快照；滚动焦点与view memory保存",
+    "dependencies": [
+      "ISM-001",
+      "ISM-032",
+      "ISM-034"
+    ],
+    "risk": "未识别具体缺陷；静态审计不证明不存在风险",
+    "risk_level": "低",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/navigation.test.ts",
+      "src/renderer/src/view-state.test.ts"
+    ],
+    "test_gap": "所列测试仅为相关源码证据，不表示本次执行通过；建议复核本文转换表中的失败、重复事件和卸载后返回边界。",
+    "responsibility": "跨窗口导航意图与身份失效",
+    "verification_status": "隔离探针通过指定转换；不是生产故障复现",
+    "modeling_recommendation": "保留现有局部状态；用类型约束、命名清晰的转换函数和取消/清理不变量即可，不必引入状态机库。",
+    "test_evidence": [
+      {
+        "path": "src/main/navigation.test.ts",
+        "cases": [
+          {
+            "line": 9,
+            "text": "test('navigation preserves identity while allowing mutable names and activity to change', () => {"
+          },
+          {
+            "line": 17,
+            "text": "test('navigation only accepts finite targets with bounded identity metadata', () => {"
+          },
+          {
+            "line": 27,
+            "text": "test('navigation survives a cancelled read and stale acknowledgements cannot discard newer targets', () => {"
+          }
+        ]
+      },
+      {
+        "path": "src/renderer/src/view-state.test.ts",
+        "cases": [
+          {
+            "line": 15,
+            "text": "test('restored selection follows identity, retains filters, and never selects a replacement object', () => {"
+          },
+          {
+            "line": 36,
+            "text": "test('task replacement clears its history page without changing the saved task filters', () => {"
+          },
+          {
+            "line": 56,
+            "text": "test('saved positions reject excess and invalid inputs while existing nodes remain editable at capacity', () => {"
+          },
+          {
+            "line": 72,
+            "text": "test('1000 object generations retain only live coordinates and collapse state, including temporarily hidden nodes', () => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/shared/navigation.ts",
+        "line": 42,
+        "excerpt": "export class PendingNavigation {",
+        "sha256": "4189d0ad4c97c76d650b6a2520cd0ebe2dc485c8b69d0f98e30ab3bc03003a8b"
+      },
+      {
+        "path": "src/renderer/src/App.tsx",
+        "line": 66,
+        "excerpt": "  const [intent, setIntent] = useState<NavigationIntent | null>(null)",
+        "sha256": "282b519f06f9270d7990eea56b8b27d03b78ceb90579085b95e6a296bbdf76b0"
+      },
+      {
+        "path": "src/renderer/src/view-state.ts",
+        "line": 61,
+        "excerpt": "export function reconcileAgentView(view: AgentViewState, data: AgentSnapshot | null): AgentViewState {",
+        "sha256": "5754f460720279406f3fb8733e6146ccd97b5fe931c064c045119602872d4e71"
+      },
+      {
+        "path": "src/renderer/src/AgentsView.tsx",
+        "line": 144,
+        "excerpt": "  useLayoutEffect(() => {",
+        "sha256": "a90e2252c12b270833b16aa668684be25a757d765ac13df5b135da0a56e5c6f9"
+      },
+      {
+        "path": "src/renderer/src/SchedulesView.tsx",
+        "line": 219,
+        "excerpt": "  useLayoutEffect(() => {",
+        "sha256": "b905b29f1cf969131773b51f124bad88e5731fa298eb1d9eb07705e4005b4bfb"
+      },
+      {
+        "path": "src/renderer/src/AgentsView.tsx",
+        "line": 80,
+        "excerpt": "  const consumed = useRef(0)",
+        "sha256": "a90e2252c12b270833b16aa668684be25a757d765ac13df5b135da0a56e5c6f9"
+      }
+    ],
+    "state_owner": "PendingNavigation + view states",
+    "writers": [
+      "put/acknowledge/openTarget/reconcileAgentView/reconcileScheduleView"
+    ],
+    "readers": [
+      "navigation IPC",
+      "consumed sequence",
+      "selected identity"
+    ],
+    "initialization": "intent空、sequence0、view初始未选中",
+    "termination": "对应sequence ack清意图；视图身份消失标失效",
+    "recovery": "新导航覆盖旧意图；重新选中当前证据对象"
+  }
+]

@@ -1,0 +1,1045 @@
+[
+  {
+    "id": "ISM-001",
+    "name": "应用启动、恢复与退出",
+    "kind": "implicit",
+    "files": [
+      "src/main/index.ts:79",
+      "src/main/index.ts:331",
+      "src/main/index.ts:442",
+      "src/main/index.ts:648",
+      "src/main/shutdown.ts:8"
+    ],
+    "states": [
+      "settings/window/recoveryWindow",
+      "quitting/quitReady",
+      "installationWork/exitCode"
+    ],
+    "transitions": [
+      "ready→readSettings→恢复窗口或正常初始化",
+      "before-quit: quitting守卫→releaseResources→quitReady→exit",
+      "beforeInstall→排空→允许Squirrel退出"
+    ],
+    "lifecycle": "初始无窗口；单实例锁拒绝退出；关闭主窗通常隐藏；退出先排空设置再停采集/desktop；5秒超时强制退出",
+    "dependencies": [
+      "ISM-002",
+      "ISM-003",
+      "ISM-007",
+      "ISM-008",
+      "ISM-009",
+      "ISM-010",
+      "ISM-023"
+    ],
+    "risk": "未识别具体缺陷；静态审计不证明不存在风险",
+    "risk_level": "中",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/shutdown.test.ts",
+      "src/main/startup-recovery.test.ts"
+    ],
+    "test_gap": "所列测试仅为相关源码证据，不表示本次执行通过；建议复核本文转换表中的失败、重复事件和卸载后返回边界。",
+    "responsibility": "应用启动、恢复与退出",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "保留现有局部状态；用类型约束、命名清晰的转换函数和取消/清理不变量即可，不必引入状态机库。",
+    "test_evidence": [
+      {
+        "path": "src/main/shutdown.test.ts",
+        "cases": [
+          {
+            "line": 16,
+            "text": "test('shutdown drains settings before dependent resources and waits for independent cleanup', async () => {"
+          },
+          {
+            "line": 42,
+            "text": "test('shutdown attempts every cleanup after a synchronous failure and preserves asynchronous failure', async () => {"
+          },
+          {
+            "line": 60,
+            "text": "test('deadline identifies unfinished cleanup and never reports a successful drain', async t => {"
+          },
+          {
+            "line": 76,
+            "text": "test('undefined and primitive rejections cannot be mistaken for cleanup success', async () => {"
+          },
+          {
+            "line": 85,
+            "text": "test('shutdown persists final geometry before closing the plugins used by settings', async t => {"
+          }
+        ]
+      },
+      {
+        "path": "src/main/startup-recovery.test.ts",
+        "cases": [
+          {
+            "line": 18,
+            "text": "test('read failures explain malformed, invalid, oversized and non-UTF8 files without modifying them or revealing content', async t => {"
+          },
+          {
+            "line": 45,
+            "text": "test('access denied stays an explicit failure and leaves original permissions unchanged', { skip: process.getuid?.() === 0 }, async t => {"
+          },
+          {
+            "line": 59,
+            "text": "test('failed re-read replaces diagnostics; repairing the same file releases valid settings once', async t => {"
+          },
+          {
+            "line": 81,
+            "text": "test('concurrent re-reads share one operation and close drains it without resuming startup', async () => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/index.ts",
+        "line": 79,
+        "excerpt": "let window: BrowserWindow | null = null",
+        "sha256": "66bf4e487b4583a77718c8741f2f53ddfabad5271862a02bea88b68890c3ee60"
+      },
+      {
+        "path": "src/main/index.ts",
+        "line": 331,
+        "excerpt": "function recoverStartupSettings(filename: string, error: unknown): Promise<AppSettings | null> {",
+        "sha256": "66bf4e487b4583a77718c8741f2f53ddfabad5271862a02bea88b68890c3ee60"
+      },
+      {
+        "path": "src/main/index.ts",
+        "line": 442,
+        "excerpt": "  app.whenReady().then(async () => {",
+        "sha256": "66bf4e487b4583a77718c8741f2f53ddfabad5271862a02bea88b68890c3ee60"
+      },
+      {
+        "path": "src/main/index.ts",
+        "line": 648,
+        "excerpt": "  app.on('before-quit', (event) => {",
+        "sha256": "66bf4e487b4583a77718c8741f2f53ddfabad5271862a02bea88b68890c3ee60"
+      },
+      {
+        "path": "src/main/shutdown.ts",
+        "line": 8,
+        "excerpt": "/** The caller must exit on failure: a timed-out operation has NOT finished cleanup. */",
+        "sha256": "6f0d7adec477e4ec66673bb1ae383aa1af4f8342d9f5ba49a2577c2faff71a3a"
+      }
+    ],
+    "state_owner": "main application",
+    "writers": [
+      "app.whenReady",
+      "recoverStartupSettings.finish",
+      "before-quit",
+      "beforeInstall"
+    ],
+    "readers": [
+      "activateApplication",
+      "IPC guards",
+      "releaseResources"
+    ],
+    "initialization": "模块初始化空窗口与quitting=false",
+    "termination": "before-quit排空后app.exit或Squirrel交接",
+    "recovery": "设置读取失败进入恢复窗口；不可恢复startup错误退出"
+  },
+  {
+    "id": "ISM-002",
+    "name": "设置应用、持久化与回滚",
+    "kind": "implicit",
+    "files": [
+      "src/main/settings.ts:253",
+      "src/main/index.ts:449",
+      "src/main/index.ts:516"
+    ],
+    "states": [
+      "current/queue/pendingUpdates/isUpdating/fatalError",
+      "appliedSettings"
+    ],
+    "transitions": [
+      "update验证→串行apply→save→current提交",
+      "失败→apply(previous)；回滚失败→fatalError永久拒绝",
+      "idle等待队列稳定"
+    ],
+    "lifecycle": "队列上限16；初始化复制设置；fatal回滚进入退出；idle排空",
+    "dependencies": [
+      "ISM-004",
+      "ISM-014",
+      "ISM-015",
+      "ISM-030"
+    ],
+    "risk": "未识别具体缺陷；静态审计不证明不存在风险",
+    "risk_level": "中",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/settings.test.ts"
+    ],
+    "test_gap": "所列测试仅为相关源码证据，不表示本次执行通过；建议复核本文转换表中的失败、重复事件和卸载后返回边界。",
+    "responsibility": "设置应用、持久化与回滚",
+    "verification_status": "隔离探针通过指定转换；不是生产故障复现",
+    "modeling_recommendation": "保留现有局部状态；用类型约束、命名清晰的转换函数和取消/清理不变量即可，不必引入状态机库。",
+    "test_evidence": [
+      {
+        "path": "src/main/settings.test.ts",
+        "cases": [
+          {
+            "line": 14,
+            "text": "test('settings validate supplied keys, exact enums and booleans without coercion', () => {"
+          },
+          {
+            "line": 35,
+            "text": "test('glass intensity rejects coercion and out-of-range values and persists exact endpoints', async t => {"
+          },
+          {
+            "line": 49,
+            "text": "test('validated stored overrides merge with defaults; malformed, invalid and unreadable paths fail explicitly', async (t) => {"
+          },
+          {
+            "line": 71,
+            "text": "test('concurrent patches serialize native effects and independently preserve both themes across restart', async (t) => {"
+          },
+          {
+            "line": 112,
+            "text": "test('a native failure restores prior effects and durable settings, and later updates still work', async (t) => {"
+          },
+          {
+            "line": 132,
+            "text": "test('a settings.json directory is classified, rolls back effects and permits retrying the same patch after removal', async (t) => {"
+          },
+          {
+            "line": 159,
+            "text": "test('structured failures classify errno without interpreting message text', () => {"
+          },
+          {
+            "line": 178,
+            "text": "test('nested aggregate failures preserve errno but classify only the original operation', () => {"
+          },
+          {
+            "line": 195,
+            "text": "test('storage exhaustion preserves the previous file and native effects, then the same patch can succeed', async (t) => {"
+          },
+          {
+            "line": 226,
+            "text": "test('a rollback failure rejects queued changes and never exposes an allegedly consistent snapshot', async () => {"
+          },
+          {
+            "line": 245,
+            "text": "test('invalid patches never enter the transaction or poison subsequent valid changes', async () => {"
+          },
+          {
+            "line": 262,
+            "text": "test('settings size and UTF-8 boundaries preserve the original file on rejection', async (t) => {"
+          },
+          {
+            "line": 279,
+            "text": "test('symlink, dangling symlink and FIFO inputs are rejected without following or blocking', { timeout: 5000 }, async (t) => {"
+          },
+          {
+            "line": 295,
+            "text": "test('growth between stat and reading is rejected and its descriptor is closed', async (t) => {"
+          },
+          {
+            "line": 315,
+            "text": "test('close and cleanup failures retain the original write errno and remain visible', async (t) => {"
+          },
+          {
+            "line": 347,
+            "text": "test('plugin preferences reject unknown identities and non-boolean or accessor values', () => {"
+          },
+          {
+            "line": 358,
+            "text": "test('queued plugin patches preserve independent changes across restart and isolate caller mutation', async t => {"
+          },
+          {
+            "line": 382,
+            "text": "test('failed plugin preference persistence restores the running plugin and durable file before retry', async t => {"
+          },
+          {
+            "line": 412,
+            "text": "test('long plugin transitions bound accepted preference work and release capacity after draining', async () => {"
+          },
+          {
+            "line": 433,
+            "text": "test('notification subscriptions persist full identities and reject unsafe or oversized preference edits', async t => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/settings.ts",
+        "line": 253,
+        "excerpt": "export class SettingsStore {",
+        "sha256": "7a8ab889e730b5608c6e17b097de0b61d9a5480bcc134e5676ea1ff6f031986b"
+      },
+      {
+        "path": "src/main/index.ts",
+        "line": 449,
+        "excerpt": "    settings = new SettingsStore(filename, initial, async (value) => {",
+        "sha256": "66bf4e487b4583a77718c8741f2f53ddfabad5271862a02bea88b68890c3ee60"
+      },
+      {
+        "path": "src/main/index.ts",
+        "line": 516,
+        "excerpt": "    handle('settings:update', async (patch): Promise<SettingsUpdateResult> => {",
+        "sha256": "66bf4e487b4583a77718c8741f2f53ddfabad5271862a02bea88b68890c3ee60"
+      }
+    ],
+    "state_owner": "SettingsStore",
+    "writers": [
+      "update operation",
+      "apply",
+      "save",
+      "rollback",
+      "finally"
+    ],
+    "readers": [
+      "value",
+      "idle",
+      "broadcastSettings",
+      "renderer snapshot"
+    ],
+    "initialization": "复制initial，空串行队列",
+    "termination": "idle等队列稳定；fatalError永久拒绝",
+    "recovery": "save失败apply previous；回滚失败触发退出"
+  },
+  {
+    "id": "ISM-003",
+    "name": "设置损坏重试恢复",
+    "kind": "implicit",
+    "files": [
+      "src/main/startup-recovery.ts:28",
+      "src/main/index.ts:331"
+    ],
+    "states": [
+      "pending/ready/closed/failure",
+      "settled/closeRecovery"
+    ],
+    "transitions": [
+      "retry合并→ready缓存或failed更新",
+      "close→closed→等待pending→清ready",
+      "ready且未退出→关闭恢复窗→正常启动"
+    ],
+    "lifecycle": "首次读取失败创建；关闭后迟到响应不得继续启动",
+    "dependencies": [
+      "ISM-001"
+    ],
+    "risk": "未识别具体缺陷；静态审计不证明不存在风险",
+    "risk_level": "低",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/startup-recovery.test.ts"
+    ],
+    "test_gap": "所列测试仅为相关源码证据，不表示本次执行通过；建议复核本文转换表中的失败、重复事件和卸载后返回边界。",
+    "responsibility": "设置损坏重试恢复",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "保留现有局部状态；用类型约束、命名清晰的转换函数和取消/清理不变量即可，不必引入状态机库。",
+    "test_evidence": [
+      {
+        "path": "src/main/startup-recovery.test.ts",
+        "cases": [
+          {
+            "line": 18,
+            "text": "test('read failures explain malformed, invalid, oversized and non-UTF8 files without modifying them or revealing content', async t => {"
+          },
+          {
+            "line": 45,
+            "text": "test('access denied stays an explicit failure and leaves original permissions unchanged', { skip: process.getuid?.() === 0 }, async t => {"
+          },
+          {
+            "line": 59,
+            "text": "test('failed re-read replaces diagnostics; repairing the same file releases valid settings once', async t => {"
+          },
+          {
+            "line": 81,
+            "text": "test('concurrent re-reads share one operation and close drains it without resuming startup', async () => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/startup-recovery.ts",
+        "line": 28,
+        "excerpt": "export class StartupSettingsRecovery {",
+        "sha256": "51df927f05a049dce2f98ee371e69128b1b6a32e2f0be141453888bc19dd9918"
+      },
+      {
+        "path": "src/main/index.ts",
+        "line": 331,
+        "excerpt": "function recoverStartupSettings(filename: string, error: unknown): Promise<AppSettings | null> {",
+        "sha256": "66bf4e487b4583a77718c8741f2f53ddfabad5271862a02bea88b68890c3ee60"
+      }
+    ],
+    "state_owner": "StartupSettingsRecovery",
+    "writers": [
+      "retry completion",
+      "close"
+    ],
+    "readers": [
+      "retry",
+      "recoverStartupSettings IPC"
+    ],
+    "initialization": "failure已记录、closed=false",
+    "termination": "close置closed并等待pending",
+    "recovery": "retry合并；成功ready缓存直到宿主消费"
+  },
+  {
+    "id": "ISM-004",
+    "name": "插件注册、运行、重试和卸载",
+    "kind": "hybrid",
+    "files": [
+      "src/main/plugins/registry.ts:19",
+      "src/main/plugins/registry.ts:198",
+      "src/main/plugins/registry.ts:291",
+      "src/main/plugins/registry.ts:415",
+      "src/main/plugins/registry.ts:459",
+      "src/main/plugins/registry.ts:499"
+    ],
+    "states": [
+      "phase/enabled/generation/controller",
+      "starting/collecting/sampling/retries/transition/stopping/removing",
+      "terminalFailure/stopFailure/closed"
+    ],
+    "transitions": [
+      "start→initialize→running",
+      "同源重试合并；跨源collect串行",
+      "禁用/移除→abort→drain→stop→disabled；失败锁定",
+      "timeout设置terminalFailure并abort，等待原任务实际结束"
+    ],
+    "lifecycle": "依赖拓扑初始化/逆序关闭；controller identity过滤过期发布；终止失败须禁用后重启，stopFailure不可恢复",
+    "dependencies": [
+      "ISM-005",
+      "ISM-011",
+      "ISM-016",
+      "ISM-024",
+      "ISM-026",
+      "ISM-027"
+    ],
+    "risk": "插件collect/start忽略signal→期限报告failed但promise未settle→禁用/关闭一直等待；应用5秒shutdown期限会退出，不能声称已正常清理。现有测试明确覆盖这种保留所有权策略。",
+    "risk_level": "高",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/plugins/registry.test.ts"
+    ],
+    "test_gap": "独立复核非合作插件及依赖关闭顺序；probe已验证超时仍持有pending。",
+    "responsibility": "插件注册、运行、重试和卸载",
+    "verification_status": "隔离探针通过指定转换；不是生产故障复现",
+    "modeling_recommendation": "用单个生命周期状态联合操作所有权，明确timed-out-draining与failed可重试的区别。",
+    "test_evidence": [
+      {
+        "path": "src/main/plugins/registry.test.ts",
+        "cases": [
+          {
+            "line": 30,
+            "text": "test('registration rejects invalid metadata and dependency graphs without constructing plugins', async () => {"
+          },
+          {
+            "line": 68,
+            "text": "test('registration snapshots mutable definitions, dependencies and scheduling metadata', async t => {"
+          },
+          {
+            "line": 98,
+            "text": "test('disabled plugins stay uninitialized, and manual collection lazily merges concurrent requests', async () => {"
+          },
+          {
+            "line": 133,
+            "text": "test('repeated start and manual refresh keep one periodic timer and one collection', async t => {"
+          },
+          {
+            "line": 167,
+            "text": "test('periodic sampling keeps its cadence across collection latency and manual refresh', async t => {"
+          },
+          {
+            "line": 194,
+            "text": "test('disabling drains the actual collection, merges stops, rejects reversal and blocks retired publications', async () => {"
+          },
+          {
+            "line": 250,
+            "text": "test('close during initialization aborts start and waits for both initialization and cleanup', async () => {"
+          },
+          {
+            "line": 282,
+            "text": "test('close before queued initialization prevents factory execution and permanently rejects reuse', async () => {"
+          },
+          {
+            "line": 297,
+            "text": "test('close supersedes a queued enable without constructing a fresh instance', async () => {"
+          },
+          {
+            "line": 310,
+            "text": "test('reentrant close from a factory prevents start and still releases its returned instance once', async () => {"
+          },
+          {
+            "line": 323,
+            "text": "test(`${operation} timeout reports ETIMEDOUT immediately but owns work until settlement and permits a clean new generation`, async t => {"
+          },
+          {
+            "line": 372,
+            "text": "test('stop timeout remains visible, owns cleanup until settle, and permanently rejects restart', async t => {"
+          },
+          {
+            "line": 402,
+            "text": "test('ordinary scheduled collection errors are visible and recover without overlapping work or stopping healthy plugins', async t => {"
+          },
+          {
+            "line": 430,
+            "text": "test('failed startup does not repeatedly call its factory and can recover only after disable and cleanup', async () => {"
+          },
+          {
+            "line": 451,
+            "text": "test('dependencies initialize first and cannot be disabled while a consumer is enabled or still draining', async () => {"
+          },
+          {
+            "line": 478,
+            "text": "test('close aborts all owners immediately and drains consumers before dependencies even after a stop failure', async () => {"
+          },
+          {
+            "line": 516,
+            "text": "test('all stop rejection values remain failures and are retained across repeated disable and close', async () => {"
+          },
+          {
+            "line": 537,
+            "text": "test('a primitive collection rejection during close is reported and cannot be mistaken for a drained success', async () => {"
+          },
+          {
+            "line": 552,
+            "text": "test('resource cleanup failures already reported by collection remain shutdown failures', async () => {"
+          },
+          {
+            "line": 565,
+            "text": "test('100 lifecycle cycles share the existing resource budget and detach the external abort listener after real drain', async () => {"
+          },
+          {
+            "line": 604,
+            "text": "test('an already aborted parent leaves every plugin disabled without factories or listeners', async () => {"
+          },
+          {
+            "line": 619,
+            "text": "test('a timed out plugin cannot block collection or cleanup of an independent plugin', async t => {"
+          },
+          {
+            "line": 650,
+            "text": "test('throwing and malformed factories report failure and release any valid cleanup method', async () => {"
+          },
+          {
+            "line": 672,
+            "text": "test('a late non-cancellation failure after timeout remains visible alongside the deadline', async t => {"
+          },
+          {
+            "line": 694,
+            "text": "test('declared source retries coalesce and stay bounded behind one serial collection chain', async () => {"
+          },
+          {
+            "line": 733,
+            "text": "test('retry failures retain source ownership and neither incremental events nor source success erase a full collection failure', async () => {"
+          },
+          {
+            "line": 760,
+            "text": "test('periodic collection skips busy retries and resumes on its original deadline', async t => {"
+          },
+          {
+            "line": 786,
+            "text": "test('disable cancels and drains the full collection and all queued retries without losing a late failure', async () => {"
+          },
+          {
+            "line": 816,
+            "text": "test('history cancellation and disabled reads never initialize unused plugins, and capability errors remain explicit', async () => {"
+          },
+          {
+            "line": 835,
+            "text": "test('history cancellation invalidates a late successful read and an initialization still in flight', async () => {"
+          },
+          {
+            "line": 858,
+            "text": "test('history disable waits for real reader release and a fresh generation cannot accept retired history', async () => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/plugins/registry.ts",
+        "line": 19,
+        "excerpt": "interface Entry {",
+        "sha256": "6d9d8300e5411f234543e69038caf0a1ff7cfcf7b1c4afc184a626cfa407b2bd"
+      },
+      {
+        "path": "src/main/plugins/registry.ts",
+        "line": 198,
+        "excerpt": "  collect(id: string, sourceId?: string): Promise<void> {",
+        "sha256": "6d9d8300e5411f234543e69038caf0a1ff7cfcf7b1c4afc184a626cfa407b2bd"
+      },
+      {
+        "path": "src/main/plugins/registry.ts",
+        "line": 291,
+        "excerpt": "  setEnabled(id: string, enabled: boolean): Promise<void> {",
+        "sha256": "6d9d8300e5411f234543e69038caf0a1ff7cfcf7b1c4afc184a626cfa407b2bd"
+      },
+      {
+        "path": "src/main/plugins/registry.ts",
+        "line": 415,
+        "excerpt": "  private initialize(entry: Entry): Promise<void> {",
+        "sha256": "6d9d8300e5411f234543e69038caf0a1ff7cfcf7b1c4afc184a626cfa407b2bd"
+      },
+      {
+        "path": "src/main/plugins/registry.ts",
+        "line": 459,
+        "excerpt": "  private async timed<T>(entry: Entry, operation: 'start' | 'collect' | 'stop', run: () => T | Promise<T>, sourceId?: string): Promise<T> {",
+        "sha256": "6d9d8300e5411f234543e69038caf0a1ff7cfcf7b1c4afc184a626cfa407b2bd"
+      },
+      {
+        "path": "src/main/plugins/registry.ts",
+        "line": 499,
+        "excerpt": "  private stopEntry(entry: Entry): Promise<void> {",
+        "sha256": "6d9d8300e5411f234543e69038caf0a1ff7cfcf7b1c4afc184a626cfa407b2bd"
+      }
+    ],
+    "state_owner": "CollectionPluginRegistry Entry",
+    "writers": [
+      "initialize",
+      "collect",
+      "setEnabled",
+      "cancel",
+      "timed",
+      "stopEntry",
+      "close"
+    ],
+    "readers": [
+      "assertAvailable",
+      "dependencyFailure",
+      "publish",
+      "statuses",
+      "diagnostics"
+    ],
+    "initialization": "entries idle/enabled、无instance",
+    "termination": "close abort所有并逆序stop；失败保留",
+    "recovery": "terminalFailure需disable清理再enable；stopFailure禁止重启"
+  },
+  {
+    "id": "ISM-005",
+    "name": "采集刷新、来源重试与发布",
+    "kind": "implicit",
+    "files": [
+      "src/main/monitor.ts:30",
+      "src/main/monitor.ts:84",
+      "src/main/monitor.ts:129",
+      "src/main/monitor.ts:201"
+    ],
+    "states": [
+      "pending/sourceRetries/collectionErrors/stopped/stopping",
+      "section.data/error/refreshing/lastAttemptAt/lastSuccessAt"
+    ],
+    "transitions": [
+      "刷新按section合并；来源重试按source合并",
+      "onSnapshot/onError/onState→更新派生状态",
+      "内容相同仅发heartbeat；stop→abort/drain/清state"
+    ],
+    "lifecycle": "与registry共享采集状态，不重复计单个来源状态；停止后update忽略",
+    "dependencies": [
+      "ISM-004",
+      "ISM-006",
+      "ISM-032",
+      "ISM-041"
+    ],
+    "risk": "未识别具体缺陷；静态审计不证明不存在风险",
+    "risk_level": "中",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/monitor.test.ts"
+    ],
+    "test_gap": "所列测试仅为相关源码证据，不表示本次执行通过；建议复核本文转换表中的失败、重复事件和卸载后返回边界。",
+    "responsibility": "采集刷新、来源重试与发布",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "保留现有局部状态；用类型约束、命名清晰的转换函数和取消/清理不变量即可，不必引入状态机库。",
+    "test_evidence": [
+      {
+        "path": "src/main/monitor.test.ts",
+        "cases": [
+          {
+            "line": 32,
+            "text": "test('automatic discovery emits only changed sections, retains other references, and never toggles loading', async () => {"
+          },
+          {
+            "line": 57,
+            "text": "test('discovery failures remain visible and a later successful reconciliation clears the error', async () => {"
+          },
+          {
+            "line": 72,
+            "text": "test('stop prevents late section publication from a collector already in flight', async () => {"
+          },
+          {
+            "line": 88,
+            "text": "test('同来源重试合并，在整轮采集之后排队，期间不启动另一轮全量采集', async () => {"
+          },
+          {
+            "line": 120,
+            "text": "test('单来源恢复不会清除未恢复的配置错误，完整采集成功才清除', async () => {"
+          },
+          {
+            "line": 140,
+            "text": "test('未知来源不执行采集，已排队的健康域不被前一域失败取消', async () => {"
+          },
+          {
+            "line": 169,
+            "text": "test('system collector receives cancellation and is disposed exactly once without publishing late results', async () => {"
+          },
+          {
+            "line": 196,
+            "text": "test('system section publishes an unknown first CPU sample and then the numeric continuous sample', async () => {"
+          },
+          {
+            "line": 209,
+            "text": "test('100 stop cycles wait for owned resource release and detach the external signal', async () => {"
+          },
+          {
+            "line": 239,
+            "text": "test('stop rejects a queued source retry before it starts and waits for its preceding collection', async () => {"
+          },
+          {
+            "line": 257,
+            "text": "test('a synchronous disposal failure does not prevent other cancellation and retains resource identity', async () => {"
+          },
+          {
+            "line": 278,
+            "text": "test('a cleanup failure already shown in a section remains a shutdown failure', async () => {"
+          },
+          {
+            "line": 290,
+            "text": "test('unchanged collection advances bounded source heartbeats without resending entities or inventing success', async t => {"
+          },
+          {
+            "line": 317,
+            "text": "test('a domain retry does not advance configuration or other domains that were not read', async t => {"
+          },
+          {
+            "line": 339,
+            "text": "test('section retries coalesce known failed sources, preserve other sections, and reject unsupported or absent routes', async t => {"
+          },
+          {
+            "line": 370,
+            "text": "test('monitor has no implicit collectors, accepts explicit section plugins, and rejects duplicate ownership', async () => {"
+          },
+          {
+            "line": 392,
+            "text": "test('disabled plugins retain measurements and timestamps and skip both manual and automatic collection', async t => {"
+          },
+          {
+            "line": 433,
+            "text": "test('repeated system enable cycles create fresh collectors and reset sampling baselines', async t => {"
+          },
+          {
+            "line": 466,
+            "text": "test('one plugin failure stays visible while independent plugins continue and later success clears it', async t => {"
+          },
+          {
+            "line": 488,
+            "text": "test('plugin snapshots preserve source heartbeat semantics for unchanged automatic samples', async t => {"
+          },
+          {
+            "line": 506,
+            "text": "test('disable waits for real collection settlement, blocks opposite transitions, and rejects late publication', async t => {"
+          },
+          {
+            "line": 543,
+            "text": "test('successful disable clears a previous collection error while retaining measurements and timestamps', async t => {"
+          },
+          {
+            "line": 571,
+            "text": "test('failed disposal remains visible after disabling and retains system identity through monitor shutdown', async () => {"
+          },
+          {
+            "line": 592,
+            "text": "test('incremental agent activity retains discovery errors and observation times until full reconciliation succeeds', async t => {"
+          },
+          {
+            "line": 631,
+            "text": "test('a source retry records its attempt without advancing unrelated domains or full-section success', async t => {"
+          },
+          {
+            "line": 658,
+            "text": "test('schedule history uses the public plugin capability and stays uninitialized while disabled', async t => {"
+          },
+          {
+            "line": 688,
+            "text": "test('disabling schedule collection cancels history, waits for actual resources, and reads from a fresh generation', async t => {"
+          },
+          {
+            "line": 728,
+            "text": "test('explicit history cancellation rejects old results without disabling future schedule reads', async t => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/monitor.ts",
+        "line": 30,
+        "excerpt": "export class Monitor extends EventEmitter {",
+        "sha256": "07800ab367443f913e681ef5f438a7a3859d4499109083640857109316598483"
+      },
+      {
+        "path": "src/main/monitor.ts",
+        "line": 84,
+        "excerpt": "  start(): void {",
+        "sha256": "07800ab367443f913e681ef5f438a7a3859d4499109083640857109316598483"
+      },
+      {
+        "path": "src/main/monitor.ts",
+        "line": 129,
+        "excerpt": "  refresh(section?: MonitorSection, manual = true): Promise<void> {",
+        "sha256": "07800ab367443f913e681ef5f438a7a3859d4499109083640857109316598483"
+      },
+      {
+        "path": "src/main/monitor.ts",
+        "line": 201,
+        "excerpt": "  private update<K extends MonitorSection>(section: K, state: MonitorSnapshot[K], observedSource?: string, incremental = false): void {",
+        "sha256": "07800ab367443f913e681ef5f438a7a3859d4499109083640857109316598483"
+      }
+    ],
+    "state_owner": "Monitor",
+    "writers": [
+      "observer.onSnapshot/onError/onState",
+      "refresh",
+      "retrySource",
+      "stop"
+    ],
+    "readers": [
+      "update",
+      "readHistory",
+      "readEvents",
+      "IPC snapshot"
+    ],
+    "initialization": "createEmptySnapshot、插件目录注册",
+    "termination": "stop清队列/快照/监听",
+    "recovery": "refresh/retrySource通过registry重采"
+  },
+  {
+    "id": "ISM-006",
+    "name": "可见窗口订阅",
+    "kind": "implicit",
+    "files": [
+      "src/main/monitor-subscriptions.ts:13",
+      "src/preload/index.ts:16"
+    ],
+    "states": [
+      "entries.visible/updates/sources",
+      "WebContents销毁/导航"
+    ],
+    "transitions": [
+      "register→visibility/兴趣更新→有条件publish",
+      "导航/崩溃重置兴趣；关闭移除监听"
+    ],
+    "lifecycle": "最多两个窗口；headless视为可见；dispose清所有",
+    "dependencies": [
+      "ISM-032"
+    ],
+    "risk": "未识别具体缺陷；静态审计不证明不存在风险",
+    "risk_level": "低",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/monitor-subscriptions.test.ts"
+    ],
+    "test_gap": "所列测试仅为相关源码证据，不表示本次执行通过；建议复核本文转换表中的失败、重复事件和卸载后返回边界。",
+    "responsibility": "可见窗口订阅",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "保留现有局部状态；用类型约束、命名清晰的转换函数和取消/清理不变量即可，不必引入状态机库。",
+    "test_evidence": [
+      {
+        "path": "src/main/monitor-subscriptions.test.ts",
+        "cases": [
+          {
+            "line": 25,
+            "text": "test('each window receives only requested streams while visible, without replaying hidden snapshots', () => {"
+          },
+          {
+            "line": 53,
+            "text": "test('pause, minimize and a hundred repeated subscription cycles do not accumulate delivery or native listeners', () => {"
+          },
+          {
+            "line": 80,
+            "text": "test('a replacement document and renderer crash invalidate subscriptions; same-document and child navigation preserve them', () => {"
+          },
+          {
+            "line": 103,
+            "text": "test('destroyed windows release their slot and listeners; unowned windows and excess registrations are refused', () => {"
+          },
+          {
+            "line": 127,
+            "text": "test('headless rendering follows explicit document subscriptions without showing native windows', () => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/monitor-subscriptions.ts",
+        "line": 13,
+        "excerpt": "export class MonitorSubscriptions {",
+        "sha256": "7fcf0f4609cb697e1dabbe7468d3758e1a63eeba8fb4d470700452ce3c8b4255"
+      },
+      {
+        "path": "src/preload/index.ts",
+        "line": 16,
+        "excerpt": "const listeners: Record<keyof MonitorMessages, number> = { 'monitor:changed': 0, 'monitor:sources': 0 }",
+        "sha256": "1a91413efdb663daa69402f831b9de9daeb87083bc57ccae2f1c135987a6070b"
+      }
+    ],
+    "state_owner": "MonitorSubscriptions + preload listeners",
+    "writers": [
+      "register",
+      "visibility",
+      "reset",
+      "set",
+      "release",
+      "subscribe cleanup"
+    ],
+    "readers": [
+      "publish",
+      "updateSubscription"
+    ],
+    "initialization": "register建立最多两个窗口条目",
+    "termination": "closed/destroyed/dispose移除监听",
+    "recovery": "导航重置兴趣；preload重新订阅"
+  },
+  {
+    "id": "ISM-007",
+    "name": "更新查询下载与安装",
+    "kind": "hybrid",
+    "files": [
+      "src/main/plugins/update-controller.ts:17",
+      "src/main/plugins/app-updates.ts:21",
+      "src/main/index.ts:596",
+      "src/main/plugins/update-source.ts:91"
+    ],
+    "states": [
+      "phase/revision/disabledReason",
+      "candidate/downloaded/operation(kind,abort,cancelled)/running/timer",
+      "plugin.stopped/verification"
+    ],
+    "transitions": [
+      "start→idle；check→checking→available/idle/error",
+      "download→downloading→downloaded/error；cancel→available",
+      "install→installing→stageNative→host排空→quitAndInstall",
+      "stop中install不等待自身promise避免死锁"
+    ],
+    "lifecycle": "仅platform禁止查询；未签名/开发禁止下载；自动检查只对可安装版本启用；stop移除监听/IPC和文件",
+    "dependencies": [
+      "ISM-001",
+      "ISM-012",
+      "ISM-031"
+    ],
+    "risk": "downloaded→installing→native staging成功→beforeInstall排空（包括更新插件stop）→quitAndInstall；任一顺序变化可能导致自等待或过早删除文件。当前stop特意跳过等待install，native staging先完成。",
+    "risk_level": "高",
+    "confidence": "高：实现证据；风险未经动态复现",
+    "tests": [
+      "src/main/app-updates.test.ts"
+    ],
+    "test_gap": "现有测试覆盖查询/取消/未签名，未见真实Squirrel交接的本次运行证据。",
+    "responsibility": "更新查询下载与安装",
+    "verification_status": "静态确认状态对象；未复现生产bug",
+    "modeling_recommendation": "明确staging、host-draining、handoff三阶段与不可取消点。",
+    "test_evidence": [
+      {
+        "path": "src/main/app-updates.test.ts",
+        "cases": [
+          {
+            "line": 16,
+            "text": "test('stable update selection respects semver and machine architecture', () => {"
+          },
+          {
+            "line": 25,
+            "text": "test('rejects nonstable releases and malformed tags', () => {"
+          },
+          {
+            "line": 35,
+            "text": "test('rejects missing or duplicate architecture and untrusted release assets', () => {"
+          },
+          {
+            "line": 54,
+            "text": "test('GitHub API uses versioned JSON headers and reports unavailable releases', async () => {"
+          },
+          {
+            "line": 65,
+            "text": "test('an unavailable GitHub Release is an error rather than an up-to-date result', async () => {"
+          },
+          {
+            "line": 78,
+            "text": "test('metadata rejects oversized responses before retaining the overflow chunk', async () => {"
+          },
+          {
+            "line": 90,
+            "text": "test('redirects cannot escape HTTPS GitHub release hosts', async () => {"
+          },
+          {
+            "line": 99,
+            "text": "test('download publishes only a complete checksum-verified file and removes failures', async () => {"
+          },
+          {
+            "line": 112,
+            "text": "test('concurrent checks coalesce and cannot auto-download or install', async () => {"
+          },
+          {
+            "line": 139,
+            "text": "test('download cancellation interrupts the read, preserves offer, and releases its partial file', async () => {"
+          },
+          {
+            "line": 168,
+            "text": "test('unsigned and development builds allow manual checks but never download or install', async context => {"
+          },
+          {
+            "line": 203,
+            "text": "test('a manual check postpones the startup check so errors remain visible', async context => {"
+          },
+          {
+            "line": 220,
+            "text": "test('signature and check errors remain visible without automatic checks and allow manual retry', async context => {"
+          },
+          {
+            "line": 259,
+            "text": "test('unsupported platforms never check, download or install even after an error', async context => {"
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "src/main/plugins/update-controller.ts",
+        "line": 17,
+        "excerpt": "export class UpdateController {",
+        "sha256": "487011f860c15baef88aa2dd0f8ed87a8f34b67336905cf43b9d0079e5371dbd"
+      },
+      {
+        "path": "src/main/plugins/app-updates.ts",
+        "line": 21,
+        "excerpt": "export class AppUpdatesPlugin implements AppPlugin {",
+        "sha256": "33372a8ec2536fe1fcef8a3d65676f34c955c8f218edddd086744fa477649523"
+      },
+      {
+        "path": "src/main/index.ts",
+        "line": 596,
+        "excerpt": "    const updates = new AppUpdatesPlugin({",
+        "sha256": "66bf4e487b4583a77718c8741f2f53ddfabad5271862a02bea88b68890c3ee60"
+      },
+      {
+        "path": "src/main/plugins/update-source.ts",
+        "line": 91,
+        "excerpt": "export async function downloadAsset(asset: UpdateAsset, directory: string, signal: AbortSignal, fetcher: FetchUpdate,",
+        "sha256": "8042b954154af5c301e6ab6c5ae29ee97b7489db379e45f83fdf89c17b3a2205"
+      }
+    ],
+    "state_owner": "UpdateController + AppUpdatesPlugin",
+    "writers": [
+      "start",
+      "run",
+      "check",
+      "download",
+      "cancel",
+      "install",
+      "stop",
+      "nativeError"
+    ],
+    "readers": [
+      "snapshot",
+      "IPC actions",
+      "UpdatesProvider"
+    ],
+    "initialization": "disabled快照→start能力判定",
+    "termination": "stop取消操作、移除IPC、清下载；安装跳过自等待",
+    "recovery": "error可check；有candidate可重新download；安装交接失败退出"
+  }
+]
