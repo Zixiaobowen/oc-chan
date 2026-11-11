@@ -64,3 +64,10 @@
 - 持久回执：`/Users/zvf003/ZStack/oc-chan/.git/task-closeouts/09f04ee1-a432-432f-ab74-faac4fc254dd.json`。回执绑定的是执行当时的交接 blob；本节属于随后补交的执行记录。
 - 查询时 GitHub Build macOS run `42953691493` 为 pending：https://github.com/Zixiaobowen/oc-chan/actions/runs/42953691493 。本地定向验证、推送和真实收尾成功不代表云端构建或预览发布已经完成。
 - 中英文 README 已同步新命令并复核；本次补交仅记录实际执行结果，不改变功能或命令，无需再次修改 README。本轮未运行全仓测试、应用构建或安装。
+
+## Git 身份修正
+
+- 用户随后明确指定本项目 Git 身份应为 `Zixiaobowen`。核查发现远端与 GitHub 登录账号正确，但本地一直继承全局 `bowen.sun <bowen.sun@zstack.io>`，项目提交技能也写死了该旧身份。
+- 已在共用仓库的本地配置设置 `user.name=Zixiaobowen`、`user.email=35100096+Zixiaobowen@users.noreply.github.com`，适用于 oc-chan 及其 worktree，不修改全局配置或其他仓库。GitHub API 返回账号 ID `35100096`；使用 [GitHub 官方 ID-based noreply 格式](https://docs.github.com/en/account-and-profile/reference/email-addresses-reference#your-noreply-email-address)，不需要扩大邮箱接口的读取权限。
+- `git var GIT_AUTHOR_IDENT` 与 `git var GIT_COMMITTER_IDENT` 均已返回上述身份；项目提交技能同步采用这一仓库身份。已推送的历史提交不改写，不执行 amend 或强推。
+- 本次仅修正提交元数据配置与项目文档；中英文 README 已复核，无需更新，不重复应用测试或安装。

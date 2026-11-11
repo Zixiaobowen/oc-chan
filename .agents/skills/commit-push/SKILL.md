@@ -17,7 +17,7 @@ description: 用于 OC Chan 当前任务的 Git 提交、整合 main、推送 Gi
 ## 核对现场
 
 1. 查看当前分支、暂存区、未提交改动、远端和工作树：`git status --short --branch`、`git diff --cached`、`git remote -v`、`git worktree list --porcelain`。读取当前任务的实际 diff；用户原有暂存块也要保留。
-2. Git 作者固定为 `bowen.sun <bowen.sun@zstack.io>`，现场核对。GitHub 操作用 `gh`，用 `gh api user --jq .login` 确认账号为 `Zixiaobowen`；预期仓库 `Zixiaobowen/oc-chan`，以现场 remote 核验，不擅自更换 remote 或认证身份。
+2. 本项目用户指定使用 GitHub 身份 `Zixiaobowen`；Git 作者和提交者配置为 `Zixiaobowen <35100096+Zixiaobowen@users.noreply.github.com>`。使用仓库本地 `user.name` / `user.email` 覆盖全局公司身份，现场用 `git var GIT_AUTHOR_IDENT` 与 `git var GIT_COMMITTER_IDENT` 核对；不修改其他仓库的全局默认。GitHub 操作用 `gh`，用 `gh api user --jq .login` 确认账号为 `Zixiaobowen`；预期仓库 `Zixiaobowen/oc-chan`，以现场 remote 核验，不擅自更换 remote 或认证身份。
 3. 推送任务应在整理提交之前执行 `git fetch origin main`，比较本地目标与 `origin/main`；不要等提交完才发现远端已发生运行时迁移。
 4. 本地 main 可能过期；当前功能分支还可能带有无关历史提交。明确目标基线与待迁移的任务改动，不能将整个分支直接合入 main 来省事。
 
