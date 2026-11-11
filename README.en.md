@@ -55,9 +55,9 @@ View launchd, cron, OMP, and Hermes tasks together, filtering by type, scope, st
 
 ### Add system monitoring when you need it
 
-Install the official system-monitor plugin from the in-app Plugin Marketplace to view CPU, memory, and network trends, disk space, and processes ranked by CPU or memory usage. The menu-bar panel can combine agent, task, and system summaries.
+Install the official system-monitor plugin from **Plugins** in the app to view CPU, memory, and network trends, disk space, and processes ranked by CPU or memory usage. The menu-bar panel can combine agent, task, and system summaries.
 
-Installed plugins appear under Plugins in the sidebar; open Plugins → System monitor to access system monitoring. Entries appear after installation, remain visible when collection is disabled, and disappear after uninstallation.
+The sidebar has one **Plugins** entry: click its name to manage installation, updates, and removal; use the separate arrow to expand or collapse installed plugins. Open Plugins → System monitor to access system monitoring. Entries appear after installation, remain visible when collection is disabled, and disappear after uninstallation. When the sidebar is hidden, the top bar retains the same Plugins management entry and installed plugin pages.
 
 System monitoring is not installed automatically on first launch. The bundled plugin package supports offline installation; online checks and updates require its release source to be available. See the [Plugin Marketplace guide (Chinese)](docs/architecture.md#插件市场与独立插件包) for installation, removal, and updates.
 

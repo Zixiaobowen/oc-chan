@@ -55,7 +55,7 @@ function controls({ main, renderer, record, capture }) {
     await renderer.clickAt(point.x, point.y)
   }
   async function navigate(zh, en) {
-    await click(`Array.from(document.querySelectorAll('.nav-item')).find(element => [${JSON.stringify(zh)},${JSON.stringify(en)}].includes(element.querySelector('span')?.textContent))`)
+    await click(`Array.from(document.querySelectorAll('.nav-item,.topbar-tabs button,.topbar-icon')).find(element => element.getClientRects().length > 0 && [${JSON.stringify(zh)},${JSON.stringify(en)}].includes(element.querySelector('span')?.textContent ?? element.getAttribute('aria-label')))`)
     await dom(`navigation to ${en}`, `[${JSON.stringify(zh)},${JSON.stringify(en)}].includes(${$('.page-heading h1')}?.textContent)`)
   }
   async function frames() {

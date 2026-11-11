@@ -49,8 +49,8 @@ export default function SettingsView({ sources = [], onOpenMarketplace }: { sour
         {!systemInstalled ? <SystemPluginNotice onOpen={onOpenMarketplace} /> : <>
           <div className="setting-toggle"><button type="button" role="switch" className="setting-switch" aria-labelledby="setting-plugins-label" aria-describedby="system-plugin-help" aria-checked={settings.plugins.system} aria-disabled={systemChanging} onClick={() => { if (!systemChanging) void update({ plugins: { system: !settings.plugins.system } }) }}><span /></button><span>{settings.plugins.system ? t('采集已开启', 'Collection enabled') : t('采集已停用', 'Collection disabled')}</span></div>
           {systemItem?.error && <SystemPluginNotice onOpen={onOpenMarketplace} />}
-          <p className="setting-help" id="system-plugin-help">{t('仅控制已安装插件的采集；安装、更新与卸载在插件市场管理。', 'Controls collection for the installed plugin. Manage installation, updates and removal in the plugin marketplace.')}</p>
-          <button className="button secondary" onClick={onOpenMarketplace}>{t('打开插件市场', 'Open plugin marketplace')}</button>
+          <p className="setting-help" id="system-plugin-help">{t('仅控制已安装插件的采集；安装、更新与卸载在“插件”中管理。', 'Controls collection for the installed plugin. Manage installation, updates and removal in Plugins.')}</p>
+          <button className="button secondary" onClick={onOpenMarketplace}>{t('打开插件', 'Open Plugins')}</button>
         </>}
       </SettingRow>
       <SettingRow name="appearance" label={t('外观', 'Appearance')}>

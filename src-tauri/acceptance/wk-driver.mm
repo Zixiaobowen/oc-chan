@@ -36,9 +36,18 @@ static NSDictionary *viewportGeometry(WKWebView *webview, NSWindow *window) {
     NSEdgeInsets value = webview.obscuredContentInsets;
     insets = @{ @"top": @(value.top), @"left": @(value.left), @"bottom": @(value.bottom), @"right": @(value.right) };
   }
+  NSMutableDictionary *buttons = [NSMutableDictionary dictionary];
+  for (NSArray *entry in @[@[@"close", @(NSWindowCloseButton)], @[@"minimize", @(NSWindowMiniaturizeButton)], @[@"zoom", @(NSWindowZoomButton)]]) {
+    NSButton *button = [window standardWindowButton:(NSWindowButton)[entry[1] unsignedIntegerValue]];
+    if (!button) { buttons[entry[0]] = [NSNull null]; continue; }
+    NSRect frame = [webview convertRect:button.bounds fromView:button];
+    CGFloat top = webview.isFlipped ? NSMinY(frame) - NSMinY(webview.bounds) : NSMaxY(webview.bounds) - NSMaxY(frame);
+    buttons[entry[0]] = @{ @"frameInWebview": rectInfo(frame), @"topFromWebview": @(top), @"centerYFromWebview": @(top + NSHeight(frame) / 2), @"hidden": @(button.hidden) };
+  }
   return @{ @"webviewFrame": rectInfo(webview.frame), @"webviewBounds": rectInfo(webview.bounds),
     @"contentViewFrame": rectInfo(window.contentView.frame), @"contentViewBounds": rectInfo(window.contentView.bounds),
     @"contentLayoutRect": rectInfo(window.contentLayoutRect), @"contentLayoutInWebview": rectInfo([webview convertRect:window.contentLayoutRect fromView:nil]),
+    @"windowButtons": buttons, @"webviewIsFlipped": @(webview.isFlipped),
     @"obscuredContentInsets": insets, @"pageZoom": @(webview.pageZoom), @"magnification": @(webview.magnification) };
 }
 static pid_t acceptanceProcessIdentifier(id target, NSString *selectorName, BOOL *available) {

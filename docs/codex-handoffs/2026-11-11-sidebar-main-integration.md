@@ -73,3 +73,7 @@ npm run smoke:renderer -- --scenario sidebar --out /tmp/oc-chan-sidebar-20261111
 1. 如需继续视觉验收，在正式应用核对原生快捷键和可见动画；当前不宣称完成。
 2. 后续修改以最新远端main为基线，保留原目录混合工作。
 3. 查看GitHub本次提交的CI结果；本地定向验收和安装回执已完成。
+
+## 原生对齐纠正
+
+用户反馈按钮低于真实红绿灯后，以AppKit按钮frame和WK顶部inset实测定位：原生中心16pt，旧DOM中心27px，偏差11pt。侧栏按钮改为top=2px、height=28px；详情及原生几何验证方法见 [原生标题栏对齐交接](2026-11-11-native-sidebar-alignment.md)。新增driver字段与局部CSS已实现，最终定向场景及安装后的可见对齐由主代理补记，不沿用上次无头截图宣称原生对齐通过。
