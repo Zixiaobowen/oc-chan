@@ -1,7 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 256" width="1280" height="1024" fill="none" color="#2563eb" role="img" aria-labelledby="title desc">
-  <title id="title">OC Chan</title>
-  <desc id="desc">O 与 C 组成猫头鹰的观察双眼；右侧方点代表独立的 Agent 节点。</desc>
-  <circle cx="90" cy="110" r="64" fill="none" stroke="currentColor" stroke-width="32"/>
-  <path d="M279.43 78 A64 64 0 1 0 279.43 142" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round"/>
-  <g fill="currentColor"><circle cx="90" cy="110" r="16"/><circle cx="224" cy="110" r="16"/><path d="M139 184 H175 C181 184 184 190 180 195 L163 218 C160 222 154 222 151 218 L134 195 C130 190 133 184 139 184Z"/><rect x="287" y="100" width="20" height="20" rx="5"/></g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1024" fill="none" aria-labelledby="title desc" color="#2563eb" role="img" viewBox="0 0 320 256"><title id="title">OC Chan</title><desc id="desc">O 与 C 组成猫头鹰的观察双眼；右侧方点代表独立的 Agent 节点。</desc><circle cx="90" cy="110" r="64" fill="none" stroke="currentColor" stroke-width="32"/><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="32" d="M279.43 78 A64 64 0 1 0 279.43 142"/><g fill="currentColor"><circle cx="90" cy="110" r="16"/><circle cx="224" cy="110" r="16"/><path d="M139 184 H175 C181 184 184 190 180 195 L163 218 C160 222 154 222 151 218 L134 195 C130 190 133 184 139 184Z"/><rect width="20" height="20" x="287" y="100" rx="5"/></g></svg>

@@ -1,18 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" fill="none" role="img" aria-labelledby="title desc">
-  <title id="title">OC Chan · 应用图标</title>
-  <desc id="desc">蓝色圆角方形上的白色 OC 猫头鹰标志，象征本机 Agent 与运行状态的观察伙伴。</desc>
-  <defs>
-    <linearGradient id="tile" x1="160" y1="64" x2="820" y2="960" gradientUnits="userSpaceOnUse"><stop stop-color="#5b8ff5"/><stop offset=".48" stop-color="#2563eb"/><stop offset="1" stop-color="#1c46aa"/></linearGradient>
-    <linearGradient id="edge" x1="512" y1="64" x2="512" y2="960" gradientUnits="userSpaceOnUse"><stop stop-color="#bfd8ff" stop-opacity=".5"/><stop offset=".46" stop-color="#bfd8ff" stop-opacity="0"/><stop offset="1" stop-color="#143a85" stop-opacity=".45"/></linearGradient>
-  </defs>
-  <path d="M280 64H744C884 64 960 140 960 280V744C960 884 884 960 744 960H280C140 960 64 884 64 744V280C64 140 140 64 280 64Z" fill="#143a85" opacity=".13" transform="translate(0 9)"/>
-  <path d="M280 64H744C884 64 960 140 960 280V744C960 884 884 960 744 960H280C140 960 64 884 64 744V280C64 140 140 64 280 64Z" fill="url(#tile)"/>
-  <path d="M280 64H744C884 64 960 140 960 280V744C960 884 884 960 744 960H280C140 960 64 884 64 744V280C64 140 140 64 280 64Z" stroke="url(#edge)" stroke-width="3"/>
-  <g transform="translate(160 244) scale(2.2)" color="#ffffff">
-    <circle cx="90" cy="110" r="64" fill="none" stroke="currentColor" stroke-width="32"/>
-  <path d="M279.43 78 A64 64 0 1 0 279.43 142" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round"/>
-    <g fill="#143a85"><circle cx="90" cy="110" r="16"/><circle cx="224" cy="110" r="16"/></g>
-    <g fill="#ffffff"><path d="M139 184 H175 C181 184 184 190 180 195 L163 218 C160 222 154 222 151 218 L134 195 C130 190 133 184 139 184Z"/></g>
-    <g fill="#bfd8ff"><rect x="287" y="100" width="20" height="20" rx="5"/></g>
-  </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" fill="none" aria-labelledby="title desc" role="img" viewBox="0 0 1024 1024"><title id="title">OC Chan · 应用图标</title><desc id="desc">蓝色圆角方形上的白色 OC 猫头鹰标志，象征本机 Agent 与运行状态的观察伙伴。</desc><defs><linearGradient id="tile" x1="160" x2="820" y1="64" y2="960" gradientUnits="userSpaceOnUse"><stop stop-color="#5b8ff5"/><stop offset=".48" stop-color="#2563eb"/><stop offset="1" stop-color="#1c46aa"/></linearGradient><linearGradient id="edge" x1="512" x2="512" y1="64" y2="960" gradientUnits="userSpaceOnUse"><stop stop-color="#bfd8ff" stop-opacity=".5"/><stop offset=".46" stop-color="#bfd8ff" stop-opacity="0"/><stop offset="1" stop-color="#143a85" stop-opacity=".45"/></linearGradient></defs><path fill="#143a85" d="M280 64H744C884 64 960 140 960 280V744C960 884 884 960 744 960H280C140 960 64 884 64 744V280C64 140 140 64 280 64Z" opacity=".13" transform="translate(0 9)"/><path fill="url(#tile)" d="M280 64H744C884 64 960 140 960 280V744C960 884 884 960 744 960H280C140 960 64 884 64 744V280C64 140 140 64 280 64Z"/><path stroke="url(#edge)" stroke-width="3" d="M280 64H744C884 64 960 140 960 280V744C960 884 884 960 744 960H280C140 960 64 884 64 744V280C64 140 140 64 280 64Z"/><g color="#fff" transform="translate(160 244) scale(2.2)"><circle cx="90" cy="110" r="64" fill="none" stroke="currentColor" stroke-width="32"/><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="32" d="M279.43 78 A64 64 0 1 0 279.43 142"/><g fill="#143a85"><circle cx="90" cy="110" r="16"/><circle cx="224" cy="110" r="16"/></g><g fill="#fff"><path d="M139 184 H175 C181 184 184 190 180 195 L163 218 C160 222 154 222 151 218 L134 195 C130 190 133 184 139 184Z"/></g><g fill="#bfd8ff"><rect width="20" height="20" x="287" y="100" rx="5"/></g></g></svg>
