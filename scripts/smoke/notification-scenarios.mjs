@@ -97,7 +97,7 @@ async function persistedNotifications(ui) {
   } finally { await file.close() }
 }
 
-async function withSettingsWriteDenied(ui, action) {
+export async function withSettingsWriteDenied(ui, action) {
   assert.equal(typeof process.getuid, 'function', 'settings permission fault requires POSIX ownership')
   assert.notEqual(process.getuid(), 0, 'root bypasses directory write restrictions; this fault cannot run as root')
   const repository = await realpath(fileURLToPath(new URL('../../', import.meta.url)))

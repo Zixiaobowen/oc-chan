@@ -40,7 +40,7 @@ const marketplacePlugins = monitorPlugins.filter(plugin => plugin.distribution =
 
 export default function App() {
   const { t, language } = useI18n()
-  const { snapshot: { settings: { plugins: preferences } } } = useSettings()
+  const { snapshot: { settings: { plugins: preferences, sidebarCollapsed: savedSidebarCollapsed } }, update: updateSettings, saving: settingsSaving, error: settingsError } = useSettings()
   const { installed: systemInstalled, item: systemItem, snapshot: marketSnapshot, loading: marketLoading, failure: marketFailure } = useSystemPlugin()
   const installedPlugins = useMemo(() => marketplacePlugins.filter(plugin => marketSnapshot?.items.some(item =>
     item.manifest.id === plugin.id && item.manifest.section === plugin.section && item.installed)), [marketSnapshot])
@@ -93,6 +93,36 @@ export default function App() {
   const navigation = useRef<HTMLElement>(null)
   const navigationToggle = useRef<HTMLButtonElement>(null)
   const navigationFocus = useRef<HTMLElement | null>(null)
+  const sidebarToggle = useRef<HTMLButtonElement>(null)
+  const topbarTabs = useRef<HTMLElement>(null)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(savedSidebarCollapsed)
+  const sidebarCollapsedRef = useRef(sidebarCollapsed)
+  useLayoutEffect(() => {
+    // Ignore intermediate acknowledgements while the latest toggle is still queued.
+    if (settingsSaving) return
+    sidebarCollapsedRef.current = savedSidebarCollapsed
+    setSidebarCollapsed(savedSidebarCollapsed)
+  }, [savedSidebarCollapsed, settingsSaving, settingsError])
+  const sidebarHidden = sidebarCollapsed && !compactNavigation
+  function toggleSidebar(next = !sidebarCollapsedRef.current) {
+    if (next === sidebarCollapsedRef.current) return
+    sidebarCollapsedRef.current = next
+    setSidebarCollapsed(next)
+    void updateSettings({ sidebarCollapsed: next })
+    sidebarToggle.current?.focus({ preventScroll: true })
+  }
+  const toggleSidebarRef = useRef(toggleSidebar)
+  toggleSidebarRef.current = toggleSidebar
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent) => {
+      if (!event.metaKey || !event.ctrlKey || event.altKey || event.shiftKey || event.code !== 'KeyS' || event.repeat) return
+      event.preventDefault()
+      if (compactNavigation) navigationToggle.current?.click()
+      else toggleSidebarRef.current()
+    }
+    window.addEventListener('keydown', shortcut)
+    return () => window.removeEventListener('keydown', shortcut)
+  }, [compactNavigation])
   const [storedSnapshot, setSnapshot] = useState(initial)
   const snapshot = systemInstalled === true ? storedSnapshot : { ...storedSnapshot, system: initial.system }
   const [pausedAt, setPausedAt] = useState<number | null>(null)
@@ -117,8 +147,9 @@ export default function App() {
     const previous = navigationFocus.current
     if (!previous) return
     navigationFocus.current = null
-    if (!navigation.current?.contains(previous) && previous !== navigationToggle.current && !previous.matches('.sidebar-resize-handle')) return
+    if (!navigation.current?.contains(previous) && !topbarTabs.current?.contains(previous) && previous !== sidebarToggle.current && previous !== navigationToggle.current && !previous.matches('.sidebar-resize-handle')) return
     const next = compactNavigation ? navigationToggle.current
+      : sidebarCollapsedRef.current ? topbarTabs.current?.querySelector<HTMLButtonElement>('[aria-current="page"]') ?? sidebarToggle.current
       : navigation.current?.contains(previous) ? previous
       : navigation.current?.querySelector<HTMLButtonElement>('[aria-current="page"]')
     next?.focus({ preventScroll: true })
@@ -256,9 +287,20 @@ export default function App() {
     schedules: { data: schedules, enabled: plugins.schedules, error: samplingError ?? null, intent, onConsumed: consumeIntent, view: scheduleView, onViewChange: setScheduleView, memory: scheduleMemory, onSource: openTarget },
     events: { snapshot, enabled: plugins.events, active: !paused && visible, view: eventView, onViewChange: setEventView, onNavigate: openTarget }
   }
-  return <div className="app-shell" data-compact-navigation={compactNavigation} data-agent-collection={plugins.agents} data-agent-evidence={agentEvidenceCurrent ? 'current' : 'stale'} data-agent-motion={agentMotion ? 'running' : 'paused'} data-display-live={!paused && visible}>
+  const mainPages = pages.filter(item => item.id !== 'sources' && item.id !== 'settings' && (!marketplacePlugins.some(plugin => plugin.page.id === item.id) || installedPlugins.some(plugin => plugin.page.id === item.id)))
+  const pageCounts: Partial<Record<AppPage, number>> = {
+    ...(plugins.agents && agents && { agents: agents.agents.length }),
+    ...(plugins.schedules && scheduled && { schedules: scheduled.length })
+  }
+  const sidebarLabel = sidebarCollapsed ? t('显示侧栏', 'Show sidebar') : t('隐藏侧栏', 'Hide sidebar')
+  const liveLabel = paused ? t('显示已暂停', 'Display paused') : samplingError ? t('更新异常', 'Update failed') : collectionDisabled ? t('采集已停用', 'Collection disabled') : partiallyDisabled ? t('部分采集已停用', 'Some collection disabled') : t('实时显示已开启', 'Live display enabled')
+  return <div className="app-shell" data-compact-navigation={compactNavigation} data-sidebar-collapsed={sidebarHidden} data-agent-collection={plugins.agents} data-agent-evidence={agentEvidenceCurrent ? 'current' : 'stale'} data-agent-motion={agentMotion ? 'running' : 'paused'} data-display-live={!paused && visible}>
     <div className="window-drag" />
-    <aside ref={navigation} id="main-navigation" className="sidebar" popover={compactNavigation ? 'auto' : undefined}>
+    {!compactNavigation && <button ref={sidebarToggle} type="button" className="sidebar-toggle" aria-controls="main-navigation" aria-expanded={!sidebarCollapsed}
+      aria-label={sidebarLabel} title={`${sidebarLabel} (⌃⌘S)`} onClick={() => toggleSidebar()}>
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><rect className="sidebar-toggle-pane" x="2.5" y="3.5" width="4" height="9" rx="1" /><g fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"><rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2.25" /><path d="M6.75 2.75v10.5" /></g></svg>
+    </button>}
+    <aside ref={navigation} id="main-navigation" className="sidebar" hidden={sidebarHidden} popover={compactNavigation ? 'auto' : undefined}>
       <div className="brand"><img className="brand-mark" src={brandIcon} width={35} height={35} alt="" aria-hidden="true" /><div><strong>OC Chan</strong><span>{t('本机运行观察', 'Local monitor')}</span></div></div>
       <nav aria-label={t('主导航', 'Main navigation')}>
         {pages.filter(item => item.id !== 'sources' && item.id !== 'settings' && item.id !== 'plugins' && !marketplacePlugins.some(plugin => plugin.page.id === item.id)).map(item => <button key={item.id} className={`nav-item ${page === item.id ? 'selected' : ''}`} onClick={() => navigate(item.id)} aria-current={page === item.id ? 'page' : undefined}><item.icon trigger="none" size={18} /><span>{item.label}</span>{item.id === 'agents' && plugins.agents && agents && <small>{agents.agents.length}</small>}{item.id === 'schedules' && plugins.schedules && scheduled && <small>{scheduled.length}</small>}</button>)}
@@ -271,8 +313,16 @@ export default function App() {
         <PluginSlot contributions={renderer.contributions} slot="Device" context={pluginContext} />
       </div>
     </aside>
-    <SidebarResizeHandle compact={compactNavigation} />
-    <div className="workspace"><header className="topbar"><button ref={navigationToggle} className="navigation-toggle" popoverTarget="main-navigation" aria-label={t('主导航', 'Main navigation')} title={t('主导航', 'Main navigation')}><MenuIcon trigger="none" size={20} aria-hidden="true" /></button><div className="breadcrumb">{t('工作台', 'Workspace')}<ChevronRight trigger="none" size={14} />{selectedPlugin && <><span>{t('插件', 'Plugins')}</span><ChevronRight trigger="none" size={14} /></>}<span>{currentPage.label}</span></div><div className={`live-state ${paused || samplingError || collectionDisabled || partiallyDisabled ? 'paused' : ''}`}><span className="status-dot" />{paused ? t('显示已暂停', 'Display paused') : samplingError ? t('更新异常', 'Update failed') : collectionDisabled ? t('采集已停用', 'Collection disabled') : partiallyDisabled ? t('部分采集已停用', 'Some collection disabled') : t('实时显示已开启', 'Live display enabled')}</div></header>
+    <SidebarResizeHandle inactive={compactNavigation || sidebarHidden} onCollapse={() => toggleSidebar(true)} />
+    <div className="workspace"><header className="topbar"><button ref={navigationToggle} className="navigation-toggle" popoverTarget="main-navigation" aria-label={t('主导航', 'Main navigation')} title={t('主导航', 'Main navigation')}><MenuIcon trigger="none" size={20} aria-hidden="true" /></button>
+      {sidebarHidden ? <nav ref={topbarTabs} className="topbar-tabs" aria-label={t('主导航', 'Main navigation')}>{mainPages.map(item => <button key={item.id} type="button" className={page === item.id ? 'selected' : undefined} onClick={() => navigate(item.id)} aria-current={page === item.id ? 'page' : undefined} aria-label={pageCounts[item.id] === undefined ? item.label : `${item.label} (${pageCounts[item.id]})`} title={item.label}><item.icon trigger="none" size={16} aria-hidden="true" /><span>{item.label}</span>{pageCounts[item.id] !== undefined && <small aria-hidden="true">{pageCounts[item.id]}</small>}</button>)}</nav>
+        : <div className="breadcrumb">{t('工作台', 'Workspace')}<ChevronRight trigger="none" size={14} />{selectedPlugin && <><span>{t('插件', 'Plugins')}</span><ChevronRight trigger="none" size={14} /></>}<span>{currentPage.label}</span></div>}
+      <div className="topbar-end"><div className={`live-state ${paused || samplingError || collectionDisabled || partiallyDisabled ? 'paused' : ''}`} aria-label={liveLabel} title={liveLabel}><span className="status-dot" /><span className="live-state-label">{liveLabel}</span></div>
+        {sidebarHidden && <>
+          <button type="button" className={`topbar-icon${page === 'sources' ? ' selected' : ''}`} onClick={() => navigate('sources')} aria-current={page === 'sources' ? 'page' : undefined} aria-label={issues > 0 ? t(`数据来源，${issues} 个问题`, `Data sources, ${issues} issues`) : t('数据来源', 'Data sources')} title={t('数据来源', 'Data sources')}><Database trigger="none" size={16} aria-hidden="true" />{issues > 0 && <small className="warning-count" aria-hidden="true">{issues}</small>}</button>
+          <button type="button" className={`topbar-icon${page === 'settings' ? ' selected' : ''}`} onClick={() => navigate('settings')} aria-current={page === 'settings' ? 'page' : undefined} aria-label={t('设置', 'Settings')} title={t('设置', 'Settings')}><Settings trigger="none" size={16} aria-hidden="true" /></button>
+        </>}
+      </div></header>
       <main ref={content} className="main-content" onScroll={event => {
         if (restoringScroll.current) return
         const saved = pageScroll.current[page]

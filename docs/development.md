@@ -37,6 +37,7 @@ npm run smoke:renderer -- --scenario collectors --out /tmp/oc-chan-collectors-ne
 npm run smoke:renderer -- --scenario marketplace --out /tmp/oc-chan-marketplace-new
 npm run smoke:renderer -- --scenario notifications --out /tmp/oc-chan-notifications-new
 npm run smoke:renderer -- --scenario topology --out /tmp/oc-chan-topology-new
+npm run smoke:renderer -- --scenario sidebar --out /tmp/oc-chan-sidebar-new
 ```
 
 `--out` 必须是新目录。入口复用 `npm run dev`；受控输入来自真实存活的描述符进程、JSONL、JSON、plist和SQLite，Rust生产采集器实际读取这些输入。系统监控由独立Rust插件真实采集本机指标。夹具不借用个人会话、任务正文或正式数据库。
@@ -66,6 +67,14 @@ npm run smoke:renderer -- --scenario topology --out /tmp/oc-chan-topology-new
 主窗、托盘和恢复窗均通过Tauri公开配置入口启用WKPreferences的[`tabFocusesLinks`](https://developer.apple.com/documentation/webkit/wkpreferences/tabfocuseslinks)，使用依赖树已有的WebKit绑定。无头窗口实际`document.hasFocus()`为false，原生Tab专项未触达目标；不将它记为可见窗口键盘导航通过。通知控件显式设置DOM焦点，再发送真实AppKit按键，验证激活、保存、错误回滚与焦点保留；事件select显式设置DOM焦点和值，再验证React草稿和实际Rust查询。鼠标点击本身不被假定会聚焦按钮或复选框，也不通过固定Tab次数推定目标焦点。
 
 协作拓扑的 2D 与 3D 共用手动控制的顶层 Agent 菜单：右键松开后保持打开，后续外部 pointerdown 关闭，菜单内部按下不提前卸载；卸载释放监听。拓扑定向 smoke 通过 AppKit responder 验证完整右键、移入、菜单点击、外部关闭及 Escape/Shift+F10/Tab。跳转请求调用真实 Rust IPC，无头模式明确返回 `OC_TERN_UNAVAILABLE`，不激活用户的 Tern，也不代表原生前台切换通过。
+
+侧栏使用当前 Rust 设置契约的 `sidebarCollapsed` 布尔字段（默认 false）及原有 `sidebarWidth`。React 沿用单在途、最新待提交补丁队列；保存期间忽略中间回执，排空后采用实际快照，失败回滚布局并显示“侧栏布局”诊断与重试。按钮固定在红绿灯右侧，⌃⌘S 切换布局；最小宽度 188px 再向左拖 64px 收起，取消本次宽度修改，展开恢复原偏好。紧凑视口保留菜单及快捷键开关菜单，不写回临时布局。
+
+收起布局只展示当前可用的核心页面、已安装插件与市场入口，来源及设置固定在顶栏右侧；展开布局继续使用现有插件分组和插件面包屑。顶栏空间不足时隐藏文字但保留显式无障碍名称，标签可横向滚动。短 CSS 过渡不创建覆盖交互的快照层，不依赖 View Transitions；减少动态效果时不播放。拖动收起后的选择阻止监听在指针释放、取消、失焦、隐藏及卸载时释放。
+
+`sidebar` 定向 smoke 使用真实隐藏 Tauri/WKWebView、AppKit 点击和拖动、Rust IPC、磁盘设置回读与同 profile 重启。覆盖顶栏各页、已安装插件、来源与设置、188−64px 阈值、原宽度保留、快速切换、设置目录真实写拒绝后的回滚与重试、紧凑导航及名称。写拒绝复用通知场景的隔离 profile 权限 helper，持有目录描述符并在 finally 精确恢复权限，不改正式应用设置。快速连续点击与快捷键使用明确标注的 DOM 事件，不能作为原生 ⌃⌘S 或可见动画验收；安装后还需在实际窗口核对原生快捷键、连续反向点击、系统减少动态效果和 VoiceOver 名称。
+
+侧栏最窄检查为 `npm run typecheck`、`cargo test -p oc-core --lib settings::` 以及上述 `sidebar` 场景。新增字段不恢复已删除的 Electron 主进程设置实现。
 
 隐藏WKWebView的`requestAnimationFrame`可能挂起；后台任务节流开关不保证动画帧执行。桌面更新调度依据宿主登记的模式选择：普通窗口使用原生rAF，无头展示使用可取消的单次任务，执行真实布局、Three.js绘制和标签投影；显式暂停和卸载会取消待执行更新，不建立常驻绘制循环。场景的`frames()`在真实`document.visibilityState === 'hidden'`时同步刷新布局并记录`hidden-layout-flush`，可见文档才等待双动画帧。实际WebGL绘制批次与原生rAF相关间隔分开计量，不将单次任务或布局刷新当作显示帧率和可见动画连续性证明。
 

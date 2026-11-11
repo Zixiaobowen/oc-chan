@@ -10,6 +10,7 @@ import { exerciseNotifications } from './notification-scenarios.mjs'
 import { exerciseTopology } from './topology-scenarios.mjs'
 import { exerciseMarketplace, verifyMarketplaceRestart } from './marketplace-scenarios.mjs'
 import { boundedFile } from './main-probe.mjs'
+import { exerciseSidebar, verifySidebarRestart } from './sidebar-scenarios.mjs'
 
 const WAIT_MS = 8_000
 const RPC_MS = 5_000
@@ -213,6 +214,13 @@ export async function exerciseSmoke({ main, renderer, manifest, record, capture,
   if (scenario === 'all') await exerciseBoundaries({ ui, main, renderer, record })
   const market = await exerciseMarketplace({ ui, main, renderer, feed, thorough: scenario === 'marketplace' || scenario === 'all' })
   if (scenario === 'marketplace') return market
+  if (scenario === 'sidebar') return exerciseSidebar({ ui, main, renderer })
+  if (scenario === 'all') {
+    await exerciseSidebar({ ui, main, renderer })
+    await ui.click('document.querySelector(".sidebar-toggle")')
+    await ui.dom('restore sidebar for remaining scenarios', 'document.querySelector(".app-shell").dataset.sidebarCollapsed === "false"')
+    await ui.expect('sidebar restoration saved', async () => (await ui.evaluate('window.desktopSettings.snapshot()')).settings.sidebarCollapsed === false)
+  }
   let initial
   await ui.stage('sections-and-sources', async () => {
     await ui.dom('real desktop APIs and mounted DOM', `!!window.monitor && !!window.desktopSettings && !!${$('.app-shell')}`)
@@ -510,6 +518,7 @@ export async function exerciseSmoke({ main, renderer, manifest, record, capture,
 
 export async function verifyRestart({ main, renderer, savedSettings, record, capture, scenario = 'all' }) {
   const ui = controls({ main, renderer, record, capture })
+  if (scenario === 'sidebar') return verifySidebarRestart({ ui, savedSettings })
   if (scenario === 'marketplace') return verifyMarketplaceRestart(ui)
   if (scenario === 'notifications') {
     await ui.stage('restart-notification-settings', async () => {

@@ -49,6 +49,37 @@ h3 { font-size: calc(14px * var(--font-scale)); font-weight: 600; }
 .workspace { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .topbar { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; height: 55px; border-bottom: 1px solid var(--border); padding: 0 30px; -webkit-app-region: drag; }
 .navigation-toggle { display: none; }
+/* Keep the toggle stationary beside the native traffic lights. */
+.sidebar-toggle { position: fixed; z-index: 12; top: 13px; left: 84px; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 28px; padding: 0; border: none; border-radius: 7px; background: none; color: var(--muted); }
+.sidebar-toggle:hover { background: var(--hover); color: var(--ink); }
+.sidebar-toggle-pane { fill: currentColor; opacity: .32; transition: opacity 200ms ease-out; }
+.app-shell[data-sidebar-collapsed='true'] .sidebar-toggle-pane { opacity: 0; }
+.sidebar[hidden] { display: none; }
+.app-shell[data-sidebar-collapsed='true'] { grid-template-columns: minmax(0, 1fr); }
+.app-shell[data-sidebar-collapsed='true'] .sidebar-resize-handle { display: none; }
+.app-shell[data-sidebar-collapsed='true'] .topbar { justify-content: flex-start; gap: 12px; padding-left: 128px; container-type: inline-size; }
+.topbar-tabs { display: flex; align-items: center; gap: 2px; min-width: 0; overflow-x: auto; -webkit-app-region: no-drag; }
+.topbar-tabs button { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 9px; border: none; border-radius: 7px; background: none; color: var(--muted); font-size: max(12px, calc(12px * var(--font-scale))); white-space: nowrap; }
+.topbar-tabs button:hover:not(.selected) { background: var(--hover); color: var(--ink); }
+.topbar-tabs button.selected, .topbar-icon.selected { background: var(--surface); color: var(--accent); box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 12%, transparent); }
+.topbar-tabs button.selected { font-weight: 600; }
+.topbar-tabs small, .topbar-icon small { font-size: max(11px, calc(11px * var(--font-scale))); font-variant-numeric: tabular-nums; }
+.topbar-tabs button:focus-visible, .topbar-icon:focus-visible, .sidebar-toggle:focus-visible { outline-offset: -2px; }
+.topbar-end { display: flex; align-items: center; gap: 4px; flex-shrink: 0; margin-left: auto; }
+.topbar-end .live-state { margin-right: 10px; }
+.topbar-icon { display: inline-flex; align-items: center; justify-content: center; gap: 3px; min-width: 30px; height: 28px; padding: 0 7px; border: none; border-radius: 7px; background: none; color: var(--muted); }
+.topbar-icon:hover { background: var(--hover); color: var(--ink); }
+@container (max-width: 860px) {
+  .topbar-tabs button:not(.selected) > span, .live-state-label { display: none; }
+  .topbar-end .live-state { margin-right: 4px; }
+}
+@container (max-width: 640px) { .topbar-tabs button > span { display: none; } }
+/* Real elements remain interactive throughout; no snapshot overlay can swallow a reverse click. */
+@media (prefers-reduced-motion: no-preference) {
+  .topbar-tabs { animation: sidebar-navigation-in 200ms ease-out; }
+  @keyframes sidebar-navigation-in { from { opacity: .5; transform: translateX(-8px); } }
+}
+@media (prefers-reduced-motion: reduce) { .sidebar-toggle-pane { transition: none; } }
 .breadcrumb { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; color: var(--muted); font-size: calc(11px * var(--font-scale)); }
 .breadcrumb span { min-width: 0; color: var(--ink); overflow-wrap: anywhere; }
 .breadcrumb > svg { flex-shrink: 0; }

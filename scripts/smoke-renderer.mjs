@@ -18,11 +18,11 @@ const limits = Object.freeze({ totalMs: 1200000, buildMs: 600000, startupMs: 300
 const options = {}
 for (let index = 2; index < process.argv.length; index += 2) {
   const key = process.argv[index]
-  if (!['--fault', '--out', '--scenario'].includes(key) || !process.argv[index + 1] || Object.hasOwn(options, key)) throw new Error('Usage: node scripts/smoke-renderer.mjs [--scenario all|notifications|topology|marketplace|collectors] [--fault fixture|ipc] [--out NEW_DIRECTORY]')
+  if (!['--fault', '--out', '--scenario'].includes(key) || !process.argv[index + 1] || Object.hasOwn(options, key)) throw new Error('Usage: node scripts/smoke-renderer.mjs [--scenario all|notifications|topology|marketplace|collectors|sidebar] [--fault fixture|ipc] [--out NEW_DIRECTORY]')
   options[key] = process.argv[index + 1]
 }
 const scenario = options['--scenario'] ?? 'all', fault = options['--fault'] ?? null
-assert(['all', 'notifications', 'topology', 'marketplace', 'collectors'].includes(scenario), 'Unknown smoke scenario')
+assert(['all', 'notifications', 'topology', 'marketplace', 'collectors', 'sidebar'].includes(scenario), 'Unknown smoke scenario')
 assert(fault === null || scenario === 'all' && ['fixture', 'ipc'].includes(fault), 'Unknown or incompatible fault')
 assert(process.platform === 'darwin' && process.arch === 'arm64', 'WK smoke requires macOS arm64')
 const output = options['--out'] ? path.resolve(options['--out']) : await mkdtemp(path.join(os.tmpdir(), 'oc-chan-smoke-evidence-'))

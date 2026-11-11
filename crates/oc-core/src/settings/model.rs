@@ -74,6 +74,7 @@ pub struct AppSettings {
     pub language: Language, pub text_size: TextSize, pub ui_font: UiFont, pub code_font: CodeFont,
     pub tray_click: TrayClick, pub show_dock: bool, pub prevent_sleep: bool,
     pub sidebar_width: f64, pub window_bounds: Option<WindowBounds>,
+    pub sidebar_collapsed: bool,
     pub plugins: PluginSettings, pub notifications: NotificationSettings,
 }
 impl Default for AppSettings {
@@ -82,6 +83,7 @@ impl Default for AppSettings {
             appearance: Appearance::System, glass_intensity: 65.0, light_theme: "oc-chan".into(), dark_theme: "oc-chan".into(),
             language: Language::System, text_size: TextSize::Default, ui_font: UiFont::System, code_font: CodeFont::System,
             tray_click: TrayClick::Tray, show_dock: true, prevent_sleep: false, sidebar_width: 214.0, window_bounds: None,
+            sidebar_collapsed: false,
             plugins: PluginSettings::default(), notifications: NotificationSettings::default(),
         }
     }
@@ -102,6 +104,7 @@ pub struct SettingsPatch {
     #[serde(deserialize_with = "present")] pub show_dock: Option<bool>,
     #[serde(deserialize_with = "present")] pub prevent_sleep: Option<bool>,
     #[serde(deserialize_with = "present")] pub sidebar_width: Option<f64>,
+    #[serde(deserialize_with = "present")] pub sidebar_collapsed: Option<bool>,
     #[serde(deserialize_with = "present")] pub window_bounds: Option<Option<WindowBounds>>,
     #[serde(deserialize_with = "present")] pub plugins: Option<PluginPatch>,
     #[serde(deserialize_with = "present")] pub notifications: Option<NotificationSettings>,
@@ -145,6 +148,7 @@ impl AppSettings {
         if let Some(value) = patch.show_dock { self.show_dock = value; }
         if let Some(value) = patch.prevent_sleep { self.prevent_sleep = value; }
         if let Some(value) = patch.sidebar_width { self.sidebar_width = value; }
+        if let Some(value) = patch.sidebar_collapsed { self.sidebar_collapsed = value; }
         if let Some(value) = patch.window_bounds { self.window_bounds = value; }
         if let Some(value) = patch.plugins {
             if let Some(v) = value.agents { self.plugins.agents = v; }
@@ -242,4 +246,23 @@ pub struct SettingsUpdateResult { pub ok: bool, #[serde(skip_serializing_if = "O
 impl SettingsUpdateResult {
     pub fn ok(snapshot: SettingsSnapshot) -> Self { Self { ok: true, snapshot: Some(snapshot), error: None } }
     pub fn error(error: SettingsUpdateFailure) -> Self { Self { ok: false, snapshot: None, error: Some(error) } }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sidebar_collapse_patch_preserves_width_and_round_trips() {
+        let mut settings = AppSettings::default();
+        settings.apply(serde_json::from_str(r#"{"sidebarWidth":280,"sidebarCollapsed":true}"#).unwrap()).unwrap();
+        let restored: AppSettings = serde_json::from_slice(&serde_json::to_vec(&settings).unwrap()).unwrap();
+        assert_eq!(restored, settings);
+        settings.apply(serde_json::from_str(r#"{"sidebarCollapsed":false}"#).unwrap()).unwrap();
+        assert!(!settings.sidebar_collapsed);
+        assert_eq!(settings.sidebar_width, 280.0);
+        for invalid in [r#"{"sidebarCollapsed":null}"#, r#"{"sidebarCollapsed":1}"#, r#"{"sidebarCollapsed":"true"}"#] {
+            assert!(serde_json::from_str::<SettingsPatch>(invalid).is_err());
+        }
+    }
 }

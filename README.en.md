@@ -63,6 +63,8 @@ System monitoring is not installed automatically on first launch. The bundled pl
 
 The interface supports Chinese and English, light and dark modes, and six themes. Native Liquid Glass is available on macOS 26 and later and respects system accessibility settings.
 
+Use the button beside the traffic lights or **⌃⌘S** to hide the sidebar. Main navigation and installed plugins move to the top bar, with Data sources and Settings on the right. Dragging the divider 64px past its minimum width also hides it; reopening restores the previous width. Layout preferences are saved. Narrow viewports use a compact navigation menu, and motion respects the system's Reduce Motion setting.
+
 ## Supported sources
 
 Each source provides different evidence. A running process, active work, and recent calls are shown separately; unknown states are never reported as zero.

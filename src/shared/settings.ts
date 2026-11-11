@@ -30,6 +30,7 @@ export interface AppSettings {
   showDock: boolean
   preventSleep: boolean
   sidebarWidth: number
+  sidebarCollapsed: boolean
   windowBounds: WindowBounds | null
   plugins: PluginSettings
   notifications: NotificationSettings
@@ -42,7 +43,7 @@ export const DEFAULT_SETTINGS: Readonly<AppSettings> = {
   glassIntensity: 65,
   language: 'system', textSize: 'default',
   uiFont: 'system', codeFont: 'system', trayClick: 'tray',
-  showDock: true, preventSleep: false, sidebarWidth: 214, windowBounds: null,
+  showDock: true, preventSleep: false, sidebarWidth: 214, sidebarCollapsed: false, windowBounds: null,
   plugins: Object.freeze(Object.fromEntries(monitorSections.map(section => [section, true])) as PluginSettings),
   notifications: DEFAULT_NOTIFICATIONS
 }
