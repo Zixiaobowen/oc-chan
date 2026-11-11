@@ -36,6 +36,7 @@ import PluginNavigation from './PluginNavigation'
 
 const initial = createEmptySnapshot()
 const marketplacePlugins = monitorPlugins.filter(plugin => plugin.distribution === 'marketplace')
+const titlebarLogo = new URL('../../../resources/brand/oc-chan-icon.svg', import.meta.url).href
 
 export default function App() {
   const { t, language } = useI18n()
@@ -299,7 +300,7 @@ export default function App() {
       aria-label={sidebarLabel} title={`${sidebarLabel} (⌃⌘S)`} onClick={() => toggleSidebar()}>
       <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><rect className="sidebar-toggle-pane" x="2.5" y="3.5" width="4" height="9" rx="1" /><g fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"><rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2.25" /><path d="M6.75 2.75v10.5" /></g></svg>
     </button>}
-    <div className="titlebar-brand">OC Chan</div>
+    <div className="titlebar-brand"><img className="titlebar-logo" src={titlebarLogo} width="14" height="14" alt="" draggable={false} /><span>OC Chan</span></div>
     <aside ref={navigation} id="main-navigation" className="sidebar" hidden={sidebarHidden} popover={compactNavigation ? 'auto' : undefined}>
       <nav aria-label={t('主导航', 'Main navigation')}>
         {pages.filter(item => item.id !== 'sources' && item.id !== 'settings' && item.id !== 'plugins' && !marketplacePlugins.some(plugin => plugin.page.id === item.id)).map(item => <button key={item.id} className={`nav-item ${page === item.id ? 'selected' : ''}`} onClick={() => navigate(item.id)} aria-current={page === item.id ? 'page' : undefined}><item.icon trigger="none" size={18} /><span>{item.label}</span>{item.id === 'agents' && plugins.agents && agents && <small>{agents.agents.length}</small>}{item.id === 'schedules' && plugins.schedules && scheduled && <small>{scheduled.length}</small>}</button>)}

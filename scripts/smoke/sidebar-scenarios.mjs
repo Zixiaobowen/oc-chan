@@ -20,6 +20,31 @@ async function assertReachable(ui, selector) {
   return geometry
 }
 
+async function assertTitlebarLogo(ui, geometry) {
+  await ui.dom('titlebar vector loaded', 'document.querySelector(".titlebar-logo")?.complete && document.querySelector(".titlebar-logo").naturalWidth > 0')
+  const bounds = await ui.evaluate(`(() => {
+    const rect = element => { const r = element.getBoundingClientRect(); return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height,center:r.top+r.height/2}; };
+    const brand = document.querySelector('.titlebar-brand');
+    const button = document.querySelector('.sidebar-toggle');
+    return {brand:rect(brand),logo:rect(brand.querySelector('img')),wordmark:rect(brand.querySelector('span')),
+      toggle:button ? rect(button) : null,viewportWidth:innerWidth};
+  })()`)
+  assert.equal(bounds.logo.width, 14, 'Logo retains its compact width')
+  assert.equal(bounds.logo.height, 14, 'Logo retains its compact height')
+  assert.ok(Math.abs(bounds.wordmark.left - bounds.logo.right - 4) <= 0.5, 'Logo precedes the wordmark with a 4px gap')
+  assert.ok(bounds.logo.left >= bounds.brand.left && bounds.wordmark.right <= bounds.brand.right
+    && bounds.brand.right <= bounds.viewportWidth, 'Logo and wordmark fit within the visible brand')
+  if (bounds.toggle) assert.ok(bounds.logo.left >= bounds.toggle.right + 4, 'Logo follows the sidebar toggle')
+  for (const part of ['brand', 'logo', 'wordmark']) {
+    const center = geometry.obscuredContentInsets.top + bounds[part].center * geometry.pageZoom
+    for (const name of ['close', 'minimize', 'zoom']) {
+      const delta = center - geometry.windowButtons[name].centerYFromWebview
+      assert.ok(Number.isFinite(delta) && Math.abs(delta) <= 0.5, `${part} aligns with native ${name}: delta=${delta}`)
+    }
+  }
+  return bounds
+}
+
 export async function exerciseSidebar({ ui, renderer }) {
   await ui.stage('sidebar-native-traffic-light-alignment', async () => {
     await renderer.resize(1280, 860)
@@ -34,26 +59,31 @@ export async function exerciseSidebar({ ui, renderer }) {
         const geometry = (await renderer.inspect()).geometry
         const delta = geometry.obscuredContentInsets.top + center * geometry.pageZoom - geometry.windowButtons.close.centerYFromWebview
         assert.ok(Number.isFinite(delta) && Math.abs(delta) <= 0.5, `Sidebar toggle must align with native traffic lights: ${textSize}, collapsed=${sidebarCollapsed}, delta=${delta}`)
+        const logoBounds = await assertTitlebarLogo(ui, geometry)
         const brand = await ui.evaluate(`(() => {
           const r = document.querySelector('.titlebar-brand').getBoundingClientRect();
           const button = ${toggle}.getBoundingClientRect();
           const entry = document.querySelector(${JSON.stringify(sidebarCollapsed ? '.topbar-tabs button' : '.sidebar nav button')});
           const navigation = entry.getBoundingClientRect();
           const drag = document.querySelector('.window-drag').getBoundingClientRect();
-          return {x:r.x,y:r.y,width:r.width,height:r.height,center:r.y+r.height/2,
+          const breadcrumb = document.querySelector('.breadcrumb')?.getBoundingClientRect();
+          const sidebar = document.querySelector('.sidebar').getBoundingClientRect();
+          return {x:r.x,y:r.y,width:r.width,height:r.height,center:r.y+r.height/2,sidebarWidth:sidebar.width,
             afterToggle:r.left >= button.right + 4, navigationClear:${sidebarCollapsed}
-              ? navigation.left >= r.right + 8 : navigation.top >= drag.bottom && navigation.top <= drag.bottom + 8};
+              ? navigation.left >= r.right + 8 : navigation.top >= drag.bottom && navigation.top <= drag.bottom + 8,
+            workspaceClear:!breadcrumb || breadcrumb.left >= r.right + 8};
         })()`)
         const brandDelta = geometry.obscuredContentInsets.top + brand.center * geometry.pageZoom - geometry.windowButtons.close.centerYFromWebview
-        assert.ok(Math.abs(brandDelta) <= 0.5 && brand.afterToggle && brand.navigationClear, `Brand alignment and navigation clearance: ${JSON.stringify(brand)}`)
+        assert.ok(Math.abs(brandDelta) <= 0.5 && brand.afterToggle && brand.navigationClear && brand.workspaceClear, `Brand alignment and navigation clearance: ${JSON.stringify(brand)}`)
         const previous = measurements.at(-1)
         if (sidebarCollapsed) assert.deepEqual({x:brand.x,y:brand.y,width:brand.width,height:brand.height}, previous.brandBounds)
         if (!sidebarCollapsed) {
+          assert.equal(brand.sidebarWidth, 188, 'Brand clears workspace content at minimum sidebar width')
           await assertReachable(ui, 'document.querySelector(".sidebar nav button")')
           const settings = await assertReachable(ui, 'document.querySelector(".sidebar-bottom button:last-child")')
           assert.ok(settings.viewportHeight - settings.bottom <= 16, 'Settings stays at the bottom without a device block below it')
         }
-        measurements.push({ textSize, sidebarCollapsed, delta, brandDelta, brandBounds:{x:brand.x,y:brand.y,width:brand.width,height:brand.height} })
+        measurements.push({ textSize, sidebarCollapsed, delta, brandDelta, logoBounds, brandBounds:{x:brand.x,y:brand.y,width:brand.width,height:brand.height} })
       }
     }
     assert.equal((await ui.evaluate('window.desktopSettings.update({textSize:"default",sidebarCollapsed:false})')).ok, true)
@@ -127,12 +157,12 @@ export async function exerciseSidebar({ ui, renderer }) {
     assert.equal((await ui.evaluate('window.desktopSettings.update({textSize:"large",language:"en"})')).ok, true)
     await ui.dom('large English topbar ready', 'document.documentElement.lang === "en"')
     assert.equal(await ui.evaluate('Array.from(document.querySelectorAll(".topbar-tabs button,.topbar-icon")).every(b=>!!b.getAttribute("aria-label"))'), true)
+    const narrowBrand = await assertTitlebarLogo(ui, (await renderer.inspect()).geometry)
     const tabCount = await ui.evaluate('document.querySelectorAll(".topbar-tabs button").length')
     for (let index = 0; index < tabCount; index++) {
       const selector = `document.querySelectorAll('.topbar-tabs button')[${index}]`
       const rect = await assertReachable(ui, selector)
-      const brandRight = await ui.evaluate('document.querySelector(".titlebar-brand").getBoundingClientRect().right')
-      assert.ok(rect.left >= brandRight + 8, 'Narrow topbar navigation clears the titlebar brand')
+      assert.ok(rect.left >= narrowBrand.brand.right + 8, 'Narrow topbar navigation clears the titlebar brand')
       await ui.click(selector)
       await ui.dom('narrow topbar destination opens', `${selector}.getAttribute('aria-current') === 'page'`)
     }
@@ -141,17 +171,18 @@ export async function exerciseSidebar({ ui, renderer }) {
     await renderer.resize(640, 640)
     await ui.dom('compact navigation reachable', `${shell}.dataset.compactNavigation === 'true'`)
     const compactToggle = await assertReachable(ui, 'document.querySelector(".navigation-toggle")')
-    const brandBottom = await ui.evaluate('document.querySelector(".titlebar-brand").getBoundingClientRect().bottom')
-    assert.ok(compactToggle.top >= brandBottom, 'Compact navigation remains below the titlebar brand')
+    const compactBrand = await assertTitlebarLogo(ui, (await renderer.inspect()).geometry)
+    assert.ok(compactToggle.top >= compactBrand.brand.bottom + 8, 'Compact navigation remains below the titlebar brand')
     await ui.click('document.querySelector(".navigation-toggle")')
     await ui.dom('compact menu opens', 'document.querySelector("#main-navigation").matches(":popover-open")')
-    await assertReachable(ui, 'document.querySelector(".sidebar nav button")')
+    const compactEntry = await assertReachable(ui, 'document.querySelector(".sidebar nav button")')
+    assert.ok(compactEntry.top >= compactBrand.brand.bottom + 8, 'Open compact menu clears the logo and wordmark')
     await assertReachable(ui, 'document.querySelector(".sidebar-bottom button:last-child")')
     await ui.navigate('设置', 'Settings')
     await renderer.resize(1280, 860)
     await ui.dom('saved collapsed preference survives compact mode', `${shell}.dataset.compactNavigation === 'false' && ${shell}.dataset.sidebarCollapsed === 'true'`)
     assert.equal((await ui.evaluate('window.desktopSettings.update({textSize:"default"})')).ok, true)
-    return { compactPreservesPreference: true, accessibleNames: true }
+    return { compactPreservesPreference: true, accessibleNames: true, narrowBrand, compactBrand }
   })
   return { settings: { sidebarCollapsed: true, sidebarWidth: 260, language: 'en', textSize: 'default' } }
 }

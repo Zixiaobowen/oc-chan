@@ -65,7 +65,7 @@ The interface supports Chinese and English, light and dark modes, and six themes
 
 Use the button beside the traffic lights or **⌃⌘S** to hide the sidebar. Main navigation and installed plugins move to the top bar, with Data sources and Settings on the right. Dragging the divider 64px past its minimum width also hides it; reopening restores the previous width. Layout preferences are saved. Narrow viewports use a compact navigation menu, and motion respects the system's Reduce Motion setting.
 
-The compact OC Chan wordmark sits to the right of the sidebar button, aligned with the traffic lights and button center. It stays in place when the sidebar opens or closes. Sidebar functions begin directly below the title bar, without the large brand block, subtitle, or device description; Data sources and Settings remain at the bottom left.
+The 14px vector logo and compact OC Chan wordmark sit to the right of the sidebar button, aligned with the traffic lights and button center. They stay in place when the sidebar opens or closes. Sidebar functions begin directly below the title bar, without the large brand block, subtitle, or device description; Data sources and Settings remain at the bottom left.
 
 ## Supported sources
 

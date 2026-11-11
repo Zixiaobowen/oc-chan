@@ -53,14 +53,15 @@ h3 { font-size: calc(14px * var(--font-scale)); font-weight: 600; }
 /* AppKit overlay titlebar is 32pt: standardWindowButton center is 16pt.
    WK reports zero top obscured inset at pageZoom 1; 2px + 28px / 2 aligns both states. */
 .sidebar-toggle { position: fixed; z-index: 12; top: 2px; left: 84px; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 28px; padding: 0; border: none; border-radius: 7px; background: none; color: var(--muted); }
-.titlebar-brand { position: fixed; z-index: 11; top: 2px; left: 120px; height: 28px; display: flex; align-items: center; color: var(--ink); font-size: 12px; font-weight: 600; white-space: nowrap; pointer-events: none; }
+.titlebar-brand { position: fixed; z-index: 11; top: 2px; left: 120px; height: 28px; display: flex; align-items: center; gap: 4px; color: var(--ink); font-size: 12px; font-weight: 600; white-space: nowrap; pointer-events: none; }
+.titlebar-logo { display: block; flex: 0 0 14px; width: 14px; height: 14px; }
 .sidebar-toggle:hover { background: var(--hover); color: var(--ink); }
 .sidebar-toggle-pane { fill: currentColor; opacity: .32; transition: opacity 200ms ease-out; }
 .app-shell[data-sidebar-collapsed='true'] .sidebar-toggle-pane { opacity: 0; }
 .sidebar[hidden] { display: none; }
 .app-shell[data-sidebar-collapsed='true'] { grid-template-columns: minmax(0, 1fr); }
 .app-shell[data-sidebar-collapsed='true'] .sidebar-resize-handle { display: none; }
-.app-shell[data-sidebar-collapsed='true'] .topbar { justify-content: flex-start; gap: 12px; padding-left: 200px; container-type: inline-size; }
+.app-shell[data-sidebar-collapsed='true'] .topbar { justify-content: flex-start; gap: 12px; padding-left: 208px; container-type: inline-size; }
 .topbar-tabs { display: flex; align-items: center; gap: 2px; min-width: 0; overflow-x: auto; -webkit-app-region: no-drag; }
 .topbar-tabs button { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 9px; border: none; border-radius: 7px; background: none; color: var(--muted); font-size: max(12px, calc(12px * var(--font-scale))); white-space: nowrap; }
 .topbar-tabs button:hover:not(.selected) { background: var(--hover); color: var(--ink); }

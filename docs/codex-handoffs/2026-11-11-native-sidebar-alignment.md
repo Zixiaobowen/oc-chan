@@ -66,3 +66,19 @@ env PATH="/Users/zvf003/.cargo/bin:$PATH" npm run smoke:renderer -- --scenario s
 主代理验证：类型检查通过；`/tmp/oc-chan-titlebar-brand-diagnosed-20261111/result.json` 为 `complete:true, errors:[]`，已查看重启截图，品牌位于顶部，菜单从40px开始，设备块移除且设置贴底。首次 `/tmp/oc-chan-titlebar-brand-20261111` 的六组合对齐通过，但后续导航click缺目标且失败诊断被command group EPERM覆盖；补充精确click表达式及保留原错误的诊断后同场景通过。首次缺目标的具体原因未确认，不将诊断补强称为产品修复。仅本次布局验收通过，不将采集来源错误当作已修复。
 
 品牌/设备块修改已提交 `eaf3db3b135acbedb7746a585c079a5fc3864b52`，GitHub main回读一致。正式安装成功，PID11320；已查看可见窗口1808截图 `/tmp/oc-chan-brand-installed-20261111.png`，OC Chan字标与按钮/红绿灯同一中心线，收起顶栏未遮挡。展开布局和设备块删除由真实WK截图与定向场景证明。系统监控OC_PLUGIN_TRUST仍存在，未在本次布局任务修复。云端CI尚未完成；此交接补记不影响已审阅的中英文README。
+
+## 标题栏追加小矢量 Logo（待主代理验收）
+
+用户追加要求将现有logo缩小并放在折叠按钮与OC Chan文字之间。`App.tsx` 使用静态 `new URL(..., import.meta.url)` 引用现有 `resources/brand/oc-chan-icon.svg`，以装饰性14×14px图片显示，文字包入span；没有新建或转换品牌资产。CSS只新增4px品牌间距及14px不可压缩logo尺寸，保留top2/height28/left120，三者中心为16px；最小188px侧栏、收起顶栏200px留白及紧凑模式left84/导航下移规则不变。没有恢复大品牌或设备说明。
+
+已有sidebar场景新增实际DOM边界断言：图片成功解码、14×14尺寸、toggle→logo→wordmark顺序及4px间距，品牌/logo/文字中心分别对三枚原生窗口按钮误差≤0.5pt；六个字号/收起组合记录logo与文字矩形，明确测量最小188px侧栏并检查工作区面包屑避让。880px英文大字号继续逐项检查顶栏导航，640px紧凑模式复测logo与原生中心、菜单按钮和弹出菜单避让。未添加源码或文本快照。
+
+本次只读取impeccable context/craft-floor并完成代码及文档修改；未运行build/test/lint/formatter/检测器、提交、推送或安装。根据明确委派推导局部布局，没有设计访谈或新增视觉方向。前文所有通过记录均属于本次logo修改之前，新增断言未执行。主代理最窄验证：`npm run typecheck`，以及 `npm run smoke:renderer -- --scenario sidebar --out <未存在的新目录>`；按需运行impeccable检测器于App.tsx/styles.css，并查看最终原生窗口截图。无需全量场景。
+
+续验收：类型检查通过；收起顶栏留白调整为208px，补足入场位移的8px避让。`/tmp/oc-chan-vector-titlebar-clearance-20261111` 六组Logo/字标/原生按钮中心对齐通过，已查看截图。完整导航因后台命令取消的 `OC_RESOURCE_CLOSE / EPERM` 失败，DOM诊断显示整个App被连接失败页替换，不是第六个按钮选择器错误。Apple XNU `bsd/kern/kern_sig.c` 的 `killpg1` 排除SZOMB成员，零可发送成员返回EPERM；正在修复此生命周期边界，不能跳过导航检查或吞掉真实权限错误。
+
+已修复 `crates/oc-core/src/io.rs` 的macOS取消边界：仅EPERM后使用有界256项原生枚举与包含zombie的状态查询，确认未回收leader仍在原组、两次成员一致且全员zombie才认为终止完成；真实权限错误、活成员、枚举不完整或查询失败仍报错。新增真实进程回归覆盖僵尸组取消/回收和仍存活后代清理。`cargo test -p oc-core io::tests::command_` 实际5项通过；未运行全仓测试。完整sidebar验收正在重新执行。
+
+最终 `/tmp/oc-chan-vector-titlebar-fixed-20261111/result.json` 返回 `complete:true, errors:[]`，完整导航、窄窗、字号、重启恢复与Logo几何验收通过，已查看重启截图。截图中Tern inspect采集不可用提示仍存在，不属于本次修复；未宣称所有来源健康。中英文README同步14px矢量Logo描述。未测长时间资源压力及硬件动画帧率。下一步提交推送本次变更并执行已授权本机安装；恢复入口为此handoff与上述证据目录。
+
+交付完成：`c7ce3e6f93c8293c2a684a8f096a78af52b202fb` 已推送GitHub main并回读一致。`npm run install:local` 成功更新 `/Applications/OC Chan.app`，安装器真实React/IPC/采集/历史就绪验证通过，PID65580；没有额外开启可见开发窗口。Logo视觉证据来自上述真实WK验收截图，本次未重新拍摄正式可见窗口；安装就绪不等同所有采集来源无错误。后续如需继续，从此工作区与handoff恢复；不修改原oc-chan工作区，不清理其它任务或个人数据。

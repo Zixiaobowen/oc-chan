@@ -320,6 +320,64 @@ async fn read_stream(mut stream: impl AsyncRead + Unpin, maximum: usize, cancel:
     Ok(bytes)
 }
 
+// The caller must retain the unreaped group leader until this check completes.
+#[cfg(target_os = "macos")]
+fn command_group_is_zombies(pid: u32) -> Result<bool> {
+    fn members(pid: u32, pids: &mut [libc::pid_t; 256]) -> Result<usize> {
+        // PROC_PGRP_ONLY from sys/proc_info.h; proc_listpids includes zombies.
+        let capacity = std::mem::size_of_val(pids) as i32;
+        let bytes = unsafe { libc::proc_listpids(2, pid, pids.as_mut_ptr().cast(), capacity) };
+        if bytes < 0 { return Err(Error::io("command group members", std::io::Error::last_os_error())); }
+        if bytes == 0 || bytes >= capacity || bytes as usize % std::mem::size_of::<libc::pid_t>() != 0 {
+            return Err(Error::new("OC_COMMAND_IDENTITY", "Command group membership is empty or incomplete"));
+        }
+        let count = bytes as usize / std::mem::size_of::<libc::pid_t>();
+        pids[..count].sort_unstable();
+        Ok(count)
+    }
+    let mut pids = [0; 256];
+    let count = members(pid, &mut pids)?;
+    if !pids[..count].contains(&(pid as i32)) {
+        return Err(Error::new("OC_COMMAND_IDENTITY", "Unreaped command leader is absent from its group"));
+    }
+    for member in &pids[..count] {
+        let mut info = std::mem::MaybeUninit::<libc::proc_bsdinfo>::uninit();
+        let size = std::mem::size_of::<libc::proc_bsdinfo>() as i32;
+        // arg=1 explicitly includes zombies; arg=0 reports ESRCH for them.
+        let bytes = unsafe { libc::proc_pidinfo(*member, libc::PROC_PIDTBSDINFO, 1, info.as_mut_ptr().cast(), size) };
+        if bytes != size { return Err(Error::io("command group member status", std::io::Error::last_os_error())); }
+        let info = unsafe { info.assume_init() };
+        if info.pbi_pid != *member as u32 || info.pbi_pgid != pid {
+            return Err(Error::new("OC_COMMAND_IDENTITY", "Command group member identity changed"));
+        }
+        if info.pbi_status != libc::SZOMB { return Ok(false); }
+    }
+    // A member could have forked before becoming a zombie during inspection.
+    let mut confirmed = [0; 256];
+    let confirmed_count = members(pid, &mut confirmed)?;
+    if pids[..count] != confirmed[..confirmed_count] {
+        return Err(Error::new("OC_COMMAND_IDENTITY", "Command group membership changed during inspection"));
+    }
+    Ok(true)
+}
+
+fn kill_command_group(pid: u32) -> Result<()> {
+    if unsafe { libc::kill(-(pid as i32), libc::SIGKILL) } == 0 { return Ok(()); }
+    let failure = std::io::Error::last_os_error();
+    if failure.raw_os_error() == Some(libc::ESRCH) { return Ok(()); }
+    #[cfg(target_os = "macos")]
+    if failure.raw_os_error() == Some(libc::EPERM) {
+        // XNU killpg1 skips SZOMB and returns EPERM when no eligible member
+        // remains. Prove that state without reaping/releasing the group's PID.
+        match command_group_is_zombies(pid) {
+            Ok(true) => return Ok(()),
+            Ok(false) => (),
+            Err(check) => return Err(Error::cleanup("command group", Error::aggregate(vec![Error::io("kill", failure), check]))),
+        }
+    }
+    Err(Error::cleanup("command group", Error::io("kill", failure)))
+}
+
 async fn command_inner(spec: CommandSpec, cancel: CancellationToken) -> Result<CommandOutput> {
     use std::os::unix::process::{CommandExt, ExitStatusExt};
     check_cancel(&cancel)?;
@@ -368,11 +426,8 @@ async fn command_inner(spec: CommandSpec, cancel: CancellationToken) -> Result<C
             // Do not reap the leader while descendants may still own its pipes.
             // The owned, unreaped child reserves its PID even after exit, so this
             // process-group ID cannot have been reused by an unrelated process.
-            if status.is_none() && unsafe { libc::kill(-(pid as i32), libc::SIGKILL) } != 0 {
-                let failure = std::io::Error::last_os_error();
-                if failure.raw_os_error() != Some(libc::ESRCH) {
-                    cleanup_failure = Some(Error::cleanup("command group", Error::io("kill", failure)));
-                }
+            if status.is_none() {
+                cleanup_failure = kill_command_group(pid).err();
             }
             pipes_cancel.cancel();
         }
