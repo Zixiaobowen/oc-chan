@@ -68,6 +68,6 @@
 ## Git 身份修正
 
 - 用户随后明确指定本项目 Git 身份应为 `Zixiaobowen`。核查发现远端与 GitHub 登录账号正确，但本地一直继承全局 `bowen.sun <bowen.sun@zstack.io>`，项目提交技能也写死了该旧身份。
-- 已在共用仓库的本地配置设置 `user.name=Zixiaobowen`、`user.email=35100096+Zixiaobowen@users.noreply.github.com`，适用于 oc-chan 及其 worktree，不修改全局配置或其他仓库。GitHub API 返回账号 ID `35100096`；使用 [GitHub 官方 ID-based noreply 格式](https://docs.github.com/en/account-and-profile/reference/email-addresses-reference#your-noreply-email-address)，不需要扩大邮箱接口的读取权限。
-- `git var GIT_AUTHOR_IDENT` 与 `git var GIT_COMMITTER_IDENT` 均已返回上述身份；项目提交技能同步采用这一仓库身份。已推送的历史提交不改写，不执行 amend 或强推。
+- 用户进一步明确邮箱为 `2549863672@qq.com`。共用仓库本地配置与项目提交技能已统一为 `Zixiaobowen <2549863672@qq.com>`，覆盖助手此前选择的 GitHub noreply 地址，适用于 oc-chan 及其 worktree；不修改全局配置或其他仓库。
+- `git var GIT_AUTHOR_IDENT` 与 `git var GIT_COMMITTER_IDENT` 均已返回上述身份。用户随后明确授权修正本项目历史中的 bowen.sun 记录；历史身份校正单独保留提交映射和文件树验证证据，不将这次授权泛化为今后的任意强推权限。
 - 本次仅修正提交元数据配置与项目文档；中英文 README 已复核，无需更新，不重复应用测试或安装。
