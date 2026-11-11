@@ -6,6 +6,24 @@ const toggle = 'document.querySelector(".sidebar-toggle")'
 const handle = 'document.querySelector(".sidebar-resize-handle")'
 
 export async function exerciseSidebar({ ui, renderer }) {
+  await ui.stage('sidebar-native-traffic-light-alignment', async () => {
+    await renderer.resize(1280, 860)
+    const measurements = []
+    for (const textSize of ['small', 'default', 'large']) {
+      for (const sidebarCollapsed of [false, true]) {
+        assert.equal((await ui.evaluate(`window.desktopSettings.update(${JSON.stringify({ textSize, sidebarCollapsed })})`)).ok, true)
+        await ui.dom('alignment layout applied', `${shell}?.dataset.sidebarCollapsed === ${JSON.stringify(String(sidebarCollapsed))}`)
+        await ui.frames()
+        const center = await ui.evaluate(`(() => { const r = ${toggle}.getBoundingClientRect(); return r.y + r.height / 2; })()`)
+        const geometry = (await renderer.inspect()).geometry
+        const delta = geometry.obscuredContentInsets.top + center * geometry.pageZoom - geometry.windowButtons.close.centerYFromWebview
+        assert.ok(Number.isFinite(delta) && Math.abs(delta) <= 0.5, `Sidebar toggle must align with native traffic lights: ${textSize}, collapsed=${sidebarCollapsed}, delta=${delta}`)
+        measurements.push({ textSize, sidebarCollapsed, delta })
+      }
+    }
+    assert.equal((await ui.evaluate('window.desktopSettings.update({textSize:"default",sidebarCollapsed:false})')).ok, true)
+    return { measurements, tolerancePoints: 0.5 }
+  })
   await ui.stage('sidebar-navigation-and-persistence', async () => {
     await renderer.resize(1280, 860)
     assert.equal((await ui.evaluate('window.desktopSettings.update({sidebarCollapsed:false,sidebarWidth:260})')).ok, true)
@@ -17,6 +35,9 @@ export async function exerciseSidebar({ ui, renderer }) {
     assert.deepEqual(await ui.evaluate(`(() => { const r=${toggle}.getBoundingClientRect(); return {x:r.x,y:r.y}; })()`), before)
     const labels = await ui.evaluate('Array.from(document.querySelectorAll(".topbar-tabs button"), b => b.getAttribute("aria-label"))')
     assert(labels.length >= 5 && labels.every(Boolean), 'Core and installed plugin tabs retain accessible names')
+    assert.equal(labels.filter(label => ['插件', 'Plugins'].includes(label)).length, 1, 'Topbar exposes one Plugins management entry')
+    assert.equal(labels.some(label => ['插件市场', 'Plugin marketplace'].includes(label)), false, 'Topbar has no duplicate marketplace entry')
+    assert.equal(labels.some(label => ['系统监控', 'System monitor'].includes(label)), true, 'Installed system monitoring remains accessible')
     // Native input exercises every actual tab, including installed system monitoring.
     for (let index = 0; index < labels.length; index++) {
       await ui.click(`document.querySelectorAll('.topbar-tabs button')[${index}]`)

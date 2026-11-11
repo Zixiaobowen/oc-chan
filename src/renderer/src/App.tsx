@@ -50,7 +50,7 @@ export default function App() {
   const pages = [
     { id: 'overview', label: t('本机概览', 'Overview'), icon: LayoutDashboard, description: t('Agent、调度任务与系统资源的当前状态。', 'The current state of agents, scheduled tasks and system resources.') },
     ...monitorPlugins.map(plugin => ({ id: plugin.page.id, label: t(...plugin.page.label), description: t(...plugin.page.description), icon: ({ agents: Bot, schedules: CalendarClock, events: List } as Partial<Record<MonitorSection, typeof Activity>>)[plugin.section] ?? Activity })),
-    { id: 'plugins', label: t('插件市场', 'Plugin marketplace'), icon: Server, description: t('安装、更新与卸载本机采集插件。', 'Install, update and uninstall local collection plugins.') },
+    { id: 'plugins', label: t('插件', 'Plugins'), icon: Server, description: t('安装、更新与卸载本机采集插件。', 'Install, update and uninstall local collection plugins.') },
     { id: 'sources', label: t('数据来源', 'Data sources'), icon: Database, description: t('每个数字从哪里来，哪些范围尚不可见。', 'Where each number comes from and what remains outside visibility.') },
     { id: 'settings', label: t('设置', 'Settings'), icon: Settings, description: t('调整外观、文字与桌面行为。', 'Adjust appearance, typography and desktop behavior.') }
   ] as const
@@ -274,7 +274,7 @@ export default function App() {
   const partiallyDisabled = !section && Object.values(plugins).some(enabled => !enabled)
   const samplingError = bridgeError || (!collectionDisabled ? section === 'agents' ? agentError : sampling?.error : null)
   const collecting = section ? plugins[section] && Boolean(sampling?.refreshing) : sourceGroups.some(group => plugins[group.id] && group.state.refreshing)
-  const samplingDetail = section === 'system' && !systemInstalled ? systemInstalled === null ? t('正在读取插件状态。', 'Loading plugin status.') : t('请在插件市场安装系统监控。', 'Install System monitor from the plugin marketplace.') : collectionDisabled ? t('请在数据来源中开启采集；上游任务不受影响。', 'Enable collection in Data sources; upstream tasks are unaffected.') : partiallyDisabled ? t('仅更新已开启的来源；停用来源保留旧快照。', 'Only enabled sources update; disabled sources retain old snapshots.') : section === 'agents'
+  const samplingDetail = section === 'system' && !systemInstalled ? systemInstalled === null ? t('正在读取插件状态。', 'Loading plugin status.') : t('请在“插件”中安装系统监控。', 'Install System monitor from Plugins.') : collectionDisabled ? t('请在数据来源中开启采集；上游任务不受影响。', 'Enable collection in Data sources; upstream tasks are unaffected.') : partiallyDisabled ? t('仅更新已开启的来源；停用来源保留旧快照。', 'Only enabled sources update; disabled sources retain old snapshots.') : section === 'agents'
     ? samplingError ? t('会话更新异常 · 可重试', 'Session update failed · Retry available') : t(`会话事件订阅 · ${collecting && !paused ? '连接中' : '持续更新'}`, `Session events · ${collecting && !paused ? 'Connecting' : 'Live'}`)
     : section
       ? t(`每 ${monitorPlugins.find(plugin => plugin.section === section)!.intervalMs / 1000} 秒 · ${collecting && !paused ? '采集中' : `最近成功 ${displayTime(sampling?.data?.collectedAt)}`}`, `Every ${monitorPlugins.find(plugin => plugin.section === section)!.intervalMs / 1000}s · ${collecting && !paused ? 'Collecting' : `Last success ${displayTime(sampling?.data?.collectedAt)}`}`)
@@ -305,7 +305,6 @@ export default function App() {
       <nav aria-label={t('主导航', 'Main navigation')}>
         {pages.filter(item => item.id !== 'sources' && item.id !== 'settings' && item.id !== 'plugins' && !marketplacePlugins.some(plugin => plugin.page.id === item.id)).map(item => <button key={item.id} className={`nav-item ${page === item.id ? 'selected' : ''}`} onClick={() => navigate(item.id)} aria-current={page === item.id ? 'page' : undefined}><item.icon trigger="none" size={18} /><span>{item.label}</span>{item.id === 'agents' && plugins.agents && agents && <small>{agents.agents.length}</small>}{item.id === 'schedules' && plugins.schedules && scheduled && <small>{scheduled.length}</small>}</button>)}
         <PluginNavigation plugins={installedPlugins} page={page} navigate={navigate} loading={marketLoading} failed={marketSnapshot === null && Boolean(marketFailure)} />
-        <button className={`nav-item ${page === 'plugins' ? 'selected' : ''}`} onClick={() => navigate('plugins')} aria-current={page === 'plugins' ? 'page' : undefined}><Server trigger="none" size={18} /><span>{t('插件市场', 'Plugin marketplace')}</span></button>
       </nav>
       <div className="sidebar-bottom">
         <button className={`nav-item ${page === 'sources' ? 'selected' : ''}`} onClick={() => navigate('sources')} aria-current={page === 'sources' ? 'page' : undefined}><Database trigger="none" size={18} /><span>{t('数据来源', 'Data sources')}</span>{issues > 0 && <small className="warning-count">{issues}</small>}</button>

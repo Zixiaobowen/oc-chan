@@ -6,7 +6,8 @@ const action = name => $(`${card} [data-plugin-action="${name}"]`)
 const snapshot = 'window.pluginMarketplace.snapshot()'
 const item = `${snapshot}.then(value => value.items.find(item => item.manifest.id === 'system'))`
 const navigationEntry = $('#installed-plugin-navigation [data-plugin-page="system"]')
-const navigationToggle = $('#plugin-navigation-title')
+const navigationToggle = $('#plugin-navigation-toggle')
+const navigationTitle = $('#plugin-navigation-title')
 
 async function ready(ui, version) {
   return ui.expect(`system plugin ${version} is active`, () => ui.evaluate(`Promise.all([${snapshot},window.monitor.snapshot()]).then(([market,monitor]) => {
@@ -30,7 +31,8 @@ async function uninstall(ui) {
 export async function exerciseMarketplace({ ui, main, renderer, feed, thorough = true }) {
   await ui.stage('marketplace-starts-uninstalled', async () => {
     await ui.dom('marketplace bridge is available', `!!window.pluginMarketplace && !!${$('.app-shell')}`)
-    await ui.navigate('插件市场', 'Plugin marketplace')
+    await ui.navigate('插件', 'Plugins')
+    await ui.dom('single plugin management entry owns the current page', `${navigationTitle}?.getAttribute('aria-current') === 'page' && Array.from(document.querySelectorAll('.sidebar nav button')).filter(button => ['插件','Plugins'].includes(button.textContent)).length === 1 && !Array.from(document.querySelectorAll('.sidebar nav button')).some(button => ['插件市场','Plugin marketplace'].includes(button.textContent))`)
     const current = await ui.evaluate(item)
     assert.equal(current.installed, false)
     assert.equal(current.installedVersion, null)
@@ -38,6 +40,13 @@ export async function exerciseMarketplace({ ui, main, renderer, feed, thorough =
     await ui.dom('install action is visible', `!!${action('install')}`)
     await ui.dom('plugin module remains available without an installed plugin', `${navigationToggle} && !${navigationEntry} && !!${$('.plugin-navigation-empty')}`)
     assert.equal(await ui.evaluate(`Array.from(document.querySelectorAll('.sidebar nav > .nav-item')).some(element => ['系统监控','System monitor'].includes(element.querySelector('span')?.textContent))`), false)
+    await ui.click($('.sidebar-toggle'))
+    await ui.dom('uninstalled topbar has one Plugins entry and no system page', `Array.from(document.querySelectorAll('.topbar-tabs button')).filter(button => ['插件','Plugins'].includes(button.getAttribute('aria-label'))).length === 1 && !Array.from(document.querySelectorAll('.topbar-tabs button')).some(button => ['系统监控','System monitor','插件市场','Plugin marketplace'].includes(button.getAttribute('aria-label')))`)
+    await ui.navigate('本机概览', 'Overview')
+    await ui.navigate('插件', 'Plugins')
+    await ui.dom('uninstalled topbar opens plugin management', `!!${action('install')}`)
+    await ui.click($('.sidebar-toggle'))
+    await ui.dom('sidebar returns before installation', `${$('.app-shell')}.dataset.sidebarCollapsed === 'false'`)
     return { installed: false, source: current.source }
   })
   await ui.stage('marketplace-install-lifecycle', async () => {
@@ -56,16 +65,18 @@ export async function exerciseMarketplace({ ui, main, renderer, feed, thorough =
   })
   await ui.stage('plugin-navigation-selection-and-collapse', async () => {
     await ui.navigate('系统监控', 'System monitor')
-    await ui.dom('plugin child owns the current-page marker', `${navigationEntry}?.getAttribute('aria-current') === 'page' && ${navigationToggle}?.getAttribute('aria-current') === null`)
+    await ui.dom('plugin child owns the current-page marker', `${navigationEntry}?.getAttribute('aria-current') === 'page' && ${navigationTitle}?.getAttribute('aria-current') === null`)
     await ui.dom('breadcrumb exposes the plugin hierarchy', `Array.from(document.querySelectorAll('.breadcrumb span')).some(element => ['插件','Plugins'].includes(element.textContent))`)
     await ui.click(navigationToggle)
     await ui.dom('collapse hides only the plugin directory', `${navigationToggle}?.getAttribute('aria-expanded') === 'false' && ${navigationEntry}?.getClientRects().length === 0 && ['系统监控','System monitor'].includes(${$('.page-heading h1')}?.textContent)`)
     await ui.evaluate('window.monitor.refresh()')
     assert.equal(await ui.evaluate(`${navigationToggle}.getAttribute('aria-expanded')`), 'false')
+    await ui.click(navigationTitle)
+    await ui.dom('collapsed directory still permits plugin management', `${navigationTitle}?.getAttribute('aria-current') === 'page' && ${navigationToggle}?.getAttribute('aria-expanded') === 'false' && !!${action('uninstall')}`)
     await ui.evaluate(`${navigationToggle}.focus()`)
     await ui.key('Enter', 'Enter', 13)
     await ui.dom('keyboard expands the installed plugin directory', `${navigationToggle}?.getAttribute('aria-expanded') === 'true' && ${navigationEntry}?.getClientRects().length > 0`)
-    await ui.navigate('插件市场', 'Plugin marketplace')
+    await ui.navigate('插件', 'Plugins')
     return { nestedSelection: true, collectionPreservesCollapse: true, keyboardExpansion: true }
   })
   await ui.stage('marketplace-disable-enable-drains-process', async () => {
@@ -82,7 +93,7 @@ export async function exerciseMarketplace({ ui, main, renderer, feed, thorough =
     await ui.navigate('数据来源', 'Data sources')
     await ui.click($('[data-source-section="system"] [role="switch"]'))
     await ready(ui, '1.0.0')
-    await ui.navigate('插件市场', 'Plugin marketplace')
+    await ui.navigate('插件', 'Plugins')
     return { installedAcrossDisable: true, collectorProcessDrained: true, resumedVersion: '1.0.0' }
   })
   if (thorough) {
@@ -127,7 +138,7 @@ export async function exerciseMarketplace({ ui, main, renderer, feed, thorough =
     await ready(ui, '1.1.0')
     return { installedContributionRetained: true, collectorStopped: true, collectionResumed: true }
   })
-  await ui.navigate('插件市场', 'Plugin marketplace')
+  await ui.navigate('插件', 'Plugins')
   await ui.stage('marketplace-rejects-failed-activation', async () => {
     await feed.setMode('broken', main)
     await ui.click($('[data-marketplace-action="check"]'))
@@ -168,7 +179,7 @@ export async function exerciseMarketplace({ ui, main, renderer, feed, thorough =
       assert.equal(await ui.evaluate(`(() => { const sidebar=document.querySelector('.sidebar'); return sidebar.scrollWidth <= sidebar.clientWidth; })()`), true, `Plugin navigation overflows: ${language}`)
       await ui.click(navigationToggle)
       await ui.click(navigationToggle)
-      await ui.navigate('插件市场', 'Plugin marketplace')
+      await ui.navigate('插件', 'Plugins')
       await ui.click(action('uninstall'))
       await ui.dom('confirmation focused at 200% text', 'document.activeElement?.dataset.pluginAction === "confirm-uninstall"')
       await ui.key('Escape', 'Escape', 27)
@@ -177,7 +188,7 @@ export async function exerciseMarketplace({ ui, main, renderer, feed, thorough =
       await ui.navigate('系统监控', 'System monitor')
     }
     await renderer.resize(1280, 860)
-    await ui.navigate('插件市场', 'Plugin marketplace')
+    await ui.navigate('插件', 'Plugins')
     const native = await renderer.inspect()
     await ui.expect('restored real outer geometry is persisted before restart', () => ui.evaluate(`window.desktopSettings.snapshot().then(value => value.settings.windowBounds?.width === ${native.outerWidth} && value.settings.windowBounds?.height === ${native.outerHeight})`))
     return { cssViewports: ['880x640', '1024x768', '1280x860', '1600x1000'], textScale: 2, languages: ['en', 'zh-CN'], visibleNativeAcceptance: false }
@@ -189,7 +200,7 @@ export async function exerciseMarketplace({ ui, main, renderer, feed, thorough =
 
 export async function verifyMarketplaceRestart(ui) {
   await ui.stage('marketplace-restart-retains-installed-code', async () => {
-    await ui.navigate('插件市场', 'Plugin marketplace')
+    await ui.navigate('插件', 'Plugins')
     const state = await ready(ui, '1.1.0')
     assert.ok(state.system.cpuCores > 0 && state.system.memoryTotal > 0)
     await ui.dom('restart restores installed plugin navigation', `!!${navigationEntry}`)
@@ -199,7 +210,7 @@ export async function verifyMarketplaceRestart(ui) {
     await ui.navigate('系统监控', 'System monitor')
     await ui.evaluate(`${navigationEntry}.focus()`)
     await ui.evaluate('window.pluginMarketplace.uninstall("system")')
-    await ui.dom('removing the active plugin opens the marketplace and restores focus', `!${navigationEntry} && ['插件市场','Plugin marketplace'].includes(${$('.page-heading h1')}?.textContent) && document.activeElement === ${$('.page-heading h1')}`)
+    await ui.dom('removing the active plugin opens the marketplace and restores focus', `!${navigationEntry} && ['插件','Plugins'].includes(${$('.page-heading h1')}?.textContent) && document.activeElement === ${$('.page-heading h1')}`)
     assert.equal((await ui.evaluate('window.monitor.snapshot()')).system.data, null)
     assert.equal((await ui.info()).plugins.some(plugin => plugin.id === 'system'), false)
     return { pluginRemoved: true, snapshotCleared: true, activePageReturnedToMarketplace: true }

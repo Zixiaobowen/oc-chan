@@ -18,11 +18,18 @@ export default function PluginNavigation({ plugins, page, loading, failed, navig
   useEffect(() => { if (active) setExpanded(true) }, [page, active])
 
   return <div className="plugin-navigation" role="group" aria-labelledby="plugin-navigation-title">
-    <button id="plugin-navigation-title" className={`nav-item plugin-navigation-toggle${active ? ' has-current' : ''}`}
-      aria-expanded={expanded} aria-controls="installed-plugin-navigation" onClick={() => setExpanded(value => !value)}>
-      <Puzzle trigger="none" size={18} aria-hidden="true" /><span>{t('插件', 'Plugins')}</span>
-      <ChevronRight className="plugin-navigation-chevron" trigger="none" size={14} aria-hidden="true" />
-    </button>
+    <div className="plugin-navigation-heading">
+      <button id="plugin-navigation-title" className={`nav-item${page === 'plugins' ? ' selected' : ''}${active ? ' has-current' : ''}`}
+        aria-current={page === 'plugins' ? 'page' : undefined} onClick={() => navigate('plugins')}>
+        <Puzzle trigger="none" size={18} aria-hidden="true" /><span>{t('插件', 'Plugins')}</span>
+      </button>
+      <button id="plugin-navigation-toggle" className="plugin-navigation-toggle" type="button"
+        aria-label={expanded ? t('收起已安装插件', 'Collapse installed plugins') : t('展开已安装插件', 'Expand installed plugins')}
+        title={expanded ? t('收起已安装插件', 'Collapse installed plugins') : t('展开已安装插件', 'Expand installed plugins')}
+        aria-expanded={expanded} aria-controls="installed-plugin-navigation" onClick={() => setExpanded(value => !value)}>
+        <ChevronRight className="plugin-navigation-chevron" trigger="none" size={14} aria-hidden="true" />
+      </button>
+    </div>
     <div id="installed-plugin-navigation" hidden={!expanded}>
       {plugins.length ? <ul className="plugin-navigation-list">{plugins.map(plugin => <li key={plugin.id}>
         <button className={`nav-item${page === plugin.page.id ? ' selected' : ''}`} data-plugin-page={plugin.id}
@@ -30,7 +37,7 @@ export default function PluginNavigation({ plugins, page, loading, failed, navig
           <span>{t(...plugin.page.label)}</span>
         </button>
       </li>)}</ul> : <p className="plugin-navigation-empty">{failed
-        ? t('插件状态读取失败，请到插件市场重试。', 'Could not load plugins. Retry in the marketplace.')
+        ? t('插件状态读取失败，请点击“插件”重试。', 'Could not load plugins. Open Plugins to retry.')
         : loading ? t('正在读取插件…', 'Loading plugins…') : t('暂无已安装插件', 'No installed plugins')}</p>}
     </div>
   </div>
