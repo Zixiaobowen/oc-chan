@@ -108,7 +108,7 @@ npm run dev:window
 
 Development instances use isolated settings, Cargo build directories, and authenticated Unix sockets. They do not read or overwrite the installed app's personal settings. Press Ctrl+C to exit and drain the instance. Node is used only for build and development tools; the production backend runs in Rust. See the [development guide (Chinese)](docs/development.md) for headless debugging, targeted validation, and packaging commands.
 
-After delivering a parallel task, complete [task closeout (Chinese)](docs/development.md#任务收尾): push the handoff to GitHub main, preserve required evidence outside the task directory, then run `npm run closeout:task` from a retained worktree to inspect and remove that task's temporary worktree. Uncommitted files, unreviewed ignored content, or active use block removal. The default only reports; `--apply` performs removal and retains branches.
+Task handoffs, audits, and migration experiment records stay local; `.gitignore` defines their exact scope. Public documentation, screenshots, migration interface contracts, and build-input JSON files remain tracked. Store handoffs in `docs/codex-handoffs/` and preserve required evidence outside temporary task directories. The existing [task closeout tool (Chinese)](docs/development.md#任务收尾), `npm run closeout:task`, requires a handoff already committed to remote main and cannot be used for these local records. Retain the worktree and report this limitation; do not force-add ignored files or bypass safety checks. Permission to push does not authorize cleanup.
 
 ## Documentation
 

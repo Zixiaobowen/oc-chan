@@ -1,9 +1,0 @@
-{
-  "date": "2026-11-09",
-  "scope": "migration plan and API/plugin/update contracts",
-  "functionalReview": { "agent": "RustMigrationPlanReview", "result": "correct", "openBlockers": 0 },
-  "boundaryReview": { "agent": "RustMigrationBoundaryReview", "result": "correct", "openBlockers": 0 },
-  "decision": "Proceed with implementation, beginning with real hidden WKWebView, native plugin and installation recovery probes",
-  "implementationVerified": false,
-  "runtimeVerified": false
-}

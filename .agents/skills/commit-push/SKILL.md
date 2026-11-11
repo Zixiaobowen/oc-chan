@@ -46,11 +46,11 @@ description: 用于 OC Chan 当前任务的 Git 提交、整合 main、推送 Gi
 2. 若被拒绝为 non-fast-forward，重新 fetch 并整合新提交，仅对新增影响运行必要验证，然后正常推送。权限或分支保护失败时如实报告，按保护规则提交 PR；不能绕过保护或声称 main 已更新。
 3. 推送成功后用 `gh api repos/Zixiaobowen/oc-chan/commits/main --jq .sha` 回读，与本次 HEAD 比较。若已有并行更新，核对本次提交已在远端 main 的祖先链中，不把“main 又前进了”误判为推送失败。
 4. 返回提交 SHA、GitHub 提交链接、目标分支和实际检查结果。CI 仍在运行则说“未完成”，不能将 push 成功当作 CI/安装/发布成功。
-5. 只有本地提交授权时在提交完成处停止，明确“未推送、未收尾”。推送任务继续执行下列收尾；有阻塞则报告实际阻塞，不以推送成功掩盖遗留工作。
+5. 只有本地提交授权时在提交完成处停止，明确“未推送、未收尾”。推送不包含清理授权；交付分别报告推送与收尾状态，有阻塞则报告实际原因。
 
 ## 任务收尾
 
-1. 在保留的同仓工作区运行 `npm run closeout:task -- --worktree <本任务临时工作树绝对路径> --handoff docs/codex-handoffs/<已推送的任务交接>.md`。传入一个明确目标，不全仓筛选或批量拼接目录。
+1. 任务交接保存在本地 `docs/codex-handoffs/`，按 `.gitignore` 排除，不推送 main。现有 `npm run closeout:task -- --worktree <本任务临时工作树绝对路径> --handoff docs/codex-handoffs/<任务交接>.md` 要求远端已提交的同一交接，本地记录不满足此前提：保留工作树并报告限制，不强制添加忽略文件、借用无关交接或改动安全逻辑绕过。下列步骤仅在另获清理授权且全部原有前提满足时适用；一次只处理明确目标。
 2. 核对报告里的实时远端 main、目标 HEAD、交接 blob、所有暂存/未暂存/未跟踪项、ignored 条目及在用文件。任何本地改动（包括 Markdown）都先完成对应工作；不 reset/stash/clean 让检查变绿。
 3. 对 ignored 材料逐项审阅。必要证据先在目标外保存并核验；仅对确认可丢弃的精确条目添加 `--discard <相对路径>`。不按 node_modules/target/out/release 的名字直接推断内容可删，不把 unknown 当缓存。
 4. 本任务会话和进程退出、预检无阻塞后，以相同参数加 `--apply`。命令只移除该 worktree，保留分支；目标有锁、在用、跨仓、路径身份变化或远端无法确认时必须保留，不用 `--force` 绕过。

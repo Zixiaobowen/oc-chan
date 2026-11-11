@@ -13,29 +13,14 @@ scripts/probes/wk/dist/
 /scripts/probes/wk/frontend-dist/
 /scripts/probes/wk/gen/
 
-# Keep raw fixtures and samples local; track only delivery receipts.
-/docs/rust-migration/evidence/**
-!/docs/rust-migration/evidence/comparisons-20261110-final/
-!/docs/rust-migration/evidence/full-20261110-verify-18/
-!/docs/rust-migration/evidence/notifications-20261110-verify-6/
-!/docs/rust-migration/evidence/performance-soak-20261110-3/
-!/docs/rust-migration/evidence/performance-stress-20261110-7/
-!/docs/rust-migration/evidence/release-20261110-5/
-!/docs/rust-migration/evidence/topology-20261110-verify-3/
-!/docs/rust-migration/evidence/cleanup-20261110-1.json
-!/docs/rust-migration/evidence/cleanup-20261110-2.json
-!/docs/rust-migration/evidence/comparisons-20261110-final/daily.json
-!/docs/rust-migration/evidence/comparisons-20261110-final/idle.json
-!/docs/rust-migration/evidence/comparisons-20261110-final/startup.json
-!/docs/rust-migration/evidence/delivery-lifecycle-20261110-5.json
-!/docs/rust-migration/evidence/dependency-review-20261110-3.json
-!/docs/rust-migration/evidence/fixture-lifecycle-20261110-1.json
-!/docs/rust-migration/evidence/full-20261110-verify-18/result.json
-!/docs/rust-migration/evidence/notifications-20261110-verify-6/result.json
-!/docs/rust-migration/evidence/performance-soak-20261110-3/result.json
-!/docs/rust-migration/evidence/performance-stress-20261110-7/result.json
-!/docs/rust-migration/evidence/receipt-native-final-20261110-5-narrow.png
-!/docs/rust-migration/evidence/receipt-native-final-20261110-5.json
-!/docs/rust-migration/evidence/release-20261110-5/cleanup.json
-!/docs/rust-migration/evidence/release-20261110-5/package-summary.json
-!/docs/rust-migration/evidence/topology-20261110-verify-3/result.json
+# Local task handoffs, audits, and migration experiment records.
+/docs/codex-handoffs/
+/docs/audits/
+/docs/rust-migration/evidence/
+/docs/rust-migration/plan.md
+/docs/rust-migration/plan.html
+/docs/rust-migration/implementation.html
+/docs/rust-migration/review.md
+/docs/rust-migration/review-approval.json
+/docs/rust-migration/source-snapshot.json
+# Public documentation, images, contracts, and build inputs remain tracked.

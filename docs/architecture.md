@@ -2,7 +2,7 @@
 
 [返回首页](../README.md)
 
-OC Chan使用Rust业务核心、Tauri 2桌面宿主和系统WKWebView。React、TypeScript、React Flow与按需加载的Three.js继续承担界面。核心维护共享契约、生命周期和资源预算，具体采集能力通过插件接入。工程约束见[工程规则](../AGENTS.md)，完整迁移边界和验收矩阵见[迁移方案](rust-migration/plan.md)。
+OC Chan使用Rust业务核心、Tauri 2桌面宿主和系统WKWebView。React、TypeScript、React Flow与按需加载的Three.js继续承担界面。核心维护共享契约、生命周期和资源预算，具体采集能力通过插件接入。工程约束见[工程规则](../AGENTS.md)，完整迁移边界和验收矩阵见迁移方案（本地记录：`docs/rust-migration/plan.md`，不随仓库分发）。
 
 ## 实现
 

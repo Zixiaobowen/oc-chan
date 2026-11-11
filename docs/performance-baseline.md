@@ -551,7 +551,7 @@ U-08未修改动效代码。`/tmp/oc-chan-u08-motion-evidence-20261105.json`证�
 
 本节记录独立迁移工作区的新宿主实测。上方 Electron 历史记录保留，不作为未经对齐的新实现对照。
 
-真实无头压力场景 [stress-7](rust-migration/evidence/performance-stress-20261110-7/result.json) `complete=true`、errors为空。128会话共生成2560次状态事件，1720条依次经过读取、发布、接收和React提交；合并的840条仍保留在分母，readIssues=0。已提交事件P95/P99均为119.75ms，不代表每条输入都显示过。
+真实无头压力场景 stress-7（本地记录：`docs/rust-migration/evidence/performance-stress-20261110-7/result.json`，不随仓库分发） `complete=true`、errors为空。128会话共生成2560次状态事件，1720条依次经过读取、发布、接收和React提交；合并的840条仍保留在分母，readIssues=0。已提交事件P95/P99均为119.75ms，不代表每条输入都显示过。
 
 100次并发刷新中12次成功、88次明确返回`OC_IPC_BUSY`，全部结束后下一次刷新直接成功。200次历史请求中199次因更新请求取消，最后一次完成，后续真实Hermes分页返回25条。宿主仍最多16个在途请求，普通业务最多12个，其余容量供文档控制和取消；没有提高总预算或加入重试兜底。
 
@@ -561,11 +561,11 @@ U-08未修改动效代码。`/tmp/oc-chan-u08-motion-evidence-20261105.json`证�
 
 压力5/6暴露业务突发饿死`desktop_ack`后连接持续失败，已通过控制容量预留修复；新增两项准入测试通过。持续运行初次验收还发现工具忽略Hermes每轮16条执行记录的增量上限：40条执行记录需要分批生成80个事件。工具现等待公开coverage进入observing并核对完整新增ID，再验证分页和去重；产品限额保持不变。失败原始记录全部保留。
 
-本轮设备为Apple M5 Max、18逻辑核、128GiB内存，macOS27.2（26B123），Node22.23.4，交流供电。[soak-3](rust-migration/evidence/performance-soak-20261110-3/result.json)实际测量362.90秒，两个压缩阶段，`complete=true`、errors为空；不是两小时或24小时。稳定段分别5088/5056个计划事件，read/publish/receive/commit全部对应，读取错误0；提交P95/P99分别285/313.5ms、191/211.75ms，均在350/500ms门限内。
+本轮设备为Apple M5 Max、18逻辑核、128GiB内存，macOS27.2（26B123），Node22.23.4，交流供电。soak-3（本地记录：`docs/rust-migration/evidence/performance-soak-20261110-3/result.json`，不随仓库分发）实际测量362.90秒，两个压缩阶段，`complete=true`、errors为空；不是两小时或24小时。稳定段分别5088/5056个计划事件，read/publish/receive/commit全部对应，读取错误0；提交P95/P99分别285/313.5ms、191/211.75ms，均在350/500ms门限内。
 
 持续场景完成4批160条真实execution，生成320个新失败事件、8页查询，另有界面原生分页、重复刷新通知去重、插件停启、会话轮换、锁库与突发后恢复。宿主后代RSS稳定段采样最大170.98/182.22MiB；CPU只有73/15个有效区间，仍标记insufficient。全程363次资源采样、时钟缺口0；短命生命周期及系统枚举权限缺口保留，不能推导完整应用峰值、独占XPC成本或24h无泄漏。退出documents、requests和所有当前资源预留为0。
 
-最终同负载顺序对照：[启动](rust-migration/evidence/comparisons-20261110-final/startup.json)、[空闲](rust-migration/evidence/comparisons-20261110-final/idle.json)、[日常](rust-migration/evidence/comparisons-20261110-final/daily.json)。每组均先运行冻结Electron基准，再运行Rust候选，双方complete=true；夹具实现、种子、实际进程/会话发现、设置、CSS视口及已执行负载逐项相同。源清单分别313/571项；生成证据目录在枚举前排除，8192项源码预算未变，全部原始证据保留。
+最终同负载顺序对照：启动（本地记录：`docs/rust-migration/evidence/comparisons-20261110-final/startup.json`，不随仓库分发）、空闲（本地记录：`docs/rust-migration/evidence/comparisons-20261110-final/idle.json`，不随仓库分发）、日常（本地记录：`docs/rust-migration/evidence/comparisons-20261110-final/daily.json`，不随仓库分发）。每组均先运行冻结Electron基准，再运行Rust候选，双方complete=true；夹具实现、种子、实际进程/会话发现、设置、CSS视口及已执行负载逐项相同。源清单分别313/571项；生成证据目录在枚举前排除，8192项源码预算未变，全部原始证据保留。
 
 | 日常32会话、4实际进程的观测 | Electron基准 | Rust候选 |
 | --- | ---: | ---: |
