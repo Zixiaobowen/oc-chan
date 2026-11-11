@@ -64,3 +64,5 @@ env PATH="/Users/zvf003/.cargo/bin:$PATH" npm run smoke:renderer -- --scenario s
 本次子代理仅完成修改，未运行build/test/lint/formatter、安装、提交。以上新断言尚未执行，前文通过回执属于修改前版本。主代理最窄验证为 `npm run typecheck` 和 `npm run smoke:renderer -- --scenario sidebar --out <新目录>`；原生窗口可见截图再确认字标/红绿灯对齐。本次已读取impeccable context/layout/craft-floor，按明确委派直接推导窄范围布局，未新增视觉世界或子代理；检测器按禁止子代理验证的任务边界留给主代理。
 
 主代理验证：类型检查通过；`/tmp/oc-chan-titlebar-brand-diagnosed-20261111/result.json` 为 `complete:true, errors:[]`，已查看重启截图，品牌位于顶部，菜单从40px开始，设备块移除且设置贴底。首次 `/tmp/oc-chan-titlebar-brand-20261111` 的六组合对齐通过，但后续导航click缺目标且失败诊断被command group EPERM覆盖；补充精确click表达式及保留原错误的诊断后同场景通过。首次缺目标的具体原因未确认，不将诊断补强称为产品修复。仅本次布局验收通过，不将采集来源错误当作已修复。
+
+品牌/设备块修改已提交 `eaf3db3b135acbedb7746a585c079a5fc3864b52`，GitHub main回读一致。正式安装成功，PID11320；已查看可见窗口1808截图 `/tmp/oc-chan-brand-installed-20261111.png`，OC Chan字标与按钮/红绿灯同一中心线，收起顶栏未遮挡。展开布局和设备块删除由真实WK截图与定向场景证明。系统监控OC_PLUGIN_TRUST仍存在，未在本次布局任务修复。云端CI尚未完成；此交接补记不影响已审阅的中英文README。
