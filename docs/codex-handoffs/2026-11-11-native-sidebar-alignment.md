@@ -80,3 +80,5 @@ env PATH="/Users/zvf003/.cargo/bin:$PATH" npm run smoke:renderer -- --scenario s
 已修复 `crates/oc-core/src/io.rs` 的macOS取消边界：仅EPERM后使用有界256项原生枚举与包含zombie的状态查询，确认未回收leader仍在原组、两次成员一致且全员zombie才认为终止完成；真实权限错误、活成员、枚举不完整或查询失败仍报错。新增真实进程回归覆盖僵尸组取消/回收和仍存活后代清理。`cargo test -p oc-core io::tests::command_` 实际5项通过；未运行全仓测试。完整sidebar验收正在重新执行。
 
 最终 `/tmp/oc-chan-vector-titlebar-fixed-20261111/result.json` 返回 `complete:true, errors:[]`，完整导航、窄窗、字号、重启恢复与Logo几何验收通过，已查看重启截图。截图中Tern inspect采集不可用提示仍存在，不属于本次修复；未宣称所有来源健康。中英文README同步14px矢量Logo描述。未测长时间资源压力及硬件动画帧率。下一步提交推送本次变更并执行已授权本机安装；恢复入口为此handoff与上述证据目录。
+
+交付完成：`c7ce3e6f93c8293c2a684a8f096a78af52b202fb` 已推送GitHub main并回读一致。`npm run install:local` 成功更新 `/Applications/OC Chan.app`，安装器真实React/IPC/采集/历史就绪验证通过，PID65580；没有额外开启可见开发窗口。Logo视觉证据来自上述真实WK验收截图，本次未重新拍摄正式可见窗口；安装就绪不等同所有采集来源无错误。后续如需继续，从此工作区与handoff恢复；不修改原oc-chan工作区，不清理其它任务或个人数据。
