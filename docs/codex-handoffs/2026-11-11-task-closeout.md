@@ -71,3 +71,26 @@
 - 用户进一步明确邮箱为 `2549863672@qq.com`。共用仓库本地配置与项目提交技能已统一为 `Zixiaobowen <2549863672@qq.com>`，覆盖助手此前选择的 GitHub noreply 地址，适用于 oc-chan 及其 worktree；不修改全局配置或其他仓库。
 - `git var GIT_AUTHOR_IDENT` 与 `git var GIT_COMMITTER_IDENT` 均已返回上述身份。用户随后明确授权修正本项目历史中的 bowen.sun 记录；历史身份校正单独保留提交映射和文件树验证证据，不将这次授权泛化为今后的任意强推权限。
 - 本次仅修正提交元数据配置与项目文档；中英文 README 已复核，无需更新，不重复应用测试或安装。
+
+## 用户授权的历史身份校正
+
+- 用户明确声明本项目提交均由自己完成，要求修正 bowen.sun 记录，并指定 `Zixiaobowen <2549863672@qq.com>`；该授权仅适用于本次身份历史重写。
+- 仓库仍为 `Zixiaobowen/oc-chan`，保留工作区 `/Users/zvf003/ZStack/oc-chan-main-menu-fix-20261110`，分支 `chore/task-closeout-20261111`。共用仓库本地身份配置已生效；项目 `.agents/skills/commit-push/SKILL.md` 已同步 QQ 邮箱，未改全局身份。
+- 重写前先整合并行任务的最新 main，再以 `[skip ci]` 提交本任务邮箱规则。隔离镜像位于 `/Users/zvf003/tmp/oc-chan-identity-20261111-wn8lor2a/rewritten.git`，未在用户工作区运行 filter-repo、reset、clean 或 checkout。
+- 使用 `uv tool run --from git-filter-repo==2.47.0 git-filter-repo` 和精确 mailmap，只统一公司邮箱、原 noreply 地址及 QQ 邮箱对应的个人姓名。保留提交说明、编码、日期、空提交与合并拓扑，不添加 replace refs。
+- 共验证 98 个本地可达提交：67 条作者记录、63 条提交者记录修正，98 个 SHA 改变。每条新旧提交的 tree、message、时间及映射后的父提交顺序均一致。4 个 GitHub 合并提交保留 `GitHub <noreply@github.com>` 提交者；重写后不能沿用旧对象的 4 个签名，旧签名保留于备份对象。
+- `git bundle verify before.bundle`、隔离镜像 `git fsck --connectivity-only --no-reflogs --no-dangling`、逐提交原始对象校验均通过；未运行应用测试、构建或安装，因为应用文件树未改变。
+- 以 `git push --atomic` 配合每个远端引用的精确 `--force-with-lease=<ref>:<old-sha>`，一次更新 main 与 5 个发布标签。远端 main 从 `bedb252c69e561dbd7b854bd711bf98d45b6334e` 映射到 `24f07b529458c96f7cbbfd56e4c80313c3735490`；`git ls-remote` 已逐项确认 6 个目标引用。标签名称及安装包附件不变，名称内旧短 SHA 是原发布标识。
+- GitHub API 已确认该重写主线上的 97 个提交，作者姓名、邮箱及账号归属分别全部为 `Zixiaobowen`、`2549863672@qq.com`、`Zixiaobowen`。本条记录之后的回执提交使用同一身份。
+- 本地导入新对象后，用带旧值校验的 `git update-ref --stdin` 事务映射 41 个引用。10 个现存工作树的 index SHA256、porcelain 状态及未提交 diff SHA256 均保持一致；1 个原有失效登记保持原状。未删除分支、目录、日志或旧对象，未把其他分支前移到最新 main。
+- Build macOS workflow `406618753` 在重写窗口暂停，旧历史 run `42966224739` 已确认取消；完成后 workflow 回读为 `active`。本次未重新运行该构建或发布新版本，不把历史校验当作云端构建通过。
+- 已确认 GitHub 仍保留 `refs/pull/1/head` 至 `refs/pull/4/head` 的旧 SHA。这些是 GitHub 管理的只读 PR 引用，不能通过普通 Git 推送修改；旧提交页面、PR 档案及本地 reflog 中可能仍看到旧身份，不宣称旧对象已从托管平台物理删除。
+- 仓库内持久映射：[2026-11-11-git-identity-commit-map.tsv](./2026-11-11-git-identity-commit-map.tsv)。隔离目录内另存 `before.bundle`、`before.json`、`verification.json`、`remote-push.txt`、`local-application.json`、`github-verification.json`；原始证据与 Git 备份保留，不纳入普通 worktree 清理。
+
+### 历史校正后的恢复步骤
+
+1. 后续工作以当前 GitHub main 为基线；本机已注册工作树的分支已按映射迁移，先查看自己的实际未提交改动，不做硬重置。
+2. 查阅旧交接、安装包或 CI 日志中的 SHA 时，使用上述 TSV 对照新 SHA；其他电脑的旧克隆不可将旧历史直接合并或强推回来。
+3. 如需验收后续代码改动，按对应任务运行定向检查；被取消的旧构建未自动重跑，发布需按当前任务授权另行处理。
+
+恢复提示：继续 OC Chan 开发前读取本交接的历史身份校正段及 SHA 映射。Git 身份固定为 Zixiaobowen <2549863672@qq.com>，已修正 main、5 个标签及本地引用；保留所有用户未提交改动与备份。不要重复重写历史、恢复公司邮箱或删除只读 PR 的历史材料。
