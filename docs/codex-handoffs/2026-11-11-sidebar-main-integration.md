@@ -61,13 +61,15 @@ npm run smoke:renderer -- --scenario sidebar --out /tmp/oc-chan-sidebar-20261111
 - 首次真实 WK 场景在拖动阈值处失败；截图显示260px未移动。根因为脚本向原生驱动发送 `move`，对应无按键 `NSEventTypeMouseMoved`。已改成 `drag` 对应 `NSEventTypeLeftMouseDragged`，保留63/64px边界断言并新增拖动已开始断言。产品代码未为此改变。
 - 宿主不支持对 `settings_update` 使用 fault-command；改用既有隔离profile写拒绝helper，finally恢复权限，保留回滚/重试断言。
 - `npm run smoke:renderer -- --scenario sidebar --out /tmp/oc-chan-sidebar-20261111-resumed`：`complete:true`、`errors:[]`。真实WK导航、拖动阈值、失败回滚重试、紧凑菜单及同profile重启通过，已查看收起布局截图。测试进程与实例清理由runner确认。未进行可见动画/原生快捷键/VoiceOver及性能前后对比验收，不宣称这些通过。
-- 已快进整合远端 `18a2e94`（仅安装证据文档）；推送和安装待后续回执。
+- 已快进整合远端 `18a2e94`（仅安装证据文档）。功能提交 `4c8f8edff641754e5b6803018df2face3d32fec4` 已正常推送 GitHub main，GitHub API 回读同SHA。
+- `env PATH="/Users/zvf003/.cargo/bin:$PATH" npm run install:local` 成功。生产包安装至 `/Applications/OC Chan.app`，真实React、IPC、Agent/任务/事件采集及Hermes历史就绪，PID 40166。版本字段仍为0.1.0，本次内容以提交SHA识别。系统插件保持未安装状态。
+- 安装证据：`release/tauri/installations/installation-lYqYjB/installed.json`，同目录 `oc-local-install-cc93ae52-4dde-4e78-bbf6-767c41461969/receipt.json`。仅安装器清理本次构建来源app；个人数据、原工作区及所有工作树保留。
+- 中英文README均已审阅并同步侧栏操作。最终证据补记仅修改本交接，不影响README事实，无需再次改写。云端CI另行报告，不以安装通过代替CI。
 
 ## 恢复提示与下一步
 
 在 `/Users/zvf003/ZStack/oc-chan-sidebar-main-20261111` 的 `feat/sidebar-main-20261111` 继续；用户已授权推送 GitHub main 并更新本机应用。保留原混合工作区及其他工作树。
 
-1. 收取 sidebar smoke 最终结果并查看截图，记录实际验收边界。
-2. 显式暂存本任务文件，提交并正常推送 `HEAD:main`，用 GitHub API 回读。
-3. 用上述 PATH 执行 `npm run install:local`，核对真实就绪与安装回执。
-4. 补充交接与最终回执；不清理工作树、不发布标签。
+1. 如需继续视觉验收，在正式应用核对原生快捷键和可见动画；当前不宣称完成。
+2. 后续修改以最新远端main为基线，保留原目录混合工作。
+3. 查看GitHub本次提交的CI结果；本地定向验收和安装回执已完成。
