@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { constants } from 'node:fs'
 import { mkdir, open, writeFile } from 'node:fs/promises'
-import { resolve, join } from 'node:path'
+import { basename, resolve, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { packageReleaseInfo, publicationInfo } from './release-config.mjs'
 import { stableMetadata } from './dist.mjs'
@@ -60,6 +60,14 @@ export async function prepareRelease({ version, tag, inputs, output, env = proce
     if (sums.get(name) !== digest.sha256) throw new Error(`SHA256 mismatch: ${name}`)
     if (name === declaration.name && (declaration.size !== digest.size || declaration.sha512 !== digest.sha512)) throw new Error('Update ZIP size or SHA512 mismatch')
     assets.push({ name, ...digest })
+  }
+  const manifest = JSON.parse(readBounded(join(directory, 'package-manifest-arm64.json'), 16 * 1024 * 1024).toString('utf8'))
+  if (manifest?.schema !== 2 || manifest.arch !== 'arm64' || manifest.version !== version || !keysAre(manifest.artifacts, ['zip', 'dmg'])) throw new Error('Invalid schema2 arm64 package artifact manifest or version')
+  for (const asset of assets) {
+    const extension = asset.name.endsWith('.zip') ? 'zip' : 'dmg', entry = manifest.artifacts[extension]
+    if (!entry || typeof entry.path !== 'string' || basename(entry.path) !== asset.name) throw new Error(`Package manifest artifact filename mismatch: ${asset.name}`)
+    if (entry.bytes !== asset.size) throw new Error(`Package manifest size mismatch: ${asset.name}`)
+    if (entry.digest !== (extension === 'zip' ? asset.sha512 : asset.sha256)) throw new Error(`Package manifest ${extension === 'zip' ? 'SHA512' : 'SHA256'} mismatch: ${asset.name}`)
   }
   const zip = assets.find(asset => asset.name === declaration.name), canonical = stableMetadata(version, { bytes: zip.size, digest: zip.sha512 })
   // All declarations and input digests are checked before the destination exists.

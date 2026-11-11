@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { statSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
@@ -98,7 +99,8 @@ function github(options = {}) {
       for (const path of args.slice(3)) {
         const name = basename(path)
         if (release.assets.some(asset => asset.name === name)) return failure('Asset already exists')
-        release.assets.push({ name, size: statSync(path).size, state: 'uploaded' })
+        const content = readFileSync(path)
+        release.assets.push({ name, size: content.length, state: 'uploaded', digest: `sha256:${createHash('sha256').update(content).digest('hex')}` })
         if (options.uploadFailure) return failure('Upload interrupted by network failure')
       }
       options.uploaded?.(release, state)
@@ -128,14 +130,16 @@ async function fixture(t, version = '1.2.3', serverOptions = {}, previewEvent) {
   const info = publicationInfo(version, env)
   const names = ['SHA256SUMS.txt', ...(!info.prerelease ? [info.metadataName] : []), `OC-Chan-${version}-mac-arm64.dmg`, `OC-Chan-${version}-mac-arm64.zip`]
   const sizes = new Map()
+  const digests = new Map()
   for (const [index, name] of names.entries()) {
     const content = Buffer.from(`release fixture ${version} ${index} ${name}\n`)
     await writeFile(join(directory, name), content)
     sizes.set(name, content.length)
+    digests.set(name, `sha256:${createHash('sha256').update(content).digest('hex')}`)
   }
   const remote = github({ tags: info.prerelease ? [] : [info.tag], ...serverOptions })
   const options = { directory, version, tag: info.tag, env }
-  return { remote, options, info, sizes, publish: () => publishRelease(options, remote.run) }
+  return { remote, options, info, sizes, digests, publish: () => publishRelease(options, remote.run) }
 }
 
 function assertPublic(fixture, latestTag) {
@@ -144,6 +148,7 @@ function assertPublic(fixture, latestTag) {
   assert.equal(release.prerelease, fixture.info.prerelease)
   assert.equal(release.tag_name, fixture.info.tag)
   assert.deepEqual(new Map(release.assets.map(asset => [asset.name, asset.size])), fixture.sizes)
+  assert.deepEqual(new Map(release.assets.map(asset => [asset.name, asset.digest])), fixture.digests)
   assert.ok(release.assets.every(asset => asset.state === 'uploaded'))
   assert.equal(fixture.remote.latest?.tag_name ?? null, latestTag)
   const events = fixture.remote.events
@@ -165,6 +170,26 @@ for (const preview of [false, true]) test(`${preview ? 'preview' : 'stable'} res
   assert.ok(events.includes(`GET /releases/${release.id}`))
   assert.ok(!events.includes(`GET /releases/tags/${f.info.tag}`))
 })
+
+for (const preview of [false, true]) for (const stage of ['draft', 'published']) for (const corruption of ['same-size content', 'missing digest']) {
+  test(`${preview ? 'preview' : 'stable'} ${stage} rejects ${corruption} digest without rollback`, async t => {
+    const corrupt = release => {
+      const asset = release.assets[0]
+      if (corruption === 'missing digest') delete asset.digest
+      else asset.digest = `sha256:${createHash('sha256').update(Buffer.alloc(asset.size)).digest('hex')}`
+    }
+    const f = await fixture(t, '1.2.3', stage === 'draft' ? { uploaded: corrupt } : { publishedReadback: corrupt }, preview ? 'push' : undefined)
+    await assert.rejects(f.publish(), error => {
+      assert.match(error.message, new RegExp(`verifying ${stage}.*SHA256 digest mismatch.*Remote state was not rolled back`))
+      return true
+    })
+    const release = f.remote.releases.get(f.info.tag)
+    assert.deepEqual(new Map(release.assets.map(asset => [asset.name, asset.size])), f.sizes)
+    assert.equal(release.draft, stage === 'draft')
+    assert.equal(f.remote.events.filter(event => event === `edit ${f.info.tag}`).length, stage === 'draft' ? 0 : 1)
+    assert.ok(f.remote.events.every(event => !event.startsWith('delete ')))
+  })
+}
 
 for (const [name, payload, message] of [
   ['resolver errors with null data', { data: { repository: { release: null } }, errors: [{ message: 'Forbidden' }] }, /GraphQL release lookup failed/],

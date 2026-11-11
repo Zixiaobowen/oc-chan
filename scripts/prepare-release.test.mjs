@@ -15,18 +15,25 @@ async function fixture(t, version = '0.2.0', preview = false) {
   const directory = join(root, 'arm64'); await mkdir(directory)
   const env = preview ? { ...previewEnv } : { GITHUB_REPOSITORY: releaseRepository, GITHUB_EVENT_NAME: 'push', GITHUB_REF: `refs/tags/v${version}` }
   const info = publicationInfo(version, env), options = { version, tag: info.tag, env, inputs: { arm64: directory }, output: join(root, 'output'), info }, sums = []
+  const manifest = { schema: 2, arch: 'arm64', version, artifacts: {} }
   for (const extension of ['zip', 'dmg']) {
     const name = `OC-Chan-${version}-mac-arm64.${extension}`, content = Buffer.from(`release unit fixture ${version} ${extension}`)
     await writeFile(join(directory, name), content)
+    manifest.artifacts[extension] = { path: `/build/runner/release/${name}`, bytes: content.length, digest: createHash(extension === 'zip' ? 'sha512' : 'sha256').update(content).digest(extension === 'zip' ? 'base64' : 'hex') }
     sums.push(`${createHash('sha256').update(content).digest('hex')}  ./${name}`)
     if (extension === 'zip') await writeFile(join(directory, info.metadataName), JSON.stringify(stableMetadata(version, { bytes: content.length, digest: createHash('sha512').update(content).digest('base64') })))
   }
   await writeFile(join(directory, 'SHA256SUMS.txt'), `${sums.join('\n')}\n`)
+  await writeFile(join(directory, 'package-manifest-arm64.json'), JSON.stringify(manifest))
   return options
 }
 async function changeMetadata(options, change) {
   const filename = join(options.inputs.arm64, options.info.metadataName), metadata = JSON.parse(await readFile(filename, 'utf8'))
   change(metadata); await writeFile(filename, JSON.stringify(metadata))
+}
+async function changeManifest(options, change) {
+  const filename = join(options.inputs.arm64, 'package-manifest-arm64.json'), manifest = JSON.parse(await readFile(filename, 'utf8'))
+  change(manifest); await writeFile(filename, JSON.stringify(manifest))
 }
 test('publishes one schema2 ZIP declaration and both bounded installer attachments', async t => {
   const options = await fixture(t), metadata = await prepareRelease(options)
@@ -78,6 +85,34 @@ for (const [name, mutate, expected] of invalidCases) test(`rejects ${name} befor
   const options = await fixture(t); await mutate(options)
   await assert.rejects(prepareRelease(options), expected); await assert.rejects(stat(options.output), { code: 'ENOENT' })
 })
+const invalidManifestCases = [
+  ['missing report', options => rm(join(options.inputs.arm64, 'package-manifest-arm64.json')), /ENOENT/],
+  ['old schema', options => changeManifest(options, data => { data.schema = 1 }), /schema2/],
+  ['wrong architecture', options => changeManifest(options, data => { data.arch = 'x64' }), /arm64/],
+  ['wrong version', options => changeManifest(options, data => { data.version = '9.9.9' }), /version/],
+  ['missing artifacts', options => changeManifest(options, data => { delete data.artifacts }), /artifact manifest/],
+  ['old artifact array', options => changeManifest(options, data => { data.artifacts = Object.values(data.artifacts) }), /artifact manifest/],
+  ['unexpected attachment', options => changeManifest(options, data => { data.artifacts.exe = data.artifacts.zip }), /artifact manifest/],
+  ['oversized report', options => writeFile(join(options.inputs.arm64, 'package-manifest-arm64.json'), ' '.repeat(16 * 1024 * 1024 + 1)), /budget/],
+]
+for (const extension of ['zip', 'dmg']) {
+  invalidManifestCases.push(
+    [`missing ${extension} declaration`, options => changeManifest(options, data => { delete data.artifacts[extension] }), /artifact manifest/],
+    [`null ${extension} declaration`, options => changeManifest(options, data => { data.artifacts[extension] = null }), /filename mismatch/],
+    [`wrong ${extension} filename`, options => changeManifest(options, data => { data.artifacts[extension].path = `/build/runner/OC-Chan-${options.version}-mac-x64.${extension}` }), /filename mismatch/],
+    [`missing ${extension} path`, options => changeManifest(options, data => { delete data.artifacts[extension].path }), /filename mismatch/],
+    [`wrong ${extension} size`, options => changeManifest(options, data => { data.artifacts[extension].bytes++ }), /size mismatch/],
+    [`missing ${extension} digest`, options => changeManifest(options, data => { delete data.artifacts[extension].digest }), /SHA(?:256|512) mismatch/],
+    [`wrong ${extension} digest`, options => changeManifest(options, data => { data.artifacts[extension].digest = 'incorrect' }), /SHA(?:256|512) mismatch/],
+  )
+}
+for (const preview of [false, true]) {
+  for (const [name, mutate, expected] of invalidManifestCases) test(`${preview ? 'preview' : 'stable'} rejects package manifest ${name} before creating output`, async t => {
+    const options = await fixture(t, '0.2.0', preview); await mutate(options)
+    await assert.rejects(prepareRelease(options), expected)
+    await assert.rejects(stat(options.output), { code: 'ENOENT' })
+  })
+}
 test('preview still rejects tampered metadata SHA512 before creating output', async t => {
   const options = await fixture(t, '0.2.0', true)
   await changeMetadata(options, data => { data.assets[0].sha512 = 'incorrect' })

@@ -89,6 +89,8 @@ OC Chan 只读观察上游 Agent 和任务，不执行定时任务、不终止 A
 
 本地和预览版采用 ad-hoc 签名，不等于 Developer ID 签名或 Apple 公证。正式版使用与包版本一致的 `vX.Y.Z` 标签，并要求 Apple 签名与公证密钥；正式签名、公证及签名版本的原地更新仍待验收。应用内更新仅适用于具备 Developer ID 签名的安装版。详见[发布与更新条件](docs/distribution.md#应用内更新)。
 
+在设置的“应用更新”中，点击“发行说明与下载”可打开 GitHub Releases。开发和未签名版本会提示从该页面下载并手动安装。
+
 ## 开发
 
 使用 **Rust 1.99（仓库固定工具链）、Node.js 22.12+（建议 24）**、npm，以及包含 macOS 26 或更新 SDK 的 Xcode Command Line Tools。以下命令在仓库根目录执行；默认启动真实的无头 Tauri / WKWebView，不显示桌面窗口。自动化原生输入验收需要 macOS 26+：

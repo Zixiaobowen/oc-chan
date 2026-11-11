@@ -89,6 +89,8 @@ Each push to `main` starts a GitHub Actions build. After the checks pass, it pub
 
 Local and preview builds use ad-hoc signing, which is not Developer ID signing or Apple notarization. Stable releases require a `vX.Y.Z` tag matching the package version and Apple signing and notarization secrets. Formal signing, notarization, and in-place updates for signed builds still require validation. In-app updates apply only to installed builds signed with Developer ID. See [release and update requirements (Chinese)](docs/distribution.md#应用内更新).
 
+In Settings → App updates, choose **Release notes and downloads** to open GitHub Releases. Development and unsigned builds explain how to download from that page and install manually.
+
 ## Development
 
 Use **Rust 1.99 (pinned by the repository), Node.js 22.12+ (24 recommended)**, npm, and Xcode Command Line Tools with the macOS 26 SDK or later. Run these commands from the repository root. The default starts a real headless Tauri / WKWebView instance without a desktop window. Automated native input validation requires macOS 26 or later:

@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { constants } from 'node:fs'
 import { open, opendir } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -94,7 +95,16 @@ export async function publishRelease({ directory, version, tag, env = process.en
     try {
       const details = await file.stat()
       if (!details.isFile() || !Number.isSafeInteger(details.size) || details.size <= 0) throw new Error(`Invalid release asset: ${name}`)
-      expected.set(name, details.size)
+      const hash = createHash('sha256')
+      let size = 0
+      for await (const chunk of file.createReadStream({ autoClose: false, highWaterMark: 64 * 1024 })) {
+        size += chunk.length
+        if (size > details.size) throw new Error(`Release asset grew during bounded read: ${name}`)
+        hash.update(chunk)
+      }
+      const after = await file.stat()
+      if (size !== details.size || after.size !== details.size || after.dev !== details.dev || after.ino !== details.ino || after.mtimeMs !== details.mtimeMs || after.ctimeMs !== details.ctimeMs) throw new Error(`Release asset changed during read: ${name}`)
+      expected.set(name, { size, digest: `sha256:${hash.digest('hex')}` })
     } finally {
       await file.close()
     }
@@ -116,7 +126,9 @@ export async function publishRelease({ directory, version, tag, env = process.en
     }
     const remaining = new Map(expected)
     for (const asset of release.assets) {
-      if (!asset || !remaining.has(asset.name) || remaining.get(asset.name) !== asset.size || asset.state !== 'uploaded') throw new Error(`Incomplete release upload: ${asset?.name}`)
+      const local = remaining.get(asset?.name)
+      if (!local || local.size !== asset.size || asset.state !== 'uploaded') throw new Error(`Incomplete release upload: ${asset?.name}`)
+      if (asset.digest !== local.digest) throw new Error(`Release asset SHA256 digest mismatch: ${asset.name}`)
       remaining.delete(asset.name)
     }
     if (remaining.size) throw new Error('Release is missing assets')
