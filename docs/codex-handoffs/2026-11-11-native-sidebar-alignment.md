@@ -48,3 +48,7 @@ env PATH="/Users/zvf003/.cargo/bin:$PATH" npm run smoke:renderer -- --scenario s
 输出目录必须未存在。补充上述原生中心断言，覆盖展开/收起、880×640与1280×860、三档字号。无头结果只能证明同实例原生几何与DOM关系；安装后仍须可见窗口截图确认原生红绿灯与图标在同一水平线。
 
 实际结果：`npm run typecheck` 通过；`sidebar` 场景证据 `/tmp/oc-chan-native-alignment-plugins-20261111` 与 `marketplace` 场景证据 `/tmp/oc-chan-unified-plugins-marketplace-20261111` 均返回 `complete:true, errors:[]`。三档字号×展开/收起的原生中心断言通过；统一插件入口及安装、禁用、卸载、重启导航通过。已审阅并同步中英文README及开发文档。提交推送与安装回执待补记。
+
+功能提交 `e6a26d880621bf37d300390f27336a32f36b3804` 已推送GitHub main并回读确认；`npm run install:local` 成功，安装器报告真实React/IPC/采集/历史就绪，PID82717。正式应用窗口1693可见截图 `/tmp/oc-chan-installed-alignment-visible-20261111.png` 已查看：侧栏图标与原生红绿灯同一水平线，一级导航仅一个「插件」。首次隐藏窗口截图只有空白背景，不作为验收证据。
+
+可见窗口同时发现系统监控插件 `OC_PLUGIN_TRUST: Installed bundled package id is not trusted by this build`，采集处于停用。安装回执不等于该插件健康；当前任务未变更插件信任/重新安装插件，后续应单独定位，不能宣称所有插件正常。原工作区和个人数据保留。此补记只改handoff，已核对中英文README无需再改。
