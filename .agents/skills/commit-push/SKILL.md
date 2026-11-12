@@ -12,19 +12,19 @@ description: 用于 OC Chan 当前任务的 Git 提交、整合 main、推送 Gi
 - 本项目中，“提交到 main”“提交到 GitHub”“推送”“提交并推送”均完成 GitHub main 推送与回读，不停在本地提交；这是本次用户对“提交到 main”的明确纠正。“commit 就好”“本地提交”只做本地提交；用户显式指定其他分支时遵从。已授权的推送直接继续，不重复询问。
 - 用户显式调用 `commit-push`，表示提交并推送当前任务；目标未指定时使用本项目 `main`。若同条指令明确限制为本地提交，以该限制为准。
 - 仅提交当前任务已明确涉及的文件和改动块。请求不授予全量提交其他未完成任务的权限。
-- 提交与推送不包含标签、Release、安装、部署、强推、删除分支、删除正式应用或归档会话。任务收尾按项目 `AGENTS.md` 的明确范围执行：本任务自行创建并登记为临时的 worktree 在完成交付后收尾；已有目录、其他任务或用户要求保留的目录不能自动纳入。`push:main` 的应用清理不代替 `closeout:task`，先核对所用入口的实际副作用。
+- 提交与推送均不包含标签、Release、安装、部署、强推、删除分支、删除应用、清理工作树或归档会话。不要调用捆绑这些动作的脚本；尤其先检查 `npm run push:main` 对应脚本，不因名字像推送就直接执行。
 
 ## 核对现场
 
 1. 查看当前分支、暂存区、未提交改动、远端和工作树：`git status --short --branch`、`git diff --cached`、`git remote -v`、`git worktree list --porcelain`。读取当前任务的实际 diff；用户原有暂存块也要保留。
-2. 本项目用户指定 GitHub 身份及 Git 作者、提交者为 `Zixiaobowen <2549863672@qq.com>`。使用仓库本地 `user.name` / `user.email` 覆盖全局公司身份，现场用 `git var GIT_AUTHOR_IDENT` 与 `git var GIT_COMMITTER_IDENT` 核对；不修改其他仓库的全局默认。GitHub 操作用 `gh`，用 `gh api user --jq .login` 确认账号为 `Zixiaobowen`；预期仓库 `Zixiaobowen/oc-chan`，以现场 remote 核验，不擅自更换 remote 或认证身份。
+2. Git 作者固定为 `bowen.sun <bowen.sun@zstack.io>`，现场核对。GitHub 操作用 `gh`，用 `gh api user --jq .login` 确认账号为 `Zixiaobowen`；预期仓库 `Zixiaobowen/oc-chan`，以现场 remote 核验，不擅自更换 remote 或认证身份。
 3. 推送任务应在整理提交之前执行 `git fetch origin main`，比较本地目标与 `origin/main`；不要等提交完才发现远端已发生运行时迁移。
 4. 本地 main 可能过期；当前功能分支还可能带有无关历史提交。明确目标基线与待迁移的任务改动，不能将整个分支直接合入 main 来省事。
 
 ## 隔离与整合
 
 - 当前工作区混有其他任务时，在独立工作树处理。新建且计划收尾的临时 worktree 一律从 `origin/main` 使用唯一命名的任务/集成分支，通过 `HEAD:main` 推送；只有计划长期保留的工作区可以检出 main/master。不移动或重置他人的工作树。
-- 新建临时工作树时，在本任务交接中记录绝对路径、用途和完成后清理约定；安排一个保留的工作区执行最终收尾，不删除当前命令/会话所在目录。
+- 新建工作树时，在本任务本地交接中记录绝对路径、用途及保留状态；没有明确清理授权不删除或归档工作树。
 - 从当前任务差异提取补丁或选择任务提交；混合文件只带相应 hunk。不得 `git add .`、`git add -A`、全量 stash/reset 或覆盖整个混合文件。
 - 新任务改动优先基于刚 fetch 的远端 main；若已有未推送任务提交，可在自有干净工作树 rebase 到 `origin/main`。不得重写已共享历史或强推。
 - 冲突逐项阅读双方意图，保留远端的新功能、契约与架构。独立新增内容可以合并；替代实现不能简单拼接双方。
@@ -37,7 +37,7 @@ description: 用于 OC Chan 当前任务的 Git 提交、整合 main、推送 Gi
 - rebase 后代码、调用方或运行时有相关变化，重新验证受影响路径。UI 用本项目当前的独立无头真实宿主；不得抢焦点、开启可见窗口或使用个人应用数据。
 - 文档/skill 单独改动检查格式、引用路径和可发现性即可，不为此跑应用全套测试。skill 的项目目录采用 `.agents/skills/<name>/SKILL.md`，必须有 name/description；可用当前 OMP 的 skill list/read 接口核验加载。
 - 错误保留原始证据；修复真实原因，不吞错、不跳过失败断言。环境缺失则明确阻塞及已尝试项，不声称验证成功。
-- 在最后一次任务提交前更新仓库 handoff，记录本任务 worktree 路径、实现与验证、提交/推送/安装/发布的独立状态、原始证据位置和保留方式。必要脱敏摘要应入库；原始日志、截图、源码快照、ZIP/DMG 在删除前保存到任务目录之外并核验内容。不要把未跟踪交接或 ignored 材料遗留在准备删除的工作树中。
+- 在最后一次任务提交前更新本地 handoff，记录本任务 worktree 路径、实现与验证、提交/推送/安装/发布的独立状态、原始证据位置和保留方式。交接按 `.gitignore` 排除；清理需另获授权，必要材料在删除前保存到任务目录之外并核验内容。
 - 显式暂存任务路径/改动块，检查暂存范围、提交说明与作者后提交。标题描述最终行为，例如 `fix: keep agent context menu open after right click`。不同目标适合独立提交时分开提交。
 
 ## 推送与回执
