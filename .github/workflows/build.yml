@@ -43,23 +43,13 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      - name: Preflight signed release
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          UPDATE_RELEASE_TOKEN: ${{ secrets.UPDATE_RELEASE_TOKEN }}
+      - name: Validate release tag against package version
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           node --input-type=module <<'NODE'
           import { readFileSync } from 'node:fs'
           const version = JSON.parse(readFileSync('package.json', 'utf8')).version
           if (process.env.GITHUB_REF_NAME !== `v${version}`) throw new Error(`Release tag must match package version v${version}`)
-          const required = ['CSC_LINK', 'CSC_KEY_PASSWORD', 'APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID', 'UPDATE_RELEASE_TOKEN']
-          const missing = required.filter(name => !process.env[name]?.trim())
-          if (missing.length) throw new Error(`Missing required release secrets: ${missing.join(', ')}`)
           NODE
 
       - name: Verify native toolchain
@@ -97,48 +87,23 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Build unsigned DMG and ZIP
-        if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
-        run: npm run dist -- "--$TARGET_ARCH"
-
-      - name: Build signed and notarized DMG and ZIP
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          UPDATE_RELEASE_TOKEN: ${{ secrets.UPDATE_RELEASE_TOKEN }}
+      - name: Build ad-hoc signed DMG and ZIP
         run: npm run dist -- "--$TARGET_ARCH"
 
       - name: Verify packaged application
         run: |
           test -f "$APP_DIRECTORY/Contents/Resources/app.asar"
-          test -f "$APP_DIRECTORY/Contents/Resources/app-update.yml"
           test -x "$APP_DIRECTORY/Contents/Resources/tern-navigation/present-window"
           lipo "$APP_DIRECTORY/Contents/MacOS/OC Chan" -verify_arch "$MACHO_ARCH"
           lipo "$APP_DIRECTORY/Contents/Resources/tern-navigation/present-window" -verify_arch "$MACHO_ARCH"
-          node --input-type=module -e 'import { access } from "node:fs/promises"; import { packageReleaseInfo } from "./scripts/release-config.mjs"; await access(`release/${packageReleaseInfo().metadataName}`)'
       - name: Review dependency licenses and advisories
         run: npm run audit:dependencies -- --output "release/dependency-review-$TARGET_ARCH.json"
 
       - name: Verify package contents and frozen size budgets
         run: npm run check:package -- --app "$APP_DIRECTORY" --arch "$TARGET_ARCH" --artifacts-dir release --output "release/package-manifest-$TARGET_ARCH.json"
 
-      - name: Verify Developer ID signature and notarization
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          requirement="anchor apple generic and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = \"$APPLE_TEAM_ID\""
-          codesign --verify --deep --strict --verbose=2 "$APP_DIRECTORY"
-          codesign --verify --strict --verbose=2 -R "$requirement" "$APP_DIRECTORY"
-          codesign --verify --strict --verbose=2 -R "$requirement" "$APP_DIRECTORY/Contents/Resources/tern-navigation/present-window"
-          codesign --verify --strict --verbose=2 -R "$requirement" "$APP_DIRECTORY/Contents/Resources/liquid-glass/liquid-glass.node"
-          codesign --verify --strict --verbose=2 -R "$requirement" "$APP_DIRECTORY/Contents/Resources/notification-permission/notification-permission.node"
-          xcrun stapler validate "$APP_DIRECTORY"
-          spctl --assess --type execute --verbose=2 "$APP_DIRECTORY"
+      - name: Verify ad-hoc application signature
+        run: codesign --verify --deep --strict --verbose=2 "$APP_DIRECTORY"
 
       - name: Generate and verify checksums
         working-directory: release
@@ -153,7 +118,6 @@ jobs:
           path: |
             release/*.dmg
             release/*.zip
-            release/*-mac.yml
             release/SHA256SUMS.txt
             release/package-manifest-arm64.json
             release/dependency-review-arm64.json
@@ -167,6 +131,8 @@ jobs:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    permissions:
+      contents: write
     defaults:
       run:
         shell: bash
@@ -196,10 +162,10 @@ jobs:
           path: artifacts
           merge-multiple: false
 
-      - name: Validate and merge update metadata
+      - name: Validate release artifacts and checksums
         run: node scripts/prepare-release.mjs artifacts release-assets "$GITHUB_RUN_NUMBER" "$RELEASE_TAG"
 
       - name: Upload draft and publish complete release
         env:
-          UPDATE_RELEASE_TOKEN: ${{ secrets.UPDATE_RELEASE_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/publish-release.mjs release-assets "$RELEASE_TAG"

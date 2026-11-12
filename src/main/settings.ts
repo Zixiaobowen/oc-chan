@@ -134,7 +134,7 @@ export function validateSettings(value: unknown): SettingsPatch {
   for (const key in value) {
     if (!Object.hasOwn(DEFAULT_SETTINGS, key)) throw new Error('未知设置字段 / Unknown setting field')
     const entry = (value as Record<string, unknown>)[key]
-    if (key === 'showDock' || key === 'preventSleep') {
+    if (key === 'showDock' || key === 'preventSleep' || key === 'sidebarCollapsed') {
       if (typeof entry !== 'boolean') throw new Error(`设置 ${key} 必须是布尔值 / Must be a boolean`)
     } else if (key === 'glassIntensity') {
       if (!Number.isSafeInteger(entry) || (entry as number) < 0 || (entry as number) > 100)

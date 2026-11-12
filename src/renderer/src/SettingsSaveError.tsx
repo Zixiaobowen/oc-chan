@@ -134,7 +134,7 @@ export function GeometrySaveErrors() {
   }
   const failure = connection ?? snapshot.geometryError
   return <>
-    {error?.patch.sidebarWidth !== undefined && <SettingsSaveError settingLabel={t('侧栏宽度', 'Sidebar width')} />}
+    {(error?.patch.sidebarWidth !== undefined || error?.patch.sidebarCollapsed !== undefined) && <SettingsSaveError settingLabel={t('侧栏布局', 'Sidebar layout')} />}
     {failure && <SettingsFailureNotice settingLabel={t('窗口尺寸和位置', 'Window size and position')}
       failure={failure} saving={saving} retry={retry}
       retained={t('窗口保持当前尺寸和位置，但这次调整尚未保存。重试会保存当前正常窗口的位置。', 'The window keeps its current size and position, but this adjustment has not been saved. Retrying saves the current normal window bounds.')} />}

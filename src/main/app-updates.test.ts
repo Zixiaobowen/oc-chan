@@ -4,13 +4,14 @@ import { createHash } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { dump } from 'js-yaml'
 import { UpdateController } from './plugins/update-controller'
-import { downloadAsset, fetchUpdate, MAX_METADATA_BYTES, parseUpdate, readMetadata, type UpdateAsset, type FetchUpdate } from './plugins/update-source'
+import { downloadAsset, fetchUpdate, MAX_METADATA_BYTES, METADATA_URL, RELEASES_URL, parseUpdate, readMetadata, type UpdateAsset, type FetchUpdate } from './plugins/update-source'
 
 const payload = Buffer.from('verified update archive test contents')
-const asset: UpdateAsset = { version: '0.2.0', url: 'https://github.com/Zixiaobowen/oc-chan-releases/releases/download/v0.2.0/OC-Chan-0.2.0-mac-arm64.zip', size: payload.length, sha512: createHash('sha512').update(payload).digest('base64') }
-const metadata = dump({ version: asset.version, files: [{ url: 'OC-Chan-0.2.0-mac-arm64.zip', size: asset.size, sha512: asset.sha512 }, { url: 'OC-Chan-0.2.0-mac-x64.zip', size: 123, sha512: asset.sha512 }] })
+const asset: UpdateAsset = { version: '0.2.0', url: `${RELEASES_URL}/download/v0.2.0/OC-Chan-0.2.0-mac-arm64.zip`, size: payload.length, sha256: createHash('sha256').update(payload).digest('hex') }
+const releaseAsset = (arch: string, size = asset.size) => ({ name: `OC-Chan-0.2.0-mac-${arch}.zip`, browser_download_url: `${RELEASES_URL}/download/v0.2.0/OC-Chan-0.2.0-mac-${arch}.zip`, state: 'uploaded', size, digest: `sha256:${asset.sha256}` })
+const release = { tag_name: 'v0.2.0', draft: false, prerelease: false, assets: [releaseAsset('arm64'), releaseAsset('x64', 123)] }
+const metadata = JSON.stringify(release)
 
 test('stable update selection respects semver and machine architecture', () => {
   assert.deepEqual(parseUpdate(metadata, '0.1.0', 'arm64'), asset)
@@ -21,12 +22,57 @@ test('stable update selection respects semver and machine architecture', () => {
   assert.throws(() => parseUpdate(metadata, '0.1.0', 'riscv64'), /architecture/)
 })
 
-test('rejects missing/duplicate architecture, unsafe size and YAML aliases', () => {
-  const item = { url: 'OC-Chan-0.2.0-mac-arm64.zip', size: asset.size, sha512: asset.sha512 }
-  assert.throws(() => parseUpdate(dump({ version: '0.2.0', files: [item, { ...item }] }), '0.1.0', 'arm64'), /duplicate/)
-  assert.throws(() => parseUpdate(dump({ version: '0.2.0', files: [{ ...item, size: 1024 ** 3 }] }), '0.1.0', 'arm64'), /size/)
-  assert.throws(() => parseUpdate(dump({ version: '0.2.0', files: [{ ...item, url: '../evil.zip' }] }), '0.1.0', 'arm64'), /Missing/)
-  assert.throws(() => parseUpdate('version: 0.2.0\nfiles: &files\n  - *files', '0.1.0', 'arm64'), /reference/)
+test('rejects nonstable releases and malformed tags', () => {
+  for (const tag_name of ['0.2.0', 'vv0.2.0', 'v02.0.0', 'v0.2', 'v 0.2.0', 'v0.2.0 ']) {
+    assert.throws(() => parseUpdate(JSON.stringify({ ...release, tag_name }), '0.1.0', 'arm64'), /version/)
+  }
+  assert.throws(() => parseUpdate(JSON.stringify({ ...release, draft: true }), '0.1.0', 'arm64'), /Draft/)
+  assert.throws(() => parseUpdate(JSON.stringify({ ...release, prerelease: true }), '0.1.0', 'arm64'), /Prerelease/)
+  assert.throws(() => parseUpdate('null', '0.1.0', 'arm64'), /version/)
+  assert.throws(() => parseUpdate('version: 0.2.0', '0.1.0', 'arm64'), SyntaxError)
+})
+
+test('rejects missing or duplicate architecture and untrusted release assets', () => {
+  const item = releaseAsset('arm64')
+  const parseAssets = (assets: unknown[]) => parseUpdate(JSON.stringify({ ...release, assets }), '0.1.0', 'arm64')
+  assert.throws(() => parseAssets([item, { ...item }]), /duplicate/)
+  assert.throws(() => parseAssets([releaseAsset('x64')]), /Missing/)
+  for (const size of [0, -1, 1.5, 512 * 1024 * 1024 + 1, '123', null]) {
+    assert.throws(() => parseAssets([{ ...item, size }]), /size/)
+  }
+  for (const digest of [undefined, null, '', asset.sha256, `sha512:${asset.sha256}`, `sha256:${'g'.repeat(64)}`, `sha256:${'a'.repeat(63)}`]) {
+    assert.throws(() => parseAssets([{ ...item, digest }]), /SHA-256/)
+  }
+  for (const browser_download_url of [item.browser_download_url.replace('/oc-chan/', '/other/'), item.browser_download_url.replace('/v0.2.0/', '/v0.1.0/'), `${item.browser_download_url}?token=a`, item.browser_download_url.replace('https:', 'http:')]) {
+    assert.throws(() => parseAssets([{ ...item, browser_download_url }]), /URL/)
+  }
+  assert.throws(() => parseAssets([{ ...item, state: 'new' }]), /uploaded/)
+  assert.throws(() => parseAssets([{ ...item, name: '../evil.zip' }]), /Missing/)
+  assert.deepEqual(parseAssets([{ ...item, digest: `sha256:${asset.sha256.toUpperCase()}` }]), asset)
+})
+
+test('GitHub API uses versioned JSON headers and reports unavailable releases', async () => {
+  const signal = new AbortController().signal
+  await fetchUpdate(METADATA_URL, signal, async (url, options) => {
+    assert.equal(url, METADATA_URL)
+    assert.deepEqual(options.headers, { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2026-03-10' })
+    assert.equal(options.credentials, 'omit')
+    return new Response(metadata)
+  })
+  await assert.rejects(fetchUpdate(METADATA_URL, signal, async () => new Response(null, { status: 404 })), /No available Release or repository inaccessible/)
+})
+
+test('an unavailable GitHub Release is an error rather than an up-to-date result', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'oc-update-unavailable-'))
+  const controller = new UpdateController({ version: '0.1.0', arch: 'arm64', directory,
+    fetch: async () => new Response(null, { status: 404 }), changed: () => {}, install: async () => {} })
+  try {
+    controller.start('development')
+    await controller.check()
+    assert.equal(controller.snapshot.phase, 'error')
+    assert.equal(controller.snapshot.availableVersion, null)
+    assert.match(controller.snapshot.error!, /No available Release or repository inaccessible/)
+  } finally { await controller.stop(); await rm(directory, { recursive: true, force: true }) }
 })
 
 test('metadata rejects oversized responses before retaining the overflow chunk', async () => {
@@ -68,7 +114,7 @@ test('concurrent checks coalesce and cannot auto-download or install', async () 
   let requests = 0
   let installs = 0
   const controller = new UpdateController({ version: '0.1.0', arch: 'arm64', directory,
-    fetch: async url => { requests++; return new Response(url.endsWith('.yml') ? metadata : payload) },
+    fetch: async url => { requests++; return new Response(url === METADATA_URL ? metadata : payload) },
     changed: () => {}, install: async () => { installs++ }
   })
   try {
@@ -96,7 +142,7 @@ test('download cancellation interrupts the read, preserves offer, and releases i
   const started = new Promise<void>(resolve => { downloadStarted = resolve })
   let aborted = false
   const fetcher: FetchUpdate = async (url, options) => {
-    if (url.endsWith('.yml')) return new Response(metadata)
+    if (url === METADATA_URL) return new Response(metadata)
     const stream = new ReadableStream({ start(streamController) {
       options.signal?.addEventListener('abort', () => { aborted = true; streamController.error(options.signal?.reason) }, { once: true })
       streamController.enqueue(payload.subarray(0, 4))

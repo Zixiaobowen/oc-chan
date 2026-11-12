@@ -2,6 +2,7 @@ import { app, autoUpdater, dialog, ipcMain, net, shell } from 'electron'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import path from 'node:path'
+import { version as appVersion } from '../../../package.json'
 import type { AppPlugin } from '../../shared/plugins'
 import type { UpdateSnapshot } from '../../shared/updates'
 import { UpdateController } from './update-controller'
@@ -29,7 +30,7 @@ export class AppUpdatesPlugin implements AppPlugin {
   }
   constructor(private readonly host: AppUpdatesHost) {
     this.controller = new UpdateController({
-      version: app.getVersion(), arch: process.arch,
+      version: appVersion, arch: process.arch,
       directory: path.join(app.getPath('userData'), 'app-updates'),
       fetch: (url, options) => net.fetch(url, options),
       changed: snapshot => host.changed(snapshot),

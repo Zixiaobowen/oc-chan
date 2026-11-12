@@ -1,5 +1,5 @@
 import { build, Platform, Arch } from 'electron-builder'
-import { packageReleaseInfo, requireReleaseEnvironment } from './release-config.mjs'
+import { packageReleaseInfo } from './release-config.mjs'
 
 const args = process.argv.slice(2)
 if (args.some(arg => !['--arm64', '--x64', '--dir'].includes(arg)) || (args.includes('--arm64') && args.includes('--x64'))) {
@@ -10,23 +10,16 @@ if (process.platform !== 'darwin' || !['arm64', 'x64'].includes(arch) || arch !=
   throw new Error(`Native macOS ${arch} runner required; got ${process.platform} ${process.arch}`)
 }
 const info = packageReleaseInfo()
-const signed = process.env.GITHUB_EVENT_NAME === 'push' && process.env.GITHUB_REF?.startsWith('refs/tags/')
-if (signed) requireReleaseEnvironment(info)
-// Never use certificates from a developer's keychain for ordinary/local builds.
-process.env.CSC_IDENTITY_AUTO_DISCOVERY = signed ? 'true' : 'false'
+if (process.env.GITHUB_REF?.startsWith('refs/tags/') && process.env.GITHUB_REF !== `refs/tags/${info.tag}`) {
+  throw new Error(`Release tag must match package version ${info.tag}`)
+}
+process.env.CSC_IDENTITY_AUTO_DISCOVERY = 'false'
 await build({
   targets: Platform.MAC.createTarget(args.includes('--dir') ? ['dir'] : ['dmg', 'zip'], Arch[arch]),
   publish: 'never',
   config: {
-    forceCodeSigning: signed,
-    mac: { ...(signed ? {} : { identity: null }), notarize: signed },
-    publish: {
-      provider: 'github',
-      owner: 'Zixiaobowen',
-      repo: 'oc-chan-releases',
-      channel: info.channel,
-      releaseType: info.prerelease ? 'prerelease' : 'draft',
-      publishAutoUpdate: true,
-    },
+    forceCodeSigning: false,
+    mac: { identity: '-', notarize: false },
+    publish: null,
   },
 })

@@ -5,10 +5,12 @@ import { useSettings } from './settings'
 
 const DEFAULT_WIDTH = DEFAULT_SETTINGS.sidebarWidth
 const MIN_WORKSPACE_WIDTH = 560
+// Dragging well past the minimum folds the sidebar away, as macOS sidebars do.
+const COLLAPSE_OVERSHOOT = 64
 
 type Drag = { pointerId: number; startX: number; startWidth: number; previousWidth: number }
 
-export default function SidebarResizeHandle({ compact }: { compact: boolean }) {
+export default function SidebarResizeHandle({ inactive, onCollapse }: { inactive: boolean; onCollapse: () => void }) {
   const { t } = useI18n()
   const { snapshot: { settings }, update, saving, error } = useSettings()
   const persisted = useRef({ width: settings.sidebarWidth, update, saving, error })
@@ -87,8 +89,8 @@ export default function SidebarResizeHandle({ compact }: { compact: boolean }) {
   }, [])
 
   useLayoutEffect(() => {
-    if (compact) finishDrag(true)
-  }, [compact])
+    if (inactive) finishDrag(true)
+  }, [inactive])
 
   function startDrag(event: PointerEvent<HTMLDivElement>) {
     if (event.button !== 0 || !event.isPrimary || drag.current) return
@@ -103,7 +105,25 @@ export default function SidebarResizeHandle({ compact }: { compact: boolean }) {
   function moveDrag(event: PointerEvent<HTMLDivElement>) {
     const active = drag.current
     if (!active || active.pointerId !== event.pointerId) return
-    preferredWidth.current = Math.max(MIN_WIDTH, Math.min(maximum.current, Math.round(active.startWidth + event.clientX - active.startX)))
+    const requested = Math.round(active.startWidth + event.clientX - active.startX)
+    if (requested < MIN_WIDTH - COLLAPSE_OVERSHOOT) {
+      // The handle leaves the layout with the button still down; without this the rest of the drag selects page text.
+      const block = (selection: Event) => selection.preventDefault()
+      const release = () => {
+        document.removeEventListener('selectstart', block)
+        window.removeEventListener('pointerup', release)
+        window.removeEventListener('pointercancel', release)
+        window.removeEventListener('blur', release)
+      }
+      document.addEventListener('selectstart', block)
+      window.addEventListener('pointerup', release)
+      window.addEventListener('pointercancel', release)
+      window.addEventListener('blur', release)
+      finishDrag(true)
+      onCollapse()
+      return
+    }
+    preferredWidth.current = Math.max(MIN_WIDTH, Math.min(maximum.current, requested))
     if (frame.current === null) frame.current = requestAnimationFrame(() => {
       frame.current = null
       applyWidth()
@@ -131,12 +151,12 @@ export default function SidebarResizeHandle({ compact }: { compact: boolean }) {
     keyboardTimer.current = setTimeout(saveKeyboardWidth, 250)
   }
 
-  return <div ref={handle} className="sidebar-resize-handle" role="separator" tabIndex={compact ? -1 : 0}
-    aria-hidden={compact || undefined} aria-orientation="vertical" aria-controls="main-navigation"
+  return <div ref={handle} className="sidebar-resize-handle" role="separator" tabIndex={inactive ? -1 : 0}
+    aria-hidden={inactive || undefined} aria-orientation="vertical" aria-controls="main-navigation"
     aria-label={t('调整侧栏宽度', 'Resize sidebar')}
     aria-valuemin={MIN_WIDTH} aria-valuemax={size.max} aria-valuenow={size.width}
     aria-valuetext={t(`${size.width} 像素`, `${size.width} pixels`)}
-    title={t('拖动调整侧栏宽度；方向键微调，双击恢复默认', 'Drag to resize; use arrow keys to adjust, double-click to reset')}
+    title={t('拖动调整侧栏宽度，向左拖到底收起；方向键微调，双击恢复默认', 'Drag to resize or far left to hide; use arrow keys to adjust, double-click to reset')}
     onPointerDown={startDrag} onPointerMove={moveDrag}
     onPointerUp={event => { if (drag.current?.pointerId === event.pointerId) finishDrag() }}
     onPointerCancel={event => { if (drag.current?.pointerId === event.pointerId) finishDrag(true) }}

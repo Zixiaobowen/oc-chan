@@ -1,16 +1,15 @@
 import { createHash } from 'node:crypto'
 import { open, rename, rm, statfs, type FileHandle } from 'node:fs/promises'
 import { join } from 'node:path'
-import { load, JSON_SCHEMA } from 'js-yaml'
 import { gt, valid } from 'semver'
 
-export const RELEASES_URL = 'https://github.com/Zixiaobowen/oc-chan-releases/releases'
-export const METADATA_URL = `${RELEASES_URL}/latest/download/latest-mac.yml`
+export const RELEASES_URL = 'https://github.com/Zixiaobowen/oc-chan/releases'
+export const METADATA_URL = 'https://api.github.com/repos/Zixiaobowen/oc-chan/releases/latest'
 export const MAX_METADATA_BYTES = 64 * 1024
 export const MAX_UPDATE_BYTES = 512 * 1024 * 1024
-const NETWORK_HOSTS: Record<string, true> = { 'github.com': true, 'release-assets.githubusercontent.com': true, 'objects.githubusercontent.com': true }
+const NETWORK_HOSTS: Record<string, true> = { 'api.github.com': true, 'github.com': true, 'release-assets.githubusercontent.com': true, 'objects.githubusercontent.com': true }
 export type FetchUpdate = (url: string, init: RequestInit) => Promise<Response>
-export interface UpdateAsset { version: string; url: string; size: number; sha512: string }
+export interface UpdateAsset { version: string; url: string; size: number; sha256: string }
 
 export async function fetchUpdate(url: string, signal: AbortSignal, fetcher: FetchUpdate): Promise<Response> {
   for (let redirects = 0; redirects <= 5; redirects++) {
@@ -18,7 +17,8 @@ export async function fetchUpdate(url: string, signal: AbortSignal, fetcher: Fet
     if (target.protocol !== 'https:' || target.username || target.password || target.port || !Object.hasOwn(NETWORK_HOSTS, target.hostname)) {
       throw new Error('更新地址不受信任 / Untrusted update URL')
     }
-    const response = await fetcher(url, { signal, redirect: 'manual', credentials: 'omit', cache: 'no-store' })
+    const response = await fetcher(url, { signal, redirect: 'manual', credentials: 'omit', cache: 'no-store',
+      ...(target.hostname === 'api.github.com' ? { headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2026-03-10' } } : {}) })
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get('location')
       await response.body?.cancel()
@@ -28,6 +28,7 @@ export async function fetchUpdate(url: string, signal: AbortSignal, fetcher: Fet
     }
     if (!response.ok) {
       await response.body?.cancel()
+      if (response.status === 404 && target.hostname === 'api.github.com') throw new Error('尚无可用 Release，或发布仓库不可访问 / No available Release or repository inaccessible (HTTP 404)')
       throw new Error(`更新服务返回 HTTP ${response.status} / Update service returned HTTP ${response.status}`)
     }
     return response
@@ -63,24 +64,28 @@ export async function readMetadata(response: Response, signal: AbortSignal): Pro
 
 export function parseUpdate(text: string, currentVersion: string, arch: string): UpdateAsset | null {
   if (Buffer.byteLength(text) > MAX_METADATA_BYTES) throw new Error('Update metadata exceeds 64 KiB')
-  // Generated builder metadata needs no YAML aliases, anchors or tags. Reject them before parsing.
-  if (/(?:^|[\s,[{])[&*!]/m.test(text)) throw new Error('Unsupported YAML reference or tag')
-  const value: unknown = load(text, { schema: JSON_SCHEMA })
-  if (!value || typeof value !== 'object' || !('version' in value) || typeof value.version !== 'string' || value.version.length > 64 || valid(value.version) !== value.version || !valid(currentVersion)) {
+  const value: unknown = JSON.parse(text)
+  if (!value || typeof value !== 'object' || !('tag_name' in value) || typeof value.tag_name !== 'string' || value.tag_name.length > 65 || !value.tag_name.startsWith('v') || !valid(currentVersion)) {
     throw new Error('更新版本无效 / Invalid update version')
   }
-  if (value.version.includes('-')) throw new Error('稳定更新源包含预发布版本 / Prerelease in stable update feed')
-  if (!('files' in value) || !Array.isArray(value.files) || value.files.length < 1 || value.files.length > 8) throw new Error('更新文件列表无效 / Invalid update file list')
+  const version = value.tag_name.slice(1)
+  if (!/^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version) || !valid(version)) throw new Error('更新版本无效 / Invalid update version')
+  if (!('draft' in value) || value.draft !== false) throw new Error('发布尚未公开 / Draft or invalid release')
+  if (!('prerelease' in value) || value.prerelease !== false || version.split('+')[0].includes('-')) throw new Error('稳定更新源包含预发布版本 / Prerelease in stable update feed')
+  if (!('assets' in value) || !Array.isArray(value.assets) || value.assets.length < 1) throw new Error('更新文件列表无效 / Invalid update file list')
   if (arch !== 'arm64' && arch !== 'x64') throw new Error('不支持此架构 / Unsupported architecture')
-  const name = `OC-Chan-${value.version}-mac-${arch}.zip`
-  const matches = value.files.filter((file): file is Record<string, unknown> => Boolean(file && typeof file === 'object' && file.url === name))
+  const name = `OC-Chan-${version}-mac-${arch}.zip`
+  const matches = value.assets.filter((file): file is Record<string, unknown> => Boolean(file && typeof file === 'object' && file.name === name))
   if (matches.length !== 1) throw new Error(`更新包缺失或重复 / Missing or duplicate update package: ${name}`)
   const file = matches[0]
-  if (!Number.isSafeInteger(file.size) || Number(file.size) <= 0 || Number(file.size) > MAX_UPDATE_BYTES || typeof file.sha512 !== 'string' || !/^[A-Za-z0-9+/]{86}==$/.test(file.sha512)) {
-    throw new Error('更新包大小或校验信息无效 / Invalid update size or SHA-512')
+  const url = `${RELEASES_URL}/download/v${version}/${name}`
+  if (file.browser_download_url !== url) throw new Error('更新资产地址不匹配 / Invalid release asset URL')
+  if (file.state !== 'uploaded') throw new Error('更新资产尚未上传完成 / Update asset is not uploaded')
+  if (!Number.isSafeInteger(file.size) || Number(file.size) <= 0 || Number(file.size) > MAX_UPDATE_BYTES || typeof file.digest !== 'string' || !/^sha256:[a-fA-F0-9]{64}$/.test(file.digest)) {
+    throw new Error('更新包大小或校验信息无效 / Invalid update size or SHA-256')
   }
-  if (!gt(value.version, currentVersion)) return null
-  return { version: value.version, url: `${RELEASES_URL}/download/v${value.version}/${name}`, size: Number(file.size), sha512: file.sha512 }
+  if (!gt(version, currentVersion)) return null
+  return { version, url, size: Number(file.size), sha256: file.digest.slice(7).toLowerCase() }
 }
 
 export async function downloadAsset(asset: UpdateAsset, directory: string, signal: AbortSignal, fetcher: FetchUpdate,
@@ -100,7 +105,7 @@ export async function downloadAsset(asset: UpdateAsset, directory: string, signa
   const reader = response.body.getReader()
   let file: FileHandle | undefined
   let transferred = 0
-  const digest = createHash('sha512')
+  const digest = createHash('sha256')
   const started = performance.now()
   let lastProgress = started
   try {
@@ -125,7 +130,7 @@ export async function downloadAsset(asset: UpdateAsset, directory: string, signa
         lastProgress = now
       }
     }
-    if (transferred !== asset.size || digest.digest('base64') !== asset.sha512) throw new Error('更新包校验失败 / Update integrity check failed')
+    if (transferred !== asset.size || digest.digest('hex') !== asset.sha256) throw new Error('更新包校验失败 / Update integrity check failed')
     signal.throwIfAborted()
     await file.sync()
     await file.close()

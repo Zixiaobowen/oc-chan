@@ -85,14 +85,6 @@
       "hardenedRuntime": true,
       "binaries": ["Resources/tern-navigation/present-window", "Resources/liquid-glass/liquid-glass.node", "Resources/notification-permission/notification-permission.node"]
     },
-    "publish": {
-      "provider": "github",
-      "owner": "Zixiaobowen",
-      "repo": "oc-chan-releases",
-      "releaseType": "draft",
-      "publishAutoUpdate": true
-    },
-    "generateUpdatesFilesForAllChannels": false,
     "asar": true
   }
 }

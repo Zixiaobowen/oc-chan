@@ -20,13 +20,13 @@
 
 ## 安装与运行
 
-当前可从源码构建，或在仓库的 **Actions → Build macOS** 中查找成功构建的 Artifacts。构建产物名为 `oc-chan-macos-arm64-<运行编号>`；下载 Actions 产物通常需要登录 GitHub，并受产物保留期限制。
+从本仓库的 [GitHub Releases](https://github.com/Zixiaobowen/oc-chan/releases/latest) 下载对应版本的 DMG、ZIP 和 `SHA256SUMS.txt`。设置中的“检查更新”会比较最新正式 Release 与当前应用版本；发现新版后可通过“发行说明与下载”前往对应版本。
 
-正式 Developer ID 签名、公证和公开 Release 分发尚未完成验证。普通构建使用 ad-hoc 签名，不能视为已通过 Apple 公证的正式安装包；macOS 可能阻止打开。请保留系统提示用于反馈，不要关闭系统安全防护。
+安装包使用 ad-hoc 签名，尚未通过 Developer ID 签名和 Apple 公证；macOS 可能阻止打开。请保留系统提示用于反馈，不要关闭系统安全防护。日常构建也可从 **Actions → Build macOS** 的 `oc-chan-macos-arm64-<运行编号>` Artifacts 下载，通常需要登录 GitHub，并受保留期限制。
 
 下载构建产物后：
 
-1. 解压外层归档，在产物目录执行 `shasum -a 256 -c SHA256SUMS.txt` 核对文件完整性。
+1. 将安装包与 `SHA256SUMS.txt` 放在同一目录，执行 `shasum -a 256 -c SHA256SUMS.txt` 核对文件完整性；Actions 产物需先解压外层归档。
 2. 打开 DMG，将完整的 `OC Chan.app` 放入“应用程序”；也可从应用 ZIP 中取出完整应用。
 3. 升级前退出旧版并保留旧应用副本，再整包替换。不要合并新旧应用包里的文件，也不需要删除个人设置。
 
@@ -95,7 +95,7 @@ OMP 会话在满足关联条件时，可从节点菜单跳转到对应 Tern 标�
 - 逐次任务执行历史目前仅支持 Hermes。launchd／cron 的计划配置和最近退出码不能替代执行历史，也不提供可靠的下一次执行时间推算。
 - OMP 自定义会话目录、隔离 profile、其他用户的 crontab、容器及第三方应用内部调度不在当前覆盖范围。
 - 原生 Liquid Glass 会在系统开启“减少透明度”或“增加对比度”时停用，并保留所选强度。
-- 开发模式和本地 ad-hoc 包可以手动检查新版，但不自动检查，也不能在应用内下载和安装更新。正式签名版本的完整升级链路仍待验收。
+- 开发模式和本地 ad-hoc 包可以手动检查 GitHub Release 新版，并打开 Release 下载页面；不自动检查，也不能在应用内下载安装。请下载后手动替换应用，正式签名版本的原生升级链路仍待验收。
 - 登录启动、系统通知投递、VoiceOver 和长时间运行等场景仍有待补齐的验收；现有测试结果不能代表所有机器和系统版本。
 
 ## 反馈与参与

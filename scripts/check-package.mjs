@@ -82,7 +82,7 @@ const hashBuffer = bytes => createHash('sha256').update(bytes).digest('hex')
 const EMPTY_HASH = hashBuffer(Buffer.alloc(0))
 
 function appFileAllowed(value, product) {
-  if (['Contents/Info.plist', 'Contents/PkgInfo', `Contents/MacOS/${product}`, ARCHIVE, HELPER, GLASS, NOTIFICATION_PERMISSION, `${PLUGIN}plugin.toml`, `${PLUGIN}window.luau`, 'Contents/Resources/app-update.yml', 'Contents/Resources/icon.icns', 'Contents/Resources/LICENSE.electron.txt', 'Contents/Resources/LICENSES.chromium.html', 'Contents/_CodeSignature/CodeResources'].includes(value)) return true
+  if (['Contents/Info.plist', 'Contents/PkgInfo', `Contents/MacOS/${product}`, ARCHIVE, HELPER, GLASS, NOTIFICATION_PERMISSION, `${PLUGIN}plugin.toml`, `${PLUGIN}window.luau`, 'Contents/Resources/icon.icns', 'Contents/Resources/LICENSE.electron.txt', 'Contents/Resources/LICENSES.chromium.html', 'Contents/_CodeSignature/CodeResources'].includes(value)) return true
   if (/^Contents\/Resources\/[a-zA-Z0-9_]+\.lproj\/InfoPlist\.strings$/.test(value)) return true
   const prefix = 'Contents/Frameworks/'
   if (!value.startsWith(prefix)) return false

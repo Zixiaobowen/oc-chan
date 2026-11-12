@@ -95,7 +95,7 @@ test('concurrent patches serialize native effects and independently preserve bot
   assert.equal(applied[0].glassIntensity, 0)
   assert.equal(applied[1].glassIntensity, 100)
   const expected: AppSettings = {
-    glassIntensity: 100, sidebarWidth: DEFAULT_SETTINGS.sidebarWidth, windowBounds: null,
+    glassIntensity: 100, sidebarWidth: DEFAULT_SETTINGS.sidebarWidth, sidebarCollapsed: false, windowBounds: null,
     appearance: 'dark', textSize: 'large', uiFont: 'pingfang', language: 'en',
     lightTheme: 'github', darkTheme: 'catppuccin',
     notifications: DEFAULT_SETTINGS.notifications,

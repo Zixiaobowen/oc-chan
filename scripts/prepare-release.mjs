@@ -3,29 +3,29 @@ import { createReadStream, constants } from 'node:fs'
 import { copyFile, lstat, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import yaml from 'js-yaml'
 import { packageReleaseInfo, releaseInfo } from './release-config.mjs'
 
-const architectures = ['arm64']
-const extensions = ['zip', 'dmg']
-const assetName = (version, arch, extension) => `OC-Chan-${version}-mac-${arch}.${extension}`
+export const releaseAssetNames = version => ['zip', 'dmg'].map(extension => `OC-Chan-${version}-mac-arm64.${extension}`)
 
-async function readSmallFile(path) {
+async function readSmallFile(path, limit = 64 * 1024) {
   const stat = await lstat(path)
-  if (!stat.isFile() || stat.size > 64 * 1024) throw new Error(`Invalid or oversized metadata: ${path}`)
+  if (!stat.isFile() || stat.size > limit) throw new Error(`Invalid or oversized metadata: ${path}`)
   return readFile(path, 'utf8')
 }
 
-async function digestFile(path) {
+export async function digestFile(path, maxBytes = Number.MAX_SAFE_INTEGER) {
   const stat = await lstat(path)
   if (!stat.isFile() || stat.size <= 0 || !Number.isSafeInteger(stat.size)) throw new Error(`Invalid release asset: ${path}`)
-  const sha512 = createHash('sha512')
+  if (stat.size > maxBytes) throw new Error(`Release asset exceeds size limit (${maxBytes} bytes): ${path}`)
   const sha256 = createHash('sha256')
+  let size = 0
   for await (const chunk of createReadStream(path)) {
-    sha512.update(chunk)
+    size += chunk.length
+    if (size > maxBytes) throw new Error(`Release asset exceeds size limit (${maxBytes} bytes): ${path}`)
     sha256.update(chunk)
   }
-  return { size: stat.size, sha512: sha512.digest('base64'), sha256: sha256.digest('hex') }
+  if (size !== stat.size) throw new Error(`Size changed while reading: ${path}`)
+  return { size, sha256: sha256.digest('hex') }
 }
 
 function parseChecksums(text, expected) {
@@ -39,50 +39,40 @@ function parseChecksums(text, expected) {
   return sums
 }
 
+export async function inspectReleaseAssets(directory, version) {
+  const names = releaseAssetNames(version)
+  const sums = parseChecksums(await readSmallFile(join(directory, 'SHA256SUMS.txt')), new Set(names))
+  const assets = []
+  for (const name of names) {
+    const source = join(directory, name)
+    const digest = await digestFile(source, name.endsWith('.zip') ? 512 * 1024 * 1024 : Number.MAX_SAFE_INTEGER)
+    if (sums.get(name) !== digest.sha256) throw new Error(`SHA256 mismatch: ${name}`)
+    assets.push({ source, name, ...digest })
+  }
+  return assets
+}
+
 export async function prepareRelease({ version, tag, inputs, output }) {
   const info = releaseInfo(version)
   if (tag !== info.tag) throw new Error(`Release tag ${tag} must match package version ${info.tag}`)
-  if (Object.keys(inputs).some(arch => !architectures.includes(arch))) throw new Error('Unsupported release architecture; this release targets arm64')
-  const assets = []
-  const dates = []
-  for (const arch of architectures) {
-    if (!inputs[arch]) throw new Error(`Missing ${arch} build directory`)
-    const directory = inputs[arch]
-    const metadata = yaml.load(await readSmallFile(join(directory, info.metadataName)), { schema: yaml.JSON_SCHEMA })
-    if (metadata?.version !== version) throw new Error(`Wrong metadata version for ${arch}: ${metadata?.version}`)
-    if (!Array.isArray(metadata.files) || metadata.files.length !== 2) throw new Error(`Expected ZIP and DMG metadata for ${arch}`)
-    if (typeof metadata.releaseDate !== 'string' || !Number.isFinite(Date.parse(metadata.releaseDate))) throw new Error(`Invalid releaseDate for ${arch}`)
-    dates.push(metadata.releaseDate)
-    const expected = new Set(extensions.map(extension => assetName(version, arch, extension)))
-    const sums = parseChecksums(await readSmallFile(join(directory, 'SHA256SUMS.txt')), expected)
-    const seen = new Set()
-    for (const file of metadata.files) {
-      if (!file || !expected.has(file.url) || seen.has(file.url)) throw new Error(`Wrong architecture, version, or duplicate metadata asset for ${arch}: ${file?.url}`)
-      seen.add(file.url)
-      const source = join(directory, file.url)
-      const digest = await digestFile(source)
-      if (file.size !== digest.size) throw new Error(`Size mismatch: ${file.url}`)
-      if (file.sha512 !== digest.sha512) throw new Error(`SHA512 mismatch: ${file.url}`)
-      if (sums.get(file.url) !== digest.sha256) throw new Error(`SHA256 mismatch: ${file.url}`)
-      assets.push({ source, url: file.url, ...digest })
-    }
-    const zip = assets.find(file => file.url === assetName(version, arch, 'zip'))
-    if (metadata.path !== zip.url || metadata.sha512 !== zip.sha512) throw new Error(`Invalid primary ZIP metadata for ${arch}`)
+  if (Object.keys(inputs).some(arch => arch !== 'arm64')) throw new Error('Unsupported release architecture; this release targets arm64')
+  if (!inputs.arm64) throw new Error('Missing arm64 build directory')
+  const assets = await inspectReleaseAssets(inputs.arm64, version)
+  const manifest = JSON.parse(await readSmallFile(join(inputs.arm64, 'package-manifest-arm64.json'), 16 * 1024 * 1024))
+  if (manifest.schema !== 1 || manifest.arch !== 'arm64' || !Array.isArray(manifest.artifacts) || manifest.artifacts.length !== assets.length) throw new Error('Invalid package artifact manifest')
+  const seen = new Set()
+  for (const entry of manifest.artifacts) {
+    const asset = assets.find(asset => asset.name === entry.name)
+    if (!asset || seen.has(entry.name)) throw new Error('Unexpected or duplicate package artifact')
+    if (entry.bytes !== asset.size) throw new Error(`Size mismatch: ${entry.name}`)
+    if (entry.sha256 !== asset.sha256) throw new Error(`Manifest SHA256 mismatch: ${entry.name}`)
+    seen.add(entry.name)
   }
   // Validate every input before creating anything. A prior output directory is an error.
-  assets.sort((a, b) => Number(a.url.endsWith('.dmg')) - Number(b.url.endsWith('.dmg')) || b.url.localeCompare(a.url))
-  const merged = {
-    version,
-    files: assets.map(({ url, sha512, size }) => ({ url, sha512, size })),
-    path: assets[0].url,
-    sha512: assets[0].sha512,
-    releaseDate: new Date(Math.max(...dates.map(Date.parse))).toISOString(),
-  }
   await mkdir(output)
-  for (const asset of assets) await copyFile(asset.source, join(output, asset.url), constants.COPYFILE_EXCL)
-  await writeFile(join(output, info.metadataName), yaml.dump(merged, { lineWidth: -1, noRefs: true }), { flag: 'wx' })
-  await writeFile(join(output, 'SHA256SUMS.txt'), assets.map(asset => `${asset.sha256}  ${asset.url}\n`).join(''), { flag: 'wx' })
-  return merged
+  for (const asset of assets) await copyFile(asset.source, join(output, asset.name), constants.COPYFILE_EXCL)
+  await writeFile(join(output, 'SHA256SUMS.txt'), assets.map(asset => `${asset.sha256}  ${asset.name}\n`).join(''), { flag: 'wx' })
+  return { version, files: assets.map(({ name, size, sha256 }) => ({ name, size, sha256 })) }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
@@ -93,7 +83,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   await prepareRelease({
     version: packageReleaseInfo().version,
     tag,
-    inputs: Object.fromEntries(architectures.map(arch => [arch, join(artifacts, `oc-chan-macos-${arch}-${runNumber}`)])),
+    inputs: { arm64: join(artifacts, `oc-chan-macos-arm64-${runNumber}`) },
     output,
   })
 }

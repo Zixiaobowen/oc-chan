@@ -7,3 +7,12 @@ resources/tern-navigation/present-window
 .dev-instances/
 resources/liquid-glass/*.node
 resources/notification-permission/*.node
+/docs/codex-handoffs/
+/docs/audits/
+/docs/rust-migration/evidence/
+/docs/rust-migration/plan.md
+/docs/rust-migration/plan.html
+/docs/rust-migration/implementation.html
+/docs/rust-migration/review.md
+/docs/rust-migration/review-approval.json
+/docs/rust-migration/source-snapshot.json

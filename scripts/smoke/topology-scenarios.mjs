@@ -17,6 +17,74 @@ export async function exerciseTopology({ ui, renderer, record, agent }) {
     return { agentId: agent.id, floor: await ui.evaluate(`${$(floor)}.value`) }
   })
 
+  assert.equal(agent.runtime, 'OMP', `Tern menu smoke requires an OMP fixture; received ${agent.runtime}`)
+  const menu = '.topology-context-menu:popover-open'
+  const item = `${menu} [role="menuitem"]`
+  const navigationError = '.topology-navigation-error, .topology-3d-navigation-error'
+  async function pointFor(selector) {
+    return ui.dom('pointer target is visible and unobstructed', `(() => {
+      const element = ${$(selector)};
+      if (!element) return false;
+      const rect = element.getBoundingClientRect();
+      const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
+      const hit = document.elementFromPoint(x, y);
+      return rect.width && rect.height && hit && element.contains(hit) ? {x, y} : false;
+    })()`)
+  }
+  async function rightClick(selector) {
+    if (selector.startsWith('.react-flow__node')) {
+      await ui.click(`Array.from(document.querySelectorAll('.topology-controls button')).find(button => ['适应视图','Fit view'].includes(button.textContent))`)
+      await ui.frames()
+    }
+    const point = await pointFor(selector)
+    await renderer.call('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point }, 5000)
+    await renderer.call('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'right', buttons: 2, clickCount: 1 }, 5000)
+    await renderer.call('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'right', buttons: 0, clickCount: 1 }, 5000)
+    await ui.frames()
+    await ui.dom('menu survives the complete right-click gesture', `!!${$(menu)} && document.activeElement === ${$(item)}`)
+  }
+  for (const view of ['3D', '2D']) {
+    const trigger = view === '3D'
+      ? `.topology-3d-label[data-id=${JSON.stringify(agent.id)}]:not([hidden])`
+      : `.react-flow__node[data-id=${JSON.stringify(agent.id)}]`
+    await ui.stage(`topology-${view}-context-menu-open`, async () => {
+      if (view === '2D') await ui.click(mode(view))
+      await ui.navigate('本机概览', 'Overview')
+      await ui.click($('.agent-preview .entity-button'))
+      await ui.dom('menu target selected through overview', `${$('.agent-inspector')}?.dataset.agentId === ${JSON.stringify(agent.id)}`)
+      await rightClick(trigger)
+      const point = await pointFor(item)
+      await renderer.call('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point }, 5000)
+      await ui.frames()
+      await ui.dom('moving into the menu keeps its action available', `!!${$(menu)} && !${$(item)}?.disabled`)
+      return { agentId: agent.id, runtime: agent.runtime, input: 'CDP right press/release and pointer move', menuOpen: true }
+    })
+    await ui.stage(`topology-${view}-context-menu-actions`, async () => {
+      await ui.click($(item))
+      await ui.dom('real Tern IPC is rejected by the headless boundary', `${$(navigationError)}?.textContent.includes('native activation are disabled in headless development') && !${$(menu)}`)
+      const rejection = await ui.evaluate(`${$(navigationError)}.textContent`)
+      await ui.info()
+      await ui.click(`${$(navigationError)}.querySelector('button')`)
+      await rightClick(trigger)
+      await ui.click($('.agent-search input'))
+      await ui.dom('outside pointer click dismisses the menu and keeps destination focus', `!${$(menu)} && document.activeElement === ${$('.agent-search input')}`)
+      await rightClick(trigger)
+      await ui.key('Escape', 'Escape', 27)
+      await ui.frames()
+      await ui.dom('Escape restores focus to the exact originating agent', `!${$(menu)} && document.activeElement === ${$(trigger)}`)
+      await ui.key('F10', 'F10', 121, 8)
+      await ui.dom('Shift+F10 opens the focused agent menu', `!!${$(menu)} && document.activeElement === ${$(item)}`)
+      await ui.key('Tab', 'Tab', 9)
+      await ui.frames()
+      await ui.dom('Tab dismisses the menu without trapping focus in a detached item', `!${$(menu)} && !!document.activeElement?.isConnected && document.activeElement !== document.body && !document.activeElement.closest('.topology-context-menu')`)
+      return { rejection, outsideClick: true, escapeRestoresAgent: true, shiftF10: true, tabDismisses: true }
+    })
+    await ui.click($('.agent-inspector .section-heading .icon-button'))
+    await ui.dom('details close after menu checks', `!${$('.agent-inspector')}`)
+  }
+  await ui.click(mode('3D'))
+  await ui.dom('3D restored after context menu scenarios', `!!${$('.topology-3d-webgl')}`)
+
   await ui.stage('office-state-after-page-and-mode-switch', async () => {
     await ui.click(`Array.from(document.querySelectorAll('.topology-3d-controls button')).find(button => ['聚焦楼层','Focus floor'].includes(button.textContent))`)
     await ui.frames()

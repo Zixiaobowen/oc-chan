@@ -28,8 +28,17 @@ export default function AgentContextMenu({ anchor, busy, onClose, onNavigate }: 
     menu.querySelector('button')?.focus({ preventScroll: true })
   }, [anchor])
 
-  return <div ref={menuRef} popover="auto" role="menu" aria-label={t('OMP 操作', 'OMP actions')} className="topology-context-menu"
-    onToggle={event => { if (event.newState === 'closed') onClose(false) }}
+  useLayoutEffect(() => {
+    // Opening on contextmenu precedes the initiating gesture's pointerup.
+    // Own dismissal so that release cannot light-dismiss the new popover.
+    function dismissOutside(event: PointerEvent) {
+      if (!event.composedPath().includes(menuRef.current!)) onClose(false)
+    }
+    document.addEventListener('pointerdown', dismissOutside, true)
+    return () => document.removeEventListener('pointerdown', dismissOutside, true)
+  }, [onClose])
+
+  return <div ref={menuRef} popover="manual" role="menu" aria-label={t('OMP 操作', 'OMP actions')} className="topology-context-menu"
     onContextMenu={event => event.preventDefault()}
     onKeyDown={event => {
       if (event.key === 'Escape') {

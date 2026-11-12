@@ -18,7 +18,7 @@ export default function UpdateSettings() {
       : t('尚未检查更新。', 'Updates have not been checked yet.'),
     checking: t('正在检查更新…', 'Checking for updates…'),
     available: snapshot?.disabledReason
-      ? t('发现新版本。当前应用不支持应用内安装，可查看发行说明。', 'A new version is available. This app cannot install updates in-app; see the release notes.')
+      ? t('发现新版本。可前往 GitHub Release 下载并手动安装。', 'A new version is available. Download it from GitHub Releases and install it manually.')
       : t('发现新版本，可手动下载。', 'A new version is available to download.'),
     downloading: t('正在下载更新，可随时取消。', 'Downloading the update. You can cancel the download.'),
     downloaded: t('更新已下载，点击“重启并安装”完成更新。', 'The update is downloaded. Choose Restart and install to apply it.'),
@@ -26,9 +26,9 @@ export default function UpdateSettings() {
     error: t('更新失败。请查看下方错误后重试。', 'The update failed. Review the error below and retry.')
   }
   const disabledReason = snapshot?.disabledReason === 'development'
-    ? t('开发模式支持手动检查更新；下载和安装请使用已签名的正式安装包。', 'Development builds support manual update checks. Use a signed release build to download and install updates.')
+    ? t('开发模式支持手动检查新版；可前往 GitHub Release 下载，应用内安装不可用。', 'Development builds support manual checks. Download from GitHub Releases; in-app installation is unavailable.')
     : snapshot?.disabledReason === 'unsigned'
-      ? t('当前应用未通过发布签名检查，仍可手动检查新版；应用内下载和安装需要已签名的正式版本。', 'You can still check for updates. In-app downloads and installation require a release-signed build.')
+      ? t('当前应用未通过正式发布签名检查，可检查新版并前往 GitHub Release 下载；应用内安装不可用。', 'This app has not passed release signature verification. Check for updates and download from GitHub Releases; in-app installation is unavailable.')
       : snapshot?.disabledReason === 'platform'
         ? t('应用内更新目前仅支持 macOS。', 'In-app updates currently support macOS only.')
         : null
@@ -63,7 +63,7 @@ export default function UpdateSettings() {
         {(phase === 'available' || (phase === 'error' && snapshot?.availableVersion)) && <button type="button" className="button primary" disabled={busy || installUnavailable} onClick={() => void run('download')}>{phase === 'error' ? t('重新下载', 'Retry download') : t('下载更新', 'Download update')}</button>}
         {phase === 'downloading' && <button type="button" className="button secondary" disabled={pending !== null && pending !== 'download'} onClick={() => void run('cancel')}>{pending === 'cancel' ? t('正在取消…', 'Cancelling…') : t('取消下载', 'Cancel download')}</button>}
         {phase === 'downloaded' && <button type="button" className="button primary" disabled={busy || installUnavailable} onClick={() => void run('install')}>{t('重启并安装', 'Restart and install')}</button>}
-        <button type="button" className="button secondary" disabled={busy} onClick={() => void run('openReleaseNotes')}>{t('发行说明', 'Release notes')}</button>
+        <button type="button" className="button secondary" disabled={busy} onClick={() => void run('openReleaseNotes')}>{t('发行说明与下载', 'Release notes and downloads')}</button>
       </div>
       <p className="setting-help">{t('可主动检查新版；已签名的正式版本还会在启动后及每 6 小时自动检查。下载和安装由你决定，普通退出不会安装，并会清理下载包；发行说明在默认浏览器打开。', 'You can check for updates manually. Signed release builds also check after launch and every 6 hours. You choose when to download and install. Quitting normally discards the download without installing. Release notes open in your default browser.')}</p>
     </div>
