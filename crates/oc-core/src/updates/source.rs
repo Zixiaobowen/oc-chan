@@ -46,7 +46,7 @@ pub(super) fn parse_metadata(bytes: &[u8], current: &str) -> Result<Option<Candi
 }
 pub(super) async fn fetch(io: &BoundedIo, transport: &HttpTransport, current: String, cancel: &CancellationToken) -> Result<Option<Candidate>> {
     let response = transport.get(HttpRequest { purpose: HttpPurpose::Update, url: METADATA_URL.into(), target: None, target_parent: None,
-        max_bytes: MAX_METADATA_BYTES, expected_size: None, timeout_ms: 30_000, disk_budget: None }, cancel, None).await?;
+        max_bytes: MAX_METADATA_BYTES, expected_size: None, timeout_ms: 30_000, disk_budget: None }, cancel, None).await.map_err(metadata_error)?;
     // Parsing reserves its own phase after the HTTP process has exited; no
     // nested command/file lease and no detached reqwest connection driver.
     io.with_file_budget("app-updates", 1024 * 1024, cancel, move |cancel| async move {
@@ -54,6 +54,12 @@ pub(super) async fn fetch(io: &BoundedIo, transport: &HttpTransport, current: St
         if response.bytes != response.body.len() as u64 { return Err(Error::invalid("update metadata length")); }
         parse_metadata(&response.body, &current)
     }).await
+}
+// Only a missing metadata response means the release feed is unavailable.
+// Asset downloads retain their HTTP error code and generic update failure.
+pub(super) fn metadata_error(mut error: Error) -> Error {
+    if error.code == "OC_HTTP_NOT_FOUND" { error.code = "OC_UPDATE_METADATA_NOT_FOUND".into(); }
+    error
 }
 struct ProgressClock { started: Instant, last: Instant, received: u64 }
 impl ProgressClock {

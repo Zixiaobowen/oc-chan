@@ -44,23 +44,38 @@ function parseChecksums(text, expected) {
   if (sums.size !== expected.size) throw new Error('Missing SHA256SUMS.txt entry')
   return sums
 }
+// Inspect the exact bytes used for publication before any remote operation.
+// Preview outputs omit metadata; preparation always supplies its metadata name.
+export async function inspectReleaseAssets({ directory, version, metadataName }) {
+  const expected = new Set(['zip', 'dmg'].map(extension => assetName(version, extension)))
+  const documents = new Map()
+  let declaration
+  if (metadataName) {
+    const content = readBounded(join(directory, metadataName), 64 * 1024)
+    documents.set(metadataName, content)
+    const metadata = JSON.parse(content.toString('utf8'))
+    if (!keysAre(metadata, ['schema', 'version', 'assets']) || metadata.schema !== 2 || metadata.version !== version) throw new Error('Invalid schema2 metadata fields or version')
+    if (!Array.isArray(metadata.assets) || metadata.assets.length !== 1 || !keysAre(metadata.assets[0], ['target', 'name', 'size', 'sha512'])) throw new Error('Expected exactly one strict arm64 ZIP asset')
+    declaration = metadata.assets[0]
+    if (declaration.target !== ['darwin', 'aarch64'].join('-') || declaration.name !== assetName(version, 'zip')) throw new Error('Invalid update target or fixed ZIP filename')
+  }
+  const checksums = readBounded(join(directory, 'SHA256SUMS.txt'), 64 * 1024)
+  documents.set('SHA256SUMS.txt', checksums)
+  const sums = parseChecksums(checksums.toString('utf8'), expected), assets = []
+  for (const name of expected) {
+    const digest = await digestAsset(join(directory, name))
+    if (sums.get(name) !== digest.sha256) throw new Error(`SHA256 mismatch: ${name}`)
+    if (name === declaration?.name && (declaration.size !== digest.size || declaration.sha512 !== digest.sha512)) throw new Error('Update ZIP size or SHA512 mismatch')
+    assets.push({ name, ...digest })
+  }
+  return { assets, documents }
+}
 export async function prepareRelease({ version, tag, inputs, output, env = process.env }) {
   const info = publicationInfo(version, env)
   if (tag !== info.tag) throw new Error(`Release tag ${tag} must match package version and publication source: ${info.tag}`)
   if (!keysAre(inputs, ['arm64']) || typeof inputs.arm64 !== 'string') throw new Error('Release requires exactly the arm64 artifact directory')
-  const directory = inputs.arm64, expected = new Set(['zip', 'dmg'].map(extension => assetName(version, extension)))
-  const metadata = JSON.parse(readBounded(join(directory, info.metadataName), 64 * 1024).toString('utf8'))
-  if (!keysAre(metadata, ['schema', 'version', 'assets']) || metadata.schema !== 2 || metadata.version !== version) throw new Error('Invalid schema2 metadata fields or version')
-  if (!Array.isArray(metadata.assets) || metadata.assets.length !== 1 || !keysAre(metadata.assets[0], ['target', 'name', 'size', 'sha512'])) throw new Error('Expected exactly one strict arm64 ZIP asset')
-  const declaration = metadata.assets[0]
-  if (declaration.target !== ['darwin', 'aarch64'].join('-') || declaration.name !== assetName(version, 'zip')) throw new Error('Invalid update target or fixed ZIP filename')
-  const sums = parseChecksums(readBounded(join(directory, 'SHA256SUMS.txt'), 64 * 1024).toString('utf8'), expected), assets = []
-  for (const name of expected) {
-    const digest = await digestAsset(join(directory, name))
-    if (sums.get(name) !== digest.sha256) throw new Error(`SHA256 mismatch: ${name}`)
-    if (name === declaration.name && (declaration.size !== digest.size || declaration.sha512 !== digest.sha512)) throw new Error('Update ZIP size or SHA512 mismatch')
-    assets.push({ name, ...digest })
-  }
+  const directory = inputs.arm64
+  const { assets } = await inspectReleaseAssets({ directory, version, metadataName: info.metadataName })
   const manifest = JSON.parse(readBounded(join(directory, 'package-manifest-arm64.json'), 16 * 1024 * 1024).toString('utf8'))
   if (manifest?.schema !== 2 || manifest.arch !== 'arm64' || manifest.version !== version || !keysAre(manifest.artifacts, ['zip', 'dmg'])) throw new Error('Invalid schema2 arm64 package artifact manifest or version')
   for (const asset of assets) {
@@ -69,7 +84,7 @@ export async function prepareRelease({ version, tag, inputs, output, env = proce
     if (entry.bytes !== asset.size) throw new Error(`Package manifest size mismatch: ${asset.name}`)
     if (entry.digest !== (extension === 'zip' ? asset.sha512 : asset.sha256)) throw new Error(`Package manifest ${extension === 'zip' ? 'SHA512' : 'SHA256'} mismatch: ${asset.name}`)
   }
-  const zip = assets.find(asset => asset.name === declaration.name), canonical = stableMetadata(version, { bytes: zip.size, digest: zip.sha512 })
+  const zip = assets.find(asset => asset.name === assetName(version, 'zip')), canonical = stableMetadata(version, { bytes: zip.size, digest: zip.sha512 })
   // All declarations and input digests are checked before the destination exists.
   await mkdir(output, { mode: 0o700 })
   for (const asset of assets) {

@@ -77,6 +77,40 @@ async fn manual_check_replaces_startup_deadline_and_late_timer_is_ignored() {
     assert_eq!(controller.snapshot().phase, UpdatePhase::Error); controller.stop().await.unwrap();
 }
 #[tokio::test]
+async fn metadata_not_found_reports_release_unavailability_and_keeps_error_state() {
+    let temporary = tempfile::tempdir().unwrap(); let controller = controller(temporary.path().canonicalize().unwrap(), None);
+    let first = ticket(&controller, Kind::Check);
+    let error = source::metadata_error(Error::new("OC_HTTP_NOT_FOUND", "HTTP source returned status 404"));
+    let failure = controller.finish(first, Err(error)).unwrap_err();
+    assert_eq!(failure.code, "OC_UPDATE_METADATA_NOT_FOUND");
+    assert_eq!(failure.message, "HTTP source returned status 404");
+    let snapshot = controller.snapshot();
+    assert_eq!(snapshot.phase, UpdatePhase::Error);
+    assert_eq!(snapshot.error.as_deref(), Some("尚无可用 Release，或发布仓库不可访问 / No available Release or repository inaccessible"));
+    assert!(snapshot.checked_at.is_some());
+    assert!(snapshot.available_version.is_none());
+    controller.stop().await.unwrap();
+}
+#[tokio::test]
+async fn other_http_errors_and_missing_assets_do_not_report_missing_release() {
+    let temporary = tempfile::tempdir().unwrap(); let controller = controller(temporary.path().canonicalize().unwrap(), None);
+    for status in [403, 429, 500] {
+        let first = ticket(&controller, Kind::Check);
+        let error = source::metadata_error(Error::new("OC_HTTP_STATUS", format!("HTTP source returned status {status}")));
+        assert_eq!(controller.finish(first, Err(error)).unwrap_err().code, "OC_HTTP_STATUS");
+        assert_eq!(controller.snapshot().phase, UpdatePhase::Error);
+        assert_eq!(controller.snapshot().error.as_deref(), Some("更新操作失败 / Update operation failed"));
+    }
+    offer(&controller);
+    let first = ticket(&controller, Kind::Download);
+    let error = Error::new("OC_HTTP_NOT_FOUND", "HTTP source returned status 404");
+    assert_eq!(controller.finish(first, Err(error)).unwrap_err().code, "OC_HTTP_NOT_FOUND");
+    assert_eq!(controller.snapshot().phase, UpdatePhase::Error);
+    assert_eq!(controller.snapshot().error.as_deref(), Some("更新操作失败 / Update operation failed"));
+    assert_eq!(controller.snapshot().available_version.as_deref(), Some("0.2.0"));
+    controller.stop().await.unwrap();
+}
+#[tokio::test]
 async fn cancelled_operation_waits_for_real_owned_stage_cleanup() {
     let temporary = tempfile::tempdir().unwrap(); let controller = controller(temporary.path().canonicalize().unwrap(), None); offer(&controller);
     let active = ticket(&controller, Kind::Download);

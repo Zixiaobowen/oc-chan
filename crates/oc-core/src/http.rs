@@ -237,6 +237,10 @@ pub fn run_worker() -> Result<()> {
         Err(error) => emit(&mut output, Frame::Failure { v: VERSION, error }),
     }
 }
+fn status_error(status: reqwest::StatusCode) -> Error {
+    let code = if status == reqwest::StatusCode::NOT_FOUND { "OC_HTTP_NOT_FOUND" } else { "OC_HTTP_STATUS" };
+    Error::new(code, format!("HTTP source returned status {}", status.as_u16()))
+}
 async fn fetch(request: HttpRequest, output: &mut impl Write) -> Result<HttpResponse> {
     let client = reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).https_only(!request.purpose.is_fixture()).http1_only().no_proxy().pool_max_idle_per_host(0)
         .connect_timeout(Duration::from_secs(10)).build().map_err(|_| Error::new("OC_HTTP_NETWORK", "HTTP client initialization failed"))?;
@@ -253,7 +257,7 @@ async fn fetch(request: HttpRequest, output: &mut impl Write) -> Result<HttpResp
             let location = value.headers().get(reqwest::header::LOCATION).and_then(|value| value.to_str().ok()).filter(|value| value.len() <= 8192).ok_or_else(|| Error::invalid("HTTP redirect location"))?;
             url = url.join(location).map_err(|_| Error::invalid("HTTP redirect URL"))?; continue;
         }
-        if value.status() != reqwest::StatusCode::OK { return Err(Error::new("OC_HTTP_STATUS", format!("HTTP source returned status {}", value.status().as_u16()))); }
+        if value.status() != reqwest::StatusCode::OK { return Err(status_error(value.status())); }
         if value.headers().get_all(reqwest::header::CONTENT_ENCODING).iter().any(|encoding| encoding != "identity") { return Err(Error::invalid("HTTP content encoding")); }
         response = Some(value); break;
     }

@@ -77,8 +77,12 @@ const invalidCases = [
   ['wrong tag', async options => { options.tag = 'v9.9.9' }, /must match package version/],
   ['unsupported architecture input', async options => { options.inputs.x64 = options.inputs.arm64 }, /exactly the arm64/],
   ['wrong SHA256', async options => { const filename = join(options.inputs.arm64, 'SHA256SUMS.txt'); await writeFile(filename, (await readFile(filename, 'utf8')).replace(/^[a-f0-9]{64}/, '0'.repeat(64))) }, /SHA256 mismatch/],
+  ['missing checksum entry', async options => { const filename = join(options.inputs.arm64, 'SHA256SUMS.txt'); await writeFile(filename, `${(await readFile(filename, 'utf8')).split('\n')[0]}\n`) }, /Missing SHA256SUMS/],
+  ['duplicate checksum entry', async options => { const filename = join(options.inputs.arm64, 'SHA256SUMS.txt'), text = await readFile(filename, 'utf8'); await writeFile(filename, text + text.split('\n')[0] + '\n') }, /duplicate SHA256SUMS/],
+  ['oversized checksums', options => writeFile(join(options.inputs.arm64, 'SHA256SUMS.txt'), ' '.repeat(64 * 1024 + 1)), /budget/],
   ['oversized metadata', options => writeFile(join(options.inputs.arm64, 'latest.json'), ' '.repeat(64 * 1024 + 1)), /budget/],
   ['oversized sparse asset', options => truncate(join(options.inputs.arm64, `OC-Chan-${options.version}-mac-arm64.zip`), 512 * 1024 * 1024 + 1), /512MiB/],
+  ['oversized sparse DMG', options => truncate(join(options.inputs.arm64, `OC-Chan-${options.version}-mac-arm64.dmg`), 512 * 1024 * 1024 + 1), /512MiB/],
   ['symlink asset', async options => { const filename = join(options.inputs.arm64, `OC-Chan-${options.version}-mac-arm64.zip`); await rm(filename); await symlink(`OC-Chan-${options.version}-mac-arm64.dmg`, filename) }, /ELOOP/]
 ]
 for (const [name, mutate, expected] of invalidCases) test(`rejects ${name} before creating output`, async t => {

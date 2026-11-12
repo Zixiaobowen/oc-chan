@@ -263,6 +263,7 @@ fn public_error(error: &Error) -> String {
     // this DTO. No reqwest URL, raw installer output or filesystem path is exposed.
     if error.is_cleanup() { "更新暂存清理失败 / Update staging cleanup failed".into() }
     else if error.code == "ETIMEDOUT" { "更新操作超时 / Update operation timed out".into() }
+    else if error.code == "OC_UPDATE_METADATA_NOT_FOUND" { "尚无可用 Release，或发布仓库不可访问 / No available Release or repository inaccessible".into() }
     else if error.code == "OC_UPDATE_SPACE" { "更新空间不足 / Insufficient update disk space".into() }
     else if error.code == "OC_UPDATE_INTEGRITY" { "更新大小或摘要不符 / Update size or SHA-512 mismatch".into() }
     else if error.code == "OC_UPDATE_ARCHIVE" { "更新ZIP结构或路径不安全 / Unsafe update ZIP structure or path".into() }

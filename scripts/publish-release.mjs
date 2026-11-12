@@ -1,10 +1,10 @@
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { constants } from 'node:fs'
-import { open, opendir } from 'node:fs/promises'
+import { opendir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { packageReleaseInfo, publicationInfo, releaseInfo, releaseRepository } from './release-config.mjs'
+import { inspectReleaseAssets } from './prepare-release.mjs'
 
 // The workflow must serialize every writer to this repository from Latest read
 // through publication and readback. GitHub has no conditional Latest update API.
@@ -89,25 +89,10 @@ export async function publishRelease({ directory, version, tag, env = process.en
     if (actual.length > names.length) throw new Error('Unexpected or missing release assets')
   }
   if (JSON.stringify(actual.sort()) !== JSON.stringify(names)) throw new Error('Unexpected or missing release assets')
-  const expected = new Map()
-  for (const name of names) {
-    const file = await open(join(directory, name), constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW)
-    try {
-      const details = await file.stat()
-      if (!details.isFile() || !Number.isSafeInteger(details.size) || details.size <= 0) throw new Error(`Invalid release asset: ${name}`)
-      const hash = createHash('sha256')
-      let size = 0
-      for await (const chunk of file.createReadStream({ autoClose: false, highWaterMark: 64 * 1024 })) {
-        size += chunk.length
-        if (size > details.size) throw new Error(`Release asset grew during bounded read: ${name}`)
-        hash.update(chunk)
-      }
-      const after = await file.stat()
-      if (size !== details.size || after.size !== details.size || after.dev !== details.dev || after.ino !== details.ino || after.mtimeMs !== details.mtimeMs || after.ctimeMs !== details.ctimeMs) throw new Error(`Release asset changed during read: ${name}`)
-      expected.set(name, { size, digest: `sha256:${hash.digest('hex')}` })
-    } finally {
-      await file.close()
-    }
+  const { assets, documents } = await inspectReleaseAssets({ directory, version: info.version, metadataName: info.prerelease ? undefined : info.metadataName })
+  const expected = new Map(assets.map(asset => [asset.name, { size: asset.size, digest: `sha256:${asset.sha256}` }]))
+  for (const [name, content] of documents) {
+    expected.set(name, { size: content.length, digest: `sha256:${createHash('sha256').update(content).digest('hex')}` })
   }
   const repository = gh(['api', `repos/${releaseRepository}`, '--include'])
   if (typeof repository?.private !== 'boolean') throw new Error('Invalid release repository visibility')

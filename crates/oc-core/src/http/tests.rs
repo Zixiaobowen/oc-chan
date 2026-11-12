@@ -48,6 +48,19 @@ fn failed_worker_is_not_a_successful_empty_body() {
     assert_eq!(parser.finish().unwrap_err().code, "OC_HTTP_NETWORK");
 }
 #[test]
+fn http_status_errors_distinguish_not_found_and_preserve_status_message() {
+    for (status, code) in [(404, "OC_HTTP_NOT_FOUND"), (403, "OC_HTTP_STATUS"), (429, "OC_HTTP_STATUS"), (500, "OC_HTTP_STATUS")] {
+        let error = status_error(reqwest::StatusCode::from_u16(status).unwrap());
+        assert_eq!(error.code, code);
+        assert_eq!(error.message, format!("HTTP source returned status {status}"));
+        let mut parser = Parser::new(metadata(), None);
+        parser.push(&frame(Frame::Failure { v: VERSION, error })).unwrap();
+        let propagated = parser.finish().unwrap_err();
+        assert_eq!(propagated.code, code);
+        assert_eq!(propagated.message, format!("HTTP source returned status {status}"));
+    }
+}
+#[test]
 fn source_policy_rejects_escape_and_allows_only_named_update_assets() {
     metadata().validate().unwrap();
     for url in ["http://raw.githubusercontent.com/Zixiaobowen/oc-chan/main/plugin-market/catalog.json", "https://evil.example/catalog.json", "https://raw.githubusercontent.com/Zixiaobowen/oc-chan/main/plugin-market/../other", "https://raw.githubusercontent.com/Zixiaobowen/oc-chan/main/plugin-market/a.ocplugin?private=1", "https://name@raw.githubusercontent.com/Zixiaobowen/oc-chan/main/plugin-market/catalog.json"] {

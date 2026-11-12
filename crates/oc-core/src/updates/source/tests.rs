@@ -6,6 +6,17 @@ fn metadata() -> serde_json::Value {
     json!({"schema":2,"version":"0.2.0","assets":[{"target":TARGET,"name":"OC-Chan-0.2.0-mac-arm64.zip","size":17,"sha512":STANDARD.encode([0u8;64])}]})
 }
 #[test]
+fn metadata_error_classification_uses_only_the_http_code() {
+    let missing = metadata_error(Error::new("OC_HTTP_NOT_FOUND", "controlled transport detail"));
+    assert_eq!(missing.code, "OC_UPDATE_METADATA_NOT_FOUND");
+    assert_eq!(missing.message, "controlled transport detail");
+    for code in ["OC_HTTP_STATUS", "OC_HTTP_NETWORK", "ETIMEDOUT", "ABORT_ERR"] {
+        let original = Error::new(code, "HTTP source returned status 404");
+        let expected = serde_json::to_value(&original).unwrap();
+        assert_eq!(serde_json::to_value(metadata_error(original)).unwrap(), expected);
+    }
+}
+#[test]
 fn strict_metadata_selects_upgrade_and_validates_even_old_releases() {
     let bytes = serde_json::to_vec(&metadata()).unwrap(); let candidate = parse_metadata(&bytes, "0.1.0").unwrap().unwrap();
     assert_eq!(candidate.version, "0.2.0"); assert_eq!(candidate.asset.size, 17);
