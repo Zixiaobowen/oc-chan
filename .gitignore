@@ -12,6 +12,9 @@ scripts/probes/wk/dist/
 # Native probe build outputs
 /scripts/probes/wk/frontend-dist/
 /scripts/probes/wk/gen/
+/resources/tern-navigation/present-window
+/resources/liquid-glass/*.node
+/resources/notification-permission/*.node
 
 # Local task handoffs, audits, and migration experiment records.
 /docs/codex-handoffs/
