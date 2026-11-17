@@ -195,6 +195,7 @@ static id Call(std::shared_ptr<State> state, NSString *command, NSDictionary *ar
     state->notifications[id] = @{ @"target":state->notifications[id][@"target"], @"cancelled":@YES };
     return @{ @"id":id, @"removalRequested":@YES };
   }
+  if ([command hasPrefix:@"updater"]) return UpdaterCall(state, command, args);
   throw std::runtime_error("unknown native command");
 }
 extern "C" int oc_native_call(oc_native_context *context, const char *command, const char *args_json, char **result_json, char **error) {
@@ -290,6 +291,7 @@ extern "C" int oc_native_release(oc_native_context *context, char **error) {
       if (state->sending) state->cancelled = true;
       throw std::runtime_error("notification revocation pending; await OS operation, query notificationState until revoking/pending/delivered are empty, then retry release; context retained");
     }
+    UpdaterRelease(state);
     RemoveObservers(state);
     if (state->delegate) {
       UNUserNotificationCenter *center = UNUserNotificationCenter.currentNotificationCenter;

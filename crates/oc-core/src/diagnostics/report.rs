@@ -14,7 +14,7 @@ pub struct ReportCoverage { pub sources: CoverageCount, pub diagnostics: Coverag
 pub struct ReportContent { pub generated_at:String, pub bytes:usize, pub json:String, pub coverage:ReportCoverage, pub limits:Vec<String> }
 pub struct ReportMetadata { pub version:String, pub gpui:String, pub platform:String, pub arch:String, pub os_release:String }
 const SOURCES:&[&str]=&["processes","omp-ownership","codex-sessions","tern-state","omp-socket","agent-activity","omp-cron","hermes-cron","hermes-runtime","hermes-metadata-errors","crontab","schedule-semantics","system","system-0","system-1","system-2","system-3","network-interface","collection-resources","schedule-limits","event-store","hermes-events","source-events"];
-const RESOURCES:&[&str]=&["agent-activity","agent-metadata","agent-processes","agent-ownership","agent-collab","agent-tern","schedule-files","schedule-plist","schedule-commands","schedule-metadata","hermes-processes","history","schedules","events","tern-navigation","diagnostic-export","plugin-host","plugin-market","http","app-updates","settings","desktop-startup","application-install","installation-readiness"];
+const RESOURCES:&[&str]=&["agent-activity","agent-metadata","agent-processes","agent-ownership","agent-collab","agent-tern","schedule-files","schedule-plist","schedule-commands","schedule-metadata","hermes-processes","history","schedules","events","tern-navigation","diagnostic-export","plugin-host","plugin-market","http","settings","desktop-startup","installation-readiness"];
 struct Projection { limits:BTreeSet<String>, coverage:ReportCoverage, inspected_sources:usize, inspected_diagnostics:usize, remaining:usize }
 impl Projection {
     fn invalid(&mut self)->Value { self.limits.insert("invalid-fields".into()); Value::Null }

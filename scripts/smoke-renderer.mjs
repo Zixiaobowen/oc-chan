@@ -10,6 +10,7 @@ import { promisify } from 'node:util'
 import { prepareSmokeFixtures } from './performance/agent-fixtures.mjs'
 import { exerciseGpui } from './smoke/gpui-scenarios.mjs'
 import { createMarketFeed } from './smoke/marketplace-feed.mjs'
+import { createSparkleFeed } from './smoke/sparkle-feed.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 export class Driver {
@@ -61,9 +62,9 @@ async function until(action, timeout = 60000) {
   }
   throw new Error('GPUI readiness deadline', { cause: last })
 }
-export async function smoke({ output, scenario = 'all', ...unsupported } = {}) {
+export async function smoke({ output, scenario = 'all', sparklePhase = 'available', ...unsupported } = {}) {
   assert.deepEqual(Object.keys(unsupported), [], 'Smoke only owns instances created by this invocation')
-  assert(['all', 'basic', 'marketplace', 'topology', 'notifications', 'collectors', 'sidebar', 'schedules'].includes(scenario), 'Unknown GPUI scenario')
+  assert(['all', 'basic', 'marketplace', 'topology', 'notifications', 'collectors', 'sidebar', 'schedules', 'updates'].includes(scenario), 'Unknown GPUI scenario')
   output ??= await mkdtemp(path.join(os.tmpdir(), 'oc-gpui-evidence-'))
   await mkdir(output, { recursive: true, mode: 0o700 })
   output = await realpath(output)
@@ -77,6 +78,7 @@ export async function smoke({ output, scenario = 'all', ...unsupported } = {}) {
     evidenceBytes += bytes; result.checks.push({ name, details })
   }
   let feed
+  let sparkleFeed
   let startupEnvironment
   let instance, driver, active, buildBytes, settingsBytes, corrupted = false, failure
   const runs = []
@@ -156,11 +158,13 @@ export async function smoke({ output, scenario = 'all', ...unsupported } = {}) {
   }
   try {
     feed = ['all', 'marketplace'].includes(scenario) ? await createMarketFeed(path.join(output, 'market-fixtures'), { record }) : null
+    if (scenario === 'updates') sparkleFeed = await createSparkleFeed({ phase: sparklePhase })
     startupEnvironment = { ...process.env, OC_CHAN_HOME: manifest.home,
+      ...(sparkleFeed ? { OC_CHAN_SPARKLE_TEST_FEED_URL: sparkleFeed.url, OC_CHAN_SPARKLE_TEST_PUBLIC_KEY: sparkleFeed.publicKey } : {}),
       ...(scenario === 'schedules' ? { OC_CHAN_ACCEPTANCE_SCHEDULE_DETAIL: '1' } : {}),
       ...(feed ? { OC_CHAN_ACCEPTANCE_MARKET_FIXTURES: JSON.stringify(feed.startupRoots()) } : {}) }
     delete startupEnvironment.OC_CHAN_ACCEPTANCE_RECOVERY
-    await launch('initial', false, scenario === 'schedules')
+    await launch('initial', false, ['schedules', 'updates'].includes(scenario))
     const first = await until(async () => { const value = await driver.request('inspect'); return value.ui?.settingsLoaded && value })
     assert.equal(first.native.visible, false); assert.equal(first.native.key, false); assert.equal(first.native.appActive, false); assert.equal(first.native.activationPolicy, 2)
     record('real-hidden-gpui-view', first)
@@ -170,7 +174,7 @@ export async function smoke({ output, scenario = 'all', ...unsupported } = {}) {
     assert.equal(glyph.probe.native.visible, false); assert.equal(glyph.probe.native.key, false)
     await copyFile(glyphPath, path.join(output, 'native-text-probe.png')); record('real-native-glyphs', glyph.probe)
     await until(async () => { const state = await driver.request('inspect'); const seen = new Set(state.ui?.agents?.map(agent => agent.id)); return manifest.agentIds.every(id => seen.has(id)) })
-    const pages = scenario === 'schedules' ? ['schedules'] : scenario === 'marketplace' ? ['plugins', 'settings'] : scenario === 'topology' ? ['agents'] : ['overview', 'agents', 'schedules', 'events', 'sources', 'settings', 'plugins']
+    const pages = scenario === 'updates' ? ['settings'] : scenario === 'schedules' ? ['schedules'] : scenario === 'marketplace' ? ['plugins', 'settings'] : scenario === 'topology' ? ['agents'] : ['overview', 'agents', 'schedules', 'events', 'sources', 'settings', 'plugins']
     for (const [width, height] of [[1280, 860], [880, 640]]) {
       await driver.request('resize', { width, height })
       for (const page of pages) {
@@ -184,8 +188,8 @@ export async function smoke({ output, scenario = 'all', ...unsupported } = {}) {
         result.screenshots.push(name); record(`${page}-${width}`, state)
       }
     }
-    const expectedSettings = await exerciseGpui({ driver, instance, output, manifest, scenario, feed, record })
-    if (scenario === 'schedules') {
+    const expectedSettings = await exerciseGpui({ driver, instance, output, manifest, scenario, feed, sparkle: sparkleFeed?.expectation, record })
+    if (['schedules', 'updates'].includes(scenario)) {
       await stop()
       await assert.rejects(lstat(instance), { code: 'ENOENT' })
       result.complete = true
@@ -261,6 +265,7 @@ export async function smoke({ output, scenario = 'all', ...unsupported } = {}) {
     if (corrupted && active?.exit) await cleanup(() => writeFile(path.join(instance, 'profile/settings.json'), settingsBytes))
     await cleanup(() => deadline(manifest.stopAgents(), 30000, 'Fixture shutdown deadline'))
     if (feed) { await cleanup(async () => { result.feed = feed.evidence() }); await cleanup(() => deadline(feed.close(), 30000, 'Feed shutdown deadline')) }
+    if (sparkleFeed) await cleanup(() => deadline(sparkleFeed.close(), 30000, 'Sparkle feed shutdown deadline'))
     if (cleanupErrors.length) { result.complete = false; failure = new AggregateError([...(failure ? [failure] : []), ...cleanupErrors], 'Smoke and cleanup failed') }
     result.runs = runs.map(run => ({ name: run.name, instance: run.instance, launcherPid: run.child.pid, receipt: run.receipt, exit: run.exit }))
     await cleanup(() => writeFile(path.join(output, 'launcher.log'), runs.map(run => `\n[${run.name}]\n${run.log}`).join(''), { mode: 0o600 }))
@@ -275,8 +280,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const options = {}
   for (let index = 2; index < process.argv.length; index += 2) {
     const key = process.argv[index], value = process.argv[index + 1]
-    assert(['--scenario', '--out'].includes(key) && value, 'Usage: smoke-renderer.mjs [--scenario NAME] [--out DIR]')
-    options[key === '--out' ? 'output' : 'scenario'] = value
+    assert(['--scenario', '--out', '--sparkle-phase'].includes(key) && value, 'Usage: smoke-renderer.mjs [--scenario NAME] [--out DIR] [--sparkle-phase available|no-update|error]')
+    options[key === '--out' ? 'output' : key === '--sparkle-phase' ? 'sparklePhase' : 'scenario'] = value
   }
   smoke(options).catch(error => { console.error(error); process.exitCode = 1 })
 }

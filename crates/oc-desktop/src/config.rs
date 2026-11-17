@@ -4,7 +4,7 @@ use oc_core::{error::{Error, Result, check_cancel}, io::BoundedIo};
 include!(concat!(env!("OUT_DIR"), "/catalog.rs"));
 
 #[derive(Clone)]
-pub enum InstallationReceipt { Signed(PathBuf), Local(PathBuf) }
+pub struct InstallationReceipt(pub PathBuf);
 
 pub struct Config {
     pub home: PathBuf,
@@ -66,12 +66,9 @@ impl Config {
         let mut ready_request = None;
         for argument in std::env::args_os().skip(1) {
             let argument = argument.to_str().ok_or_else(|| Error::invalid("application argument encoding"))?;
-            if let Some(path) = argument.strip_prefix(oc_installer::READY_ARGUMENT) {
+            if let Some(path) = argument.strip_prefix(oc_installer::LOCAL_READY_ARGUMENT) {
                 if ready_request.is_some() { return Err(Error::invalid("duplicate installation receipt")); }
-                ready_request = Some(InstallationReceipt::Signed(absolute(PathBuf::from(path), "installation receipt")?));
-            } else if let Some(path) = argument.strip_prefix(oc_installer::LOCAL_READY_ARGUMENT) {
-                if ready_request.is_some() { return Err(Error::invalid("duplicate installation receipt")); }
-                ready_request = Some(InstallationReceipt::Local(absolute(PathBuf::from(path), "local installation receipt")?));
+                ready_request = Some(InstallationReceipt(absolute(PathBuf::from(path), "local installation receipt")?));
             } else if !(argument.starts_with("-psn_") && argument.len() <= 64 && argument[5..].bytes().all(|b| b.is_ascii_digit() || b == b'_')) {
                 return Err(Error::invalid("application argument"));
             }

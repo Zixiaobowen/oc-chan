@@ -6,7 +6,7 @@ fn metadata() -> HttpRequest {
         max_bytes: METADATA_LIMIT, expected_size: None, timeout_ms: 30_000, disk_budget: None }
 }
 fn frame(frame: Frame) -> Vec<u8> { let mut bytes = Vec::new(); emit(&mut bytes, frame).unwrap(); bytes }
-fn complete(body: &[u8]) -> Frame { Frame::Complete { v: VERSION, bytes: body.len() as u64, sha256: format!("{:x}", Sha256::digest(body)), sha512: STANDARD.encode(Sha512::digest(body)), file_identity: None } }
+fn complete(body: &[u8]) -> Frame { Frame::Complete { v: VERSION, bytes: body.len() as u64, sha256: format!("{:x}", Sha256::digest(body)), file_identity: None } }
 fn profile() -> tempfile::TempDir {
     let root = std::env::temp_dir().canonicalize().unwrap(); let dir = tempfile::tempdir_in(root).unwrap();
     std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap(); dir
@@ -61,16 +61,11 @@ fn http_status_errors_distinguish_not_found_and_preserve_status_message() {
     }
 }
 #[test]
-fn source_policy_rejects_escape_and_allows_only_named_update_assets() {
+fn source_policy_rejects_escape_and_bounds_market_requests() {
     metadata().validate().unwrap();
     for url in ["http://raw.githubusercontent.com/Zixiaobowen/oc-chan/main/plugin-market/catalog.json", "https://evil.example/catalog.json", "https://raw.githubusercontent.com/Zixiaobowen/oc-chan/main/plugin-market/../other", "https://raw.githubusercontent.com/Zixiaobowen/oc-chan/main/plugin-market/a.ocplugin?private=1", "https://name@raw.githubusercontent.com/Zixiaobowen/oc-chan/main/plugin-market/catalog.json"] {
         assert!(validate_url(HttpPurpose::Marketplace, &reqwest::Url::parse(url).unwrap(), false).is_err());
     }
-    for suffix in ["latest/download/latest.json", "download/v1.2.3/OC-Chan-1.2.3-mac-arm64.zip"] { validate_url(HttpPurpose::Update, &reqwest::Url::parse(&format!("{RELEASE_BASE}{suffix}")).unwrap(), false).unwrap(); }
-    for suffix in ["latest/download/latest.yml", "download/v1.2.3/OC-Chan-1.2.4-mac-arm64.zip", "download/v1.2.3-beta/OC-Chan-1.2.3-beta-mac-arm64.zip", "download/v1.2.3/OC-Chan-1.2.3-mac-x64.zip"] { assert!(validate_url(HttpPurpose::Update, &reqwest::Url::parse(&format!("{RELEASE_BASE}{suffix}")).unwrap(), false).is_err()); }
-    validate_url(HttpPurpose::Update, &reqwest::Url::parse("https://release-assets.githubusercontent.com/path?signature=opaque").unwrap(), true).unwrap();
-    assert!(validate_url(HttpPurpose::Update, &reqwest::Url::parse("https://release-assets.githubusercontent.com.evil.example/path").unwrap(), true).is_err());
-    assert!(validate_url(HttpPurpose::Update, &reqwest::Url::parse("https://objects.githubusercontent.com:444/path").unwrap(), true).is_err());
     let mut request = metadata(); request.max_bytes += 1; assert!(request.validate().is_err());
     let mut encoded = serde_json::to_value(metadata()).unwrap(); encoded["unknown"] = serde_json::json!(true); assert!(serde_json::from_value::<HttpRequest>(encoded).is_err());
 }

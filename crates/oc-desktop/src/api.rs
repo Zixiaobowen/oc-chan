@@ -14,7 +14,7 @@ impl View {
 #[cfg(test)]mod tests{
     use super::*;
     #[test]fn auxiliary_views_cannot_mutate_settings_plugins_or_updates(){
-        for command in ["settings_update","settings_update_login_item","settings_request_notification_permission","marketplace_install","marketplace_update","marketplace_uninstall","updates_download","updates_install","diagnostics_save"]{assert!(!View::Tray.permits(command));assert!(!View::Recovery.permits(command));assert!(View::Main.permits(command));}
+        for command in ["settings_update","settings_update_login_item","settings_request_notification_permission","marketplace_install","marketplace_update","marketplace_uninstall","updates_check","updates_set_automatic_checks","diagnostics_save"]{assert!(!View::Tray.permits(command));assert!(!View::Recovery.permits(command));assert!(View::Main.permits(command));}
         assert!(View::Tray.permits("settings_show_main_window"));assert!(View::Tray.permits("tray_preferences_save"));
         assert!(!View::Main.permits("recovery_retry"));assert!(View::Recovery.permits("recovery_retry"));assert!(!View::Recovery.permits("monitor_snapshot"));
     }

@@ -1,4 +1,5 @@
-use oc_core::{model::*, settings::*, marketplace, updates};
+use oc_core::{model::*, settings::*, marketplace};
+use crate::updates;
 
 pub(super) trait UiLabel {
     fn labels(self) -> (&'static str, &'static str);
@@ -35,8 +36,7 @@ labels!(MonitorSection { Agents => ("Agent", "Agents"), Schedules => ("定时任
 labels!(marketplace::Action { Install => ("安装", "Install"), Update => ("更新", "Update"), Uninstall => ("卸载", "Uninstall") });
 labels!(marketplace::Phase { Downloading => ("下载中", "Downloading"), Verifying => ("校验中", "Verifying"), Activating => ("激活中", "Activating"), Removing => ("卸载中", "Removing") });
 labels!(marketplace::Source { Bundled => ("随附离线包", "Bundled package"), Online => ("在线目录", "Online catalog"), Installed => ("本机已安装", "Installed locally") });
-labels!(updates::UpdatePhase { Disabled => ("更新已停用", "Updates disabled"), Idle => ("等待检查", "Ready to check"), Checking => ("检查中", "Checking"), Available => ("有可用更新", "Update available"), Downloading => ("下载中", "Downloading"), Downloaded => ("下载完成", "Downloaded"), Installing => ("安装中", "Installing"), Error => ("更新失败", "Update failed") });
-labels!(updates::DisabledReason { Development => ("开发版本不支持自动更新", "Automatic updates are unavailable in development builds"), Platform => ("当前平台不支持自动更新", "Automatic updates are unsupported on this platform"), Unsigned => ("未签名版本不支持自动更新", "Automatic updates are unavailable in unsigned builds") });
+labels!(updates::UpdatePhase { Idle => ("等待检查", "Ready to check"), Checking => ("检查中", "Checking"), NoUpdate => ("没有适用更新", "No applicable update"), Available => ("有可用更新", "Update available"), Downloading => ("下载中", "Downloading"), Downloaded => ("下载完成", "Downloaded"), Extracting => ("解压中", "Extracting"), ReadyToInstall => ("准备安装", "Ready to install"), Installing => ("安装中", "Installing"), AwaitingQuit => ("正在结束业务后重启", "Draining work before restart"), Cancelled => ("已取消", "Cancelled"), Error => ("更新失败", "Update failed") });
 labels!(LoginAvailability { Available => ("可用", "Available"), Development => ("开发版本不可用", "Unavailable in development builds"), NotInstalled => ("应用尚未安装", "Application not installed"), Unsupported => ("当前平台不支持", "Unsupported on this platform") });
 labels!(LoginStatus { NotRegistered => ("未注册登录项", "Login item not registered"), Enabled => ("已启用", "Enabled"), RequiresApproval => ("需要系统批准", "System approval required"), NotFound => ("未找到登录项", "Login item not found"), Unknown => ("未知", "Unknown") });
 labels!(SourceDiagnosticOperation { Services => ("services", "services"), Disabled => ("disabled", "disabled") });

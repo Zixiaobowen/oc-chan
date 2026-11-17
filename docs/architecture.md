@@ -6,10 +6,10 @@ OC Chan 使用 Rust 业务核心与 GPUI 0.2.2 桌面界面，macOS 由 Metal �
 
 ## 实现
 
-- `crates/oc-core/`：Agent 发现与实时会话、任务/历史、事件/通知策略、设置事务、诊断、导航、插件调度、市场和应用更新；不依赖界面窗口对象。
+- `crates/oc-core/`：Agent 发现与实时会话、任务/历史、事件/通知策略、设置事务、诊断、导航、插件调度和市场；不依赖界面窗口对象。应用更新由 GPUI 宿主接入 Sparkle。
 - `crates/oc-plugin-sdk/`：原生插件协议、公开数据与有界宿主IO契约。插件只依赖SDK，不读取核心或其他插件私有状态。
 - `plugins/system-monitor/`：独立Rust系统采集器、清单及边界测试；不编译为核心内置系统采集实现。
-- `crates/oc-installer/`：安装锁、来源和进程身份、暂存、替换、就绪与回滚事务；更新控制器不自行覆盖正在运行的应用。
+- `crates/oc-installer/`：本地安装就绪库；旧在线安装助手已删除，Sparkle 管理在线更新的安装与重启。
 - `crates/oc-desktop/`：GPUI 窗口、托盘、启动恢复、页面、原生拓扑、受限业务动作、视图 owner、安装就绪与应用退出。
 - `native/`：C ABI的AppKit/UserNotifications/ServiceManagement/IOKit桥接，以及Swift的Tern窗口助手；没有N-API。
 - `scripts/build-app.mjs`、`dist.mjs`、`develop.mjs`：受控构建、打包与隔离实例；Node只运行这些开发工具。
@@ -57,7 +57,7 @@ GPUI/AppKit 主线程处理窗口和平台 UI，异步业务由 Tokio 执行。�
 
 Tern助手位于`native/tern-present.swift`，配合`resources/tern-navigation/plugin/`重新核对会话、进程出生身份、签名和唯一原生窗口；缺权限、歧义或目标变更均可见。Liquid Glass采用公开`NSGlassEffectView`，每窗最多一个实例，强度0立即释放，辅助功能设置优先。
 
-应用更新采用固定公开发布源、schema2 元数据、流式校验与 Rust 安装助手。显式安装前验证 Developer ID、固定 Bundle ID、同 Team、架构和升级版本；替换后必须收到绑定事务身份的 GPUI 绘制、界面动作往返、采集和历史就绪回执，才可提交。普通退出不安装。事务契约见[应用更新](rust-migration/update-contract.md)，签名与包检查见[发布文档](distribution.md)。
+应用更新使用 Sparkle 2.10.1 完整官方 framework 和上游签名 helpers，以归档 SHA-256 与逐文件 pin 校验，包括不能裁剪的封印内 Headers/Modules。生产固定读取 GitHub Releases 的 `latest/download/appcast.xml`，Ed25519 签名覆盖 feed 和 ZIP；启用提取前验证及签名 feed，签名过期 fallback 为 0。GPUI 设置显示状态与自动检查选项，下载、安装和重启由 Sparkle 标准界面负责；自动下载关闭，普通退出不自动安装。开发/无头只探测。旧核心更新器、`latest.json` 和在线安装助手不再保留；本地安装就绪库独立保留。应用更新无需付费 Apple 会员，但 ad-hoc 不等于公证或 Gatekeeper 豁免；插件市场的独立信任要求不因此放宽。契约见[应用更新](rust-migration/update-contract.md)，签名与包检查见[发布文档](distribution.md)。
 
 验收驱动和 Metal 截图钩子只在 `acceptance` feature 编译。默认通过 `npm run dev` 启动隔离、隐藏、不抢焦点的 GPUI 应用；认证 Unix socket 驱动实际视图和输入，截图读取真实 Metal drawable。单元测试、真实无头应用、签名产物、正式安装、系统权限和可见动效是不同证据，不能互相代替。
 

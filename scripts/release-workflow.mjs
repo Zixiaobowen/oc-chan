@@ -14,11 +14,11 @@ export function requireMain(env) {
   if (!/^[a-f0-9]{40}$/.test(env.GITHUB_SHA || '')) throw new Error('Release entry points require an exact main commit')
 }
 
-export function stableTarget(requested, checked, env) {
+export function stableTarget(requested, checked, env, publicKey) {
   requireMain(env)
   const info = releaseInfo(requested)
   if (checked.version !== info.version) throw new Error('Requested version does not match the selected main commit')
-  requireReleaseEnvironment(info, { ...env, GITHUB_REF: `refs/tags/${info.tag}` })
+  requireReleaseEnvironment(info, { ...env, GITHUB_REF: `refs/tags/${info.tag}` }, publicKey)
   return info
 }
 
@@ -117,7 +117,7 @@ export async function run(command, env = process.env, dependencies = {}) {
     return { version: productVersion, branch, pullRequest: pr.html_url }
   }
   if (command === 'stable') {
-    const info = stableTarget(env.RELEASE_VERSION, runVersion('check', '--release'), env)
+    const info = stableTarget(env.RELEASE_VERSION, runVersion('check', '--release'), env, dependencies.publicKey)
     await requireUnpublished(api, info.tag)
     const refs = await api(`git/matching-refs/tags/${info.tag}`)
     const existing = refs.find(ref => ref.ref === `refs/tags/${info.tag}`)

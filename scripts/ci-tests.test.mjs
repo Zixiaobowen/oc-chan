@@ -45,7 +45,7 @@ test('renderer smoke follows executable and UI changes, while documentation and 
 test('collection and view changes include Rust module callers without unrelated packages', () => {
   assert.deepEqual(selectTests(['crates/oc-core/src/schedules/launchd.rs']).rust, ['events', 'monitor', 'schedules'])
   assert.deepEqual(selectTests(['crates/oc-core/src/agents/activity.rs']).rust, ['agents', 'monitor', 'tern'])
-  assert.deepEqual(selectTests(['crates/oc-core/src/updates/source.rs']).rust, ['updates'])
+  assert.deepEqual(selectTests(['crates/oc-core/src/marketplace/source.rs']).rust, ['marketplace', 'plugins'])
   assert.deepEqual(selectTests(['crates/oc-core/src/marketplace/archive.rs']).rust, ['marketplace', 'plugins'])
   assert.deepEqual(selectTests(['crates/oc-desktop/src/views.rs']).tests, union('install'))
   assert.deepEqual(selectTests(['crates/oc-desktop/src/views.rs']).rust, ['host'])
@@ -134,11 +134,11 @@ test('branch and PR events require a precise base; release and manual events che
 })
 
 test('core tests first build a real worker and pass its exact absolute executable path', () => {
-  const plan = rustCommands(['events', 'updates'], { cwd: '/workspace/project', environment: { CARGO_TARGET_DIR: 'isolated-target' } })
+  const plan = rustCommands(['events', 'monitor'], { cwd: '/workspace/project', environment: { CARGO_TARGET_DIR: 'isolated-target' } })
   assert.deepEqual(plan.commands[0], ['build', '--locked', '-p', 'oc-core', '--bin', 'oc-data-worker', '--features', 'acceptance'])
   assert.equal(plan.env.OC_DATA_WORKER_TEST_EXECUTABLE, '/workspace/project/isolated-target/debug/oc-data-worker')
   assert.equal(plan.env.OC_DATA_WORKER, plan.env.OC_DATA_WORKER_TEST_EXECUTABLE)
-  assert.deepEqual(plan.commands.slice(1).map(args => args.at(-3)), ['events::', 'updates::'])
+  assert.deepEqual(plan.commands.slice(1).map(args => args.at(-3)), ['events::', 'monitor::'])
   assert.ok(plan.commands.slice(1).every(args => args.includes('--lib') && !args.includes('--workspace')))
   assert.equal(rustCommands(['installer']).commands.length, 1)
   assert.throws(() => rustCommands(['unknown']), /未知Rust/)
@@ -148,6 +148,7 @@ test('host tests prepare real catalog inputs before GPUI cargo tests in an isola
   const environment = { CARGO_TARGET_DIR: 'isolated-target', OC_CHAN_RESOURCE_DIR: '/stale/resources' }
   const plan = rustCommands(['host'], { cwd: '/workspace/project', environment, hostDirectory: '/tmp/ci-owned' })
   assert.deepEqual(plan.prerequisites, [
+    [process.execPath, ['/workspace/project/scripts/sparkle-sdk.mjs']],
     ['cargo', ['build', '--locked', '--release', '--target', 'aarch64-apple-darwin', '--target-dir', '/workspace/project/isolated-target', '-p', 'oc-system-monitor', '--bin', 'collector']],
     [process.execPath, ['/workspace/project/scripts/build-plugin-market-rust.mjs', '--collector', '/workspace/project/isolated-target/aarch64-apple-darwin/release/collector', '--manifest', '/workspace/project/plugins/system-monitor/manifest.json', '--out', '/tmp/ci-owned/resources/plugin-market', '--sign', '-']],
   ])
@@ -174,7 +175,7 @@ test('host prerequisites fail closed and release their directory on success, non
     if (outcome === 'error') assert.throws(execute, error => error === failure)
     else assert.equal(execute(), outcome === 'exit' ? 7 : 0)
     assert.equal(existsSync(directory), false)
-    assert.equal(calls.length, outcome === 'success' ? 4 : 2)
+    assert.equal(calls.length, outcome === 'success' ? 5 : 2)
     assert.equal(calls.some(([command, args]) => command === 'cargo' && args[0] === 'test'), outcome === 'success')
   }
 })

@@ -30,10 +30,9 @@ GPUI 视图通过 `Desktop::action(owner, command, args)` 调用下表动作；�
 |`settings_open_permission_settings`|M|仅固定辅助功能/通知设置页|无头拒绝外部打开|
 |`settings_show_main_window`|M/T|严格导航目标|单主窗、单导航槽；无头拒绝显示|
 |`tray_preferences_snapshot` / `tray_preferences_save`|T|托盘组合的真实持久值|私有 profile 内有界读写|
-|`updates_snapshot` / `updates_check`|M|UpdateSnapshot；开发/未签名可手动查询|单操作；自动调度仅对合格安装版启用|
-|`updates_download`|M|签名资格、大小与摘要校验|流式下载；取消清理临时文件|
-|`updates_cancel`|M|取消后保留可用版本状态|等待下载和文件关闭|
-|`updates_install`|M|仅已下载且验证通过的更新|排空业务后移交可信安装助手|
+|`updates_snapshot` / `updates_check`|M|宿主更新状态；开发/无头仅探测|生产显式检查由 Sparkle 标准界面处理，自动检查由 Sparkle 调度|
+|应用更新自动检查选项|M|设置反映 Sparkle 自动检查状态|自动下载关闭，普通退出不自动安装|
+|更新下载、安装与重启|Sparkle|标准更新界面及签名校验结果|不再提供旧核心 `updates_download` / `updates_cancel` / `updates_install` 命令|
 |`updates_open_release_notes`|M|固定受限发布 URL|无头拒绝外部打开|
 |`marketplace_snapshot`|M/T|MarketplaceSnapshot|只读|
 |`marketplace_check`|M|单独占目录检查|30s/退出|

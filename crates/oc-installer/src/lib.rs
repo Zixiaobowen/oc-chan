@@ -1,60 +1,15 @@
-//! Persistent, same-volume macOS application installation.
-//!
-//! The host keeps `PreparedInstallation` alive, closes admission and drains its real
-//! work, calls `spawn_helper`, then exits. The helper waits for that exact process
-//! birth and for the retained lock. New applications receive `READY_ARGUMENT`
-//! followed by a private request path, and publish evidence only after their real
-//! React commit, IPC round trip and enabled collectors have completed.
-//! Production entry points always use Apple Developer ID validation. Test trust
-//! injection is compiled exclusively by unit tests or the non-default acceptance feature.
-//!
-//! Durable stage order: prepared → waiting-parent → backup-intent → old-backed-up
-//! → install-intent → new-installed → verifying-startup → committed. Both forward
-//! renames and rollback renames have fsynced write-ahead intents. A child cannot
-//! exec until its pid/birth and readiness request have been durably published.
-//! Any uncommitted resumed transaction is rolled back, including the interval
-//! between a rename and its completion record. Rollback records stop-new,
-//! move-new-to-stage, restore-old and restart-old intents before their effects.
-//!
-//! `PrepareRequest::candidate_sha512` is the `bundle_digest` inventory digest,
-//! separate from the archive hash validated by the download controller. Bundle
-//! inventory bounds are 20,000 entries, depth 64 and 2 GiB; no archive extraction
-//! or network operation is performed by the helper. Journals are at most 64 KiB,
-//! readiness requests/receipts 16 KiB, and command output 128 KiB.
-//!
-//! Before handoff, cancellation and ordinary host shutdown must explicitly call
-//! `PreparedInstallation::abandon` and surface cleanup errors. After handoff the
-//! helper finishes or restores the transaction. A failed transaction retains its
-//! two bundles and journal for diagnosis; successful commit removes the registered
-//! old bundle only after an authenticated receipt and two seconds of survival.
-//! The persistent target-directory lock file is never unlinked (flock owns it),
-//! preventing lock-inode replacement races. Committed recovery uses the new signed
-//! application's helper; uncommitted recovery uses the registered old helper,
-//! which may be inside the transaction's backup bundle.
+//! Authenticated local installation startup evidence and readiness receipts.
 mod filesystem;
 mod local;
 mod process;
-mod signature;
-mod transaction;
 
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, path::{Path, PathBuf}};
+use std::{collections::BTreeMap, path::PathBuf};
 use uuid::Uuid;
 
 pub use process::ProcessIdentity;
-pub use transaction::{PreparedInstallation, prepare, run_handoff};
-pub use filesystem::bundle_digest;
 pub use local::{LOCAL_READY_ARGUMENT, LocalFileIdentity, LocalInstallAuthorization, read_local_ready_request, write_local_ready_receipt};
 pub const BUNDLE_ID: &str = "local.oc-chan.desktop";
-pub const READY_ARGUMENT: &str = "--oc-install-receipt=";
-pub const MAX_TRANSACTION_SECONDS: u64 = 120;
-
-/// Verify the complete installed bundle before enabling online updates.
-pub fn verify_host(bundle: &Path) -> Result<String> {
-    signature::BundleValidator::validate(&signature::AppleValidator, bundle,
-        std::time::Instant::now() + std::time::Duration::from_secs(30))
-        .map(|validated| validated.version)
-}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -82,62 +37,6 @@ impl<T> IoResult<T> for std::io::Result<T> {
 }
 pub(crate) fn combine(primary: Error, secondary: Error) -> Error {
     Error::Aggregate { primary: Box::new(primary), secondary: Box::new(secondary) }
-}
-
-#[derive(Debug, Clone)]
-pub struct PrepareRequest {
-    pub target: PathBuf,
-    pub candidate: PathBuf,
-    pub expected_version: String,
-    /// SHA-512 of the canonical bounded bundle inventory, computed after unpacking.
-    /// This is separate from the release archive SHA-512 verified by the downloader.
-    pub candidate_sha512: String,
-    pub parent: ProcessIdentity,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct FileIdentity { pub device: u64, pub inode: u64 }
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Stage {
-    Prepared, WaitingParent, BackupIntent, OldBackedUp, InstallIntent,
-    NewInstalled, VerifyingStartup, Committed, RollingBack, RolledBack,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum RollbackIntent { StopNew, MoveNewToStage, RestoreOld, RestartOld }
-
-/// Persisted journal, not a caller-supplied command language. Paths are derived
-/// from the UUID/target; no executable, shell command or script is accepted here.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Handoff {
-    pub schema: u32,
-    pub transaction: Uuid,
-    pub created_at_ms: u64,
-    pub target: PathBuf,
-    pub parent_directory: FileIdentity,
-    pub transaction_directory: FileIdentity,
-    pub lock: FileIdentity,
-    pub parent: ProcessIdentity,
-    pub old_bundle: FileIdentity,
-    pub new_bundle: FileIdentity,
-    pub helper: FileIdentity,
-    pub old_digest: String,
-    pub new_digest: String,
-    pub old_version: String,
-    pub expected_version: String,
-    pub team: String,
-    pub old_executable: String,
-    pub new_executable: String,
-    pub stage: Stage,
-    pub rollback_intent: Option<RollbackIntent>,
-    pub launched: Option<ProcessIdentity>,
-    pub restored: Option<ProcessIdentity>,
-    pub launch_at_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -217,33 +116,3 @@ impl ReadyEvidence {
     }
 }
 
-/// Read and authenticate a request in this process, including current pid/birth,
-/// current executable, bundle identity and the private transaction directory.
-pub fn read_ready_request(path: &Path) -> Result<ReadyRequest> {
-    let request: ReadyRequest = filesystem::read_private_json(path, 16 * 1024)?;
-    transaction::validate_ready_path(path, request.transaction, &request.bundle)?;
-    ensure(request.schema == 1 && request.process == ProcessIdentity::current()?, "request is for another process")?;
-    ensure(request.issued_at_ms <= filesystem::now_ms()? && filesystem::now_ms()? <= request.expires_at_ms,
-        "readiness request expired or is from the future")?;
-    ensure(request.process.executable.starts_with(request.bundle.join("Contents/MacOS")), "readiness executable outside bundle")?;
-    Ok(request)
-}
-
-/// Exclusive, fsynced publication. Calling this asserts that the evidence was
-/// obtained from real host/renderer services; this library does not invent probes.
-pub fn write_ready_receipt(path: &Path, evidence: ReadyEvidence) -> Result<()> {
-    let request = read_ready_request(path)?;
-    evidence.validate(&request.version)?;
-    let receipt = ReadyReceipt { request, checked_at_ms: filesystem::now_ms()?, evidence };
-    let output = path.with_file_name("receipt.json");
-    filesystem::publish_private_json(&output, &receipt, 16 * 1024)
-}
-
-#[cfg(any(test, feature = "acceptance"))]
-pub mod acceptance {
-    pub use crate::signature::{BundleValidator, ValidatedBundle};
-    pub use crate::transaction::{prepare_with_validator, run_handoff_with_validator};
-}
-
-#[cfg(test)]
-mod tests;

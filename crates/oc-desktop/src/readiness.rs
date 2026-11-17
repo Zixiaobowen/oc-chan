@@ -1,7 +1,7 @@
 use super::*;
 use std::collections::BTreeMap;
 use oc_installer::{HistoryReadiness, PartitionEvidence, PartitionReadiness, ReadyEvidence};
-use crate::{config::InstallationReceipt, session::Session};
+use crate::session::Session;
 
 fn bounded_reason(value: &str) -> String {
     if value.len() <= 512 { return value.to_owned(); }
@@ -41,10 +41,7 @@ impl Desktop {
                 let request = host.io.with_file_budget("installation-readiness", 32 * 1024, &document.cancel, move |cancel| async move {
                     tokio::task::spawn_blocking(move || {
                         check_cancel(&cancel)?;
-                        match request_receipt {
-                            InstallationReceipt::Signed(path) => oc_installer::read_ready_request(&path),
-                            InstallationReceipt::Local(path) => oc_installer::read_local_ready_request(&path),
-                        }.map_err(|error| Error::new("OC_READY_REQUEST", error.to_string()))
+                        oc_installer::read_local_ready_request(&request_receipt.0).map_err(|error| Error::new("OC_READY_REQUEST", error.to_string()))
                     }).await.map_err(|_| Error::invalid("readiness authentication task"))?
                 }).await?;
                 if request.version != env!("CARGO_PKG_VERSION") || request.bundle != host.config.bundle { return Err(Error::invalid("readiness application identity")); }
@@ -52,10 +49,7 @@ impl Desktop {
                 host.io.with_file_budget("installation-readiness", 32 * 1024, &document.cancel, move |cancel| async move {
                     tokio::task::spawn_blocking(move || {
                         check_cancel(&cancel)?;
-                        match receipt {
-                            InstallationReceipt::Signed(path) => oc_installer::write_ready_receipt(&path, evidence),
-                            InstallationReceipt::Local(path) => oc_installer::write_local_ready_receipt(&path, evidence),
-                        }.map_err(|error| Error::new("OC_READY_RECEIPT", error.to_string()))
+                        oc_installer::write_local_ready_receipt(&receipt.0, evidence).map_err(|error| Error::new("OC_READY_RECEIPT", error.to_string()))
                     }).await.map_err(|_| Error::invalid("readiness publication task"))?
                 }).await
             }.await;

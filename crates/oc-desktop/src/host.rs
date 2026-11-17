@@ -2,7 +2,7 @@ use std::{sync::{Arc, Mutex, Weak, atomic::{AtomicBool, AtomicU64, Ordering}}, t
 use oc_core::{agents::AgentPaths, error::{Error, Result, check_cancel}, events::EventPaths, io::BoundedIo,
     marketplace::{BundledAssets, Marketplace, MarketplaceOptions, MarketplaceSnapshot}, model::*, monitor::{Monitor, MonitorOptions},
     navigation::NavigationController, resources::ResourceBudget, schedules::SchedulePaths,
-    settings::{AppSettings, ResolvedLanguage, SettingsLoadError, read_settings}, tern::{TernNavigation, TernOptions}, updates::{UpdateConfig, UpdateController}};
+    settings::{AppSettings, ResolvedLanguage, SettingsLoadError, read_settings}, tern::{TernNavigation, TernOptions}};
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -17,9 +17,9 @@ pub enum Phase { Starting, Recovery(SettingsLoadError), Running, Fault(Error), S
 #[derive(Clone, Default)]
 struct Components {
     monitor: Option<Arc<Monitor>>, market: Option<Arc<Marketplace>>, settings: Option<Arc<SettingsCoordinator>>,
-    updates: Option<Arc<UpdateController>>, tern: Option<Arc<TernNavigation>>,
+    tern: Option<Arc<TernNavigation>>,
 }
-pub struct Services { pub monitor: Arc<Monitor>, pub market: Arc<Marketplace>, pub settings: Arc<SettingsCoordinator>, pub updates: Arc<UpdateController>, pub tern: Arc<TernNavigation> }
+pub struct Services { pub monitor: Arc<Monitor>, pub market: Arc<Marketplace>, pub settings: Arc<SettingsCoordinator>, pub tern: Arc<TernNavigation> }
 
 struct RequestAdmission { total: Arc<Semaphore>, data: Arc<Semaphore> }
 impl RequestAdmission {
@@ -28,7 +28,7 @@ impl RequestAdmission {
         let busy = |_| Error::new("OC_DESKTOP_BUSY", "桌面请求已达上限，请等待 / Desktop request limit reached");
         // Reserve four admission slots for cancellation and shutdown controls.
         let control = matches!(command, "monitor_cancel_schedule_detail" | "monitor_cancel_schedule_history" | "monitor_cancel_events" | "diagnostics_cancel"
-            | "updates_cancel" | "marketplace_cancel" | "recovery_quit");
+            | "marketplace_cancel" | "recovery_quit");
         let data = if control { None } else { Some(self.data.clone().try_acquire_owned().map_err(busy)?) };
         let total = self.total.clone().try_acquire_owned().map_err(busy)?;
         Ok((total, data))
@@ -57,8 +57,8 @@ impl Desktop {
  pub fn report(&self,error:Error){eprintln!("{error}");self.published.send_modify(|state|state.last_error=Some(error));}
  pub fn services(&self)->Result<Services>{
         let components = self.components.lock().map_err(|_| Error::invalid("host component state"))?;
-        match (&components.monitor, &components.market, &components.settings, &components.updates, &components.tern) {
-            (Some(monitor), Some(market), Some(settings), Some(updates), Some(tern)) => Ok(Services { monitor: monitor.clone(), market: market.clone(), settings: settings.clone(), updates: updates.clone(), tern: tern.clone() }),
+        match (&components.monitor, &components.market, &components.settings, &components.tern) {
+            (Some(monitor), Some(market), Some(settings), Some(tern)) => Ok(Services { monitor: monitor.clone(), market: market.clone(), settings: settings.clone(), tern: tern.clone() }),
             _ => Err(Error::new("OC_HOST_NOT_READY", "桌面服务尚未就绪 / Desktop services are not ready")),
         }
  }
@@ -69,6 +69,14 @@ impl Desktop {
         self.background.spawn(async move { loop {
             let event = tokio::select! { _ = host.background_stop.cancelled() => break, event = native_events.recv() => match event { Some(event) => event, None => { host.report(Error::new("OC_NATIVE_EVENTS_CLOSED", "原生事件连接已关闭 / Native event connection closed")); break; } } };
             if event["event"] == "applicationLaunched" { host.launch.send_replace(true); }
+            if event["event"] == "updaterInstallRequested" { host.request_sparkle_install(); continue; }
+            if event["event"] == "updaterChanged" {
+                match crate::updates::decode(event["value"].clone()) {
+                    Ok(snapshot) => if let Err(error) = host.emit("updates-changed", &snapshot) { host.report(error); },
+                    Err(error) => host.report(error),
+                }
+                continue;
+            }
             if host.shutting.load(Ordering::Acquire) { continue; }
             let settings = host.components.lock().expect("component state").settings.clone();
             if let Some(settings) = settings {
@@ -139,9 +147,8 @@ impl Desktop {
             #[cfg(feature = "acceptance")] fixture_roots: market_fixture_roots,
         }, &self.boot_cancel).await?;
         self.components.lock().map_err(|_| Error::invalid("host components"))?.market = Some(market);
-        let updates = UpdateController::new(UpdateConfig { profile: self.config.profile.clone(), host_bundle: self.config.bundle.clone(), worker: self.config.resources.join("oc-data-worker"),
-            current_version: env!("CARGO_PKG_VERSION").into(), development: self.config.development }, self.io.clone()).await?;
-        self.components.lock().map_err(|_| Error::invalid("host components"))?.updates = Some(updates.clone());
+        let updates = crate::updates::decode(self.native.call("updaterStart", json!({"development": self.config.development})).await?)?;
+        self.emit("updates-changed", &updates)?;
         let effect_monitor = monitor.clone(); let windows = self.window_manager()?.clone();
         let notifications = monitor.events(); let permissions = monitor.events(); let sleep_monitor = monitor.clone();
         let settings = SettingsCoordinator::new(SettingsOptions { io: self.io.clone(), path: self.config.profile.join("settings.json"), initial,
@@ -173,8 +180,8 @@ impl Desktop {
                 if let Some(value) = &*sources.borrow_and_update() { if let Err(error) = host.emit_stream("monitor-sources", stream, value) { host.report(error); } }
             } });
         }
-        self.watch(settings.subscribe(), "settings-changed", ""); self.watch(updates.subscribe(), "updates-changed", ""); self.watch(market_updates, "marketplace-changed", "");
-        updates.start(); Ok(())
+        self.watch(settings.subscribe(), "settings-changed", ""); self.watch(market_updates, "marketplace-changed", "");
+        Ok(())
     }
     fn watch<T: Serialize + Clone + Send + Sync + 'static>(self: &Arc<Self>, mut receiver: watch::Receiver<T>, channel: &'static str, stream: &'static str) {
         let weak = Arc::downgrade(self); let stop = self.background_stop.clone();
@@ -198,21 +205,31 @@ impl Desktop {
   self.windows.ensure_main(services.settings.snapshot().await?.settings.window_bounds).await?;
   self.windows.show_main().await?;self.emit("monitor-navigation",&self.navigation.read()?)
  }
- pub fn request_quit(self:&Arc<Self>,code:i32){if self.shutting.swap(true,Ordering::AcqRel){return;}self.boot_cancel.cancel();let host=self.clone();tokio::spawn(async move{match host.shutdown(None).await{Ok(())=>{host.exit_ready.store(true,Ordering::Release);if let Err(error)=host.windows.request(HostWindowAction::Exit(code)).await{host.report(error);}},Err(error)=>{host.report(error);host.shutting.store(false,Ordering::Release);}}});}
- fn request_install(self:&Arc<Self>,prepared:oc_installer::PreparedInstallation){self.shutting.store(true,Ordering::Release);self.boot_cancel.cancel();let host=self.clone();tokio::spawn(async move{match host.shutdown(Some(prepared)).await{Ok(())=>{host.exit_ready.store(true,Ordering::Release);if let Err(error)=host.windows.request(HostWindowAction::Exit(0)).await{host.report(error);}},Err(error)=>{if let Ok(services)=host.services(){services.updates.fail(error.clone());}host.report(error);host.shutting.store(false,Ordering::Release);}}});}
+ pub fn request_quit(self:&Arc<Self>,code:i32){if self.shutting.swap(true,Ordering::AcqRel){return;}self.boot_cancel.cancel();let host=self.clone();tokio::spawn(async move{match host.shutdown().await{Ok(())=>{host.exit_ready.store(true,Ordering::Release);if let Err(error)=host.windows.request(HostWindowAction::Exit(code)).await{host.report(error);}},Err(error)=>{host.report(error);host.shutting.store(false,Ordering::Release);}}});}
+ fn request_sparkle_install(self:&Arc<Self>){
+  if self.shutting.swap(true,Ordering::AcqRel){return;}
+  self.boot_cancel.cancel();let host=self.clone();
+  tokio::spawn(async move {
+   match host.shutdown().await {
+    Ok(())=>{host.exit_ready.store(true,Ordering::Release);if let Err(error)=host.native.call("updaterResumeInstallation",json!({})).await{host.report(error);}},
+    Err(error)=>{host.report(error);host.shutting.store(false,Ordering::Release);}
+   }
+  });
+ }
  pub async fn quit_from_os(self:&Arc<Self>)->Result<()> {
   if self.exit_ready.load(Ordering::Acquire){return Ok(());}
-  if !self.shutting.swap(true,Ordering::AcqRel){self.boot_cancel.cancel();self.shutdown(None).await?;self.exit_ready.store(true,Ordering::Release);return Ok(());}
+  if !self.shutting.swap(true,Ordering::AcqRel){self.boot_cancel.cancel();self.shutdown().await?;self.exit_ready.store(true,Ordering::Release);return Ok(());}
   let mut state=self.subscribe();
   loop {if matches!(state.borrow().phase,Phase::Stopped){return Ok(());}state.changed().await.map_err(|_|Error::new("OC_SHUTDOWN_STATE","Shutdown state channel closed"))?;}
  }
-    async fn shutdown(&self, mut installation: Option<oc_installer::PreparedInstallation>) -> Result<()> {
+    async fn shutdown(&self) -> Result<()> {
         let _close = self.close_gate.lock().await; let _boot = self.boot_gate.lock().await;
         *self.phase.lock().map_err(|_| Error::invalid("shutdown state"))? = Phase::Stopping;
         self.requests.close();
         *self.settings_link.lock().map_err(|_| Error::invalid("settings notification link"))? = None;
         let components = self.components.lock().map_err(|_| Error::invalid("host components"))?.clone();
         let result = async {
+            let retain_native = self.native.call("updaterPrepareToQuit", json!({})).await?["retainContext"].as_bool().ok_or_else(|| Error::invalid("Sparkle quit response"))?;
             // Final geometry writes still apply collection preferences. Drain them before stopping plugins.
             if let Some(settings) = &components.settings { settings.close().await?; }
             for document in self.sessions()? {
@@ -222,7 +239,6 @@ impl Desktop {
             }
             if let Some(tern) = &components.tern { tern.close().await?; }
             if let Some(market) = &components.market { market.close().await?; }
-            if let Some(updates) = &components.updates { updates.stop().await?; }
             if let Some(monitor) = &components.monitor { monitor.stop().await?; }
             self.requests.wait().await;
             for document in self.sessions()? {
@@ -231,30 +247,14 @@ impl Desktop {
                 self.sessions.lock().map_err(|_| Error::invalid("sessions"))?.remove(&document.id);
             }
             self.background_stop.cancel(); self.background.close(); self.background.wait().await;
-            self.native.release().await?;
-            if let Some(prepared) = installation.take() {
-                self.io.with_file_budget("application-install", 64 * 1024, &self.io.cancellation(), move |_| async move {
-                    tokio::task::spawn_blocking(move || {
-                        let mut prepared = prepared;
-                        if let Err(error) = prepared.spawn_helper() {
-                            let failure = Error::new("OC_UPDATE_HANDOFF", error.to_string());
-                            return match prepared.abandon() { Ok(()) => Err(failure), Err(cleanup) => Err(Error::aggregate(vec![failure, Error::new("OC_RESOURCE_CLOSE", cleanup.to_string())])) };
-                        }
-                        Ok(())
-                    }).await.map_err(|_| Error::new("OC_UPDATE_HANDOFF", "安装移交任务异常 / Installer handoff task failed"))?
-                }).await?;
-            }
+            // Active Sparkle drivers and installation continuations live until
+            // process termination, including installs scheduled for normal quit.
+            if !retain_native { self.native.release().await?; }
             self.io.shutdown().await?;
             self.windows.close().await?;
             self.publish_phase(Phase::Stopped)?;
             Ok(())
         }.await;
-        if let Some(prepared) = installation {
-            let cleanup = tokio::task::spawn_blocking(move || prepared.abandon()).await
-                .map_err(|_| Error::new("OC_RESOURCE_CLOSE", "安装事务清理任务异常 / Installer cleanup task failed"))?
-                .map_err(|error| Error::new("OC_RESOURCE_CLOSE", error.to_string()));
-            return match (result, cleanup) { (Ok(()), result) => result, (Err(error), Ok(())) => Err(error), (Err(error), Err(cleanup)) => Err(Error::aggregate(vec![error, cleanup])) };
-        }
         result
     }
  pub fn startup_failed(self:&Arc<Self>,error:Error){if let Err(failure)=self.publish_phase(Phase::Fault(error.clone())){self.report(failure);}self.report(error);self.request_quit(1);}

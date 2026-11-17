@@ -3,18 +3,14 @@ import assert from 'node:assert/strict'
 import { requireMain, stableTarget, requireMatchingTag, verifyDispatchCommit, run, githubApi } from './release-workflow.mjs'
 import { releaseRepository, signingSecrets } from './release-config.mjs'
 import { readFileSync } from 'node:fs'
+import { publicKey, privateSeed } from './sparkle-test-fixture.mjs'
 
 const env = {
   GITHUB_EVENT_NAME: 'workflow_dispatch',
   GITHUB_REF: 'refs/heads/main',
   GITHUB_REPOSITORY: releaseRepository,
   GITHUB_SHA: 'a'.repeat(40),
-  APPLE_CERTIFICATE: 'certificate',
-  APPLE_CERTIFICATE_PASSWORD: 'password',
-  APPLE_SIGNING_IDENTITY: 'Developer ID Application: Example (ABCDEFGHIJ)',
-  APPLE_ID: 'example@example.com',
-  APPLE_PASSWORD: 'password',
-  APPLE_TEAM_ID: 'ABCDEFGHIJ',
+  SPARKLE_PRIVATE_KEY: privateSeed,
 }
 
 test('release entry requires manual source main and exact selected commit', () => {
@@ -29,17 +25,17 @@ test('release entry requires manual source main and exact selected commit', () =
 })
 
 test('stable version must be strict and match checked main version', () => {
-  assert.equal(stableTarget('1.2.3', { version: '1.2.3' }, env).tag, 'v1.2.3')
+  assert.equal(stableTarget('1.2.3', { version: '1.2.3' }, env, publicKey).tag, 'v1.2.3')
   for (const requested of ['v1.2.3', '1.2.3-beta', '01.2.3', '1.2.3\n', '1.2.4']) {
-    assert.throws(() => stableTarget(requested, { version: '1.2.3' }, env))
+    assert.throws(() => stableTarget(requested, { version: '1.2.3' }, env, publicKey))
   }
 })
 
 test('stable entry checks every signing secret before creating a tag', () => {
   for (const key of signingSecrets) {
-    assert.throws(() => stableTarget('1.2.3', { version: '1.2.3' }, { ...env, [key]: '' }), /Missing required release secrets/)
+    assert.throws(() => stableTarget('1.2.3', { version: '1.2.3' }, { ...env, [key]: '' }, publicKey), /Missing required release secrets/)
   }
-  assert.throws(() => stableTarget('1.2.3', { version: '1.2.3' }, { ...env, APPLE_TEAM_ID: 'OTHERTEAM1' }), /APPLE_TEAM_ID/)
+  assert.throws(() => stableTarget('1.2.3', { version: '1.2.3' }, { ...env, SPARKLE_PRIVATE_KEY: Buffer.alloc(32).toString('base64') }, publicKey), /does not match/)
 })
 
 test('an existing immutable tag is reusable only at the exact selected commit', () => {
@@ -64,6 +60,7 @@ function workflowFixture({ tagCommit, releases = [], failRoute, ancestor = true 
   const files = ['Cargo.toml', 'Cargo.lock', 'package.json', 'package-lock.json', 'docs/dependency-review-policy.json', 'releases/1.2.3.md']
   const input = { ...env, GH_TOKEN: ['workflow', 'fixture'].join('-'), RELEASE_BUMP: 'patch', RELEASE_VERSION: '1.2.3', RELEASE_NOTES: 'Fix $(echo unsafe) `literal`\nSecond line' }
   const dependencies = {
+    publicKey,
     git(...args) {
       events.push({ type: 'git', args })
       if (args[0] === 'rev-parse') return args[1] === 'HEAD' ? head : tagCommit
@@ -153,7 +150,7 @@ test('stable propagates dispatch failure and rejects missing signing credentials
   const fixture = workflowFixture({ failRoute: 'actions/workflows/build.yml/dispatches' })
   await assert.rejects(run('stable', fixture.input, fixture.dependencies), /HTTP 403/)
   const unsigned = workflowFixture()
-  await assert.rejects(run('stable', { ...unsigned.input, APPLE_CERTIFICATE: '' }, unsigned.dependencies), /Missing required release secrets/)
+  await assert.rejects(run('stable', { ...unsigned.input, SPARKLE_PRIVATE_KEY: '' }, unsigned.dependencies), /Missing required release secrets/)
   assert.ok(!unsigned.events.some(event => event.type === 'api'))
 })
 

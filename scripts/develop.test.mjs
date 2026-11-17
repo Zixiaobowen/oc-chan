@@ -47,7 +47,7 @@ async function bundleFixture(t) {
   await mkdir(path.dirname(layout.binary), { recursive: true }); await mkdir(layout.resourcesDir, { recursive: true })
   await writeFile(layout.binary, 'unit-test executable bytes'); await writeFile(plist, 'unit-test plist bytes')
   const resources = {}
-  for (const name of ['oc-data-worker', 'oc-installer', 'tern-navigation/present-window', 'tern-navigation/plugin/plugin.toml', 'tern-navigation/plugin/window.luau', 'plugin-market/catalog.json', 'rust-dependencies/manifest.json']) {
+  for (const name of ['oc-data-worker', 'tern-navigation/present-window', 'tern-navigation/plugin/plugin.toml', 'tern-navigation/plugin/window.luau', 'plugin-market/catalog.json', 'rust-dependencies/manifest.json']) {
     const filename = path.join(layout.resourcesDir, name)
     await mkdir(path.dirname(filename), { recursive: true }); await writeFile(filename, name)
     resources[name] = await digestFile(filename)

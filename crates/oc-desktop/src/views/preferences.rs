@@ -40,10 +40,20 @@ impl RootView {
         body=body.child(self.notifications(cx));body.into_any_element()
     }
     fn update_settings(&self,cx:&mut Context<Self>)->AnyElement{
-        let mut section=self.section(self.t("应用更新","Application updates"));if let Some(update)=&self.updates{section=section.child(self.row(self.t("当前 / 可用版本","Current / Available version"),format!("{} / {}",update.current_version,update.available_version.as_deref().unwrap_or("—")))).child(self.row(self.t("更新状态","Update status"),self.label(update.phase))).child(self.row(self.t("上次检查","Last check"),update.checked_at.clone().unwrap_or_else(||"—".into())));
-            if let Some(reason)=update.disabled_reason{section=section.child(self.note(format!("{}: {}",self.t("更新不可用","Updates unavailable"),self.label(reason))));}if let Some(error)=&update.error{section=section.child(self.note(error.clone()));}if let Some(progress)=&update.progress{section=section.child(self.note(format!("{:.1}% · {} / {} · {}/s",progress.percent,bytes(progress.transferred),bytes(progress.total),bytes(progress.bytes_per_second as u64))));}
-            use oc_core::updates::UpdatePhase;let mut controls=self.toolbar();if !matches!(update.phase,UpdatePhase::Disabled|UpdatePhase::Installing){controls=controls.child(self.command("updates_check",self.t("检查更新 / 重试","Check for updates / Retry"),cx));}if matches!(update.phase,UpdatePhase::Available|UpdatePhase::Error|UpdatePhase::Downloaded){controls=controls.child(self.command("updates_download",self.t("下载 / 重新下载","Download / Download again"),cx));}if update.phase==UpdatePhase::Downloading{controls=controls.child(self.command("updates_cancel",self.t("取消下载","Cancel download"),cx));}if update.phase==UpdatePhase::Downloaded{controls=controls.child(self.command("updates_install",self.t("重启并安装","Restart and install"),cx));}section=section.child(controls).child(self.command("updates_open_release_notes",self.t("浏览发行说明","Read release notes"),cx));
-        }else{section=section.child(self.command("updates_snapshot",self.t("读取更新状态","Read update status"),cx));}section.into_any_element()
+        let mut section=self.section(self.t("应用更新","Application updates"));
+        if let Some(update)=&self.updates {
+            section=section.child(self.row(self.t("当前 / 最新发现版本","Current / Latest found version"),format!("{} / {}",update.current_version,update.available_version.as_deref().unwrap_or("—"))))
+                .child(self.row(self.t("更新状态","Update status"),self.label(update.phase)))
+                .child(self.row(self.t("可以检查更新","Can check for updates"),if update.can_check{self.t("是","Yes")}else{self.t("否","No")}))
+                .child(self.row(self.t("上次检查","Last check"),update.checked_at.clone().unwrap_or_else(||"—".into())));
+            if let Some(error)=&update.error{section=section.child(self.note(error.clone()));}
+            if update.probe_only{section=section.child(self.note(self.t("开发实例只检查更新信息，不下载或安装；自动检查已关闭。","Development instances only check update information. Downloads, installation and automatic checks are disabled.")));}
+            section=section.child(self.toolbar()
+                .child(self.button("updates_check",self.t("检查更新","Check for updates"),Action::Command("updates_check",json!({})),update.can_check&&!self.busy("updates_check"),cx))
+                .child(self.button("updates-automatic",if update.automatic_checks{self.t("自动检查：开启","Automatic checks: On")}else{self.t("自动检查：关闭","Automatic checks: Off")},Action::Command("updates_set_automatic_checks",json!({"enabled":!update.automatic_checks})),!update.probe_only&&!self.busy("updates_set_automatic_checks"),cx)))
+                .child(self.command("updates_open_release_notes",self.t("浏览发行说明","Read release notes"),cx));
+        }else{section=section.child(self.command("updates_snapshot",self.t("读取更新状态","Read update status"),cx));}
+        section.into_any_element()
     }
     fn notifications(&self,cx:&mut Context<Self>)->AnyElement{
         let Some(snapshot)=&self.settings else{return div().into_any_element();};let n=&snapshot.settings.notifications;let mut toggled=n.clone();toggled.enabled=!toggled.enabled;

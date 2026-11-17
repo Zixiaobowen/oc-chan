@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "lockSha256": "6d9f0c586c977072bb8352f41cb6e6abcd19ea711b68f01cc74a0a192fd05e6e",
-  "cargoLockSha256": "27ee082daa4cea212e57865d13f4bd24d27c11aa795c4da4b3b649e86692351b",
+  "cargoLockSha256": "b8259601ad8840a3b8b5e56139f641fd7ae063fbc3c97c4f266aa0cbd4b93e74",
   "allowedLicenses": [
     "Apache-2.0",
     "Apache-2.0 OR MIT",
@@ -49,6 +49,6 @@
     "Zlib OR Apache-2.0 OR MIT"
   ],
   "advisories": [],
-  "reviewedAt": "2026-11-13",
-  "dependencyChangeReason": "GPUI原生桌面替换Tauri/Wry/Tao与React/Vite前端；生产根为oc-desktop、oc-core、oc-installer、oc-system-monitor，npm只保留unzipper构建依赖。启用macOS真实文字必需的font-kit特性后，锁定metadata生产闭包含510个外部crate（runtime 338、build 92、runtime-and-build 80）；该特性增加zed-font-kit及10个传递依赖，实际许可均落在现有已审阅表达式中。包数量不能推断安装包体积。GPUI负责原生窗口、Metal、文字排版、布局、SVG/图像与相关构建工具链；图像默认特性包含rav1e等编解码依赖。保留registry许可全文、LLVM exception、WHATWG BSD等额外通知。33个缺独立许可文件的crate在resources/rust-license-supplements/manifest.json补证：23个published-vcs记录绑定精确上游提交，10个published-spdx记录绑定发布归档的原始Cargo/README声明、已有源码版权头与固定SPDX提交标准文本；不伪造版权通知、不推断权利人或年份。旧补证均显式标识binding，已退出闭包的记录已删除。此清单绑定锁与许可，不加入UNKNOWN、不豁免安全公告；实际审计、许可生成及包体积分别验证。"
+  "reviewedAt": "2026-11-17",
+  "dependencyChangeReason": "Sparkle 2.10.1替换自建在线更新器。Cargo.lock仅移除oc-core到oc-installer及oc-installer到plist两条本地依赖边，外部crate版本与checksum不变。oc-installer库只保留本地安装授权及readiness；不再打包旧在线安装helper。Sparkle由独立SDK归档SHA256和逐文件清单绑定，运行时含framework及上游签名helpers，携带上游LICENSE；开发头文件与工具不进应用包。npm依赖未变。既有Rust许可审查、上游许可补证与安全公告门禁保留；不以SDK加入或依赖边减少推断性能与体积，实际构建包另测。"
 }

@@ -2,6 +2,27 @@ use super::*;
 use crate::{HistoryReadiness, PartitionEvidence, PartitionReadiness};
 use std::{collections::BTreeMap, fs::{OpenOptions, Permissions}, os::unix::fs::{OpenOptionsExt, PermissionsExt}, process::{Child, Command, Stdio}, time::{Duration, Instant}};
 
+#[test]
+fn readiness_requires_real_host_renderer_and_partition_evidence() {
+    let valid = evidence("1.2.3");
+    valid.validate("1.2.3").unwrap();
+    assert!(valid.validate("1.2.4").is_err());
+    let mut invalid = valid.clone(); invalid.renderer_committed = false;
+    assert!(invalid.validate("1.2.3").is_err());
+    let mut invalid = valid.clone(); invalid.action_round_trip = false;
+    assert!(invalid.validate("1.2.3").is_err());
+    let mut invalid = valid.clone(); invalid.renderer_entry.clear();
+    assert!(invalid.validate("1.2.3").is_err());
+    let mut invalid = valid.clone(); invalid.partitions.remove("agents");
+    assert!(invalid.validate("1.2.3").is_err());
+    let mut invalid = valid.clone(); invalid.partitions.get_mut("system").unwrap().state = PartitionReadiness::Unavailable;
+    assert!(invalid.validate("1.2.3").is_err());
+    let mut invalid = valid.clone(); invalid.history_entries = 26;
+    assert!(invalid.validate("1.2.3").is_err());
+    let mut invalid = valid; invalid.hermes_history = HistoryReadiness::Unavailable; invalid.history_reason = None;
+    assert!(invalid.validate("1.2.3").is_err());
+}
+
 fn private_file_at(path: &Path) -> File { OpenOptions::new().read(true).write(true).create_new(true).mode(0o600).open(path).unwrap() }
 fn directory() -> tempfile::TempDir { tempfile::tempdir_in(std::env::temp_dir().canonicalize().unwrap()).unwrap() }
 fn evidence(version: &str) -> ReadyEvidence {
