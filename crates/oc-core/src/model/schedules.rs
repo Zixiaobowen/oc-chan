@@ -80,3 +80,34 @@ pub struct ScheduleHistory {
     pub job_id: String, pub source: HistorySource, pub entries: Vec<ScheduleExecution>,
     pub offset: usize, pub limit: usize, pub has_more: bool, pub collected_at: String,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ScheduleDetailField { pub key: String, pub value: String }
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ScheduleDetail { pub job_id: String, pub collected_at: String, pub fields: Vec<ScheduleDetailField>, pub notes: Vec<String> }
+
+pub const MAX_SCHEDULE_DETAIL_FIELD_BYTES: usize = 64 * 1024;
+pub const MAX_SCHEDULE_DETAIL_BYTES: usize = 256 * 1024;
+pub const MAX_SCHEDULE_DETAIL_FIELDS: usize = 64;
+impl ScheduleDetail {
+    pub fn validate(&self, job_id: &str) -> crate::error::Result<()> {
+        use crate::error::{Error, validate_text};
+        if self.job_id != job_id { return Err(Error::invalid("schedule detail response identity")); }
+        validate_text(&self.collected_at, 128, 128, "schedule detail timestamp")?;
+        if self.fields.len() > MAX_SCHEDULE_DETAIL_FIELDS || self.notes.len() > 16 { return Err(Error::invalid("schedule detail response entries")); }
+        let mut bytes = self.job_id.len() + self.collected_at.len();
+        for field in &self.fields {
+            if !matches!(field.key.as_str(), "configurationFile"|"metadataFile"|"prompt"|"command"|"program"|"argv"|"launchdArguments"|"cwd"|"workdir"|"workingDirectory"|"defaultTimezone"|"metadataNotBefore"|"model"|"provider"|"script"|"interpreter"|"noAgent"|"monitorScript"|"skills"|"skill"|"repeatCompleted"|"repeatTimes"|"schedule"|"calendar"|"timezone"|"notBefore"|"originalSchedule"|"enabled"|"state"|"startInterval"|"startCalendarInterval"|"runAtLoad"|"keepAlive"|"standardInPath"|"standardOutPath"|"standardErrorPath") { return Err(Error::invalid("schedule detail field key")); }
+            if field.value.len() > MAX_SCHEDULE_DETAIL_FIELD_BYTES { return Err(Error::limit("schedule detail field bytes",MAX_SCHEDULE_DETAIL_FIELD_BYTES,field.value.len())); }
+            bytes += field.key.len() + field.value.len();
+        }
+        for note in &self.notes {
+            if note.len() > MAX_SCHEDULE_DETAIL_FIELD_BYTES { return Err(Error::limit("schedule detail note bytes",MAX_SCHEDULE_DETAIL_FIELD_BYTES,note.len())); }
+            bytes += note.len();
+        }
+        if bytes > MAX_SCHEDULE_DETAIL_BYTES { return Err(Error::limit("schedule detail response bytes",MAX_SCHEDULE_DETAIL_BYTES,bytes)); }
+        Ok(())
+    }
+}

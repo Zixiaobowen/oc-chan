@@ -60,6 +60,14 @@ impl CollectionPlugin for SchedulePlugin {
             let page = self.collector.history(&job, offset, &cancel).await?; check_cancel(&self.life)?; shared.require_job(&job)?; Ok(page)
         })
     }
+    fn schedule_detail(&self, job: ScheduledJob, cancel: CancellationToken) -> BoxFuture<'_, Result<ScheduleDetail>> {
+        Box::pin(async move {
+            let _gate = self.gate.lock().await; check_cancel(&self.life)?; check_cancel(&cancel)?;
+            let shared = self.shared.upgrade().ok_or_else(Error::cancelled)?; shared.require_job(&job)?;
+            let detail = self.collector.schedule_detail(&job, &cancel).await?;
+            check_cancel(&self.life)?; shared.require_job(&job)?; Ok(detail)
+        })
+    }
     fn stop(&self) -> BoxFuture<'_, Result<()>> { Box::pin(async move { self.life.cancel(); let _drained = self.gate.lock().await; Ok(()) }) }
 }
 struct EventsPlugin { service: EventService, life: CancellationToken, shared: Weak<Shared> }

@@ -13,7 +13,7 @@ use input::TextInput;
 #[derive(Clone, Copy, PartialEq)] enum Mode { Main, Tray, Recovery }
 #[derive(Clone)] enum Action {
     Navigate(NavigationTarget), Command(&'static str, Value), Patch(Value), Pause, Sidebar,
-    Filter(&'static str, usize), History(usize), EventsApply, EventsClear, EventsNext, EventsPrevious,
+    Filter(&'static str, usize), History(usize), ScheduleDetail, EventsApply, EventsClear, EventsNext, EventsPrevious,
     CloseDetail, Confirm(&'static str,String), CancelConfirm, AcceptConfirm, Subscribe(NavigationTarget),
     TrayPanel(usize), QuietSave, Glass(bool),
 }
@@ -32,6 +32,7 @@ pub struct RootView {
     page:AppPage, monitor:MonitorSnapshot, settings:Option<SettingsSnapshot>, market:Option<MarketplaceSnapshot>, updates:Option<UpdateSnapshot>,
     topology:Entity<TopologyView>, search:Entity<TextInput>, source_search:Entity<TextInput>, quiet_start:Entity<TextInput>,quiet_end:Entity<TextInput>,
     selection:Option<NavigationTarget>, history:Option<ScheduleHistory>, event_page:Option<EventPage>, event_query:EventQuery,event_stack:Vec<EventQuery>,
+    schedule_config:Option<ScheduleDetail>,
     filters:BTreeMap<&'static str,usize>, requests:BTreeMap<&'static str,Request>,
     paused:bool, visible:bool, latest:BTreeMap<String,Value>, applied:BTreeMap<String,Value>,
     confirmation:Option<(&'static str,String)>, diagnostic:Option<DiagnosticPreview>, notice:Option<String>, error:Option<String>, recovery:Option<Value>,
@@ -81,6 +82,7 @@ impl RootView {
         let preview_tail=None;
         let mut this=Self{host,owner,mode,focus,page:AppPage::Overview,monitor:MonitorSnapshot::default(),settings:None,market:None,updates:None,topology,search,source_search,quiet_start,quiet_end,selection:None,history:None,event_page:None,event_query:EventQuery::default(),event_stack:vec![],filters:BTreeMap::new(),requests:BTreeMap::new(),paused:false,visible:true,latest:BTreeMap::new(),applied:BTreeMap::new(),confirmation:None,diagnostic:None,notice:None,error:None,recovery:None,tray_panels:[true;5],scrolls:(0..8).map(|_|ScrollHandle::new()).collect(),subscriptions,watch_task:Some(watch_task),interaction_pending:false,tray_excluded:vec![],sidebar_drag:None,page_searches:BTreeMap::new(),page_selections:BTreeMap::new(),history_offset:0,pending_events:None,deferred_queries:BTreeMap::new(),quiet_saved:None,glass_input,theme_preview:None,preview_tail,
             preview_pending:None,
+            schedule_config:None,
             glass_preview:None,
             stable_focus:Default::default(),pending_focus:None,detail_scroll:ScrollHandle::new(),source_jump:Default::default(),navigation_sequence:None,target_bounds:Default::default(),
             focus_frame:Default::default(),inert_detail:Default::default(),building_detail:Default::default(),focus_overflow:Default::default(),
@@ -94,7 +96,7 @@ impl RootView {
         if mode==Mode::Main{this.request("monitor_navigation",json!({}),cx);}
         this
     }
-    pub fn set_visible(&mut self,visible:bool,cx:&mut Context<Self>){if self.visible==visible{return;}self.visible=visible;if visible{self.apply_latest(cx);if self.mode==Mode::Main{self.request("monitor_navigation",json!({}),cx);}if self.page==AppPage::Events{self.load_events(cx);}if self.page==AppPage::Schedules{self.load_history(self.history_offset,cx);}}else{self.panel_motion.from=self.panel_motion.to;if self.panel_motion.to==0.{self.detail_exit=None;}self.cancel_queries(cx);if self.page==AppPage::Settings{self.end_preview(cx);}}cx.notify();}
+    pub fn set_visible(&mut self,visible:bool,cx:&mut Context<Self>){if self.visible==visible{return;}self.visible=visible;if visible{self.apply_latest(cx);if self.mode==Mode::Main{self.request("monitor_navigation",json!({}),cx);}if self.page==AppPage::Events{self.load_events(cx);}if self.page==AppPage::Schedules{self.load_history(self.history_offset,cx);self.load_schedule_detail(cx);}}else{self.panel_motion.from=self.panel_motion.to;if self.panel_motion.to==0.{self.detail_exit=None;}self.cancel_queries(cx);if self.page==AppPage::Settings{self.end_preview(cx);}}cx.notify();}
     pub fn visible(&self)->bool {self.visible}
     pub fn window_blurred(&mut self,cx:&mut Context<Self>){self.sidebar_drag=None;if self.mode==Mode::Main{self.end_preview(cx);}cx.notify();}
     #[cfg(feature="acceptance")]
@@ -107,12 +109,16 @@ impl RootView {
         state["drafts"]=json!({"quietStart":self.quiet_start.read(cx).text,"quietEnd":self.quiet_end.read(cx).text,"glass":self.glass_input.read(cx).text});
         state["inputs"]=json!(self.input_bounds.borrow().iter().map(|(id,b)|(id.clone(),json!({"x":f32::from(b.left()),"y":f32::from(b.top()),"width":f32::from(b.size.width),"height":f32::from(b.size.height)}))).collect::<BTreeMap<_,_>>());
         state["requests"]=json!(self.requests.iter().map(|(command,request)|(*command,json!({"generation":request.generation,"busy":request.busy,"error":request.error}))).collect::<BTreeMap<_,_>>());
+        // Explicit acceptance permission; an alternate home alone does not authorize exposing task text.
+        if self.host.config.development&&self.host.config.headless&&std::env::var("OC_CHAN_ACCEPTANCE_SCHEDULE_DETAIL").as_deref()==Ok("1")&&std::env::var_os("HOME").is_some_and(|home|std::path::PathBuf::from(home)!=self.host.config.home){state["scheduleDetail"]=json!(self.schedule_config);}
+        state["scheduleDetailBounds"]=json!(self.target_bounds.borrow().iter().filter(|(id,_)|id.starts_with("schedule-field-")).map(|(id,b)|(id.clone(),json!({"x":f32::from(b.left()),"y":f32::from(b.top()),"width":f32::from(b.size.width),"height":f32::from(b.size.height)}))).collect::<BTreeMap<_,_>>());
         state["topology"]=self.topology.read(cx).inspect();state
     }
     #[cfg(feature="acceptance")]
     pub fn navigate_for_acceptance(&mut self,page:&str,_window:&mut Window,cx:&mut Context<Self>)->Result<(),String>{let page=match page{"overview"=>AppPage::Overview,"agents"=>AppPage::Agents,"schedules"=>AppPage::Schedules,"events"=>AppPage::Events,"system"=>AppPage::System,"plugins"=>AppPage::Plugins,"sources"=>AppPage::Sources,"settings"=>AppPage::Settings,_=>return Err("Unknown page".into())};self.navigate(NavigationTarget::Page{page},cx);Ok(())}
     fn decode<T:DeserializeOwned>(&mut self,value:Value)->Option<T>{match serde_json::from_value(value){Ok(v)=>Some(v),Err(e)=>{self.error=Some(format!("数据格式错误 / Invalid response: {e}"));None}}}
     fn apply_latest(&mut self,cx:&mut Context<Self>){
+        let detail_was_allowed=self.schedule_detail_allowed();
         let changed:Vec<_>=self.latest.iter().filter(|(k,v)|self.applied.get(*k)!=Some(*v)&&(!self.paused||!k.starts_with("monitor-")||k.starts_with("monitor-navigation"))).map(|(k,v)|(k.clone(),v.clone())).collect();
         for (key,value) in changed{self.applied.insert(key.clone(),value.clone());if key.starts_with("monitor-changed"){
             if let Some(update)=self.decode::<MonitorUpdate>(value){match update{MonitorUpdate::Agents(v)=>self.monitor.agents=v,MonitorUpdate::Schedules(v)=>self.monitor.schedules=v,MonitorUpdate::System(v)=>self.monitor.system=v,MonitorUpdate::Events(v)=>self.monitor.events=v}self.sync_topology(cx);}
@@ -123,11 +129,13 @@ impl RootView {
         else if key.starts_with("monitor-navigation")&&self.mode==Mode::Main{self.request("monitor_navigation",json!({}),cx);}
         else if key=="tray-preferences-changed"{self.accept("tray_preferences_snapshot",value,cx);}
         }
+        if !self.schedule_detail_allowed(){self.cancel_schedule_detail(cx);}else if !detail_was_allowed&&self.schedule_config.is_none(){self.load_schedule_detail(cx);}
     }
     fn heartbeat(&mut self,h:SourceHeartbeat){let sources=match h.section{MonitorSection::Agents=>self.monitor.agents.data.as_mut().map(|s|&mut s.sources),MonitorSection::Schedules=>self.monitor.schedules.data.as_mut().map(|s|&mut s.sources),MonitorSection::System=>self.monitor.system.data.as_mut().map(|s|&mut s.sources),MonitorSection::Events=>self.monitor.events.data.as_mut().map(|s|&mut s.sources)};if let Some(sources)=sources{for observation in h.sources{if let Some(source)=sources.iter_mut().find(|s|s.id==observation.id){source.last_attempt_at=observation.last_attempt_at;source.last_success_at=observation.last_success_at;}}}}
-    fn sync_theme(&mut self,cx:&mut Context<Self>){self.sync_drafts(cx);let dark=self.dark();for input in [&self.search,&self.source_search,&self.quiet_start,&self.quiet_end,&self.glass_input]{input.update(cx,|i,cx|{i.dark=dark;cx.notify();});}if let Some(settings)=&self.settings{self.topology.update(cx,|v,cx|{v.set_settings(settings);cx.notify();});if (!settings.settings.plugins.schedules&&self.busy("monitor_schedule_history"))||(!settings.settings.plugins.events&&self.busy("monitor_events")){self.cancel_queries(cx);}}}
+    fn sync_theme(&mut self,cx:&mut Context<Self>){self.sync_drafts(cx);let dark=self.dark();for input in [&self.search,&self.source_search,&self.quiet_start,&self.quiet_end,&self.glass_input]{input.update(cx,|i,cx|{i.dark=dark;cx.notify();});}if let Some(settings)=&self.settings{self.topology.update(cx,|v,cx|{v.set_settings(settings);cx.notify();});if (!settings.settings.plugins.schedules&&self.busy("monitor_schedule_history"))||(!settings.settings.plugins.events&&self.busy("monitor_events")){self.cancel_queries(cx);}}if !self.schedule_detail_allowed(){self.cancel_schedule_detail(cx);}else if self.schedule_config.is_none()&&!self.busy("monitor_schedule_detail"){self.load_schedule_detail(cx);}}
     fn sync_topology(&mut self,cx:&mut Context<Self>){let agents=self.monitor.agents.data.as_ref().map(|s|s.agents.clone()).unwrap_or_default();let current=!self.paused&&self.monitor.agents.error.is_none()&&self.settings.as_ref().is_some_and(|s|s.settings.plugins.agents);self.topology.update(cx,|v,cx|{v.update_agents(agents);v.set_evidence_current(current);cx.notify();});}
     fn request(&mut self,command:&'static str,args:Value,cx:&mut Context<Self>){
+        if command=="monitor_schedule_detail"&&!self.schedule_detail_allowed(){return;}
         if command=="settings_update"&&self.busy(command){return;}
         if command=="settings_preview_glass"&&self.busy(command){self.preview_pending=Some(args);return;}
         if command=="settings_update"{self.preview_pending=None;}
@@ -143,7 +151,7 @@ impl RootView {
         cx.spawn(async move|weak,cx|{let result=match task.await{Ok(result)=>result.map_err(|e|e.to_string()),Err(e)=>Err(format!("操作中断 / Operation interrupted: {e}"))};let _=weak.update(cx,|this,cx|{
             let Some(slot)=this.requests.get_mut(command)else{return;};if slot.generation!=generation{return;}slot.busy=false;
             if result.is_ok()&&preview_generation==this.filters.get("preview-generation").copied().unwrap_or(0){if let Some(intensity)=preview_intensity{this.glass_preview=intensity;}if command=="settings_update"{this.glass_preview=None;}}
-            match result{Ok(value)=>{this.accept(command,value,cx);if interaction{if let Err(error)=this.host.action_completed(this.owner){this.error=Some(error.to_string());}}},Err(error)=>{slot.error=Some(error.clone());this.error=Some(error);if command=="monitor_events"{this.pending_events=None;}if command=="monitor_cancel_events"{this.deferred_queries.remove("monitor_events");}if command=="monitor_cancel_schedule_history"{this.deferred_queries.remove("monitor_schedule_history");}}}cx.notify();
+            match result{Ok(value)=>{this.accept(command,value,cx);if interaction{if let Err(error)=this.host.action_completed(this.owner){this.error=Some(error.to_string());}}},Err(error)=>{slot.error=Some(error.clone());if command!="monitor_schedule_detail"&&command!="monitor_cancel_schedule_detail"{this.error=Some(error.clone());}if command=="monitor_events"{this.pending_events=None;}if command=="monitor_cancel_events"{this.deferred_queries.remove("monitor_events");}if command=="monitor_cancel_schedule_history"{this.deferred_queries.remove("monitor_schedule_history");}if command=="monitor_cancel_schedule_detail"{this.deferred_queries.remove("monitor_schedule_detail");if let Some(request)=this.requests.get_mut("monitor_schedule_detail"){request.error=Some(error);}}}}cx.notify();
             if command=="settings_preview_glass"{if let Some(args)=this.preview_pending.take(){this.request("settings_preview_glass",args,cx);}}
         });}).detach();cx.notify();
     }
@@ -151,6 +159,8 @@ impl RootView {
         "tray_preferences_snapshot"|"tray_preferences_save"=>{if let Some(excluded)=value.get("excluded"){if let Some(excluded)=self.decode::<Vec<String>>(excluded.clone()){self.tray_excluded=excluded;for(index,id)in ["overview","cpu","memory","disk","network"].iter().enumerate(){self.tray_panels[index]=!self.tray_excluded.iter().any(|excluded|excluded==id);}}}},
         "monitor_navigation"=>{if !value.is_null(){if let Some(intent)=self.decode::<NavigationIntent>(value){if self.navigation_sequence!=Some(intent.sequence){self.navigation_sequence=Some(intent.sequence);self.navigate(intent.target,cx);}self.request("monitor_acknowledge_navigation",json!({"sequence":intent.sequence}),cx);}}},
         "monitor_cancel_events"|"monitor_cancel_schedule_history"=>{let query=if command=="monitor_cancel_events"{"monitor_events"}else{"monitor_schedule_history"};if let Some(args)=self.deferred_queries.remove(query){self.request(query,args,cx);}},
+        "monitor_cancel_schedule_detail"=>{if self.deferred_queries.remove("monitor_schedule_detail").is_some(){self.load_schedule_detail(cx);}},
+        "monitor_schedule_detail"=>{match serde_json::from_value::<ScheduleDetail>(value){Ok(detail) if self.schedule_detail_allowed()&&matches!(&self.selection,Some(NavigationTarget::Schedule{id,..}) if *id==detail.job_id)=>self.schedule_config=Some(detail),Ok(_)=>{},Err(error)=>{if let Some(request)=self.requests.get_mut("monitor_schedule_detail"){request.error=Some(format!("配置格式错误 / Invalid configuration response: {error}"));}}}},
         "monitor_snapshot"=>{if let Some(snapshot)=self.decode(value){self.monitor=snapshot;self.applied.retain(|k,_|!k.starts_with("monitor-"));self.apply_latest(cx);self.sync_topology(cx);}},
         "settings_snapshot"=>{self.settings=self.decode(value);self.sync_theme(cx);},
         "settings_update"|"settings_retry_geometry"=>{if let Some(result)=self.decode::<SettingsUpdateResult>(value){if let Some(error)=result.error{self.error=Some(format!("{} · {}",error.details,error.file_path));}if let Some(snapshot)=result.snapshot{self.settings=Some(snapshot);self.sync_theme(cx);self.sync_topology(cx);}}},
@@ -165,7 +175,7 @@ impl RootView {
         "recovery_snapshot"=>self.recovery=Some(value),"recovery_retry"=>{if let Some(snapshot)=value.get("snapshot"){self.recovery=Some(snapshot.clone());}},
         "settings_accessibility_state"=>{self.notice=Some(format!("{}: {}",self.t("辅助功能权限","Accessibility permission"),value.get("status").and_then(Value::as_str).unwrap_or("unknown")));},_=>{}
     }}
-    fn cancel_queries(&mut self,cx:&mut Context<Self>){if self.mode!=Mode::Main{return;}self.deferred_queries.clear();self.pending_events=None;for (query,cancel) in [("monitor_events","monitor_cancel_events"),("monitor_schedule_history","monitor_cancel_schedule_history")]{if let Some(request)=self.requests.get_mut(query){request.generation+=1;request.busy=false;}if !self.busy(cancel){self.request(cancel,json!({}),cx);}}}
+    fn cancel_queries(&mut self,cx:&mut Context<Self>){if self.mode!=Mode::Main{return;}self.cancel_schedule_detail(cx);self.deferred_queries.clear();self.pending_events=None;for (query,cancel) in [("monitor_events","monitor_cancel_events"),("monitor_schedule_history","monitor_cancel_schedule_history")]{if let Some(request)=self.requests.get_mut(query){request.generation+=1;request.busy=false;}if !self.busy(cancel){self.request(cancel,json!({}),cx);}}}
     fn navigate(&mut self,target:NavigationTarget,cx:&mut Context<Self>){
         if self.mode==Mode::Tray{self.request("settings_show_main_window",json!({"target":target}),cx);return;}
         let next=target.page();
@@ -187,17 +197,21 @@ impl RootView {
             self.selection=self.page_selections.get(&(next as usize)).cloned();
         }
         if matches!(target,NavigationTarget::Page{..})&&matches!(self.selection,Some(NavigationTarget::Schedule{..}|NavigationTarget::Agent{..})){self.panel_motion=PanelMotion{from:1.,to:1.,started:std::time::Instant::now()};}
-        if !matches!(target,NavigationTarget::Page{..}){if self.selection.as_ref()!=Some(&target)&&matches!(target,NavigationTarget::Schedule{..}){self.history_offset=0;self.history=None;self.cancel_queries(cx);}self.selection=Some(target);}
-        if self.page==AppPage::Events{self.load_events(cx);}if self.page==AppPage::Schedules{self.load_history(self.history_offset,cx);}cx.notify();
+        if !matches!(target,NavigationTarget::Page{..}){if self.selection.as_ref()!=Some(&target){if matches!(target,NavigationTarget::Schedule{..}){self.history_offset=0;self.history=None;self.cancel_queries(cx);}else{self.cancel_schedule_detail(cx);}}self.selection=Some(target);}
+        if self.page==AppPage::Events{self.load_events(cx);}if self.page==AppPage::Schedules{self.load_history(self.history_offset,cx);self.load_schedule_detail(cx);}cx.notify();
     }
     fn load_history(&mut self,offset:usize,cx:&mut Context<Self>){if self.paused||!self.visible||!self.settings.as_ref().is_some_and(|s|s.settings.plugins.schedules){return;}if let Some(NavigationTarget::Schedule{id,..})=&self.selection{if offset<=MAX_HISTORY_OFFSET{self.request("monitor_schedule_history",json!({"jobId":id,"offset":offset}),cx);}}}
     fn load_events(&mut self,cx:&mut Context<Self>){if !self.paused&&self.visible&&self.settings.as_ref().is_some_and(|s|s.settings.plugins.events){self.request("monitor_events",json!({"query":self.event_query}),cx);}}
+    fn schedule_detail_allowed(&self)->bool{self.mode==Mode::Main&&self.page==AppPage::Schedules&&self.visible&&!self.paused&&self.settings.as_ref().is_some_and(|s|s.settings.plugins.schedules)&&self.selection.as_ref().is_some_and(|target|matches!(target,NavigationTarget::Schedule{..})&&self.monitor.schedules.data.as_ref().is_some_and(|s|s.jobs.iter().any(|job|NavigationTarget::schedule(job)==*target)))}
+    fn load_schedule_detail(&mut self,cx:&mut Context<Self>){if !self.schedule_detail_allowed()||self.busy("monitor_schedule_detail"){return;}if let Some(NavigationTarget::Schedule{id,identity})=&self.selection{self.request("monitor_schedule_detail",json!({"jobId":id,"identity":identity}),cx);}}
+    fn cancel_schedule_detail(&mut self,cx:&mut Context<Self>){self.schedule_config=None;self.deferred_queries.remove("monitor_schedule_detail");let active=self.requests.get_mut("monitor_schedule_detail").is_some_and(|request|{let active=request.busy;request.generation+=1;request.busy=false;request.error=None;active});if active&&!self.busy("monitor_cancel_schedule_detail"){self.request("monitor_cancel_schedule_detail",json!({}),cx);}}
     fn query_events(&mut self,query:EventQuery,stack:Vec<EventQuery>,cx:&mut Context<Self>){self.pending_events=Some((query.clone(),stack));self.request("monitor_events",json!({"query":query}),cx);}
     fn act(&mut self,action:Action,cx:&mut Context<Self>){self.interaction_pending=true;match action{
         Action::Navigate(target)=>self.navigate(target,cx),Action::Command(command,args)=>{if command=="settings_preview_glass"&&args.get("intensity").is_some_and(Value::is_null){self.end_preview(cx);}else{self.request(command,args,cx);}},Action::Patch(patch)=>self.request("settings_update",json!({"patch":patch}),cx),
-        Action::Pause=>{self.paused=!self.paused;if self.paused{self.cancel_queries(cx);}else{self.apply_latest(cx);if self.page==AppPage::Events{self.load_events(cx);}if self.page==AppPage::Schedules{self.load_history(self.history_offset,cx);}}self.sync_topology(cx);},
+        Action::Pause=>{self.paused=!self.paused;if self.paused{self.cancel_queries(cx);}else{self.apply_latest(cx);if self.page==AppPage::Events{self.load_events(cx);}if self.page==AppPage::Schedules{self.load_history(self.history_offset,cx);self.load_schedule_detail(cx);}}self.sync_topology(cx);},
         Action::Sidebar=>{if let Some(s)=&self.settings{self.request("settings_update",json!({"patch":{"sidebarCollapsed":!s.settings.sidebar_collapsed}}),cx);}},
         Action::Filter(key,index)=>{self.filters.insert(key,index);},Action::History(offset)=>self.load_history(offset,cx),
+        Action::ScheduleDetail=>self.load_schedule_detail(cx),
         Action::EventsApply=>{let source=self.source_search.read(cx).text.trim().to_owned();let mut query=EventQuery{source_id:(!source.is_empty()).then_some(source),event_type:self.filter("event-type").checked_sub(1).and_then(|i|LocalEventType::ALL.get(i).copied()),..EventQuery::default()};let hours=match self.filter("event-time"){1=>1,2=>24,3=>168,_=>0};if hours>0{query.from=Some((chrono::Utc::now()-chrono::Duration::hours(hours)).to_rfc3339_opts(chrono::SecondsFormat::Millis,true));}self.query_events(query,vec![],cx);},
         Action::EventsClear=>{self.filters.insert("event-type",0);self.filters.insert("event-time",0);self.source_search.update(cx,|i,cx|i.set(String::new(),cx));self.query_events(EventQuery::default(),vec![],cx);},
         Action::EventsNext=>{if let Some(next)=self.event_page.as_ref().and_then(|p|p.next){let mut stack=self.event_stack.clone();stack.push(self.event_query.clone());let mut query=self.event_query.clone();query.before=Some(next);self.query_events(query,stack,cx);}},
@@ -350,7 +364,7 @@ fn bytes(value:u64)->String{let value=value as f64;if value>=1_073_741_824.{form
 fn percent(value:Option<f64>)->String{value.map(|v|format!("{v:.1}%")).unwrap_or_else(||"—".into())}
 fn synced_draft(current:&str,previous:Option<&str>,saved:&str)->Option<String>{previous.map_or(current.is_empty(),|old|current==old).then(||saved.to_owned())}
 fn glass_position_value(position:f32,width:f32)->u8{((position/width.max(1.)).clamp(0.,1.)*100.).round()as u8}
-fn defer_until_cancelled(command:&'static str,args:&Value,requests:&BTreeMap<&'static str,Request>,pending:&mut BTreeMap<&'static str,Value>)->bool{let cancel=match command{"monitor_events"=>"monitor_cancel_events","monitor_schedule_history"=>"monitor_cancel_schedule_history",_=>return false};if requests.get(cancel).is_some_and(|r|r.busy){pending.insert(command,args.clone());true}else{false}}
+fn defer_until_cancelled(command:&'static str,args:&Value,requests:&BTreeMap<&'static str,Request>,pending:&mut BTreeMap<&'static str,Value>)->bool{let cancel=match command{"monitor_events"=>"monitor_cancel_events","monitor_schedule_history"=>"monitor_cancel_schedule_history","monitor_schedule_detail"=>"monitor_cancel_schedule_detail",_=>return false};if requests.get(cancel).is_some_and(|r|r.busy){pending.insert(command,args.clone());true}else{false}}
 fn commit_event_result(query:&mut EventQuery,stack:&mut Vec<EventQuery>,page:&mut Option<EventPage>,pending:&mut Option<(EventQuery,Vec<EventQuery>)>,result:Result<EventPage,String>)->Result<(),String>{
     let candidate=pending.take();let result=result?;
     if let Some((mut next,history))=candidate{next.upper=Some(result.upper);*query=next;*stack=history;}
@@ -358,6 +372,16 @@ fn commit_event_result(query:&mut EventQuery,stack:&mut Vec<EventQuery>,page:&mu
 }
 #[cfg(test)] mod regression_tests {
     use super::*;
+    #[test] fn schedule_configuration_replacement_waits_for_cancel_without_deferring_history(){
+        let mut requests=BTreeMap::new();requests.insert("monitor_cancel_schedule_detail",Request{generation:1,busy:true,error:None});let mut pending=BTreeMap::new();
+        assert!(defer_until_cancelled("monitor_schedule_detail",&json!({"jobId":"first","identity":"first-identity"}),&requests,&mut pending));
+        assert!(defer_until_cancelled("monitor_schedule_detail",&json!({"jobId":"second","identity":"second-identity"}),&requests,&mut pending));
+        assert!(!defer_until_cancelled("monitor_schedule_history",&json!({"jobId":"second","offset":0}),&requests,&mut pending));
+        assert_eq!(pending.len(),1);assert_eq!(pending["monitor_schedule_detail"]["jobId"],"second");
+        assert_eq!(pending["monitor_schedule_detail"]["identity"],"second-identity");
+        requests.get_mut("monitor_cancel_schedule_detail").unwrap().busy=false;
+        let latest=pending.remove("monitor_schedule_detail").unwrap();assert!(!defer_until_cancelled("monitor_schedule_detail",&latest,&requests,&mut pending));assert!(pending.is_empty());
+    }
     use core::prelude::v1::test;
     #[test] fn focus_cache_reclaims_departed_rows_and_preserves_active_and_pending(){let mut entries=BTreeMap::from([(0,(0,1)),(1,(1,2)),(2,(2,1)),(3,(3,1))]);retain_recent_focus(&mut entries,2,|v|*v==2||*v==3);assert_eq!(entries.keys().copied().collect::<Vec<_>>(),vec![1,2,3]);retain_recent_focus(&mut entries,3,|_|false);assert!(entries.is_empty());}
     #[test] fn bounds_budget_rejects_growth_but_allows_existing_target_refresh(){let mut entries=BTreeMap::new();for key in 0..TARGET_BUDGET{assert!(bounded_insert(&mut entries,key,1,TARGET_BUDGET).is_ok());}assert!(bounded_insert(&mut entries,TARGET_BUDGET,2,TARGET_BUDGET).is_err());assert!(bounded_insert(&mut entries,0,3,TARGET_BUDGET).is_ok());assert_eq!(entries.len(),TARGET_BUDGET);assert_eq!(entries[&0],3);entries.clear();assert!(bounded_insert(&mut entries,TARGET_BUDGET,4,TARGET_BUDGET).is_ok());}

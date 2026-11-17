@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { copyFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 
 // Only fixture feed configuration is seeded. All product mutations below are
 // performed by native pointer/keyboard events against measured, rendered controls.
@@ -100,6 +102,66 @@ export async function exerciseGpui({ driver, instance, output, manifest, scenari
   const active = (ui, version) => !ui.market.operation && !ui.market.error && item(ui)?.installedVersion === version && item(ui).installed && !ui.monitor.system.error && ui.monitor.system.data?.cpuCores > 0 && ui.monitor.system.data.memoryTotal > 0
   await driver.request('resize', { width: 1280, height: 860 })
   await expect('settings and monitor loaded', ui => ui.settings && ui.monitor && ui.market)
+  if (scenario === 'schedules') {
+    await stage('schedule-configuration-details', async () => {
+      const started = Date.now(), rssSamples = []
+      const sampleRss = async () => {
+        const { stdout } = await promisify(execFile)('/bin/ps', ['-p', String(driver.receipt.pid), '-o', 'rss='], { timeout: 2000, maxBuffer: 4096 })
+        const kib = Number(stdout.trim())
+        assert(Number.isFinite(kib) && kib > 0, 'Owned GPUI process memory must be observable')
+        rssSamples.push(kib)
+      }
+      await sampleRss()
+      await navigate('schedules')
+      const ready = await expect('fixture tasks collected', ui => manifest.hermesJobIds.slice(0, 2).every(id => ui.monitor.schedules.data?.jobs.some(job => job.id === id)))
+      const job = ready.monitor.schedules.data.jobs.find(job => job.id === manifest.hermesJobIds[0])
+      assert(!JSON.stringify(ready.monitor).includes(JSON.stringify(manifest.taskDetail.prompt)), 'Task bodies must stay out of periodic snapshots')
+      await fill('search', job.name)
+      await click(`job-${job.id}`)
+      await panelReady(job.id, 'job-close')
+      const loaded = await expect('task configuration and execution history load independently', ui => ui.scheduleDetail?.jobId === job.id && ui.historyLoaded && !ui.pending.includes('monitor_schedule_detail') && !ui.requests.monitor_schedule_detail.error)
+      const fields = Object.fromEntries(loaded.scheduleDetail.fields.map(field => [field.key, field.value]))
+      assert.equal(fields.prompt, manifest.taskDetail.prompt)
+      assert.equal(fields.workdir, manifest.taskDetail.workdir)
+      assert.equal(fields.model, manifest.taskDetail.model)
+      const captures = []
+      for (const [width, height] of [[1280, 860], [880, 640]]) {
+        await driver.request('resize', { width, height })
+        await panelReady(job.id, 'job-close')
+        const state = await expect('prompt is rendered within panel width', ui => {
+          const field = ui.targets['schedule-field-prompt'], panel = ui.targets['detail-panel']
+          return field && panel && field.width > 0 && field.height > 40 && field.x >= panel.x && field.x + field.width <= panel.x + panel.width + 1
+        })
+        const panel = state.targets['detail-panel'], prompt = state.targets['schedule-field-prompt']
+        await driver.request('scroll', { ...center(panel), deltaY: panel.y + 80 - prompt.y })
+        captures.push(await capture(`schedule-prompt-${width}`))
+      }
+      const generation = loaded.requests.monitor_schedule_detail.generation
+      await clickInPanel('schedule-detail-refresh')
+      await expect('configuration refresh completes', ui => ui.requests.monitor_schedule_detail.generation > generation && !ui.pending.includes('monitor_schedule_detail') && !ui.requests.monitor_schedule_detail.error && ui.scheduleDetail?.jobId === job.id)
+      await clickInPanel('history-refresh')
+      await expect('history refresh retains configuration', ui => !ui.pending.includes('monitor_schedule_history') && ui.scheduleDetail?.jobId === job.id)
+      await driver.request('key', { key: 'escape' })
+      await expect('closing releases configuration', ui => !ui.selection && !ui.scheduleDetail && !ui.pending.includes('monitor_schedule_detail'))
+      await driver.request('resize', { width: 1280, height: 860 })
+      const other = ready.monitor.schedules.data.jobs.find(job => job.id === manifest.hermesJobIds[1])
+      await fill('search', other.name)
+      await click(`job-${other.id}`)
+      const changed = await expect('switching task loads its own configuration', ui => ui.scheduleDetail?.jobId === other.id)
+      assert(!changed.scheduleDetail.fields.some(field => field.value === manifest.taskDetail.prompt), 'Previous task body must not leak into another task')
+      await navigate('overview')
+      await expect('leaving releases configuration', ui => !ui.scheduleDetail && !ui.pending.includes('monitor_schedule_detail'))
+      for (let iteration = 0; iteration < 8; iteration++) {
+        await navigate('schedules')
+        await expect('return reloads selected task', ui => ui.scheduleDetail?.jobId === other.id)
+        await sampleRss()
+        await navigate('overview')
+        await expect('repeat leave releases configuration', ui => !ui.scheduleDetail && !ui.pending.includes('monitor_schedule_detail'))
+      }
+      return { taskId: job.id, widths: [1280, 880], captures, independentHistory: true, releasedOnCloseAndLeave: true, reopenCycles: 8, durationMs: Date.now() - started, hostRssSamplesKiB: rssSamples, sampledPeakHostRssKiB: Math.max(...rssSamples) }
+    })
+    return {}
+  }
 
   await stage('refresh-pause-resume', async () => {
     await navigate('overview')

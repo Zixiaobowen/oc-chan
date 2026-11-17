@@ -8,6 +8,7 @@ fn reply<T:Serialize+?Sized>(value:&T)->Result<Value>{serde_json::to_value(value
 #[derive(Deserialize)] #[serde(rename_all="camelCase", deny_unknown_fields)] struct Source { source_id: String }
 #[derive(Deserialize)] #[serde(rename_all="camelCase", deny_unknown_fields)] struct Agent { agent_id: String }
 #[derive(Deserialize)] #[serde(rename_all="camelCase", deny_unknown_fields)] struct History { job_id: String, offset: usize }
+#[derive(Deserialize)] #[serde(rename_all="camelCase", deny_unknown_fields)] struct ScheduleDetailInput { job_id: String, identity: String }
 #[derive(Deserialize)] #[serde(deny_unknown_fields)] struct Events { query: EventQuery }
 #[derive(Deserialize)] #[serde(deny_unknown_fields)] struct Identifier { id: String }
 #[derive(Deserialize)] #[serde(deny_unknown_fields)] struct Patch { patch: SettingsPatch }
@@ -37,6 +38,7 @@ impl Desktop {
   let session=self.session(owner)?;session.invalidate();let mut errors=Vec::new();
   if let Some(diagnostics)=&session.diagnostics{if let Err(error)=diagnostics.close().await{errors.push(error);}}
   if let Err(error)=session.history.cancel().await{errors.push(error);}if let Err(error)=session.events.cancel().await{errors.push(error);}
+  if let Err(error)=session.schedule_detail.cancel().await{errors.push(error);}
   let components=self.components.lock().map_err(|_|Error::invalid("components"))?.clone();
   if session.view==View::Main{if let Some(tern)=&components.tern{if let Err(error)=tern.cancel().await{errors.push(error);}}}
   session.tasks.wait().await;
@@ -65,6 +67,9 @@ impl Desktop {
             "monitor_schedule_history" => { let input: History = decode(args)?;
                 let result = document.history.run(&document.cancel, |cancel| services.monitor.history(&input.job_id, input.offset, cancel)).await?; reply(&result) },
             "monitor_cancel_schedule_history" => { document.history.cancel().await?; reply(&()) },
+            "monitor_schedule_detail" => { let input: ScheduleDetailInput = decode(args)?;
+                let result = document.schedule_detail.run(&document.cancel, |cancel| services.monitor.schedule_detail(&input.job_id, &input.identity, cancel)).await?; reply(&result) },
+            "monitor_cancel_schedule_detail" => { document.schedule_detail.cancel().await?; reply(&()) },
             "monitor_events" => { let input: Events = decode(args)?;
                 let result = document.events.run(&document.cancel, |cancel| services.monitor.query_events(input.query, cancel)).await;
                 reply(&result?) },
@@ -115,5 +120,17 @@ impl Desktop {
             Phase::Recovery(failure) => Ok(json!({"failure":failure,"language":self.system_language})),
             _ => Err(Error::new("OC_RECOVERY_INACTIVE", "启动恢复已结束 / Startup recovery is no longer active")),
         }
+    }
+}
+
+#[cfg(test)]
+mod schedule_detail_input_tests {
+    use super::*;
+    #[test]
+    fn schedule_detail_requires_selection_identity() {
+        assert!(decode::<ScheduleDetailInput>(json!({"jobId":"hermes-job:one"})).is_err());
+        assert!(decode::<ScheduleDetailInput>(json!({"jobId":"hermes-job:one","identity":null})).is_err());
+        let input = decode::<ScheduleDetailInput>(json!({"jobId":"hermes-job:one","identity":"selected-identity"})).unwrap();
+        assert_eq!(input.identity,"selected-identity");
     }
 }

@@ -1,7 +1,8 @@
-//! Read-only scheduling metadata. No job command or prompt is executed or published.
+//! Read-only scheduling metadata; task bodies are read only by explicit detail queries.
 mod parse;
 mod launchd;
 mod runtime;
+mod detail;
 #[cfg(test)] mod tests;
 pub use parse::{describe_calendar,describe_cron,describe_launch_schedule,launch_origin,parse_crontab};
 pub use launchd::{LaunchRuntime,launch_state,parse_launch_disabled,parse_launch_services};

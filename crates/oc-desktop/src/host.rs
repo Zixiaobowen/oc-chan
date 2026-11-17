@@ -27,7 +27,7 @@ impl RequestAdmission {
     fn acquire(&self, command: &str) -> Result<(OwnedSemaphorePermit, Option<OwnedSemaphorePermit>)> {
         let busy = |_| Error::new("OC_DESKTOP_BUSY", "桌面请求已达上限，请等待 / Desktop request limit reached");
         // Reserve four admission slots for cancellation and shutdown controls.
-        let control = matches!(command, "monitor_cancel_schedule_history" | "monitor_cancel_events" | "diagnostics_cancel"
+        let control = matches!(command, "monitor_cancel_schedule_detail" | "monitor_cancel_schedule_history" | "monitor_cancel_events" | "diagnostics_cancel"
             | "updates_cancel" | "marketplace_cancel" | "recovery_quit");
         let data = if control { None } else { Some(self.data.clone().try_acquire_owned().map_err(busy)?) };
         let total = self.total.clone().try_acquire_owned().map_err(busy)?;
@@ -218,7 +218,7 @@ impl Desktop {
             for document in self.sessions()? {
                 document.invalidate();
                 if let Some(diagnostics) = &document.diagnostics { diagnostics.close().await?; }
-                document.history.cancel().await?; document.events.cancel().await?;
+                document.history.cancel().await?; document.schedule_detail.cancel().await?; document.events.cancel().await?;
             }
             if let Some(tern) = &components.tern { tern.close().await?; }
             if let Some(market) = &components.market { market.close().await?; }
@@ -284,6 +284,7 @@ impl Desktop {
   for session in self.sessions()?{
    if session.view!=view{continue;}
    if let Err(error)=session.history.cancel().await{failures.push(error);}
+   if let Err(error)=session.schedule_detail.cancel().await{failures.push(error);}
    if let Err(error)=session.events.cancel().await{failures.push(error);}
    if let Some(diagnostics)=&session.diagnostics{if let Err(error)=diagnostics.cancel().await{failures.push(error);}}
    if let Err(error)=self.blur(session.id).await{failures.push(error);}

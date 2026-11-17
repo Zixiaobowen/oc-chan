@@ -212,3 +212,43 @@ async fn system_locale_changes_preserve_explicit_language_and_apply_when_returni
     settings.language = Language::System; monitor.apply_settings(settings).await.unwrap(); assert_eq!(monitor.language.lock().unwrap().resolved(), ResolvedLanguage::Chinese);
     monitor.stop().await.unwrap();
 }
+
+struct ScheduleDetailIdentityProbe { job: Mutex<ScheduledJob>, queried: AtomicUsize }
+impl CollectionPlugin for ScheduleDetailIdentityProbe {
+    fn start(&self, cancel: CancellationToken) -> BoxFuture<'_, Result<()>> { Box::pin(async move { check_cancel(&cancel) }) }
+    fn collect(&self, _: CancellationToken, _: Option<String>) -> BoxFuture<'_, Result<Option<SnapshotData>>> {
+        Box::pin(async { Ok(Some(SnapshotData::Schedules(ScheduleSnapshot { collected_at:timestamp(),jobs:vec![self.job.lock().unwrap().clone()],sources:Vec::new() }))) })
+    }
+    fn schedule_detail(&self, job: ScheduledJob, _: CancellationToken) -> BoxFuture<'_, Result<ScheduleDetail>> {
+        Box::pin(async move {
+            self.queried.fetch_add(1,Ordering::SeqCst);
+            Ok(ScheduleDetail { job_id:job.id,collected_at:timestamp(),fields:vec![ScheduleDetailField { key:"prompt".into(),value:"current configuration body".into() }],notes:Vec::new() })
+        })
+    }
+    fn stop(&self) -> BoxFuture<'_, Result<()>> { Box::pin(async { Ok(()) }) }
+}
+#[tokio::test]
+async fn schedule_detail_rejects_stale_selection_before_querying_replacement() {
+    let profile = profile(); let monitor = Monitor::new(options(profile.path())).unwrap(); monitor.start(&disabled()).await.unwrap();
+    monitor.registry.unregister("schedules").await.unwrap();
+    let first = ScheduledJob { id:"hermes-job:same".into(),name:"Job".into(),source:"hermes".into(),scope:JobScope::User,origin:JobOrigin::Personal,kind:JobKind::Interval,schedule:"hourly".into(),state:JobState::Waiting,state_reason:None,last_run:None,pid:None,last_exit_code:None,file:Some("/first/jobs.json".into()),executable:None,next_run:None };
+    let plugin = Arc::new(ScheduleDetailIdentityProbe { job:Mutex::new(first),queried:AtomicUsize::new(0) }); let factory = plugin.clone();
+    monitor.registry.register(PluginDefinition { id:"schedules".into(),section:MonitorSection::Schedules,capabilities:Vec::new(),dependencies:Vec::new(),retry_sources:Vec::new(),interval:Duration::from_secs(60),timeout:Duration::from_secs(1),create:Arc::new(move |_| Ok(factory.clone())) },true).await.unwrap();
+    for replacement in 0..3 {
+        let before = monitor.snapshot().schedules.data.unwrap().jobs[0].clone();
+        let NavigationTarget::Schedule { identity:old_identity,.. } = NavigationTarget::schedule(&before) else { unreachable!() };
+        {
+            let mut job = plugin.job.lock().unwrap();
+            match replacement { 0 => job.file = Some("/replacement/jobs.json".into()), 1 => job.source = "replacement source".into(), _ => job.executable = Some("replacement executable".into()) }
+        }
+        monitor.refresh(Some(MonitorSection::Schedules)).await.unwrap();
+        let count = plugin.queried.load(Ordering::SeqCst);
+        let error = monitor.schedule_detail(&before.id,&old_identity,CancellationToken::new()).await.unwrap_err();
+        assert_eq!(error.code,"OC_SCHEDULE_IDENTITY"); assert_eq!(plugin.queried.load(Ordering::SeqCst),count);
+        let after = monitor.snapshot().schedules.data.unwrap().jobs[0].clone();
+        let NavigationTarget::Schedule { identity:new_identity,.. } = NavigationTarget::schedule(&after) else { unreachable!() };
+        let detail = monitor.schedule_detail(&after.id,&new_identity,CancellationToken::new()).await.unwrap();
+        assert_eq!(detail.fields[0].value,"current configuration body"); assert_eq!(plugin.queried.load(Ordering::SeqCst),count+1);
+    }
+    monitor.stop().await.unwrap();
+}

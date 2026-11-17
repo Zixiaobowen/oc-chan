@@ -27,11 +27,11 @@ impl QuerySlot {
 
 pub struct Session {
  pub id:u64,pub view:View,pub cancel:CancellationToken,pub tasks:TaskTracker,
- pub history:QuerySlot,pub events:QuerySlot,pub diagnostics:Option<Arc<Diagnostics>>,
+ pub history:QuerySlot,pub schedule_detail:QuerySlot,pub events:QuerySlot,pub diagnostics:Option<Arc<Diagnostics>>,
  pub native_registered:AtomicBool,pub settings_registered:AtomicBool,
  pub committed:AtomicBool,pub action_completed:AtomicBool,
 }
 impl Session {
- pub fn new(id:u64,view:View,diagnostics:Option<Arc<Diagnostics>>)->Self { Self{id,view,cancel:CancellationToken::new(),tasks:TaskTracker::new(),history:QuerySlot::default(),events:QuerySlot::default(),diagnostics,native_registered:AtomicBool::new(false),settings_registered:AtomicBool::new(false),committed:AtomicBool::new(false),action_completed:AtomicBool::new(false)} }
+ pub fn new(id:u64,view:View,diagnostics:Option<Arc<Diagnostics>>)->Self { Self{id,view,cancel:CancellationToken::new(),tasks:TaskTracker::new(),history:QuerySlot::default(),schedule_detail:QuerySlot::default(),events:QuerySlot::default(),diagnostics,native_registered:AtomicBool::new(false),settings_registered:AtomicBool::new(false),committed:AtomicBool::new(false),action_completed:AtomicBool::new(false)} }
  pub fn invalidate(&self){self.cancel.cancel();self.tasks.close();}
 }
