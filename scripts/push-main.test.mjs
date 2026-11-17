@@ -45,7 +45,7 @@ function fixture(t) {
   writeFileSync(path.join(root, 'docs/handoff.md'), 'initial\n')
   mkdirSync(path.join(root, 'scripts'))
   // Copy the lifecycle's real transitive imports; cleanup must execute production code.
-  for (const filename of ['push-main.mjs', 'local-app-lifecycle.mjs', 'local-install-readiness.mjs', 'build-app.mjs', 'build-plugin-market-rust.mjs', 'rust-dependencies.mjs']) {
+  for (const filename of ['push-main.mjs', 'local-app-lifecycle.mjs', 'local-install-readiness.mjs', 'build-app.mjs', 'build-plugin-market-rust.mjs', 'rust-dependencies.mjs', 'sparkle-sdk.mjs']) {
     copyFileSync(new URL(`./${filename}`, import.meta.url), path.join(root, 'scripts', filename))
   }
   const initial = commit(root, 'initial')
