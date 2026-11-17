@@ -19,7 +19,7 @@ async function fixture(t) {
   const root = path.join(temporary, 'repo')
   await mkdir(path.join(root, 'scripts'), { recursive: true })
   await run('git', ['init', '--quiet', root], { timeout: 8000 })
-  for (const name of ['local-app-lifecycle.mjs', 'local-install-readiness.mjs', 'local-install-process.m', 'build-app.mjs', 'build-plugin-market-rust.mjs', 'rust-dependencies.mjs']) await copyFile(path.join(path.dirname(source), name), path.join(root, 'scripts', name))
+  for (const name of ['local-app-lifecycle.mjs', 'local-install-readiness.mjs', 'local-install-process.m', 'build-app.mjs', 'build-plugin-market-rust.mjs', 'rust-dependencies.mjs', 'sparkle-sdk.mjs']) await copyFile(path.join(path.dirname(source), name), path.join(root, 'scripts', name))
   const children = []
   t.after(async () => {
     for (const child of children) {

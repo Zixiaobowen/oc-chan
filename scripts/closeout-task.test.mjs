@@ -37,7 +37,7 @@ function fixture(t) {
   writeFileSync(path.join(root, 'product.js'), 'export const value = 1\n')
   writeFileSync(path.join(root, '.gitignore'), 'cache/\n*.log\n')
   mkdirSync(path.join(root, 'scripts'))
-  for (const file of ['closeout-task.mjs', 'push-main.mjs', 'local-app-lifecycle.mjs', 'local-install-readiness.mjs', 'build-app.mjs', 'build-plugin-market-rust.mjs', 'rust-dependencies.mjs']) {
+  for (const file of ['closeout-task.mjs', 'push-main.mjs', 'local-app-lifecycle.mjs', 'local-install-readiness.mjs', 'build-app.mjs', 'build-plugin-market-rust.mjs', 'rust-dependencies.mjs', 'sparkle-sdk.mjs']) {
     copyFileSync(new URL(`./${file}`, import.meta.url), path.join(root, 'scripts', file))
   }
   const initial = commit(root, 'initial')
