@@ -138,8 +138,7 @@ impl TernNavigation {
         let birth=(self.options.process_identity)(owner_id.clone()).await?;
         if owner.pid != birth.pid || ProcessIdentity::read(birth.pid)? != birth { return Err(failure("OC_TERN_IDENTITY")); }
         let session=self.options.io.read_range(SOURCE,Path::new(&target.session_file),0,65536,cancel).await?;
-        let header:Value=serde_json::from_slice(session.bytes.split(|b| *b==b'\n').next().ok_or_else(|| failure("OC_TERN_TARGET"))?).map_err(|_| failure("OC_TERN_TARGET"))?;
-        if header["type"]!="session" || header["id"]!=session_id { return Err(failure("OC_TERN_TARGET")); }
+        validate_session_header(&session.bytes, session_id)?;
         let resources=self.resources(cancel).await?; let helper=self.options.resources.join("present-window");
         let identity=identity(self.command(&helper,&["probe"],65536,true,deadline,cancel).await?)?;
         let tern_birth=ProcessIdentity::read(identity.pid)?;
@@ -163,8 +162,8 @@ impl TernNavigation {
         pane(&self.command(&identity.executable,&inspect,2*1024*1024,false,deadline,cancel).await?,&target)?;
         check_cancel(cancel)?;
         let session_current=self.options.io.read_range(SOURCE,Path::new(&target.session_file),0,65536,cancel).await?;
-        let header_current:Value=serde_json::from_slice(session_current.bytes.split(|b|*b==b'\n').next().ok_or_else(||failure("OC_TERN_TARGET"))?).map_err(|_|failure("OC_TERN_TARGET"))?;
-        if !session_current.identity.same_file(&session.identity)||header_current["type"]!="session"||header_current["id"]!=session_id||ProcessIdentity::read(birth.pid)?!=birth||ProcessIdentity::read(identity.pid)?!=tern_birth{return Err(failure("OC_TERN_IDENTITY"));}
+        validate_session_header(&session_current.bytes, session_id)?;
+        if !session_current.identity.same_file(&session.identity)||ProcessIdentity::read(birth.pid)?!=birth||ProcessIdentity::read(identity.pid)?!=tern_birth{return Err(failure("OC_TERN_IDENTITY"));}
         let pane_id=target.pane_id.to_string();
         let focused=self.command(&identity.executable,&["focus",&pane_id,"--json","--window",&target.window_key],65536,false,deadline,cancel).await?;
         if focused["block"].as_u64()!=Some(target.pane_id) { return Err(failure("OC_TERN_TARGET")); }
@@ -180,6 +179,27 @@ fn identity(value:Value)->Result<TernIdentity>{identity_from(value)}
 fn identity_from(value:Value)->Result<TernIdentity>{
     let result:TernIdentity=serde_json::from_value(value).map_err(|_| failure("OC_TERN_IDENTITY"))?;
     if result.pid==0 || result.pid>i32::MAX as u32 || result.bundle_id!="so.stencil.tern" || result.team_id!="VTLHGQC72S" || !path_valid(&result.bundle) || !path_valid(&result.executable) || result.executable!=result.bundle.join("Contents/MacOS/tern") { return Err(failure("OC_TERN_IDENTITY")); } Ok(result)
+}
+fn validate_session_header(bytes: &[u8], session_id: &str) -> Result<()> {
+    #[derive(Deserialize)]
+    struct Header<'a> {
+        #[serde(rename = "type", borrow)]
+        kind: std::borrow::Cow<'a, str>,
+        #[serde(borrow)]
+        id: Option<std::borrow::Cow<'a, str>>,
+        v: Option<u32>,
+    }
+    let mut lines = bytes.split(|b| *b == b'\n');
+    let parse = |line| serde_json::from_slice::<Header<'_>>(line).map_err(|_| failure("OC_TERN_TARGET"));
+    let first = parse(lines.next().ok_or_else(|| failure("OC_TERN_TARGET"))?)?;
+    // OMP's mutable title slot precedes the immutable session identity.
+    let header = if first.kind == "title" && first.v == Some(1) {
+        parse(lines.next().ok_or_else(|| failure("OC_TERN_TARGET"))?)?
+    } else { first };
+    if header.kind != "session" || header.id.as_deref() != Some(session_id) {
+        return Err(failure("OC_TERN_TARGET"));
+    }
+    Ok(())
 }
 fn pane(value:&Value,target:&TernTarget)->Result<()> {
     let panes=value["panes"].as_array().filter(|a| a.len()<=10_000).ok_or_else(|| failure("OC_TERN_PROTOCOL"))?; let mut matches=0;
@@ -200,6 +220,27 @@ async fn wait(mut rx:watch::Receiver<Option<Result<()>>>)->Result<()> {
 }
 #[cfg(test)] mod tests {
     use super::*; use serde_json::json;
+    #[test] fn validates_session_identity_with_optional_title_slot() {
+        let session = br#"{"type":"session","id":"expected"}"#;
+        assert!(validate_session_header(session, "expected").is_ok());
+        for title in ["original", "renamed"] {
+            let prefix = format!("{{\"type\":\"title\",\"v\":1,\"title\":\"{title}\"}}\n{}\nnot parsed", std::str::from_utf8(session).unwrap());
+            assert!(validate_session_header(prefix.as_bytes(), "expected").is_ok());
+            assert_eq!(validate_session_header(prefix.as_bytes(), "replaced").unwrap_err().code, "OC_TERN_TARGET");
+        }
+    }
+    #[test] fn rejects_missing_malformed_or_displaced_session_headers() {
+        for prefix in [
+            "", "not json", "{\"type\":\"title\",\"v\":1}",
+            "{\"type\":\"title\",\"v\":1}\n{",
+            "{\"type\":\"title\",\"v\":2}\n{\"type\":\"session\",\"id\":\"expected\"}",
+            "{\"type\":\"message\"}\n{\"type\":\"session\",\"id\":\"expected\"}",
+            "{\"type\":\"title\",\"v\":1}\n{\"type\":\"title\",\"v\":1}\n{\"type\":\"session\",\"id\":\"expected\"}",
+            "{\"type\":\"session\"}",
+        ] {
+            assert_eq!(validate_session_header(prefix.as_bytes(), "expected").unwrap_err().code, "OC_TERN_TARGET", "{prefix}");
+        }
+    }
     #[test] fn rejects_ambiguous_and_replaced_panes() {
         let target=TernTarget { window_key:"w".into(),pane_id:1,session_file:"/tmp/session".into() };
         let item=json!({"pane":1,"omp_session_file":"/tmp/session"});
