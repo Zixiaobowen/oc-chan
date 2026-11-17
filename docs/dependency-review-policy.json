@@ -1,7 +1,7 @@
 {
   "schema": 2,
-  "lockSha256": "2090c5a89a53c5a4af7080767a011b35d806815929929bf575e395558f607cdf",
-  "cargoLockSha256": "05c2dbbc57bfb5e578b9ded597c1c0be4e8e30ed6afa8561d7e13aaf5fd85c36",
+  "lockSha256": "6d9f0c586c977072bb8352f41cb6e6abcd19ea711b68f01cc74a0a192fd05e6e",
+  "cargoLockSha256": "27ee082daa4cea212e57865d13f4bd24d27c11aa795c4da4b3b649e86692351b",
   "allowedLicenses": [
     "Apache-2.0",
     "Apache-2.0 OR MIT",
