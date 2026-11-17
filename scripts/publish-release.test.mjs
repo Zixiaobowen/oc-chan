@@ -90,7 +90,8 @@ function github(options = {}) {
       const target = args.includes('--target') ? args[args.indexOf('--target') + 1] : defaultCommit
       const draft = seed(tag, { draft: true, prerelease: args.includes('--prerelease'), commit: target })
       draft.name = args[args.indexOf('--title') + 1]
-      draft.body = args[args.indexOf('--notes') + 1]
+      assert.equal(args[args.indexOf('--notes-file') + 1], '-')
+      draft.body = config.input
       return success()
     }
     const release = releases.get(tag)
@@ -153,9 +154,32 @@ async function fixture(t, version = '1.2.3', serverOptions = {}, previewEvent) {
     digests.set(name, `sha256:${createHash('sha256').update(content).digest('hex')}`)
   }
   const remote = github({ tags: info.prerelease ? [] : [info.tag], ...serverOptions })
-  const options = { directory, version, tag: info.tag, env }
+  const notesFile = join(root, 'release-notes.md')
+  await writeFile(notesFile, `# OC Chan ${version}\n\n修复更新检查；保留用户的设置。\n`)
+  const options = { directory, version, tag: info.tag, notesFile, env }
   return { remote, options, info, sizes, digests, publish: () => publishRelease(options, remote.run) }
 }
+
+test('stable publication uses reviewed notes verbatim, including shell metacharacters', async t => {
+  const f = await fixture(t)
+  const notes = '# Release\n\n修复路径处理：`$(touch should-not-exist)` 和 $HOME。\n'
+  await writeFile(f.options.notesFile, notes)
+  f.options.env.GITHUB_EVENT_NAME = 'workflow_dispatch'
+  await f.publish()
+  assert.equal(f.remote.releases.get(f.info.tag).body, notes)
+  assertPublic(f, f.info.tag)
+})
+
+for (const [name, change] of [
+  ['missing', file => rm(file)],
+  ['empty', file => writeFile(file, ' \n')],
+  ['oversized', file => writeFile(file, 'x'.repeat(64 * 1024 + 1))],
+]) test(`stable refuses ${name} release notes before remote writes`, async t => {
+  const f = await fixture(t)
+  await change(f.options.notesFile)
+  await assert.rejects(f.publish())
+  assert.deepEqual(f.remote.events, [])
+})
 
 for (const preview of [false, true]) {
   for (const [name, mutate, expected] of [

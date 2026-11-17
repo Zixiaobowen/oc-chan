@@ -20,6 +20,14 @@ test('documentation selects no product tests', () => {
   assert.deepEqual(selectTests(['README.md', 'docs/performance-baseline.json']).tests, [])
 })
 
+test('version management and release notes validate publication without selecting product crates', () => {
+  for (const file of ['scripts/version.mjs', 'scripts/release-workflow.mjs', 'releases/0.2.0.md', '.github/workflows/release-prepare.yml', '.github/workflows/release-stable.yml']) {
+    const plan = selectTests([file])
+    assert.deepEqual(plan.tests, union('versioning', 'updates'))
+    assert.deepEqual(plan.rust, [])
+  }
+})
+
 test('renderer smoke follows executable and UI changes, while documentation and unit-test-only edits stay targeted', () => {
   assert.equal(selectTests(['README.md', 'docs/performance-baseline.json']).rendererSmoke, false)
   assert.equal(selectTests(['scripts/build-app.test.mjs']).rendererSmoke, false)
