@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { lstat, mkdtemp, rename, rm, symlink, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import { BUNDLE_ID, TARGET, boundedJson, buildEnvironment, developmentBundleLayout, digestFile, signingIdentity, tauriConfiguration, withBuildLock } from './build-app.mjs'
+import { BUNDLE_ID, TARGET, boundedJson, buildEnvironment, bundleApplication, developmentBundleLayout, digestFile, signingIdentity, withBuildLock } from './build-app.mjs'
 import { parseDistributionOptions, stableMetadata } from './dist.mjs'
 
 async function fixture(t) { const root = await mkdtemp(path.join(os.tmpdir(), 'oc-rust-build-')); t.after(() => rm(root, { recursive: true, force: true })); return root }
@@ -18,10 +18,19 @@ test('production builds strip development overrides and do not discover signing 
   assert.throws(() => buildEnvironment({ configuration: {} }, { RUSTFLAGS: '--cfg feature="acceptance"' }), /acceptance/)
   assert.equal(signingIdentity({}), '-'); assert.throws(() => signingIdentity({ APPLE_SIGNING_IDENTITY: 'Apple Development: Someone' }), /Developer ID/)
 })
-test('Tauri maps isolated embedded frontend and resource roots without build recursion', () => {
-  const config = tauriConfiguration('/instance/frontend', '/instance/resources', '-')
-  assert.equal(config.build.frontendDist, '/instance/frontend'); assert.equal(config.build.beforeBuildCommand, '')
-  assert.deepEqual(config.bundle.resources, { '/instance/resources/': '' }); assert.equal(config.bundle.createUpdaterArtifacts, false)
+test('GPUI bundle copies the executable and resources and signs the finished bundle', async t => {
+  const root = await fixture(t), binary = path.join(root, 'host'), resourcesDir = path.join(root, 'resources'), application = path.join(root, 'OC Chan.app')
+  await mkdir(resourcesDir); await writeFile(binary, 'native host'); await writeFile(path.join(resourcesDir, 'oc-data-worker'), 'worker')
+  const calls = []
+  await bundleApplication({ application, binary, resourcesDir, version: '1.2.3', sign: '-', execute: async (file, args) => { calls.push({ file, args }) } })
+  assert.equal(await readFile(path.join(application, 'Contents/MacOS/oc-chan'), 'utf8'), 'native host')
+  assert.equal(await readFile(path.join(application, 'Contents/Resources/oc-data-worker'), 'utf8'), 'worker')
+  const plist = await readFile(path.join(application, 'Contents/Info.plist'), 'utf8')
+  assert.match(plist, /<key>CFBundleIdentifier<\/key><string>local\.oc-chan\.desktop<\/string>/)
+  assert.match(plist, /<key>CFBundleShortVersionString<\/key><string>1\.2\.3<\/string>/)
+  assert.match(plist, /<key>LSUIElement<\/key><false\/>/)
+  assert.deepEqual(calls, [{ file: '/usr/bin/codesign', args: ['--force', '--sign', '-', '--options', 'runtime', application] }])
+  await assert.rejects(bundleApplication({ application, binary, resourcesDir, version: '1.2.3', sign: '-', execute: async () => assert.fail('existing bundle must not be signed') }))
 })
 test('development bundle identity is legal, isolated per instance and stable on resume', () => {
   const instance = '/workspace/.dev-instances/instance-one', layout = developmentBundleLayout(instance)
@@ -32,11 +41,6 @@ test('development bundle identity is legal, isolated per instance and stable on 
   assert.notEqual(layout.identifier, BUNDLE_ID)
   assert.notEqual(layout.identifier, developmentBundleLayout(`${instance}-two`).identifier)
   assert.deepEqual(layout, developmentBundleLayout(instance))
-  const config = tauriConfiguration('/frontend', '/resources', '-', { identifier: layout.identifier, infoPlist: '/instance/development.Info.plist' })
-  assert.equal(config.identifier, layout.identifier); assert.equal(config.bundle.macOS.infoPlist, '/instance/development.Info.plist')
-  assert.equal(config.bundle.macOS.signingIdentity, '-')
-  const production = tauriConfiguration('/frontend', '/resources', '-')
-  assert.equal(production.identifier, undefined); assert.equal(production.bundle.macOS.infoPlist, undefined)
 })
 test('build ownership excludes a concurrent builder and releases the exact lock', async t => {
   const resources = path.join(await fixture(t), 'resources')

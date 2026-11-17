@@ -12,7 +12,7 @@
   <strong>See your Mac's agents, scheduled tasks, and system status.</strong>
 </p>
 
-<p align="center">macOS · Apple Silicon · Local, read-only observation</p>
+<p align="center">macOS · Apple Silicon · Rust / GPUI / Metal · Local, read-only observation</p>
 
 <p align="center">
   <a href="#features">Features</a> ·
@@ -23,10 +23,10 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/agent-project-buildings.png" width="1100" height="620" alt="OC Chan 3D collaboration view: one building per project, one floor per task, private offices for main agents, and shared desks for subagents" />
+  <img src="docs/images/gpui-agent-project-buildings.png" width="1100" alt="OC Chan native GPUI 3D topology: project buildings, task floors, offices, and shared desks" />
 </p>
 
-<p align="center"><sub>Screenshot of the actual 3D renderer using synthetic demo data.</sub></p>
+<p align="center"><sub>Actual GPUI / Metal rendering with the 32 synthetic agents from this validation run.</sub></p>
 
 When you run several agents and background tasks at once, OC Chan gives you one desktop window to find their working directories and sessions, check task status, and inspect your Mac's resource usage.
 
@@ -39,7 +39,7 @@ In the default 3D view, each project occupies a building, and each main session 
 <details>
 <summary>See the 2D collaboration view</summary>
 
-![OC Chan 2D collaboration graph, with edges connecting main agents and subagents](docs/images/agent-topology.png)
+![OC Chan native GPUI 2D topology, with edges connecting main agents and subagents](docs/images/gpui-agent-topology.png)
 
 The same synthetic demo data in 2D, with edges showing main agents and their subagents.
 
@@ -63,9 +63,9 @@ System monitoring is not installed automatically on first launch. The bundled pl
 
 The interface supports Chinese and English, light and dark modes, and six themes. Native Liquid Glass is available on macOS 26 and later and respects system accessibility settings.
 
-Use the button beside the traffic lights or **⌃⌘S** to hide the sidebar. Main navigation and installed plugins move to the top bar, with Data sources and Settings on the right. Dragging the divider 64px past its minimum width also hides it; reopening restores the previous width. Layout preferences are saved. Narrow viewports use a compact navigation menu, and motion respects the system's Reduce Motion setting.
+Use the top **Navigation** button or **⌃⌘S** to hide the sidebar. Main navigation and installed plugins move to the top bar, with Data sources and Settings on the right. Drag the divider to resize it, or pull farther inward to collapse it; reopening restores the saved width. Narrow windows use compact navigation, and detail panels respect the system's Reduce Motion setting.
 
-The 14px vector logo and compact OC Chan wordmark sit to the right of the sidebar button, aligned with the traffic lights and button center. They stay in place when the sidebar opens or closes. Sidebar functions begin directly below the title bar, without the large brand block, subtitle, or device description; Data sources and Settings remain at the bottom left.
+The top of the window contains a 14px monochrome OC vector mark, wordmark, and navigation button; macOS manages the native window controls. Data sources and Settings remain at the bottom of the expanded sidebar. Page content and detail panels scroll independently.
 
 ## Supported sources
 
@@ -93,7 +93,7 @@ In Settings → App updates, choose **Release notes and downloads** to open GitH
 
 ## Development
 
-Use **Rust 1.99 (pinned by the repository), Node.js 22.12+ (24 recommended)**, npm, and Xcode Command Line Tools with the macOS 26 SDK or later. Run these commands from the repository root. The default starts a real headless Tauri / WKWebView instance without a desktop window. Automated native input validation requires macOS 26 or later:
+Use **Rust 1.99 (pinned by the repository), Node.js 22.12+ (24 recommended)**, npm, and Xcode Command Line Tools with the macOS 26 SDK or later. The desktop host and interface use **GPUI 0.2.2 / Metal**, with runtime shader compilation; a separate `metal` compiler is not required. Run these commands from the repository root. The default starts a real hidden GPUI application without displaying a desktop window:
 
 ```sh
 npm ci
@@ -117,6 +117,6 @@ The following documents are currently in Chinese:
 - [Features, controls, and data boundaries](docs/features.md): topology, task history, local events, notifications, and settings.
 - [Development and validation](docs/development.md): environment setup, headless debugging, targeted tests, and performance validation.
 - [Installation, builds, and releases](docs/distribution.md): delivery, upgrades, CI, signed updates, and local cleanup.
-- [Architecture and plugins](docs/architecture.md): collector lifecycle, standalone plugin packages, IPC, and brand assets.
+- [Architecture and plugins](docs/architecture.md): collector lifecycle, standalone plugin packages, GPUI views, and brand assets.
 - [Performance baseline](docs/performance-baseline.md): measured workloads, results, and untested scenarios.
 - [Product scope](PRODUCT.md) · [Design guidelines](DESIGN.md) · [Engineering rules](AGENTS.md).

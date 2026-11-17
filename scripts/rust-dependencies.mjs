@@ -4,7 +4,7 @@ import { constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readSy
 import path from 'node:path'
 
 export const RUST_TARGET = 'aarch64-apple-darwin'
-export const RUST_ROOTS = Object.freeze(['oc-chan', 'oc-core', 'oc-installer', 'oc-system-monitor'])
+export const RUST_ROOTS = Object.freeze(['oc-desktop', 'oc-core', 'oc-installer', 'oc-system-monitor'])
 export const RUST_LIMITS = Object.freeze({ metadata: 16 * 1024 * 1024, packages: 20000, edges: 200000, crateEntries: 40000, entries: 250000, depth: 24, licenseFiles: 8192, licenseBytes: 2 * 1024 * 1024, totalLicenseBytes: 32 * 1024 * 1024 })
 export const sha256 = value => createHash('sha256').update(value).digest('hex')
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -153,8 +153,9 @@ export function collectCargoLegalFiles(item, checksum, budget, supplemental) {
   }
   if (supplemental) {
     const { record, directory: supplementRoot } = supplemental
-    requireThat(found.length === 0 && designated === null && record.name === item.name && record.version === item.version && record.checksum === checksum && record.license === item.license && record.repository === item.repository && /^[a-f0-9]{40}$/.test(record.commit), 'Obsolete or mismatched explicitly reviewed Cargo license supplement')
-    requireThat(Array.isArray(record.evidence) && record.evidence.length >= 2 && record.evidence.length <= 8 && Array.isArray(record.files) && record.files.length > 0 && record.files.length <= 8, 'Invalid supplemental license evidence')
+    requireThat(found.length === 0 && designated === null && record.name === item.name && record.version === item.version && record.checksum === checksum && record.license === item.license && record.repository === item.repository, 'Obsolete or mismatched explicitly reviewed Cargo license supplement')
+    requireThat(['published-vcs', 'published-spdx'].includes(record.binding), 'Unknown supplemental license binding')
+    requireThat(Array.isArray(record.evidence) && record.evidence.length >= 1 && record.evidence.length <= 32 && Array.isArray(record.files) && record.files.length > 0 && record.files.length <= 32, 'Invalid supplemental license evidence')
     let vcs, hasManifest = false
     for (const evidence of record.evidence) {
       requireThat(typeof evidence.path === 'string' && evidence.path.split('/').every(part => part && part !== '.' && part !== '..') && !/[\0\r\n\\?*\[\]]/.test(evidence.path) && /^[a-f0-9]{64}$/.test(evidence.sha256), 'Unsafe supplemental archive evidence path')
@@ -163,18 +164,38 @@ export function collectCargoLegalFiles(item, checksum, budget, supplemental) {
       if (evidence.path === '.cargo_vcs_info.json') vcs = JSON.parse(bytes.toString('utf8'))
       if (evidence.path === 'Cargo.toml') hasManifest = true
     }
-    requireThat(hasManifest && vcs?.git?.sha1 === record.commit && vcs.path_in_vcs === record.pathInVcs && record.sourceArchive === `https://crates.io/api/v1/crates/${item.name}/${item.version}/download`, 'Supplemental license has no exact published VCS identity')
+    requireThat(hasManifest && record.sourceArchive === `https://crates.io/api/v1/crates/${item.name}/${item.version}/download`, 'Supplemental license has no exact published archive identity')
+    if (record.binding === 'published-vcs') {
+      requireThat(/^[a-f0-9]{40}$/.test(record.commit) && vcs?.git?.sha1 === record.commit && vcs.path_in_vcs === record.pathInVcs, 'Supplemental license has no exact published VCS identity')
+    } else {
+      requireThat(record.commit === undefined && record.pathInVcs === undefined && record.reason?.includes('canonical') && record.files.some(file => file.kind === 'archive-declaration' && file.archivePath === 'Cargo.toml'), 'Published SPDX evidence must retain the original declaration without claiming an upstream commit')
+      const terms = record.license.split(/\s+OR\s+|\s*\/\s*/)
+      requireThat(terms.length > 0 && terms.every(term => ['MIT', 'Apache-2.0', 'CC0-1.0', 'Zlib'].includes(term) && record.files.some(file => file.kind === 'canonical-standard-license' && file.license === term)), 'Published SPDX supplement lacks complete declared license terms')
+    }
     const outputs = new Set()
     for (const file of record.files) {
       requireThat(typeof file.path === 'string' && file.path.split('/').every(part => part && part !== '.' && part !== '..') && !/[\0\r\n\\]/.test(file.path) && /^[A-Za-z0-9_.-]{1,128}$/.test(file.name) && legalName.test(file.name) && !codeName.test(file.name) && !outputs.has(file.name), 'Unsafe or duplicate supplemental legal file')
-      requireThat(['upstream-license', 'upstream-notice', 'archive-header', 'linked-standard-license'].includes(file.kind) && typeof file.url === 'string' && /^https:\/\/(?:raw\.githubusercontent\.com\/[^/]+\/[^/]+\/[a-f0-9]{40}\/|www\.mozilla\.org\/media\/MPL\/2\.0\/)/.test(file.url) && /^[a-f0-9]{64}$/.test(file.sha256), 'Unbound supplemental license provenance')
+      const declaration = record.binding === 'published-spdx' && file.kind === 'archive-declaration'
+      const header = record.binding === 'published-spdx' && file.kind === 'archive-header'
+      const canonical = record.binding === 'published-spdx' && file.kind === 'canonical-standard-license'
+      const standardHashes = { MIT: 'b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5', 'Apache-2.0': '074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff', Zlib: 'bfb1112d49db5b1daecdfef24bd7e2f3ea0bafb33aa67aa0ab51e2bf8407c03d', 'CC0-1.0': 'a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499' }
+      requireThat(typeof file.url === 'string' && /^[a-f0-9]{64}$/.test(file.sha256), 'Invalid supplemental license provenance')
+      if (declaration) requireThat(file.url === record.sourceArchive && record.evidence.some(evidence => evidence.path === file.archivePath && evidence.sha256 === file.sha256), 'Unbound original archive declaration')
+      else if (header) requireThat(file.url === record.sourceArchive && record.evidence.some(evidence => evidence.path === file.archivePath) && Number.isSafeInteger(file.bytes) && file.bytes > 0 && file.bytes <= 8192, 'Unbound original archive header')
+      else if (canonical) requireThat(file.sha256 === standardHashes[file.license] && file.url === `https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/${file.license}.txt`, 'Unbound canonical standard license')
+      else requireThat(record.binding === 'published-vcs' && ['upstream-license', 'upstream-notice', 'archive-header', 'linked-standard-license'].includes(file.kind) && /^https:\/\/(?:raw\.githubusercontent\.com\/[^/]+\/[^/]+\/[a-f0-9]{40}\/|www\.mozilla\.org\/media\/MPL\/2\.0\/)/.test(file.url), 'Unbound supplemental license provenance')
       requireThat(++budget.files <= RUST_LIMITS.licenseFiles && budget.bytes < RUST_LIMITS.totalLicenseBytes, 'Supplemental license exceeds aggregate budget')
       const filename = path.join(supplementRoot, file.path), maximum = Math.min(RUST_LIMITS.licenseBytes, RUST_LIMITS.totalLicenseBytes - budget.bytes)
       requireThat(realpathSync(path.dirname(filename)) === path.dirname(filename), 'Supplemental license parent is a symbolic link')
       const bytes = readBounded(filename, maximum)
       requireThat(bytes.length > 0 && bytes.length === file.bytes && sha256(bytes) === file.sha256, 'Supplemental license bytes differ from reviewed source')
+      if (declaration) requireThat(bytes.equals(tar(['-xOf', '-', '--', `${packageName}/${file.archivePath}`], maximum)), 'Original archive declaration was altered')
+      if (header) {
+        const original = tar(['-xOf', '-', '--', `${packageName}/${file.archivePath}`], RUST_LIMITS.licenseBytes)
+        requireThat(bytes.equals(original.subarray(0, file.bytes)) && /^(?:\s*\/\/[^\n]*\n)+\s*$|^\/\*[\s\S]*?\*\/\s*$/.test(bytes.toString('utf8')), 'Original license header was altered or includes implementation code')
+      }
       budget.bytes += bytes.length; outputs.add(file.name)
-      found.push({ name: file.name, bytes, source: { kind: file.kind, url: file.url, upstreamCommit: record.commit, sourceArchive: record.sourceArchive, archiveEvidence: record.evidence } })
+      found.push({ name: file.name, bytes, source: { kind: file.kind, binding: record.binding, url: file.url, ...(record.commit ? { upstreamCommit: record.commit } : {}), sourceArchive: record.sourceArchive, archiveEvidence: record.evidence, ...(record.binding === 'published-spdx' ? { explanation: record.reason } : {}) } })
     }
   }
   requireThat(found.length > 0 && (designated === null || found.some(file => file.name === designated)), `Missing complete LICENSE/NOTICE files: ${item.name}@${item.version}`)

@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, fs::{OpenOptions, Permissions}, os::unix::fs::{
 fn private_file_at(path: &Path) -> File { OpenOptions::new().read(true).write(true).create_new(true).mode(0o600).open(path).unwrap() }
 fn directory() -> tempfile::TempDir { tempfile::tempdir_in(std::env::temp_dir().canonicalize().unwrap()).unwrap() }
 fn evidence(version: &str) -> ReadyEvidence {
-    ReadyEvidence { host_version: version.into(), renderer_entry: "local-library-test".into(), renderer_committed: true, ipc_round_trip: true,
+    ReadyEvidence { host_version: version.into(), renderer_entry: "local-library-test".into(), renderer_committed: true, action_round_trip: true,
         partitions: ["agents", "schedules", "events", "system"].into_iter().map(|name| (name.to_owned(), PartitionEvidence { enabled: false, installed: true, state: PartitionReadiness::Disabled, reason: None })).collect::<BTreeMap<_, _>>(),
         hermes_history: HistoryReadiness::Disabled, history_entries: 0, history_reason: Some("Schedules disabled by test fixture".into()) }
 }

@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { cargoClosure, cargoInventory, parseCargoAuditResult, readBounded } from './rust-dependencies.mjs'
+import { cargoClosure, cargoInventory, collectCargoLegalFiles, parseCargoAuditResult, readBounded, sha256 } from './rust-dependencies.mjs'
+import { execFileSync } from 'node:child_process'
 
 const registry = 'registry+https://github.com/rust-lang/crates.io-index'
 function graphFixture() {
@@ -57,4 +58,40 @@ test('bounded source reads reject oversized, symlink and directory inputs before
   assert.throws(() => readBounded(file, 11), /budget/)
   symlinkSync(file, path.join(directory, 'link')); assert.throws(() => readBounded(path.join(directory, 'link')), /ELOOP/)
   mkdirSync(path.join(directory, 'folder')); assert.throws(() => readBounded(path.join(directory, 'folder')), /not regular/)
+})
+
+test('published SPDX supplements bind archive declarations and canonical terms without inventing VCS provenance', t => {
+  const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'oc-spdx-')))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const parent = path.join(root, 'src/registry'), directory = path.join(parent, 'fixture-1.0.0'), cache = path.join(root, 'cache/registry'), supplementRoot = path.join(root, 'supplements')
+  for (const folder of [directory, cache, supplementRoot]) mkdirSync(folder, { recursive: true })
+  const declaration = '[package]\nname = "fixture"\nversion = "1.0.0"\nlicense = "MIT"\n'
+  writeFileSync(path.join(directory, 'Cargo.toml'), declaration)
+  const archive = path.join(cache, 'fixture-1.0.0.crate')
+  execFileSync('/usr/bin/tar', ['-czf', archive, '-C', parent, 'fixture-1.0.0'])
+  const checksum = sha256(readFileSync(archive)), canonical = readFileSync(new URL('../resources/rust-license-supplements/standard/MIT.txt', import.meta.url))
+  writeFileSync(path.join(supplementRoot, 'NOTICE.txt'), declaration)
+  writeFileSync(path.join(supplementRoot, 'LICENSE.txt'), canonical)
+  const sourceArchive = 'https://crates.io/api/v1/crates/fixture/1.0.0/download'
+  const record = { name: 'fixture', version: '1.0.0', checksum, license: 'MIT', repository: null, binding: 'published-spdx', sourceArchive, reason: 'Original declaration plus canonical standard terms; no invented notice.', evidence: [{ path: 'Cargo.toml', sha256: sha256(declaration) }], files: [
+    { path: 'NOTICE.txt', name: 'NOTICE.txt', kind: 'archive-declaration', archivePath: 'Cargo.toml', url: sourceArchive, sha256: sha256(declaration), bytes: Buffer.byteLength(declaration) },
+    { path: 'LICENSE.txt', name: 'LICENSE-canonical.txt', kind: 'canonical-standard-license', license: 'MIT', url: 'https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt', sha256: sha256(canonical), bytes: canonical.length }
+  ] }
+  const item = { name: record.name, version: record.version, license: record.license, repository: null, manifest_path: path.join(directory, 'Cargo.toml') }
+  const collect = candidate => collectCargoLegalFiles(item, checksum, { entries: 0, files: 0, bytes: 0 }, { record: candidate, directory: supplementRoot })
+  const files = collect(record)
+  assert.equal(files.length, 2)
+  assert.equal(files.find(file => file.name === 'NOTICE.txt').bytes.toString(), declaration)
+  assert.equal(files[0].source.upstreamCommit, undefined)
+  for (const mutate of [
+    value => { delete value.binding },
+    value => { value.commit = 'a'.repeat(40) },
+    value => { value.files.pop() },
+    value => { value.files[1].sha256 = 'a'.repeat(64) },
+    value => { value.files[1].url = value.files[1].url.replace('31846481de7ea17d92f2f46fad76abe58b2e9bb0', 'main') },
+    value => { value.files[0].archivePath = 'README.md' },
+    value => { value.evidence[0].sha256 = 'a'.repeat(64) }
+  ]) { const candidate = structuredClone(record); mutate(candidate); assert.throws(() => collect(candidate)) }
+  writeFileSync(path.join(supplementRoot, 'NOTICE.txt'), 'invented copyright')
+  assert.throws(() => collect(record), /bytes differ/)
 })

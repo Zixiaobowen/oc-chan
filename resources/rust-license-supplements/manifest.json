@@ -1,37 +1,55 @@
 {
   "schema": 1,
-  "reviewedAt": "2026-11-10",
+  "reviewedAt": "2026-11-13",
   "packages": [
     {
-      "name": "alloc-stdlib",
-      "version": "0.3.0",
-      "checksum": "0b5c1865780388bfa186411ab5f247819487fc4864c6e9c3106611fa347586e1",
-      "license": "BSD-3-Clause",
-      "repository": "https://github.com/dropbox/rust-alloc-no-stdlib",
-      "commit": "0a81fd6928ea3b33c8cd484aa4575d50ffb98012",
-      "pathInVcs": "alloc-stdlib",
-      "sourceArchive": "https://crates.io/api/v1/crates/alloc-stdlib/0.3.0/download",
+      "name": "block",
+      "version": "0.1.6",
+      "checksum": "0d8c1fef690941d3e7788d328517591fecc684c084084702d6ff1641e993699a",
+      "license": "MIT",
+      "repository": "http://github.com/SSheldon/rust-block",
+      "binding": "published-spdx",
+      "sourceArchive": "https://crates.io/api/v1/crates/block/0.1.6/download",
       "evidence": [
         {
           "path": "Cargo.toml",
-          "sha256": "bd73bb44d77b96ac83b93eed2e47d8c8cac86dc2df39602b67e783675ba01229"
+          "sha256": "24df2f33b48c9e756a4f864f882c1ab07a159b6c2b790f45af2e8162499b6719"
         },
         {
-          "path": ".cargo_vcs_info.json",
-          "sha256": "2bfc044805e0e75273a7e4d06c9d72f4e029a6cb926e4645c382bde160ecfd95"
+          "path": "README.md",
+          "sha256": "01c56329fa14f48ea1c9c7986c3660c41beeff2477f61c2d36bd8e666b9fc562"
         }
       ],
       "files": [
         {
-          "path": "upstream/alloc-0a81fd6928ea3b33c8cd484aa4575d50ffb98012-LICENSE.txt",
-          "url": "https://raw.githubusercontent.com/dropbox/rust-alloc-no-stdlib/0a81fd6928ea3b33c8cd484aa4575d50ffb98012/LICENSE",
-          "sha256": "c0c56f26d9c051cac4d200c34c84e7ae9aaa853e01a982a1df08b09931e518ae",
-          "bytes": 1483,
-          "name": "LICENSE-BSD-3-Clause.txt",
-          "kind": "upstream-license"
+          "path": "declarations/block-0.1.6-Cargo-toml.txt",
+          "url": "https://crates.io/api/v1/crates/block/0.1.6/download",
+          "archivePath": "Cargo.toml",
+          "sha256": "24df2f33b48c9e756a4f864f882c1ab07a159b6c2b790f45af2e8162499b6719",
+          "bytes": 531,
+          "name": "NOTICE-Cargo-toml.txt",
+          "kind": "archive-declaration"
+        },
+        {
+          "path": "declarations/block-0.1.6-README-md.txt",
+          "url": "https://crates.io/api/v1/crates/block/0.1.6/download",
+          "archivePath": "README.md",
+          "sha256": "01c56329fa14f48ea1c9c7986c3660c41beeff2477f61c2d36bd8e666b9fc562",
+          "bytes": 1264,
+          "name": "NOTICE-README-md.txt",
+          "kind": "archive-declaration"
+        },
+        {
+          "path": "standard/MIT.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+          "bytes": 1078,
+          "name": "LICENSE-MIT-canonical.txt",
+          "kind": "canonical-standard-license",
+          "license": "MIT"
         }
       ],
-      "reason": "The published crate subdirectory omits the repository root LICENSE; the exact published VCS commit contains the complete Dropbox BSD notice."
+      "reason": "The checksum-bound published archive declares this license but contains no standalone LICENSE/NOTICE. Original Cargo declarations and available README are preserved verbatim as declaration evidence, not invented copyright notices. Full canonical SPDX standard texts retain their original template markers and are not upstream-authored notices. No missing copyright holder or year is inferred; no upstream commit identity is claimed."
     },
     {
       "name": "block2",
@@ -70,7 +88,70 @@
           "kind": "linked-standard-license"
         }
       ],
-      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
+      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders.",
+      "binding": "published-vcs"
+    },
+    {
+      "name": "convert_case",
+      "version": "0.4.0",
+      "checksum": "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e",
+      "license": "MIT",
+      "repository": "https://github.com/rutrum/convert-case",
+      "binding": "published-spdx",
+      "sourceArchive": "https://crates.io/api/v1/crates/convert_case/0.4.0/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "bbd8c27bde074b1c78539307cc2f1770efdaf890253cce4b9557cfdc32d4e605"
+        },
+        {
+          "path": "Cargo.toml.orig",
+          "sha256": "5f821f7641c67da8a4e0eb2ebf994f5ba88ad811a3529cb91017d26c8075aea2"
+        },
+        {
+          "path": "README.md",
+          "sha256": "e2c239f152b34058cca9848c12a357eabd4af3df9d97bac11cfdcdd09f612b72"
+        }
+      ],
+      "files": [
+        {
+          "path": "declarations/convert_case-0.4.0-Cargo-toml.txt",
+          "url": "https://crates.io/api/v1/crates/convert_case/0.4.0/download",
+          "archivePath": "Cargo.toml",
+          "sha256": "bbd8c27bde074b1c78539307cc2f1770efdaf890253cce4b9557cfdc32d4e605",
+          "bytes": 1092,
+          "name": "NOTICE-Cargo-toml.txt",
+          "kind": "archive-declaration"
+        },
+        {
+          "path": "declarations/convert_case-0.4.0-Cargo-toml-orig.txt",
+          "url": "https://crates.io/api/v1/crates/convert_case/0.4.0/download",
+          "archivePath": "Cargo.toml.orig",
+          "sha256": "5f821f7641c67da8a4e0eb2ebf994f5ba88ad811a3529cb91017d26c8075aea2",
+          "bytes": 677,
+          "name": "NOTICE-Cargo-toml-orig.txt",
+          "kind": "archive-declaration"
+        },
+        {
+          "path": "declarations/convert_case-0.4.0-README-md.txt",
+          "url": "https://crates.io/api/v1/crates/convert_case/0.4.0/download",
+          "archivePath": "README.md",
+          "sha256": "e2c239f152b34058cca9848c12a357eabd4af3df9d97bac11cfdcdd09f612b72",
+          "bytes": 2349,
+          "name": "NOTICE-README-md.txt",
+          "kind": "archive-declaration"
+        },
+        {
+          "path": "standard/MIT.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+          "bytes": 1078,
+          "name": "LICENSE-MIT-canonical.txt",
+          "kind": "canonical-standard-license",
+          "license": "MIT"
+        }
+      ],
+      "reason": "The checksum-bound published archive declares this license but contains no standalone LICENSE/NOTICE. Original Cargo declarations and available README are preserved verbatim as declaration evidence, not invented copyright notices. Full canonical SPDX standard texts retain their original template markers and are not upstream-authored notices. No missing copyright holder or year is inferred; no upstream commit identity is claimed."
     },
     {
       "name": "dispatch2",
@@ -125,7 +206,569 @@
           "kind": "linked-standard-license"
         }
       ],
-      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
+      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders.",
+      "binding": "published-vcs"
+    },
+    {
+      "name": "dtor",
+      "version": "0.0.6",
+      "checksum": "97cbdf2ad6846025e8e25df05171abfb30e3ababa12ee0a0e44b9bbe570633a8",
+      "license": "Apache-2.0 OR MIT",
+      "repository": "https://github.com/mmastrac/rust-ctor",
+      "binding": "published-vcs",
+      "commit": "e8c8b4a82de72311a5257db0502ced728081e745",
+      "pathInVcs": "dtor",
+      "sourceArchive": "https://crates.io/api/v1/crates/dtor/0.0.6/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "8a6f7c24afa58569525b5d2199d14d5e67835a8e4ce666c6d75526f320f5561a"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "2f4955141dedb552251008e2381bdad8eedb73d859d19531a7637564cbb8f1e3"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/dtor-e8c8b4a82de72311a5257db0502ced728081e745-LICENSE-APACHE.txt",
+          "url": "https://raw.githubusercontent.com/mmastrac/rust-ctor/e8c8b4a82de72311a5257db0502ced728081e745/LICENSE-APACHE",
+          "sha256": "a8ad31b1c3f40dca5a84119351b8fa8ddc868edd77fad8a8ebf6d8f2d16fa4ae",
+          "bytes": 11324,
+          "name": "LICENSE-APACHE.txt",
+          "kind": "upstream-license"
+        },
+        {
+          "path": "upstream/dtor-e8c8b4a82de72311a5257db0502ced728081e745-LICENSE-MIT.txt",
+          "url": "https://raw.githubusercontent.com/mmastrac/rust-ctor/e8c8b4a82de72311a5257db0502ced728081e745/LICENSE-MIT",
+          "sha256": "bccaa8b6c09f94e81f06696e179dbe058464bbdfbc823b6d49cada1d71e84ac3",
+          "bytes": 1022,
+          "name": "LICENSE-MIT.txt",
+          "kind": "upstream-license"
+        }
+      ],
+      "reason": "The published crate omits repository license files. Complete original legal texts were retrieved from its exact published VCS commit; copyright and permission notices are preserved verbatim."
+    },
+    {
+      "name": "dtor-proc-macro",
+      "version": "0.0.5",
+      "checksum": "7454e41ff9012c00d53cf7f475c5e3afa3b91b7c90568495495e8d9bf47a1055",
+      "license": "Apache-2.0 OR MIT",
+      "repository": "https://github.com/mmastrac/rust-ctor",
+      "binding": "published-vcs",
+      "commit": "b05136ac964049a1ee29de763d0b119c42258567",
+      "pathInVcs": "dtor-proc-macro",
+      "sourceArchive": "https://crates.io/api/v1/crates/dtor-proc-macro/0.0.5/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "f10dabe49b0bea6a4be86950dce667e3b27b4ab6dccec5c833fadb6588282546"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "eff771b18154ace5df132fca637c1b11bea0a19f35ac083a8dea85d19b093c7e"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/dtor-proc-macro-b05136ac964049a1ee29de763d0b119c42258567-LICENSE-APACHE.txt",
+          "url": "https://raw.githubusercontent.com/mmastrac/rust-ctor/b05136ac964049a1ee29de763d0b119c42258567/LICENSE-APACHE",
+          "sha256": "a8ad31b1c3f40dca5a84119351b8fa8ddc868edd77fad8a8ebf6d8f2d16fa4ae",
+          "bytes": 11324,
+          "name": "LICENSE-APACHE.txt",
+          "kind": "upstream-license"
+        },
+        {
+          "path": "upstream/dtor-proc-macro-b05136ac964049a1ee29de763d0b119c42258567-LICENSE-MIT.txt",
+          "url": "https://raw.githubusercontent.com/mmastrac/rust-ctor/b05136ac964049a1ee29de763d0b119c42258567/LICENSE-MIT",
+          "sha256": "bccaa8b6c09f94e81f06696e179dbe058464bbdfbc823b6d49cada1d71e84ac3",
+          "bytes": 1022,
+          "name": "LICENSE-MIT.txt",
+          "kind": "upstream-license"
+        }
+      ],
+      "reason": "The published crate omits repository license files. Complete original legal texts were retrieved from its exact published VCS commit; copyright and permission notices are preserved verbatim."
+    },
+    {
+      "name": "hexf-parse",
+      "version": "0.2.1",
+      "checksum": "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df",
+      "license": "CC0-1.0",
+      "repository": "https://github.com/lifthrasiir/hexf",
+      "binding": "published-spdx",
+      "sourceArchive": "https://crates.io/api/v1/crates/hexf-parse/0.2.1/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "dd7274968556f3f3309df5615d94437ec4e4823777cc440f91177b2170cbe2a7"
+        },
+        {
+          "path": "Cargo.toml.orig",
+          "sha256": "4a56dbdbc12054fd33b7a2634a45cbbe6fe12f5e6f4081002cbfa527f7220c70"
+        }
+      ],
+      "files": [
+        {
+          "path": "declarations/hexf-parse-0.2.1-Cargo-toml.txt",
+          "url": "https://crates.io/api/v1/crates/hexf-parse/0.2.1/download",
+          "archivePath": "Cargo.toml",
+          "sha256": "dd7274968556f3f3309df5615d94437ec4e4823777cc440f91177b2170cbe2a7",
+          "bytes": 868,
+          "name": "NOTICE-Cargo-toml.txt",
+          "kind": "archive-declaration"
+        },
+        {
+          "path": "declarations/hexf-parse-0.2.1-Cargo-toml-orig.txt",
+          "url": "https://crates.io/api/v1/crates/hexf-parse/0.2.1/download",
+          "archivePath": "Cargo.toml.orig",
+          "sha256": "4a56dbdbc12054fd33b7a2634a45cbbe6fe12f5e6f4081002cbfa527f7220c70",
+          "bytes": 344,
+          "name": "NOTICE-Cargo-toml-orig.txt",
+          "kind": "archive-declaration"
+        },
+        {
+          "path": "standard/CC0-1.0.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/CC0-1.0.txt",
+          "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499",
+          "bytes": 7048,
+          "name": "LICENSE-CC0-1.0-canonical.txt",
+          "kind": "canonical-standard-license",
+          "license": "CC0-1.0"
+        }
+      ],
+      "reason": "The checksum-bound published archive declares this license but contains no standalone LICENSE/NOTICE. Original Cargo declarations and available README are preserved verbatim as declaration evidence, not invented copyright notices. Full canonical SPDX standard texts retain their original template markers and are not upstream-authored notices. No missing copyright holder or year is inferred; no upstream commit identity is claimed."
+    },
+    {
+      "name": "leak",
+      "version": "0.1.2",
+      "checksum": "bd100e01f1154f2908dfa7d02219aeab25d0b9c7fa955164192e3245255a0c73",
+      "license": "Apache-2.0 OR MIT",
+      "repository": "https://github.com/jmesmon/leak.git",
+      "binding": "published-spdx",
+      "sourceArchive": "https://crates.io/api/v1/crates/leak/0.1.2/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "8800b6172da0ce015fdc69cbe3fdc48c22f4223babe254e207255c681c83e8dd"
+        }
+      ],
+      "files": [
+        {
+          "path": "declarations/leak-0.1.2-Cargo-toml.txt",
+          "url": "https://crates.io/api/v1/crates/leak/0.1.2/download",
+          "archivePath": "Cargo.toml",
+          "sha256": "8800b6172da0ce015fdc69cbe3fdc48c22f4223babe254e207255c681c83e8dd",
+          "bytes": 407,
+          "name": "NOTICE-Cargo-toml.txt",
+          "kind": "archive-declaration"
+        },
+        {
+          "path": "standard/Apache-2.0.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Apache-2.0.txt",
+          "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff",
+          "bytes": 10280,
+          "name": "LICENSE-Apache-2.0-canonical.txt",
+          "kind": "canonical-standard-license",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "standard/MIT.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+          "bytes": 1078,
+          "name": "LICENSE-MIT-canonical.txt",
+          "kind": "canonical-standard-license",
+          "license": "MIT"
+        }
+      ],
+      "reason": "The checksum-bound published archive declares this license but contains no standalone LICENSE/NOTICE. Original Cargo declarations and available README are preserved verbatim as declaration evidence, not invented copyright notices. Full canonical SPDX standard texts retain their original template markers and are not upstream-authored notices. No missing copyright holder or year is inferred; no upstream commit identity is claimed."
+    },
+    {
+      "name": "leaky-cow",
+      "version": "0.1.1",
+      "checksum": "40a8225d44241fd324a8af2806ba635fc7c8a7e9a7de4d5cf3ef54e71f5926fc",
+      "license": "MIT / Apache-2.0",
+      "repository": "https://github.com/notriddle/rust-leaky-cow",
+      "binding": "published-spdx",
+      "sourceArchive": "https://crates.io/api/v1/crates/leaky-cow/0.1.1/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "cd5e595a4b4eede02b0c1b96bb86eb3860bf660fafd7ca6eb0f92b96d9e733f5"
+        },
+        {
+          "path": "README.md",
+          "sha256": "de022877415d090896cc7050408bdd2973fd34816f654327b139e32b9e6ddf44"
+        },
+        {
+          "path": "src/lib.rs",
+          "sha256": "5c34776cad80147e94ce1c4af40135d645b478276abf16dc44265cd57da77ea0"
+        }
+      ],
+      "files": [
+        {
+          "path": "declarations/leaky-cow-0.1.1-Cargo-toml.txt",
+          "url": "https://crates.io/api/v1/crates/leaky-cow/0.1.1/download",
+          "archivePath": "Cargo.toml",
+          "sha256": "cd5e595a4b4eede02b0c1b96bb86eb3860bf660fafd7ca6eb0f92b96d9e733f5",
+          "bytes": 366,
+          "name": "NOTICE-Cargo-toml.txt",
+          "kind": "archive-declaration"
+        },
+        {
+          "path": "declarations/leaky-cow-0.1.1-README-md.txt",
+          "url": "https://crates.io/api/v1/crates/leaky-cow/0.1.1/download",
+          "archivePath": "README.md",
+          "sha256": "de022877415d090896cc7050408bdd2973fd34816f654327b139e32b9e6ddf44",
+          "bytes": 263,
+          "name": "NOTICE-README-md.txt",
+          "kind": "archive-declaration"
+        },
+        {
+          "path": "standard/MIT.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+          "bytes": 1078,
+          "name": "LICENSE-MIT-canonical.txt",
+          "kind": "canonical-standard-license",
+          "license": "MIT"
+        },
+        {
+          "path": "standard/Apache-2.0.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Apache-2.0.txt",
+          "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff",
+          "bytes": 10280,
+          "name": "LICENSE-Apache-2.0-canonical.txt",
+          "kind": "canonical-standard-license",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "declarations/leaky-cow-0.1.1-src-lib.rs-header.txt",
+          "url": "https://crates.io/api/v1/crates/leaky-cow/0.1.1/download",
+          "archivePath": "src/lib.rs",
+          "sha256": "929d8fa88c658ac28bc44237726d9a0d253dceb1a88bc802ad20bce74df46f4a",
+          "bytes": 269,
+          "name": "NOTICE-src-lib.rs-header.txt",
+          "kind": "archive-header"
+        }
+      ],
+      "reason": "The checksum-bound published archive declares this license but contains no standalone LICENSE/NOTICE. Original Cargo declarations and available README are preserved verbatim as declaration evidence, not invented copyright notices. Full canonical SPDX standard texts retain their original template markers and are not upstream-authored notices. No missing copyright holder or year is inferred; no upstream commit identity is claimed. Original source license headers are also preserved verbatim, including every published copyright statement."
+    },
+    {
+      "name": "lyon",
+      "version": "1.0.19",
+      "checksum": "bd0578bdecb7d6d88987b8b2b1e3a4e2f81df9d0ece1078623324a567904e7b7",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/nical/lyon",
+      "binding": "published-vcs",
+      "commit": "56219c95c658d4f39de7b190d98e57d5773ba241",
+      "pathInVcs": "crates/lyon",
+      "sourceArchive": "https://crates.io/api/v1/crates/lyon/1.0.19/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "d0247358d21759f525010d1732021c966e3937d17723896c6d40291aaccf2b4a"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "0817d84704983bef636dae6a02068bf392a771d349ef4b74a6ea49cef106e526"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/lyon-56219c95c658d4f39de7b190d98e57d5773ba241-LICENSE-APACHE.txt",
+          "url": "https://raw.githubusercontent.com/nical/lyon/56219c95c658d4f39de7b190d98e57d5773ba241/LICENSE-APACHE",
+          "sha256": "216486f29671a4262efe32af6d84a75bef398127f8c5f369b5c8305983887a06",
+          "bytes": 554,
+          "name": "LICENSE-APACHE.txt",
+          "kind": "upstream-license"
+        },
+        {
+          "path": "upstream/lyon-56219c95c658d4f39de7b190d98e57d5773ba241-LICENSE-MIT.txt",
+          "url": "https://raw.githubusercontent.com/nical/lyon/56219c95c658d4f39de7b190d98e57d5773ba241/LICENSE-MIT",
+          "sha256": "80f275e90d799911ed3830a7f242a2ef5a4ade2092fe0aa07bfb2d2cf2f2b95e",
+          "bytes": 1080,
+          "name": "LICENSE-MIT.txt",
+          "kind": "upstream-license"
+        }
+      ],
+      "reason": "The published crate omits repository license files. Complete original legal texts were retrieved from its exact published VCS commit; copyright and permission notices are preserved verbatim."
+    },
+    {
+      "name": "lyon_algorithms",
+      "version": "1.0.22",
+      "checksum": "f3a6b9d4e8b48acd531fbf1241ad9b270df6e60b6b92bdea1469f4f40899d805",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/nical/lyon",
+      "binding": "published-vcs",
+      "commit": "db98d26a1a90076a7a894262dcb51117eef643c8",
+      "pathInVcs": "crates/algorithms",
+      "sourceArchive": "https://crates.io/api/v1/crates/lyon_algorithms/1.0.22/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "a3ee89366065fbd929e155f98420210f3ef8abb4e8c690a21c0718afc7c6b3c0"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "b7a00c86b546ad8b4312a5f6ada1a04f44b805c9199061b4b1d9d92c1288c548"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/lyon_algorithms-db98d26a1a90076a7a894262dcb51117eef643c8-LICENSE-APACHE.txt",
+          "url": "https://raw.githubusercontent.com/nical/lyon/db98d26a1a90076a7a894262dcb51117eef643c8/LICENSE-APACHE",
+          "sha256": "216486f29671a4262efe32af6d84a75bef398127f8c5f369b5c8305983887a06",
+          "bytes": 554,
+          "name": "LICENSE-APACHE.txt",
+          "kind": "upstream-license"
+        },
+        {
+          "path": "upstream/lyon_algorithms-db98d26a1a90076a7a894262dcb51117eef643c8-LICENSE-MIT.txt",
+          "url": "https://raw.githubusercontent.com/nical/lyon/db98d26a1a90076a7a894262dcb51117eef643c8/LICENSE-MIT",
+          "sha256": "80f275e90d799911ed3830a7f242a2ef5a4ade2092fe0aa07bfb2d2cf2f2b95e",
+          "bytes": 1080,
+          "name": "LICENSE-MIT.txt",
+          "kind": "upstream-license"
+        }
+      ],
+      "reason": "The published crate omits repository license files. Complete original legal texts were retrieved from its exact published VCS commit; copyright and permission notices are preserved verbatim."
+    },
+    {
+      "name": "lyon_geom",
+      "version": "1.0.20",
+      "checksum": "d82dd26aa4dc0b5b70b9115de59824842bcb43cf4a28e1b1e6d0ad148c93f93e",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/nical/lyon",
+      "binding": "published-vcs",
+      "commit": "db98d26a1a90076a7a894262dcb51117eef643c8",
+      "pathInVcs": "crates/geom",
+      "sourceArchive": "https://crates.io/api/v1/crates/lyon_geom/1.0.20/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "c4ad1fab0b0e6a64cad01ee392a2ca41bf1bc89e6895ef12b79d8452ed9f2522"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "020cea44447d9d22bfd03a4fb7d6ea0de72b79b1905959290a44b65968bdec74"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/lyon_geom-db98d26a1a90076a7a894262dcb51117eef643c8-LICENSE-APACHE.txt",
+          "url": "https://raw.githubusercontent.com/nical/lyon/db98d26a1a90076a7a894262dcb51117eef643c8/LICENSE-APACHE",
+          "sha256": "216486f29671a4262efe32af6d84a75bef398127f8c5f369b5c8305983887a06",
+          "bytes": 554,
+          "name": "LICENSE-APACHE.txt",
+          "kind": "upstream-license"
+        },
+        {
+          "path": "upstream/lyon_geom-db98d26a1a90076a7a894262dcb51117eef643c8-LICENSE-MIT.txt",
+          "url": "https://raw.githubusercontent.com/nical/lyon/db98d26a1a90076a7a894262dcb51117eef643c8/LICENSE-MIT",
+          "sha256": "80f275e90d799911ed3830a7f242a2ef5a4ade2092fe0aa07bfb2d2cf2f2b95e",
+          "bytes": 1080,
+          "name": "LICENSE-MIT.txt",
+          "kind": "upstream-license"
+        }
+      ],
+      "reason": "The published crate omits repository license files. Complete original legal texts were retrieved from its exact published VCS commit; copyright and permission notices are preserved verbatim."
+    },
+    {
+      "name": "lyon_path",
+      "version": "1.0.19",
+      "checksum": "5c463f9c428b7fc5ec885dcd39ce4aa61e29111d0e33483f6f98c74e89d8621e",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/nical/lyon",
+      "binding": "published-vcs",
+      "commit": "56219c95c658d4f39de7b190d98e57d5773ba241",
+      "pathInVcs": "crates/path",
+      "sourceArchive": "https://crates.io/api/v1/crates/lyon_path/1.0.19/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "f37569f37541593a26986d3fa5fa6d62a0a2ceb9793607bd88ec0a909bbc17ec"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "7332c8538553197480afd9a72955203fadc9ee52bf9103fbaed9b741a42b056d"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/lyon_path-56219c95c658d4f39de7b190d98e57d5773ba241-LICENSE-APACHE.txt",
+          "url": "https://raw.githubusercontent.com/nical/lyon/56219c95c658d4f39de7b190d98e57d5773ba241/LICENSE-APACHE",
+          "sha256": "216486f29671a4262efe32af6d84a75bef398127f8c5f369b5c8305983887a06",
+          "bytes": 554,
+          "name": "LICENSE-APACHE.txt",
+          "kind": "upstream-license"
+        },
+        {
+          "path": "upstream/lyon_path-56219c95c658d4f39de7b190d98e57d5773ba241-LICENSE-MIT.txt",
+          "url": "https://raw.githubusercontent.com/nical/lyon/56219c95c658d4f39de7b190d98e57d5773ba241/LICENSE-MIT",
+          "sha256": "80f275e90d799911ed3830a7f242a2ef5a4ade2092fe0aa07bfb2d2cf2f2b95e",
+          "bytes": 1080,
+          "name": "LICENSE-MIT.txt",
+          "kind": "upstream-license"
+        }
+      ],
+      "reason": "The published crate omits repository license files. Complete original legal texts were retrieved from its exact published VCS commit; copyright and permission notices are preserved verbatim."
+    },
+    {
+      "name": "lyon_tessellation",
+      "version": "1.0.23",
+      "checksum": "fd4872650e70dc907dd4f7ebc449d7d657a0d2658e423b2e724970870bbbf75b",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/nical/lyon",
+      "binding": "published-vcs",
+      "commit": "db98d26a1a90076a7a894262dcb51117eef643c8",
+      "pathInVcs": "crates/tessellation",
+      "sourceArchive": "https://crates.io/api/v1/crates/lyon_tessellation/1.0.23/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "75816d66278bc4dd7823327b29a6177fdfa45e6cb17346da0b88ae24d032bf0f"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "ecb0a28274db3cee6ecd563dcff69efd83c4046a86ee1da1194acc52f1d06416"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/lyon_tessellation-db98d26a1a90076a7a894262dcb51117eef643c8-LICENSE-APACHE.txt",
+          "url": "https://raw.githubusercontent.com/nical/lyon/db98d26a1a90076a7a894262dcb51117eef643c8/LICENSE-APACHE",
+          "sha256": "216486f29671a4262efe32af6d84a75bef398127f8c5f369b5c8305983887a06",
+          "bytes": 554,
+          "name": "LICENSE-APACHE.txt",
+          "kind": "upstream-license"
+        },
+        {
+          "path": "upstream/lyon_tessellation-db98d26a1a90076a7a894262dcb51117eef643c8-LICENSE-MIT.txt",
+          "url": "https://raw.githubusercontent.com/nical/lyon/db98d26a1a90076a7a894262dcb51117eef643c8/LICENSE-MIT",
+          "sha256": "80f275e90d799911ed3830a7f242a2ef5a4ade2092fe0aa07bfb2d2cf2f2b95e",
+          "bytes": 1080,
+          "name": "LICENSE-MIT.txt",
+          "kind": "upstream-license"
+        }
+      ],
+      "reason": "The published crate omits repository license files. Complete original legal texts were retrieved from its exact published VCS commit; copyright and permission notices are preserved verbatim."
+    },
+    {
+      "name": "malloc_buf",
+      "version": "0.0.6",
+      "checksum": "62bb907fe88d54d8d9ce32a3cceab4218ed2f6b7d35617cafe9adf84e43919cb",
+      "license": "MIT",
+      "repository": "https://github.com/SSheldon/malloc_buf",
+      "binding": "published-spdx",
+      "sourceArchive": "https://crates.io/api/v1/crates/malloc_buf/0.0.6/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "d87624d9d117489bd49dbaeb70077a0721e00ac2a76eb371faec818a92da5661"
+        }
+      ],
+      "files": [
+        {
+          "path": "declarations/malloc_buf-0.0.6-Cargo-toml.txt",
+          "url": "https://crates.io/api/v1/crates/malloc_buf/0.0.6/download",
+          "archivePath": "Cargo.toml",
+          "sha256": "d87624d9d117489bd49dbaeb70077a0721e00ac2a76eb371faec818a92da5661",
+          "bytes": 349,
+          "name": "NOTICE-Cargo-toml.txt",
+          "kind": "archive-declaration"
+        },
+        {
+          "path": "standard/MIT.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+          "bytes": 1078,
+          "name": "LICENSE-MIT-canonical.txt",
+          "kind": "canonical-standard-license",
+          "license": "MIT"
+        }
+      ],
+      "reason": "The checksum-bound published archive declares this license but contains no standalone LICENSE/NOTICE. Original Cargo declarations and available README are preserved verbatim as declaration evidence, not invented copyright notices. Full canonical SPDX standard texts retain their original template markers and are not upstream-authored notices. No missing copyright holder or year is inferred; no upstream commit identity is claimed."
+    },
+    {
+      "name": "naga",
+      "version": "25.0.1",
+      "checksum": "2b977c445f26e49757f9aca3631c3b8b836942cb278d69a92e7b80d3b24da632",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/gfx-rs/wgpu/tree/trunk/naga",
+      "binding": "published-vcs",
+      "commit": "060a779fc5f56560215ea84bda70278cbbd31e72",
+      "pathInVcs": "naga",
+      "sourceArchive": "https://crates.io/api/v1/crates/naga/25.0.1/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "d4b4ced71d5954e272a643fd5a29c1e4ad94c04a77ceadcce8ddd5cae1e1c90e"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "44d965d5bf96bc62062230693fae84ead5ce3f65bfa224f895e30ddb1c015c54"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/naga-060a779fc5f56560215ea84bda70278cbbd31e72-LICENSE.APACHE.txt",
+          "url": "https://raw.githubusercontent.com/gfx-rs/wgpu/060a779fc5f56560215ea84bda70278cbbd31e72/LICENSE.APACHE",
+          "sha256": "a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9",
+          "bytes": 10173,
+          "name": "LICENSE.APACHE.txt",
+          "kind": "upstream-license"
+        },
+        {
+          "path": "upstream/naga-060a779fc5f56560215ea84bda70278cbbd31e72-LICENSE.MIT.txt",
+          "url": "https://raw.githubusercontent.com/gfx-rs/wgpu/060a779fc5f56560215ea84bda70278cbbd31e72/LICENSE.MIT",
+          "sha256": "c7fea58d1cfe49634cd92e54fc10a9d871f4b275321a4cd8c09e449122caaeb4",
+          "bytes": 1078,
+          "name": "LICENSE.MIT.txt",
+          "kind": "upstream-license"
+        }
+      ],
+      "reason": "The published crate omits repository license files. Complete original legal texts were retrieved from its exact published VCS commit; copyright and permission notices are preserved verbatim."
+    },
+    {
+      "name": "objc2",
+      "version": "0.6.5",
+      "checksum": "08849bbd4767dfae9457696856ae1c84fe4e0281bbe4a7abff2d0e06fb7981f8",
+      "license": "MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "commit": "d7d2fa23ceaa5e6096c923b081040e5d81b3b9df",
+      "pathInVcs": "crates/objc2",
+      "sourceArchive": "https://crates.io/api/v1/crates/objc2/0.6.5/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "5556dba493fc18e98ebf82f587011f76df6c8c26532613e4c8f904ee586d7cf0"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "5f7c8e095d3933c477ff1f71021b551cbfe497a62346a1dc8615debd9846e257"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/objc2-d7d2fa23ceaa5e6096c923b081040e5d81b3b9df-NOTICE.txt",
+          "url": "https://raw.githubusercontent.com/madsmtm/objc2/d7d2fa23ceaa5e6096c923b081040e5d81b3b9df/LICENSE.md",
+          "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+          "bytes": 1339,
+          "name": "NOTICE-upstream.txt",
+          "kind": "upstream-notice"
+        },
+        {
+          "path": "standard/MIT.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+          "bytes": 1078,
+          "name": "LICENSE-MIT.txt",
+          "kind": "linked-standard-license"
+        }
+      ],
+      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders.",
+      "binding": "published-vcs"
     },
     {
       "name": "objc2-app-kit",
@@ -180,7 +823,8 @@
           "kind": "linked-standard-license"
         }
       ],
-      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
+      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders.",
+      "binding": "published-vcs"
     },
     {
       "name": "objc2-core-foundation",
@@ -235,7 +879,8 @@
           "kind": "linked-standard-license"
         }
       ],
-      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
+      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders.",
+      "binding": "published-vcs"
     },
     {
       "name": "objc2-core-graphics",
@@ -290,7 +935,8 @@
           "kind": "linked-standard-license"
         }
       ],
-      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
+      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders.",
+      "binding": "published-vcs"
     },
     {
       "name": "objc2-encode",
@@ -329,62 +975,8 @@
           "kind": "linked-standard-license"
         }
       ],
-      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
-    },
-    {
-      "name": "objc2-exception-helper",
-      "version": "0.1.1",
-      "checksum": "c7a1c5fbb72d7735b076bb47b578523aedc40f3c439bea6dfd595c089d79d98a",
-      "license": "Zlib OR Apache-2.0 OR MIT",
-      "repository": "https://github.com/madsmtm/objc2",
-      "commit": "8d214f5477365ffcbcbb7de058c86ed9a518efb7",
-      "pathInVcs": "crates/objc2-exception-helper",
-      "sourceArchive": "https://crates.io/api/v1/crates/objc2-exception-helper/0.1.1/download",
-      "evidence": [
-        {
-          "path": "Cargo.toml",
-          "sha256": "11418770c4b19efe4ff9dcbc7a2aebfda1fb1f0eb4291e3225b20aed5c38a515"
-        },
-        {
-          "path": ".cargo_vcs_info.json",
-          "sha256": "c7e239421c2f7dc6ec239f8d464ca656be3d325c801c780a341dfa99c79a0949"
-        }
-      ],
-      "files": [
-        {
-          "path": "upstream/objc2-8d214f5477365ffcbcbb7de058c86ed9a518efb7-NOTICE.txt",
-          "url": "https://raw.githubusercontent.com/madsmtm/objc2/8d214f5477365ffcbcbb7de058c86ed9a518efb7/LICENSE.md",
-          "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
-          "bytes": 1339,
-          "name": "NOTICE-upstream.txt",
-          "kind": "upstream-notice"
-        },
-        {
-          "path": "standard/Zlib.txt",
-          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Zlib.txt",
-          "sha256": "bfb1112d49db5b1daecdfef24bd7e2f3ea0bafb33aa67aa0ab51e2bf8407c03d",
-          "bytes": 838,
-          "name": "LICENSE-Zlib.txt",
-          "kind": "linked-standard-license"
-        },
-        {
-          "path": "standard/Apache-2.0.txt",
-          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Apache-2.0.txt",
-          "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff",
-          "bytes": 10280,
-          "name": "LICENSE-Apache-2.0.txt",
-          "kind": "linked-standard-license"
-        },
-        {
-          "path": "standard/MIT.txt",
-          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
-          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
-          "bytes": 1078,
-          "name": "LICENSE-MIT.txt",
-          "kind": "linked-standard-license"
-        }
-      ],
-      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
+      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders.",
+      "binding": "published-vcs"
     },
     {
       "name": "objc2-foundation",
@@ -423,254 +1015,674 @@
           "kind": "linked-standard-license"
         }
       ],
-      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
+      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders.",
+      "binding": "published-vcs"
     },
     {
-      "name": "objc2-io-surface",
-      "version": "0.3.2",
-      "checksum": "180788110936d59bab6bd83b6060ffdfffb3b922ba1396b312ae795e1de9d81d",
-      "license": "Zlib OR Apache-2.0 OR MIT",
-      "repository": "https://github.com/madsmtm/objc2",
-      "commit": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
-      "pathInVcs": "framework-crates/objc2-io-surface",
-      "sourceArchive": "https://crates.io/api/v1/crates/objc2-io-surface/0.3.2/download",
+      "name": "pathfinder_geometry",
+      "version": "0.5.1",
+      "checksum": "0b7b7e7b4ea703700ce73ebf128e1450eb69c3a8329199ffbfb9b2a0418e5ad3",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/servo/pathfinder",
+      "binding": "published-spdx",
+      "sourceArchive": "https://crates.io/api/v1/crates/pathfinder_geometry/0.5.1/download",
       "evidence": [
         {
           "path": "Cargo.toml",
-          "sha256": "b42e1ba685611320fbd2f04586d2c1bda70807f93d127d241c0c5c716b76ec40"
+          "sha256": "141871f41ab4ac7af854e54f1f637fb168ffbc97fdb57c60608f11b8eb95f1d7"
         },
         {
-          "path": ".cargo_vcs_info.json",
-          "sha256": "a68dbb39ef7cfef6062e3d2e49c59539c7a34d70d13c5bdf4a443d2475280011"
+          "path": "Cargo.toml.orig",
+          "sha256": "fdcc9be8eb9a2f08cd416fffc6e6c3d5c3311a9d06a2b8210e16e38ac91e9f78"
+        },
+        {
+          "path": "src/rect.rs",
+          "sha256": "68d48ddd9934ac11f0ed0e81c2cc6ede9271528dc318c3dd49cc9c9f51cb15ca"
+        },
+        {
+          "path": "src/line_segment.rs",
+          "sha256": "4af21598890aef0ffec10abd5460c0416cb1bb56b003fb499f0cd75fc68177da"
+        },
+        {
+          "path": "src/angle.rs",
+          "sha256": "dce9c08facbaceccb920035477ac53ffc2798247b42b2ddef9338f2e35ab9c80"
+        },
+        {
+          "path": "src/util.rs",
+          "sha256": "33a05481be71f5cf41128eeeb3e378248249d0f6f30ebc057e4c05f11344a0e5"
+        },
+        {
+          "path": "src/vector.rs",
+          "sha256": "cfcaad0394c5489a412bcdbbbe6928e1875d4a422eb5a7da1a3e415fdbc0790c"
+        },
+        {
+          "path": "src/lib.rs",
+          "sha256": "cedfb2d85e682e9b9e327a169347bf0cebecd52668e1ed91a3af05ec91b42090"
+        },
+        {
+          "path": "src/transform3d.rs",
+          "sha256": "d42aa24d02570376c429256f24891f489bd71ef257d9691f80b4fb6528e09275"
+        },
+        {
+          "path": "src/transform2d.rs",
+          "sha256": "36514cf158f7bd2118a1e2f2586e439f6484d61f0505919e8005fb733e3c917c"
+        },
+        {
+          "path": "src/unit_vector.rs",
+          "sha256": "a6c30c98aaf859492746696b9d67999322b18117fbe891b53f38ccfca5b28a5f"
         }
       ],
       "files": [
         {
-          "path": "upstream/objc2-7b1abfd750a2cacaea71d6a56ecfb83cb7de560b-NOTICE.txt",
-          "url": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
-          "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
-          "bytes": 1339,
-          "name": "NOTICE-upstream.txt",
-          "kind": "upstream-notice"
+          "path": "declarations/pathfinder_geometry-0.5.1-Cargo-toml.txt",
+          "url": "https://crates.io/api/v1/crates/pathfinder_geometry/0.5.1/download",
+          "archivePath": "Cargo.toml",
+          "sha256": "141871f41ab4ac7af854e54f1f637fb168ffbc97fdb57c60608f11b8eb95f1d7",
+          "bytes": 923,
+          "name": "NOTICE-Cargo-toml.txt",
+          "kind": "archive-declaration"
         },
         {
-          "path": "standard/Zlib.txt",
-          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Zlib.txt",
-          "sha256": "bfb1112d49db5b1daecdfef24bd7e2f3ea0bafb33aa67aa0ab51e2bf8407c03d",
-          "bytes": 838,
-          "name": "LICENSE-Zlib.txt",
-          "kind": "linked-standard-license"
+          "path": "declarations/pathfinder_geometry-0.5.1-Cargo-toml-orig.txt",
+          "url": "https://crates.io/api/v1/crates/pathfinder_geometry/0.5.1/download",
+          "archivePath": "Cargo.toml.orig",
+          "sha256": "fdcc9be8eb9a2f08cd416fffc6e6c3d5c3311a9d06a2b8210e16e38ac91e9f78",
+          "bytes": 432,
+          "name": "NOTICE-Cargo-toml-orig.txt",
+          "kind": "archive-declaration"
+        },
+        {
+          "path": "standard/MIT.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+          "bytes": 1078,
+          "name": "LICENSE-MIT-canonical.txt",
+          "kind": "canonical-standard-license",
+          "license": "MIT"
         },
         {
           "path": "standard/Apache-2.0.txt",
           "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Apache-2.0.txt",
           "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff",
           "bytes": 10280,
-          "name": "LICENSE-Apache-2.0.txt",
-          "kind": "linked-standard-license"
+          "name": "LICENSE-Apache-2.0-canonical.txt",
+          "kind": "canonical-standard-license",
+          "license": "Apache-2.0"
         },
         {
-          "path": "standard/MIT.txt",
-          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
-          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
-          "bytes": 1078,
-          "name": "LICENSE-MIT.txt",
-          "kind": "linked-standard-license"
-        }
-      ],
-      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
-    },
-    {
-      "name": "objc2-quartz-core",
-      "version": "0.3.2",
-      "checksum": "96c1358452b371bf9f104e21ec536d37a650eb10f7ee379fff67d2e08d537f1f",
-      "license": "Zlib OR Apache-2.0 OR MIT",
-      "repository": "https://github.com/madsmtm/objc2",
-      "commit": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
-      "pathInVcs": "framework-crates/objc2-quartz-core",
-      "sourceArchive": "https://crates.io/api/v1/crates/objc2-quartz-core/0.3.2/download",
-      "evidence": [
-        {
-          "path": "Cargo.toml",
-          "sha256": "7af27150fadd5ac0b3e86ec173b4e3e2b0dd42d614de963a0c9f0bf55cc7b4d9"
-        },
-        {
-          "path": ".cargo_vcs_info.json",
-          "sha256": "d18b21bb115491577880f7f8c491ac10dd8d9947bd27fdc3f6dafcf4cf92b2e9"
-        }
-      ],
-      "files": [
-        {
-          "path": "upstream/objc2-7b1abfd750a2cacaea71d6a56ecfb83cb7de560b-NOTICE.txt",
-          "url": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
-          "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
-          "bytes": 1339,
-          "name": "NOTICE-upstream.txt",
-          "kind": "upstream-notice"
-        },
-        {
-          "path": "standard/Zlib.txt",
-          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Zlib.txt",
-          "sha256": "bfb1112d49db5b1daecdfef24bd7e2f3ea0bafb33aa67aa0ab51e2bf8407c03d",
-          "bytes": 838,
-          "name": "LICENSE-Zlib.txt",
-          "kind": "linked-standard-license"
-        },
-        {
-          "path": "standard/Apache-2.0.txt",
-          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Apache-2.0.txt",
-          "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff",
-          "bytes": 10280,
-          "name": "LICENSE-Apache-2.0.txt",
-          "kind": "linked-standard-license"
-        },
-        {
-          "path": "standard/MIT.txt",
-          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
-          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
-          "bytes": 1078,
-          "name": "LICENSE-MIT.txt",
-          "kind": "linked-standard-license"
-        }
-      ],
-      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
-    },
-    {
-      "name": "objc2-web-kit",
-      "version": "0.3.2",
-      "checksum": "b2e5aaab980c433cf470df9d7af96a7b46a9d892d521a2cbbb2f8a4c16751e7f",
-      "license": "Zlib OR Apache-2.0 OR MIT",
-      "repository": "https://github.com/madsmtm/objc2",
-      "commit": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
-      "pathInVcs": "framework-crates/objc2-web-kit",
-      "sourceArchive": "https://crates.io/api/v1/crates/objc2-web-kit/0.3.2/download",
-      "evidence": [
-        {
-          "path": "Cargo.toml",
-          "sha256": "ea592b63600b5ccb95b557ac0b648d922b6da8a5d00992baa1e9e0c634cb3ab3"
-        },
-        {
-          "path": ".cargo_vcs_info.json",
-          "sha256": "af77e35da92d2c30dde7cd40ff3723ce9f312cddb639a388ae447979af630a30"
-        }
-      ],
-      "files": [
-        {
-          "path": "upstream/objc2-7b1abfd750a2cacaea71d6a56ecfb83cb7de560b-NOTICE.txt",
-          "url": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
-          "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
-          "bytes": 1339,
-          "name": "NOTICE-upstream.txt",
-          "kind": "upstream-notice"
-        },
-        {
-          "path": "standard/Zlib.txt",
-          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Zlib.txt",
-          "sha256": "bfb1112d49db5b1daecdfef24bd7e2f3ea0bafb33aa67aa0ab51e2bf8407c03d",
-          "bytes": 838,
-          "name": "LICENSE-Zlib.txt",
-          "kind": "linked-standard-license"
-        },
-        {
-          "path": "standard/Apache-2.0.txt",
-          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Apache-2.0.txt",
-          "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff",
-          "bytes": 10280,
-          "name": "LICENSE-Apache-2.0.txt",
-          "kind": "linked-standard-license"
-        },
-        {
-          "path": "standard/MIT.txt",
-          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
-          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
-          "bytes": 1078,
-          "name": "LICENSE-MIT.txt",
-          "kind": "linked-standard-license"
-        }
-      ],
-      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
-    },
-    {
-      "name": "objc2",
-      "version": "0.6.5",
-      "checksum": "08849bbd4767dfae9457696856ae1c84fe4e0281bbe4a7abff2d0e06fb7981f8",
-      "license": "MIT",
-      "repository": "https://github.com/madsmtm/objc2",
-      "commit": "d7d2fa23ceaa5e6096c923b081040e5d81b3b9df",
-      "pathInVcs": "crates/objc2",
-      "sourceArchive": "https://crates.io/api/v1/crates/objc2/0.6.5/download",
-      "evidence": [
-        {
-          "path": "Cargo.toml",
-          "sha256": "5556dba493fc18e98ebf82f587011f76df6c8c26532613e4c8f904ee586d7cf0"
-        },
-        {
-          "path": ".cargo_vcs_info.json",
-          "sha256": "5f7c8e095d3933c477ff1f71021b551cbfe497a62346a1dc8615debd9846e257"
-        }
-      ],
-      "files": [
-        {
-          "path": "upstream/objc2-d7d2fa23ceaa5e6096c923b081040e5d81b3b9df-NOTICE.txt",
-          "url": "https://raw.githubusercontent.com/madsmtm/objc2/d7d2fa23ceaa5e6096c923b081040e5d81b3b9df/LICENSE.md",
-          "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
-          "bytes": 1339,
-          "name": "NOTICE-upstream.txt",
-          "kind": "upstream-notice"
-        },
-        {
-          "path": "standard/MIT.txt",
-          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
-          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
-          "bytes": 1078,
-          "name": "LICENSE-MIT.txt",
-          "kind": "linked-standard-license"
-        }
-      ],
-      "reason": "The exact upstream commit states this crate licensing and links these standard texts. Preserve its entire Apple SDK derivation notice and the complete linked terms; canonical template text is reproduced verbatim without inventing copyright holders."
-    },
-    {
-      "name": "selectors",
-      "version": "0.38.0",
-      "checksum": "8adfa1c298912827b8a28b223b3b874357397ae706e6190acd9bf28cee99114d",
-      "license": "MPL-2.0",
-      "repository": "https://github.com/servo/stylo",
-      "commit": "572ecba2d1600e7c3d490586692a209faf703baa",
-      "pathInVcs": "selectors",
-      "sourceArchive": "https://crates.io/api/v1/crates/selectors/0.38.0/download",
-      "evidence": [
-        {
-          "path": "Cargo.toml",
-          "sha256": "83630f5e117638281303f757127dfffc3f621c8d2ff03f99ff7f7589748bacd8"
-        },
-        {
-          "path": ".cargo_vcs_info.json",
-          "sha256": "1ddc4845786a1b1ebc7fb2f940878d9b923c4385d7d66841f25c765d1312fe74"
-        },
-        {
-          "path": "lib.rs",
-          "sha256": "d54c6e13e9e952dac17d209171df8657e3cae93beaddace4906150cdec8d02e9"
-        }
-      ],
-      "files": [
-        {
-          "path": "upstream/selectors-572ecba2d1600e7c3d490586692a209faf703baa-NOTICE.txt",
-          "url": "https://raw.githubusercontent.com/servo/stylo/572ecba2d1600e7c3d490586692a209faf703baa/selectors/lib.rs",
-          "sha256": "766674381e88a468d55e07de3596987391cf0e8beebe51baf4fddf11078785b3",
-          "bytes": 206,
-          "name": "NOTICE-source-header.txt",
+          "path": "declarations/pathfinder_geometry-0.5.1-src-rect.rs-header.txt",
+          "url": "https://crates.io/api/v1/crates/pathfinder_geometry/0.5.1/download",
+          "archivePath": "src/rect.rs",
+          "sha256": "3bec512e1d377461b984542541ea2978157e2b56cf066b9b0136ba30dcd355bb",
+          "bytes": 458,
+          "name": "NOTICE-src-rect.rs-header.txt",
           "kind": "archive-header"
         },
         {
-          "path": "standard/MPL-2.0.txt",
-          "url": "https://www.mozilla.org/media/MPL/2.0/index.txt",
-          "sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04",
-          "bytes": 16726,
-          "name": "LICENSE-MPL-2.0.txt",
-          "kind": "linked-standard-license"
+          "path": "declarations/pathfinder_geometry-0.5.1-src-line_segment.rs-header.txt",
+          "url": "https://crates.io/api/v1/crates/pathfinder_geometry/0.5.1/download",
+          "archivePath": "src/line_segment.rs",
+          "sha256": "1480f8151ab2dd5589d8f2cf44e132038f244ee5aba2df42a147261f793e6f7a",
+          "bytes": 458,
+          "name": "NOTICE-src-line_segment.rs-header.txt",
+          "kind": "archive-header"
+        },
+        {
+          "path": "declarations/pathfinder_geometry-0.5.1-src-angle.rs-header.txt",
+          "url": "https://crates.io/api/v1/crates/pathfinder_geometry/0.5.1/download",
+          "archivePath": "src/angle.rs",
+          "sha256": "04ddac04a3c0c2149d5cad373bbfeee0a1567964946adf52182a15693f0c84b2",
+          "bytes": 421,
+          "name": "NOTICE-src-angle.rs-header.txt",
+          "kind": "archive-header"
+        },
+        {
+          "path": "declarations/pathfinder_geometry-0.5.1-src-util.rs-header.txt",
+          "url": "https://crates.io/api/v1/crates/pathfinder_geometry/0.5.1/download",
+          "archivePath": "src/util.rs",
+          "sha256": "70148ecaea6d527d4b0da376ee82abf0f64bc98a3023ebcfb6ed1271863bcb6c",
+          "bytes": 422,
+          "name": "NOTICE-src-util.rs-header.txt",
+          "kind": "archive-header"
+        },
+        {
+          "path": "declarations/pathfinder_geometry-0.5.1-src-vector.rs-header.txt",
+          "url": "https://crates.io/api/v1/crates/pathfinder_geometry/0.5.1/download",
+          "archivePath": "src/vector.rs",
+          "sha256": "3f4c88645638a49c1479392efca7cc98c93a3b4e5b775407ce8fbe0839fb7dcf",
+          "bytes": 439,
+          "name": "NOTICE-src-vector.rs-header.txt",
+          "kind": "archive-header"
+        },
+        {
+          "path": "declarations/pathfinder_geometry-0.5.1-src-lib.rs-header.txt",
+          "url": "https://crates.io/api/v1/crates/pathfinder_geometry/0.5.1/download",
+          "archivePath": "src/lib.rs",
+          "sha256": "f3074c62f786dfd9964b533e7c7d3bef454e50509916603b8f00aea0a24a8bf3",
+          "bytes": 469,
+          "name": "NOTICE-src-lib.rs-header.txt",
+          "kind": "archive-header"
+        },
+        {
+          "path": "declarations/pathfinder_geometry-0.5.1-src-transform3d.rs-header.txt",
+          "url": "https://crates.io/api/v1/crates/pathfinder_geometry/0.5.1/download",
+          "archivePath": "src/transform3d.rs",
+          "sha256": "d3fd04514cd5e13c5175fbad4ecf5d7ae91a42b85d0ded358dd990dca18619c3",
+          "bytes": 460,
+          "name": "NOTICE-src-transform3d.rs-header.txt",
+          "kind": "archive-header"
+        },
+        {
+          "path": "declarations/pathfinder_geometry-0.5.1-src-transform2d.rs-header.txt",
+          "url": "https://crates.io/api/v1/crates/pathfinder_geometry/0.5.1/download",
+          "archivePath": "src/transform2d.rs",
+          "sha256": "dd9aebae0651fcbb26d88f408340a0f02597b524f13d668ab8071a464dc8bbbf",
+          "bytes": 438,
+          "name": "NOTICE-src-transform2d.rs-header.txt",
+          "kind": "archive-header"
+        },
+        {
+          "path": "declarations/pathfinder_geometry-0.5.1-src-unit_vector.rs-header.txt",
+          "url": "https://crates.io/api/v1/crates/pathfinder_geometry/0.5.1/download",
+          "archivePath": "src/unit_vector.rs",
+          "sha256": "b2498d84c7ab4f1a5a94deff6a238343a45087cec63fb5ddcae7b02b2dea773b",
+          "bytes": 479,
+          "name": "NOTICE-src-unit_vector.rs-header.txt",
+          "kind": "archive-header"
         }
       ],
-      "reason": "The locked lib.rs header explicitly grants MPL 2.0 and links Mozilla; preserve that notice plus the full official versioned license."
+      "reason": "The checksum-bound published archive declares this license but contains no standalone LICENSE/NOTICE. Original Cargo declarations and available README are preserved verbatim as declaration evidence, not invented copyright notices. Full canonical SPDX standard texts retain their original template markers and are not upstream-authored notices. No missing copyright holder or year is inferred; no upstream commit identity is claimed. Original source license headers are also preserved verbatim, including every published copyright statement."
+    },
+    {
+      "name": "pathfinder_simd",
+      "version": "0.5.6",
+      "checksum": "4500030c302e4af1d423f36f3b958d1aecb6c04184356ed5a833bf6b60435777",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/servo/pathfinder",
+      "binding": "published-vcs",
+      "commit": "6c3c0466f451c5bd2007087728cd168798cd64e8",
+      "pathInVcs": "simd",
+      "sourceArchive": "https://crates.io/api/v1/crates/pathfinder_simd/0.5.6/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "8c786fc7a21f92ef487513268e52c99a4d889550670a2ec0e1277619e7127bfd"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "469961ff70bc7fc4f3b724386f38cd0719936e18aae4a44b6c7c469ba30228fc"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/pathfinder_simd-6c3c0466f451c5bd2007087728cd168798cd64e8-LICENSE-APACHE.txt",
+          "url": "https://raw.githubusercontent.com/servo/pathfinder/6c3c0466f451c5bd2007087728cd168798cd64e8/LICENSE-APACHE",
+          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+          "bytes": 10847,
+          "name": "LICENSE-APACHE.txt",
+          "kind": "upstream-license"
+        },
+        {
+          "path": "upstream/pathfinder_simd-6c3c0466f451c5bd2007087728cd168798cd64e8-LICENSE-MIT.txt",
+          "url": "https://raw.githubusercontent.com/servo/pathfinder/6c3c0466f451c5bd2007087728cd168798cd64e8/LICENSE-MIT",
+          "sha256": "0621878e61f0d0fda054bcbe02df75192c28bde1ecc8289cbd86aeba2dd72720",
+          "bytes": 1071,
+          "name": "LICENSE-MIT.txt",
+          "kind": "upstream-license"
+        }
+      ],
+      "reason": "The published crate omits repository license files. Complete original legal texts were retrieved from its exact published VCS commit; copyright and permission notices are preserved verbatim."
+    },
+    {
+      "name": "profiling",
+      "version": "1.0.18",
+      "checksum": "3d595e54a326bc53c1c197b32d295e14b169e3cfeaa8dc82b529f947fba6bcf5",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/aclysma/profiling",
+      "binding": "published-vcs",
+      "commit": "8271551172eb6fa4cba47369aedd93790c623df9",
+      "pathInVcs": "profiling",
+      "sourceArchive": "https://crates.io/api/v1/crates/profiling/1.0.18/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "00c84a390cdb283f2fea80bb6ccbfef8af8cd2005e79309057af1b5030d3e6a5"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "15498e60d175e3e5a4a1c4d30a3a4c836c130c79a93b5dd27944d5ae9a3b3b82"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/profiling-8271551172eb6fa4cba47369aedd93790c623df9-LICENSE-APACHE.txt",
+          "url": "https://raw.githubusercontent.com/aclysma/profiling/8271551172eb6fa4cba47369aedd93790c623df9/LICENSE-APACHE",
+          "sha256": "10d30a673cd5e9349bdc02aeb48f14b3386d27d0da32df8f0a555d4aa16aa551",
+          "bytes": 10818,
+          "name": "LICENSE-APACHE.txt",
+          "kind": "upstream-license"
+        },
+        {
+          "path": "upstream/profiling-8271551172eb6fa4cba47369aedd93790c623df9-LICENSE-MIT.txt",
+          "url": "https://raw.githubusercontent.com/aclysma/profiling/8271551172eb6fa4cba47369aedd93790c623df9/LICENSE-MIT",
+          "sha256": "c8167fdeeed46d3f244d3f85c5bf998ce889343691c32be2c61a8bc4b5c08333",
+          "bytes": 1093,
+          "name": "LICENSE-MIT.txt",
+          "kind": "upstream-license"
+        }
+      ],
+      "reason": "The published crate omits repository license files. Complete original legal texts were retrieved from its exact published VCS commit; copyright and permission notices are preserved verbatim."
+    },
+    {
+      "name": "profiling-procmacros",
+      "version": "1.0.18",
+      "checksum": "4488a4a36b9a4ba6b9334a32a39971f77c1436ec82c38707bce707699cc3bbcb",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/aclysma/profiling",
+      "binding": "published-vcs",
+      "commit": "8271551172eb6fa4cba47369aedd93790c623df9",
+      "pathInVcs": "profiling-procmacros",
+      "sourceArchive": "https://crates.io/api/v1/crates/profiling-procmacros/1.0.18/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "bd4fef29709a44e6769efb66e2f65bf555557b86516deb249ef3dd9907f597c1"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "c12ac018384c3216963c746bd4078bc5c3e0371439b4192aded2f692f3ff11a5"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/profiling-procmacros-8271551172eb6fa4cba47369aedd93790c623df9-LICENSE-APACHE.txt",
+          "url": "https://raw.githubusercontent.com/aclysma/profiling/8271551172eb6fa4cba47369aedd93790c623df9/LICENSE-APACHE",
+          "sha256": "10d30a673cd5e9349bdc02aeb48f14b3386d27d0da32df8f0a555d4aa16aa551",
+          "bytes": 10818,
+          "name": "LICENSE-APACHE.txt",
+          "kind": "upstream-license"
+        },
+        {
+          "path": "upstream/profiling-procmacros-8271551172eb6fa4cba47369aedd93790c623df9-LICENSE-MIT.txt",
+          "url": "https://raw.githubusercontent.com/aclysma/profiling/8271551172eb6fa4cba47369aedd93790c623df9/LICENSE-MIT",
+          "sha256": "c8167fdeeed46d3f244d3f85c5bf998ce889343691c32be2c61a8bc4b5c08333",
+          "bytes": 1093,
+          "name": "LICENSE-MIT.txt",
+          "kind": "upstream-license"
+        }
+      ],
+      "reason": "The published crate omits repository license files. Complete original legal texts were retrieved from its exact published VCS commit; copyright and permission notices are preserved verbatim."
+    },
+    {
+      "name": "seahash",
+      "version": "4.1.0",
+      "checksum": "1c107b6f4780854c8b126e228ea8869f4d7b71260f962fefb57b996b8959ba6b",
+      "license": "MIT",
+      "repository": "https://gitlab.redox-os.org/redox-os/seahash",
+      "binding": "published-spdx",
+      "sourceArchive": "https://crates.io/api/v1/crates/seahash/4.1.0/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "1d610f6d1bce065add6ec5f2fb764e97eeda505afbe26271acc5f3d73a8c410a"
+        },
+        {
+          "path": "Cargo.toml.orig",
+          "sha256": "dd213de338ca98b7ef7a2562bcf4e4214d215d1a8277750a6a72b4e809c8d0dd"
+        },
+        {
+          "path": "README.md",
+          "sha256": "38357210ef69a97bf9858ff22661cb1c2384179f5e6b73143cb33193e36c6473"
+        }
+      ],
+      "files": [
+        {
+          "path": "declarations/seahash-4.1.0-Cargo-toml.txt",
+          "url": "https://crates.io/api/v1/crates/seahash/4.1.0/download",
+          "archivePath": "Cargo.toml",
+          "sha256": "1d610f6d1bce065add6ec5f2fb764e97eeda505afbe26271acc5f3d73a8c410a",
+          "bytes": 1145,
+          "name": "NOTICE-Cargo-toml.txt",
+          "kind": "archive-declaration"
+        },
+        {
+          "path": "declarations/seahash-4.1.0-Cargo-toml-orig.txt",
+          "url": "https://crates.io/api/v1/crates/seahash/4.1.0/download",
+          "archivePath": "Cargo.toml.orig",
+          "sha256": "dd213de338ca98b7ef7a2562bcf4e4214d215d1a8277750a6a72b4e809c8d0dd",
+          "bytes": 585,
+          "name": "NOTICE-Cargo-toml-orig.txt",
+          "kind": "archive-declaration"
+        },
+        {
+          "path": "declarations/seahash-4.1.0-README-md.txt",
+          "url": "https://crates.io/api/v1/crates/seahash/4.1.0/download",
+          "archivePath": "README.md",
+          "sha256": "38357210ef69a97bf9858ff22661cb1c2384179f5e6b73143cb33193e36c6473",
+          "bytes": 484,
+          "name": "NOTICE-README-md.txt",
+          "kind": "archive-declaration"
+        },
+        {
+          "path": "standard/MIT.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+          "bytes": 1078,
+          "name": "LICENSE-MIT-canonical.txt",
+          "kind": "canonical-standard-license",
+          "license": "MIT"
+        }
+      ],
+      "reason": "The checksum-bound published archive declares this license but contains no standalone LICENSE/NOTICE. Original Cargo declarations and available README are preserved verbatim as declaration evidence, not invented copyright notices. Full canonical SPDX standard texts retain their original template markers and are not upstream-authored notices. No missing copyright holder or year is inferred; no upstream commit identity is claimed."
+    },
+    {
+      "name": "simd_helpers",
+      "version": "0.1.0",
+      "checksum": "95890f873bec569a0362c235787f3aca6e1e887302ba4840839bcc6459c42da6",
+      "license": "MIT",
+      "repository": "https://github.com/lu-zero/simd_helpers",
+      "binding": "published-spdx",
+      "sourceArchive": "https://crates.io/api/v1/crates/simd_helpers/0.1.0/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "42364d200c5cc7792960bdf10354a108b6c68ca49f2e1567967e2d5b1dba37a6"
+        },
+        {
+          "path": "Cargo.toml.orig",
+          "sha256": "b41497677a5498040f2eb3fc089e3c2c38c413dca64f41dc57a115e26480461d"
+        },
+        {
+          "path": "README.md",
+          "sha256": "e672b974ba905441c8eee630f10bc351f4e8e462c99d178b334ae3e48d8ca7f5"
+        }
+      ],
+      "files": [
+        {
+          "path": "declarations/simd_helpers-0.1.0-Cargo-toml.txt",
+          "url": "https://crates.io/api/v1/crates/simd_helpers/0.1.0/download",
+          "archivePath": "Cargo.toml",
+          "sha256": "42364d200c5cc7792960bdf10354a108b6c68ca49f2e1567967e2d5b1dba37a6",
+          "bytes": 899,
+          "name": "NOTICE-Cargo-toml.txt",
+          "kind": "archive-declaration"
+        },
+        {
+          "path": "declarations/simd_helpers-0.1.0-Cargo-toml-orig.txt",
+          "url": "https://crates.io/api/v1/crates/simd_helpers/0.1.0/download",
+          "archivePath": "Cargo.toml.orig",
+          "sha256": "b41497677a5498040f2eb3fc089e3c2c38c413dca64f41dc57a115e26480461d",
+          "bytes": 367,
+          "name": "NOTICE-Cargo-toml-orig.txt",
+          "kind": "archive-declaration"
+        },
+        {
+          "path": "declarations/simd_helpers-0.1.0-README-md.txt",
+          "url": "https://crates.io/api/v1/crates/simd_helpers/0.1.0/download",
+          "archivePath": "README.md",
+          "sha256": "e672b974ba905441c8eee630f10bc351f4e8e462c99d178b334ae3e48d8ca7f5",
+          "bytes": 439,
+          "name": "NOTICE-README-md.txt",
+          "kind": "archive-declaration"
+        },
+        {
+          "path": "standard/MIT.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+          "bytes": 1078,
+          "name": "LICENSE-MIT-canonical.txt",
+          "kind": "canonical-standard-license",
+          "license": "MIT"
+        }
+      ],
+      "reason": "The checksum-bound published archive declares this license but contains no standalone LICENSE/NOTICE. Original Cargo declarations and available README are preserved verbatim as declaration evidence, not invented copyright notices. Full canonical SPDX standard texts retain their original template markers and are not upstream-authored notices. No missing copyright holder or year is inferred; no upstream commit identity is claimed."
+    },
+    {
+      "name": "stacksafe",
+      "version": "0.1.4",
+      "checksum": "1d9c1172965d317e87ddb6d364a040d958b40a1db82b6ef97da26253a8b3d090",
+      "license": "Apache-2.0",
+      "repository": "https://github.com/fast/stacksafe",
+      "binding": "published-vcs",
+      "commit": "a5c029b7d3a5fe6771ecd79266b6e21313cfa174",
+      "pathInVcs": "stacksafe",
+      "sourceArchive": "https://crates.io/api/v1/crates/stacksafe/0.1.4/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "d0b82522b45e7ff6dd72f2fe384dc0b791d2e70e3a8721e1a5ec74e8c25db397"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "0a54abe47db0e290ee88e00effc567cdf6fd3e7dde3b237e0833b1646da898ac"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/stacksafe-a5c029b7d3a5fe6771ecd79266b6e21313cfa174-LICENSE.txt",
+          "url": "https://raw.githubusercontent.com/fast/stacksafe/a5c029b7d3a5fe6771ecd79266b6e21313cfa174/LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "bytes": 11357,
+          "name": "LICENSE.txt",
+          "kind": "upstream-license"
+        }
+      ],
+      "reason": "The published crate omits repository license files. Complete original legal texts were retrieved from its exact published VCS commit; copyright and permission notices are preserved verbatim."
+    },
+    {
+      "name": "stacksafe-macro",
+      "version": "0.1.4",
+      "checksum": "172175341049678163e979d9107ca3508046d4d2a7c6682bee46ac541b17db69",
+      "license": "Apache-2.0",
+      "repository": "https://github.com/fast/stacksafe",
+      "binding": "published-vcs",
+      "commit": "a5c029b7d3a5fe6771ecd79266b6e21313cfa174",
+      "pathInVcs": "stacksafe-macro",
+      "sourceArchive": "https://crates.io/api/v1/crates/stacksafe-macro/0.1.4/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "44e892ad218ca12bff29f3bde6647864c634a96af442c0e13c42cb9177f92aa4"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "4043b17517a67aa96560c0aec276e2ac00a7d80258ef4db47c872d6e49f289be"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/stacksafe-macro-a5c029b7d3a5fe6771ecd79266b6e21313cfa174-LICENSE.txt",
+          "url": "https://raw.githubusercontent.com/fast/stacksafe/a5c029b7d3a5fe6771ecd79266b6e21313cfa174/LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "bytes": 11357,
+          "name": "LICENSE.txt",
+          "kind": "upstream-license"
+        }
+      ],
+      "reason": "The published crate omits repository license files. Complete original legal texts were retrieved from its exact published VCS commit; copyright and permission notices are preserved verbatim."
+    },
+    {
+      "name": "svg_fmt",
+      "version": "0.4.5",
+      "checksum": "0193cc4331cfd2f3d2011ef287590868599a2f33c3e69bc22c1a3d3acf9e02fb",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/nical/rust_debug",
+      "binding": "published-vcs",
+      "commit": "93f414cd572b5c2781df93dbdc068ed13443d05a",
+      "pathInVcs": "svg_fmt",
+      "sourceArchive": "https://crates.io/api/v1/crates/svg_fmt/0.4.5/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "84650d018d4259c31ab944439b642665668367ed4312a64a735ee2654d1056e5"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "559575e2ad0bb3d09cde0aac106e9ad2021efad87259da068bffe440e1b4138f"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/svg_fmt-93f414cd572b5c2781df93dbdc068ed13443d05a-LICENSE.txt",
+          "url": "https://raw.githubusercontent.com/nical/rust_debug/93f414cd572b5c2781df93dbdc068ed13443d05a/LICENSE",
+          "sha256": "7e98bed7f100747aaae7d82ab94fbe6b76fd6b84b09a3aaa413bff8196d0fbb1",
+          "bytes": 1070,
+          "name": "LICENSE.txt",
+          "kind": "upstream-license"
+        }
+      ],
+      "reason": "The published crate omits repository license files. Complete original legal texts were retrieved from its exact published VCS commit; copyright and permission notices are preserved verbatim."
+    },
+    {
+      "name": "taffy",
+      "version": "0.9.0",
+      "checksum": "a13e5d13f79d558b5d353a98072ca8ca0e99da429467804de959aa8c83c9a004",
+      "license": "MIT",
+      "repository": "https://github.com/DioxusLabs/taffy",
+      "binding": "published-vcs",
+      "commit": "599b1b7d7410d97e13bafc4c01fbe6d7a9cf060a",
+      "pathInVcs": "",
+      "sourceArchive": "https://crates.io/api/v1/crates/taffy/0.9.0/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "d3eda627a17d29a5014a2af44a59b884054f8c219c3c4b9986ff5a52a86e17b4"
+        },
+        {
+          "path": ".cargo_vcs_info.json",
+          "sha256": "29f19a82707bcd65c2a319d83963531cd675d4e0be4af9f3a216948b5ab2ab7b"
+        }
+      ],
+      "files": [
+        {
+          "path": "upstream/taffy-599b1b7d7410d97e13bafc4c01fbe6d7a9cf060a-LICENSE.md.txt",
+          "url": "https://raw.githubusercontent.com/DioxusLabs/taffy/599b1b7d7410d97e13bafc4c01fbe6d7a9cf060a/LICENSE.md",
+          "sha256": "a7083ef3dd41a65eeb2162c2c091b0082e2724fb4c6ed029b363c7840d244ecd",
+          "bytes": 1420,
+          "name": "LICENSE.md.txt",
+          "kind": "upstream-license"
+        }
+      ],
+      "reason": "The published crate omits repository license files. Complete original legal texts were retrieved from its exact published VCS commit; copyright and permission notices are preserved verbatim."
+    },
+    {
+      "name": "zune-inflate",
+      "version": "0.2.54",
+      "checksum": "73ab332fe2f6680068f3582b16a24f90ad7096d5d39b974d1c0aff0125116f02",
+      "license": "MIT OR Apache-2.0 OR Zlib",
+      "repository": null,
+      "binding": "published-spdx",
+      "sourceArchive": "https://crates.io/api/v1/crates/zune-inflate/0.2.54/download",
+      "evidence": [
+        {
+          "path": "Cargo.toml",
+          "sha256": "f3da162dd3818fcdf23c9ce34930d66064106873a692d6994abd49b80e60ea66"
+        },
+        {
+          "path": "Cargo.toml.orig",
+          "sha256": "a7e3d8fd82218e7f9f2172d41a048e4879abc81228589539e1ec750d72811f90"
+        },
+        {
+          "path": "README.md",
+          "sha256": "ad9675f80fd32f89ceabc856d8e5c4fea145aa8bbbf2cba423fdb3687ac634d9"
+        },
+        {
+          "path": "src/encoder.rs",
+          "sha256": "c99d7afda5c50bc52efc5d8e788da6a884d0e13b3b38865f760f5ed3d9fc65bd"
+        },
+        {
+          "path": "src/encoder/fast_match_finder.rs",
+          "sha256": "67bcc3602a1705dd375128526d99334aee78777dc19bcc622757d78c43af90d6"
+        },
+        {
+          "path": "src/lib.rs",
+          "sha256": "ee2b5b58f48ee36835bd4e312a26dace36be39d1c4af956f4e2e04d0620667f9"
+        }
+      ],
+      "files": [
+        {
+          "path": "declarations/zune-inflate-0.2.54-Cargo-toml.txt",
+          "url": "https://crates.io/api/v1/crates/zune-inflate/0.2.54/download",
+          "archivePath": "Cargo.toml",
+          "sha256": "f3da162dd3818fcdf23c9ce34930d66064106873a692d6994abd49b80e60ea66",
+          "bytes": 1065,
+          "name": "NOTICE-Cargo-toml.txt",
+          "kind": "archive-declaration"
+        },
+        {
+          "path": "declarations/zune-inflate-0.2.54-Cargo-toml-orig.txt",
+          "url": "https://crates.io/api/v1/crates/zune-inflate/0.2.54/download",
+          "archivePath": "Cargo.toml.orig",
+          "sha256": "a7e3d8fd82218e7f9f2172d41a048e4879abc81228589539e1ec750d72811f90",
+          "bytes": 654,
+          "name": "NOTICE-Cargo-toml-orig.txt",
+          "kind": "archive-declaration"
+        },
+        {
+          "path": "declarations/zune-inflate-0.2.54-README-md.txt",
+          "url": "https://crates.io/api/v1/crates/zune-inflate/0.2.54/download",
+          "archivePath": "README.md",
+          "sha256": "ad9675f80fd32f89ceabc856d8e5c4fea145aa8bbbf2cba423fdb3687ac634d9",
+          "bytes": 3430,
+          "name": "NOTICE-README-md.txt",
+          "kind": "archive-declaration"
+        },
+        {
+          "path": "standard/MIT.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+          "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+          "bytes": 1078,
+          "name": "LICENSE-MIT-canonical.txt",
+          "kind": "canonical-standard-license",
+          "license": "MIT"
+        },
+        {
+          "path": "standard/Apache-2.0.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Apache-2.0.txt",
+          "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff",
+          "bytes": 10280,
+          "name": "LICENSE-Apache-2.0-canonical.txt",
+          "kind": "canonical-standard-license",
+          "license": "Apache-2.0"
+        },
+        {
+          "path": "standard/Zlib.txt",
+          "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/Zlib.txt",
+          "sha256": "bfb1112d49db5b1daecdfef24bd7e2f3ea0bafb33aa67aa0ab51e2bf8407c03d",
+          "bytes": 838,
+          "name": "LICENSE-Zlib-canonical.txt",
+          "kind": "canonical-standard-license",
+          "license": "Zlib"
+        },
+        {
+          "path": "declarations/zune-inflate-0.2.54-src-encoder.rs-header.txt",
+          "url": "https://crates.io/api/v1/crates/zune-inflate/0.2.54/download",
+          "archivePath": "src/encoder.rs",
+          "sha256": "f6dac95f7bb92844c54da86a531df042808a8db3fd325b7946bee62410bcdb90",
+          "bytes": 161,
+          "name": "NOTICE-src-encoder.rs-header.txt",
+          "kind": "archive-header"
+        },
+        {
+          "path": "declarations/zune-inflate-0.2.54-src-encoder-fast_match_finder.rs-header.txt",
+          "url": "https://crates.io/api/v1/crates/zune-inflate/0.2.54/download",
+          "archivePath": "src/encoder/fast_match_finder.rs",
+          "sha256": "6c12dfa435e4adf6a2560044fed48e108cda4cff49ef6fd9e37d30b5250ea1a6",
+          "bytes": 167,
+          "name": "NOTICE-src-encoder-fast_match_finder.rs-header.txt",
+          "kind": "archive-header"
+        },
+        {
+          "path": "declarations/zune-inflate-0.2.54-src-lib.rs-header.txt",
+          "url": "https://crates.io/api/v1/crates/zune-inflate/0.2.54/download",
+          "archivePath": "src/lib.rs",
+          "sha256": "f6dac95f7bb92844c54da86a531df042808a8db3fd325b7946bee62410bcdb90",
+          "bytes": 161,
+          "name": "NOTICE-src-lib.rs-header.txt",
+          "kind": "archive-header"
+        }
+      ],
+      "reason": "The checksum-bound published archive declares this license but contains no standalone LICENSE/NOTICE. Original Cargo declarations and available README are preserved verbatim as declaration evidence, not invented copyright notices. Full canonical SPDX standard texts retain their original template markers and are not upstream-authored notices. No missing copyright holder or year is inferred; no upstream commit identity is claimed. Original source license headers are also preserved verbatim, including every published copyright statement."
     }
   ]
 }

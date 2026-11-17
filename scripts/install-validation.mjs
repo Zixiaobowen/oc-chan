@@ -95,7 +95,7 @@ export async function verifyDeliveryForInstall(directory, root) {
     values.push(value)
   }
   const [source, expected, dependencies, buildRecord] = values
-  requireThat(source.version === delivery.version && source.digest === delivery.source.digest && source.commit === delivery.source.commit && expected.schema === 2 && expected.arch === 'arm64' && dependencies.status === 'verified' && buildRecord.schema === 2 && buildRecord.version === delivery.version && buildRecord.buildId === expected.buildId, 'Delivery source, package, build or dependency evidence differs')
+  requireThat(source.version === delivery.version && source.digest === delivery.source.digest && source.commit === delivery.source.commit && expected.schema === 2 && expected.arch === 'arm64' && dependencies.status === 'verified' && buildRecord.schema === 3 && buildRecord.renderer === 'gpui' && buildRecord.version === delivery.version && buildRecord.buildId === expected.buildId, 'Delivery source, package, build or dependency evidence differs')
   requireThat(Array.isArray(source.files) && source.files.length > 0 && source.files.length <= 1024 && createHash('sha256').update(JSON.stringify(source.files)).digest('hex') === source.digest, 'Source snapshot manifest digest differs')
   const snapshot = path.join(directory, 'source-snapshot'), seen = new Set(); let sourceBytes = 0
   for (const file of source.files) {
