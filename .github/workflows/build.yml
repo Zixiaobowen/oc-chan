@@ -60,12 +60,7 @@ jobs:
       - name: Preflight signed release
         if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref, 'refs/tags/')
         env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: node --input-type=module -e 'import {packageReleaseInfo,requireReleaseEnvironment} from "./scripts/release-config.mjs";requireReleaseEnvironment(packageReleaseInfo())'
 
       - name: Verify native GPUI acceptance environment
@@ -82,28 +77,11 @@ jobs:
           cargo install cargo-audit --version 0.22.2 --locked --root "$RUNNER_TEMP/oc-audit-tools"
           printf '%s\n' "$RUNNER_TEMP/oc-audit-tools/bin" >> "$GITHUB_PATH"
 
-      - name: Import release identity into a job-owned temporary keychain
-        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref, 'refs/tags/')
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-        run: |
-          set -euo pipefail
-          umask 077
-          oc_signing_key="$(openssl rand -hex 32)"
-          echo "::add-mask::$oc_signing_key"
-          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/oc-release.p12"
-          chmod 600 "$RUNNER_TEMP/oc-release.p12"
-          security create-keychain -p "$oc_signing_key" "$RUNNER_TEMP/oc-release.keychain-db"
-          security set-keychain-settings -lut 21600 "$RUNNER_TEMP/oc-release.keychain-db"
-          security unlock-keychain -p "$oc_signing_key" "$RUNNER_TEMP/oc-release.keychain-db"
-          security import "$RUNNER_TEMP/oc-release.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -k "$RUNNER_TEMP/oc-release.keychain-db"
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$oc_signing_key" "$RUNNER_TEMP/oc-release.keychain-db"
-          security list-keychains -d user -s "$RUNNER_TEMP/oc-release.keychain-db" "$HOME/Library/Keychains/login.keychain-db"
-          rm "$RUNNER_TEMP/oc-release.p12"
-
       - name: Install delivery tooling dependencies
         run: npm ci --no-audit --no-fund
+
+      - name: Cache and verify pinned Sparkle SDK
+        run: node scripts/sparkle-sdk.mjs
 
       - name: Run affected Rust and JavaScript behavior tests
         id: behavior_tests
@@ -130,13 +108,10 @@ jobs:
         if: (github.event_name != 'push' && github.event_name != 'workflow_dispatch') || !startsWith(github.ref, 'refs/tags/')
         run: npm run dist -- --arm64
 
-      - name: Build Developer ID signed and notarized Rust DMG and ZIP
+      - name: Build ad-hoc application and Ed25519 signed Sparkle feed
         if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref, 'refs/tags/')
         env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: npm run dist -- --arm64
 
       - name: Bind artifact paths to the completed Rust distribution
@@ -163,21 +138,6 @@ jobs:
           DISTRIBUTION_DIRECTORY: ${{ steps.distribution.outputs.directory }}
         run: npm run check:package -- --app "$APP_DIRECTORY" --arch arm64 --artifacts-dir "$DISTRIBUTION_DIRECTORY" --output "$DISTRIBUTION_DIRECTORY/package-manifest-arm64.json"
 
-      - name: Verify Developer ID team and notarization
-        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref, 'refs/tags/')
-        env:
-          APP_DIRECTORY: ${{ steps.distribution.outputs.app }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          requirement="=anchor apple generic and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = \"$APPLE_TEAM_ID\""
-          codesign --verify --deep --strict --verbose=2 "$APP_DIRECTORY"
-          codesign --verify --strict --verbose=2 -R "$requirement" "$APP_DIRECTORY"
-          for helper in oc-data-worker oc-installer tern-navigation/present-window; do
-            codesign --verify --strict --verbose=2 -R "$requirement" "$APP_DIRECTORY/Contents/Resources/$helper"
-          done
-          xcrun stapler validate "$APP_DIRECTORY"
-          spctl --assess --type execute --verbose=2 "$APP_DIRECTORY"
-
       - name: Generate attachment checksums
         env:
           DISTRIBUTION_DIRECTORY: ${{ steps.distribution.outputs.directory }}
@@ -202,19 +162,13 @@ jobs:
           path: |
             ${{ steps.distribution.outputs.directory }}/*.dmg
             ${{ steps.distribution.outputs.directory }}/*.zip
-            ${{ steps.distribution.outputs.directory }}/latest.json
+            ${{ steps.distribution.outputs.directory }}/appcast.xml
             ${{ steps.distribution.outputs.directory }}/SHA256SUMS.txt
             ${{ steps.distribution.outputs.directory }}/package-manifest-arm64.json
             ${{ steps.distribution.outputs.directory }}/dependency-review-arm64.json
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
-
-      - name: Remove only this job's signing material
-        if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref, 'refs/tags/')
-        run: |
-          if test -f "$RUNNER_TEMP/oc-release.p12"; then rm "$RUNNER_TEMP/oc-release.p12"; fi
-          if test -f "$RUNNER_TEMP/oc-release.keychain-db"; then security delete-keychain "$RUNNER_TEMP/oc-release.keychain-db"; fi
 
   release:
     name: Publish checked macOS installers

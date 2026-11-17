@@ -6,6 +6,7 @@ import path from 'node:path'
 import test from 'node:test'
 import { forbiddenPackagePath, inspectBuildMarkers, inspectExecutable, inspectTree, validatePlist, validateRustLegalManifest, validateFrozenBudgets } from './check-package.mjs'
 import { RUST_ROOTS, RUST_TARGET } from './rust-dependencies.mjs'
+import { readSparkleConfig } from './sparkle-sdk.mjs'
 
 async function fixture(t) { const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'oc-rust-package-'))); t.after(() => rm(root, { recursive: true, force: true })); return root }
 function macho(cpu = 0x0100000c, type = 2) { const bytes = Buffer.alloc(64); bytes.writeUInt32LE(0xfeedfacf, 0); bytes.writeUInt32LE(cpu, 4); bytes.writeUInt32LE(type, 12); bytes.writeUInt32LE(1, 16); bytes.writeUInt32LE(32, 20); return bytes }
@@ -32,10 +33,15 @@ test('only executable thin arm64 Mach-O passes the static architecture gate', as
   await writeFile(binary, macho()); await chmod(binary, 0o600); await assert.rejects(inspectExecutable(binary), /mode/)
 })
 test('bundle identity and semantic version are tied to the Rust build', () => {
-  const plist = { CFBundleIdentifier: 'local.oc-chan.desktop', CFBundlePackageType: 'APPL', CFBundleExecutable: 'oc-chan', CFBundleShortVersionString: '1.2.3' }
+  const sparkle = readSparkleConfig()
+  const plist = { CFBundleIdentifier: 'local.oc-chan.desktop', CFBundlePackageType: 'APPL', CFBundleExecutable: 'oc-chan', CFBundleShortVersionString: '1.2.3', CFBundleVersion: '1.2.3', SUFeedURL: sparkle.feedURL, SUPublicEDKey: sparkle.publicKey, SUVerifyUpdateBeforeExtraction: true, SURequireSignedFeed: true, SUSignedFeedFailureExpirationInterval: 0, SUEnableSystemProfiling: false, SUEnableJavaScript: false }
   validatePlist(plist, '1.2.3')
   assert.throws(() => validatePlist({ ...plist, CFBundleIdentifier: 'local.other' }, '1.2.3'), /identity/)
   assert.throws(() => validatePlist(plist, '1.2.4'), /version/)
+  assert.throws(() => validatePlist({ ...plist, SUPublicEDKey: 'A'.repeat(43) + '=' }, '1.2.3'), /public key/)
+  assert.throws(() => validatePlist({ ...plist, SURequireSignedFeed: false }, '1.2.3'), /signature/)
+  assert.throws(() => validatePlist({ ...plist, SUVerifyUpdateBeforeExtraction: false }, '1.2.3'), /signature/)
+  assert.throws(() => validatePlist({ ...plist, SUSignedFeedFailureExpirationInterval: 3600 }, '1.2.3'), /signature/)
 })
 test('inventory records content digests and rejects external links and hardlinks', async t => {
   const root = await fixture(t), app = path.join(root, 'OC Chan.app'); await mkdir(app)

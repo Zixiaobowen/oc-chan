@@ -1,11 +1,10 @@
 import assert from 'node:assert/strict'
-import { createHash } from 'node:crypto'
 import { lstat, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { BUNDLE_ID, TARGET, boundedJson, buildEnvironment, bundleApplication, developmentBundleLayout, digestFile, signingIdentity, withBuildLock } from './build-app.mjs'
-import { parseDistributionOptions, stableMetadata } from './dist.mjs'
+import { parseDistributionOptions } from './dist.mjs'
 
 async function fixture(t) { const root = await mkdtemp(path.join(os.tmpdir(), 'oc-rust-build-')); t.after(() => rm(root, { recursive: true, force: true })); return root }
 
@@ -16,7 +15,7 @@ test('production builds strip development overrides and do not discover signing 
   assert.equal(env.HOME, '/user'); assert.equal(env.OC_CHAN_RESOURCE_DIR, '/build/resources'); assert.equal(env.APPLE_SIGNING_IDENTITY, '-')
   for (const key of ['OC_CHAN_HOME', 'OC_CHAN_PROFILE', 'OC_CHAN_HEADLESS', 'APPLE_ID', 'APPLE_PASSWORD', 'APPLE_CERTIFICATE', 'TAURI_SIGNING_PRIVATE_KEY']) assert.equal(env[key], undefined)
   assert.throws(() => buildEnvironment({ configuration: {} }, { RUSTFLAGS: '--cfg feature="acceptance"' }), /acceptance/)
-  assert.equal(signingIdentity({}), '-'); assert.throws(() => signingIdentity({ APPLE_SIGNING_IDENTITY: 'Apple Development: Someone' }), /Developer ID/)
+  assert.equal(signingIdentity({}), '-'); assert.throws(() => signingIdentity({ APPLE_SIGNING_IDENTITY: 'Apple Development: Someone' }), /ad-hoc/)
 })
 test('GPUI bundle copies the executable and resources and signs the finished bundle', async t => {
   const root = await fixture(t), binary = path.join(root, 'host'), resourcesDir = path.join(root, 'resources'), application = path.join(root, 'OC Chan.app')
@@ -29,7 +28,10 @@ test('GPUI bundle copies the executable and resources and signs the finished bun
   assert.match(plist, /<key>CFBundleIdentifier<\/key><string>local\.oc-chan\.desktop<\/string>/)
   assert.match(plist, /<key>CFBundleShortVersionString<\/key><string>1\.2\.3<\/string>/)
   assert.match(plist, /<key>LSUIElement<\/key><false\/>/)
-  assert.deepEqual(calls, [{ file: '/usr/bin/codesign', args: ['--force', '--sign', '-', '--options', 'runtime', application] }])
+  assert.match(plist, /<key>SURequireSignedFeed<\/key><true\/>/)
+  assert.match(plist, /<key>SUVerifyUpdateBeforeExtraction<\/key><true\/>/)
+  assert.ok((await lstat(path.join(application, 'Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle'))).isFile())
+  assert.deepEqual(calls, [{ file: '/usr/bin/codesign', args: ['--force', '--sign', '-', application] }])
   await assert.rejects(bundleApplication({ application, binary, resourcesDir, version: '1.2.3', sign: '-', execute: async () => assert.fail('existing bundle must not be signed') }))
 })
 test('development bundle identity is legal, isolated per instance and stable on resume', () => {
@@ -67,12 +69,7 @@ test('bounded reads and hashing reject symlinks and preflight file-size excess',
   await assert.rejects(boundedJson(file, 4), /oversized/); await assert.rejects(digestFile(file, 'sha256', 4), /oversized/)
   const alias = path.join(root, 'alias'); await symlink(file, alias); await assert.rejects(boundedJson(alias)); await assert.rejects(digestFile(alias))
 })
-test('schema2 metadata uses fixed arm64 filename and canonical SHA512', () => {
-  const digest = createHash('sha512').update('archive').digest('base64')
-  assert.deepEqual(stableMetadata('1.2.3', { bytes: 7, digest }), { schema: 2, version: '1.2.3', assets: [{ target: ['darwin', 'aarch64'].join('-'), name: 'OC-Chan-1.2.3-mac-arm64.zip', size: 7, sha512: digest }] })
-  for (const version of ['v1.2.3', '1.2.3-beta.1', '1.2.3+local', '01.2.3']) assert.throws(() => stableMetadata(version, { bytes: 7, digest }), /stable/)
-  for (const bytes of [0, -1, 512 * 1024 * 1024 + 1, 1.5]) assert.throws(() => stableMetadata('1.2.3', { bytes, digest }), /size/)
-  assert.throws(() => stableMetadata('1.2.3', { bytes: 7, digest: 'x'.repeat(88) }), /SHA-512/)
+test('distribution options reject unsupported architectures', () => {
   assert.throws(() => parseDistributionOptions(['--x64']), /Usage/)
   assert.deepEqual(parseDistributionOptions(['--dir']), { directoryOnly: true })
 })

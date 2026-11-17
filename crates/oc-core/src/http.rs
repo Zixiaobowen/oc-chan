@@ -5,7 +5,7 @@ use crate::{error::{Error, Result}, io::{BoundedIo, CommandSpec, FileIdentity}};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256, Sha512};
+use sha2::{Digest, Sha256};
 use std::{ffi::{CStr, CString}, fs::File, io::{Read, Write}, os::{fd::{AsRawFd, FromRawFd, IntoRawFd}, unix::{ffi::OsStrExt, fs::MetadataExt}}, path::{Component, Path, PathBuf}, sync::{Arc, Mutex}, time::{Duration, Instant}};
 use tokio_util::sync::CancellationToken;
 
@@ -16,16 +16,14 @@ const CHUNK: usize = 16 * 1024;
 const METADATA_LIMIT: usize = 256 * 1024;
 const MARKET_DISK: u64 = 32 * 1024 * 1024;
 const MARKET_BASE: &str = "https://raw.githubusercontent.com/Zixiaobowen/oc-chan/main/plugin-market/";
-const RELEASE_BASE: &str = "https://github.com/Zixiaobowen/oc-chan/releases/";
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum HttpPurpose {
-    Marketplace, Update,
+    Marketplace,
     #[cfg(feature = "acceptance")]
     AcceptanceMarketplace,
 }
 impl HttpPurpose {
-    fn is_market(self) -> bool { self != Self::Update }
     fn is_fixture(self) -> bool {
         #[cfg(feature = "acceptance")]
         if self == Self::AcceptanceMarketplace { return true; }
@@ -43,7 +41,7 @@ pub struct HttpRequest {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct HttpResponse { pub bytes: u64, pub body: Vec<u8>, pub sha256: String, pub sha512: String, pub file_identity: Option<FileIdentity> }
+pub struct HttpResponse { pub bytes: u64, pub body: Vec<u8>, pub sha256: String, pub file_identity: Option<FileIdentity> }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct HttpProgress { pub received_bytes: u64, pub total_bytes: Option<u64> }
@@ -74,18 +72,17 @@ impl HttpRequest {
         #[cfg(feature = "acceptance")]
         if self.purpose.is_fixture() { validate_acceptance_market_url(&self.url)?; }
         let url = reqwest::Url::parse(&self.url).map_err(|_| Error::invalid("HTTP URL"))?; validate_url(self.purpose, &url, false)?;
-        let max = match (self.purpose, self.target.is_some()) { (HttpPurpose::Update, true) => 512 * 1024 * 1024, (HttpPurpose::Update, false) => 64 * 1024, (_, true) => 2 * 1024 * 1024, (_, false) => METADATA_LIMIT };
+        let max = if self.target.is_some() { 2 * 1024 * 1024 } else { METADATA_LIMIT };
         if self.max_bytes == 0 || self.max_bytes > max || self.timeout_ms == 0 || self.timeout_ms > 900_000 || self.expected_size.is_some_and(|size| size == 0 || size > self.max_bytes as u64) { return Err(Error::invalid("HTTP request limits")); }
         match (&self.target, &self.target_parent) {
             (Some(target), Some(parent)) => {
                 validate_path(target)?;
                 if parent.uid != unsafe { libc::getuid() } || parent.mode & 0o077 != 0 || parent.mode & libc::S_IFMT as u32 != libc::S_IFDIR as u32 || self.expected_size.is_none() { return Err(Error::invalid("HTTP target parent identity")); }
-                if self.purpose.is_market() && !url.path().ends_with(".ocplugin") { return Err(Error::invalid("market archive URL")); }
-                if self.purpose == HttpPurpose::Update && !url.path().ends_with(".zip") { return Err(Error::invalid("update archive URL")); }
+                if !url.path().ends_with(".ocplugin") { return Err(Error::invalid("market archive URL")); }
             }
             (None, None) => {
                 let expected = match self.purpose {
-                    HttpPurpose::Marketplace => format!("{MARKET_BASE}catalog.json"), HttpPurpose::Update => format!("{RELEASE_BASE}latest/download/latest.json"),
+                    HttpPurpose::Marketplace => format!("{MARKET_BASE}catalog.json"),
                     #[cfg(feature = "acceptance")]
                     HttpPurpose::AcceptanceMarketplace => { if !url.path().ends_with("/catalog.json") { return Err(Error::invalid("acceptance catalog filename")); } url.to_string() }
                 };
@@ -95,18 +92,18 @@ impl HttpRequest {
         }
         if let Some(budget) = &self.disk_budget {
             validate_path(&budget.root)?;
-            if !self.purpose.is_market() || budget.max_bytes != MARKET_DISK || !self.target.as_ref().is_some_and(|target| target.starts_with(&budget.root) && target != &budget.root) { return Err(Error::invalid("HTTP market disk budget")); }
-        } else if self.purpose.is_market() && self.target.is_some() { return Err(Error::invalid("market downloads require installation disk budget")); }
+            if budget.max_bytes != MARKET_DISK || !self.target.as_ref().is_some_and(|target| target.starts_with(&budget.root) && target != &budget.root) { return Err(Error::invalid("HTTP market disk budget")); }
+        } else if self.target.is_some() { return Err(Error::invalid("market downloads require installation disk budget")); }
         Ok(())
     }
 }
 fn validate_path(path: &Path) -> Result<()> {
     if !path.is_absolute() || path.as_os_str().as_bytes().len() > 4096 || path.components().any(|c| matches!(c, Component::ParentDir | Component::CurDir)) || path.as_os_str().as_bytes().contains(&0) { return Err(Error::invalid("HTTP private target path")); } Ok(())
 }
-fn validate_url(purpose: HttpPurpose, url: &reqwest::Url, redirected: bool) -> Result<()> {
+fn validate_url(purpose: HttpPurpose, url: &reqwest::Url, _redirected: bool) -> Result<()> {
     #[cfg(feature = "acceptance")]
     if purpose == HttpPurpose::AcceptanceMarketplace {
-        if redirected { return Err(Error::invalid("acceptance feed redirect")); }
+        if _redirected { return Err(Error::invalid("acceptance feed redirect")); }
         return validate_acceptance_market_url(url.as_str());
     }
     if url.as_str().len() > 8192 || url.scheme() != "https" || url.as_str().trim_start_matches("https://").split('/').next().is_some_and(|authority| authority.contains('@')) || url.fragment().is_some() || url.port().is_some_and(|port| port != 443) { return Err(Error::invalid("HTTPS source")); }
@@ -116,21 +113,6 @@ fn validate_url(purpose: HttpPurpose, url: &reqwest::Url, redirected: bool) -> R
         HttpPurpose::Marketplace => {
             let name = url.as_str().strip_prefix(MARKET_BASE).ok_or_else(|| Error::invalid("official market URL"))?;
             if url.query().is_some() || name.is_empty() || name.len() > 128 || name.contains("..") || !name.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte)) { return Err(Error::invalid("official market filename")); }
-        }
-        HttpPurpose::Update => {
-            if redirected {
-                if !matches!(url.host_str(), Some("github.com" | "release-assets.githubusercontent.com" | "objects.githubusercontent.com")) { return Err(Error::invalid("update redirect host")); }
-                if url.host_str() == Some("github.com") && !url.path().starts_with("/Zixiaobowen/oc-chan/releases/") { return Err(Error::invalid("update redirect repository")); }
-            } else {
-                if url.query().is_some() { return Err(Error::invalid("update initial query")); }
-                let suffix = url.as_str().strip_prefix(RELEASE_BASE).ok_or_else(|| Error::invalid("official update repository"))?;
-                if suffix != "latest/download/latest.json" {
-                    let path = suffix.strip_prefix("download/v").ok_or_else(|| Error::invalid("update asset path"))?;
-                    let (version, name) = path.split_once('/').ok_or_else(|| Error::invalid("update asset version"))?;
-                    let parsed = semver::Version::parse(version).map_err(|_| Error::invalid("update asset version"))?;
-                    if version.len() > 64 || !parsed.pre.is_empty() || !parsed.build.is_empty() || parsed.to_string() != version || name != format!("OC-Chan-{version}-mac-arm64.zip") { return Err(Error::invalid("stable update asset")); }
-                }
-            }
         }
     }
     Ok(())
@@ -152,15 +134,15 @@ pub(crate) fn validate_acceptance_market_url(value: &str) -> Result<()> {
 enum Frame {
     Progress { v: u8, received_bytes: u64, total_bytes: Option<u64> },
     Data { v: u8, seq: u64, data: String },
-    Complete { v: u8, bytes: u64, sha256: String, sha512: String, file_identity: Option<FileIdentity> },
+    Complete { v: u8, bytes: u64, sha256: String, file_identity: Option<FileIdentity> },
     Failure { v: u8, error: Error },
 }
 struct Parser {
     request: HttpRequest, progress: Option<Progress>, line: Vec<u8>, body: Vec<u8>, sequence: u64,
-    transferred: u64, hash256: Sha256, hash512: Sha512, terminal: Option<Result<HttpResponse>>,
+    transferred: u64, hash256: Sha256, terminal: Option<Result<HttpResponse>>,
 }
 impl Parser {
-    fn new(request: HttpRequest, progress: Option<Progress>) -> Self { Self { request, progress, line: Vec::new(), body: Vec::new(), sequence: 0, transferred: 0, hash256: Sha256::new(), hash512: Sha512::new(), terminal: None } }
+    fn new(request: HttpRequest, progress: Option<Progress>) -> Self { Self { request, progress, line: Vec::new(), body: Vec::new(), sequence: 0, transferred: 0, hash256: Sha256::new(), terminal: None } }
     fn push(&mut self, mut bytes: &[u8]) -> Result<()> {
         while !bytes.is_empty() {
             if self.terminal.is_some() { return Err(Error::new("OC_HTTP_PROTOCOL", "Output after HTTP terminal result")); }
@@ -188,18 +170,18 @@ impl Parser {
                 let decoded = STANDARD.decode(&data).map_err(|_| Error::new("OC_HTTP_PROTOCOL", "Invalid HTTP chunk encoding"))?;
                 if decoded.is_empty() || decoded.len() > CHUNK || decoded.len() > self.request.max_bytes.saturating_sub(self.body.len()) { return Err(Error::limit("HTTP metadata", self.request.max_bytes, self.body.len() + decoded.len())); }
                 if self.body.capacity() == 0 { self.body.reserve_exact(self.request.max_bytes); }
-                self.body.extend_from_slice(&decoded); self.hash256.update(&decoded); self.hash512.update(&decoded); self.sequence += 1;
+                self.body.extend_from_slice(&decoded); self.hash256.update(&decoded); self.sequence += 1;
             }
-            Frame::Complete { v: VERSION, bytes, sha256, sha512, file_identity } => {
+            Frame::Complete { v: VERSION, bytes, sha256, file_identity } => {
                 if bytes > self.request.max_bytes as u64 || bytes < self.transferred || self.request.expected_size.is_some_and(|expected| expected != bytes)
-                    || !oc_plugin_sdk::valid_digest(&sha256) || STANDARD.decode(&sha512).map_or(true, |digest| digest.len() != 64 || STANDARD.encode(&digest) != sha512) { return Err(Error::new("OC_HTTP_PROTOCOL", "Invalid HTTP completion")); }
+                    || !oc_plugin_sdk::valid_digest(&sha256) { return Err(Error::new("OC_HTTP_PROTOCOL", "Invalid HTTP completion")); }
                 if self.request.target.is_some() {
                     let identity = file_identity.as_ref().ok_or_else(|| Error::new("OC_HTTP_PROTOCOL", "Missing HTTP target identity"))?;
                     if !self.body.is_empty() || identity.size != bytes || identity.uid != unsafe { libc::getuid() } || identity.nlink != 1 || identity.mode & 0o077 != 0 || identity.mode & libc::S_IFMT as u32 != libc::S_IFREG as u32 { return Err(Error::new("OC_HTTP_PROTOCOL", "Invalid HTTP target identity")); }
-                } else if file_identity.is_some() || bytes != self.body.len() as u64 || sha256 != format!("{:x}", self.hash256.clone().finalize()) || sha512 != STANDARD.encode(self.hash512.clone().finalize()) {
+                } else if file_identity.is_some() || bytes != self.body.len() as u64 || sha256 != format!("{:x}", self.hash256.clone().finalize()) {
                     return Err(Error::new("OC_HTTP_PROTOCOL", "HTTP metadata digest mismatch"));
                 }
-                self.terminal = Some(Ok(HttpResponse { bytes, body: std::mem::take(&mut self.body), sha256, sha512, file_identity }));
+                self.terminal = Some(Ok(HttpResponse { bytes, body: std::mem::take(&mut self.body), sha256, file_identity }));
             }
             Frame::Failure { v: VERSION, error } => {
                 if error.message.len() > 1024 || error.code.len() > 64 || error.causes.len() > 16 { return Err(Error::new("OC_HTTP_PROTOCOL", "Unbounded HTTP worker error")); }
@@ -233,7 +215,7 @@ pub fn run_worker() -> Result<()> {
         drop(runtime); result
     })();
     match result {
-        Ok(response) => emit(&mut output, Frame::Complete { v: VERSION, bytes: response.bytes, sha256: response.sha256, sha512: response.sha512, file_identity: response.file_identity }),
+        Ok(response) => emit(&mut output, Frame::Complete { v: VERSION, bytes: response.bytes, sha256: response.sha256, file_identity: response.file_identity }),
         Err(error) => emit(&mut output, Frame::Failure { v: VERSION, error }),
     }
 }
@@ -246,7 +228,7 @@ async fn fetch(request: HttpRequest, output: &mut impl Write) -> Result<HttpResp
         .connect_timeout(Duration::from_secs(10)).build().map_err(|_| Error::new("OC_HTTP_NETWORK", "HTTP client initialization failed"))?;
     let deadline = Instant::now() + Duration::from_millis(request.timeout_ms);
     let mut url = reqwest::Url::parse(&request.url).map_err(|_| Error::invalid("HTTP source"))?;
-    let redirects = if request.purpose == HttpPurpose::Update { 5 } else if request.purpose.is_fixture() { 0 } else { 3 };
+    let redirects = if request.purpose.is_fixture() { 0 } else { 3 };
     let mut response = None;
     for attempt in 0..=redirects {
         validate_url(request.purpose, &url, attempt > 0)?;
@@ -276,7 +258,7 @@ async fn fetch(request: HttpRequest, output: &mut impl Write) -> Result<HttpResp
     let mut target = match opening { Ok(target) => target, Err(error) => return if let Some(root) = budget { merge(Err(error), root.close()) } else { Err(error) } };
     let result = async {
         let mut stream = response.bytes_stream(); let mut received = 0u64; let mut sequence = 0u64;
-        let mut hash256 = Sha256::new(); let mut hash512 = Sha512::new(); let mut progress_at = Instant::now();
+        let mut hash256 = Sha256::new(); let mut progress_at = Instant::now();
         while let Some(chunk) = stream.next().await {
             let chunk = chunk.map_err(network_error)?;
             if Instant::now() >= deadline { return Err(Error::timeout("HTTP body")); }
@@ -288,13 +270,13 @@ async fn fetch(request: HttpRequest, output: &mut impl Write) -> Result<HttpResp
                 } else {
                     emit(output, Frame::Data { v: VERSION, seq: sequence, data: STANDARD.encode(part) })?; sequence += 1;
                 }
-                received += part.len() as u64; hash256.update(part); hash512.update(part);
+                received += part.len() as u64; hash256.update(part);
             }
             if progress_at.elapsed() >= Duration::from_millis(250) { emit(output, Frame::Progress { v: VERSION, received_bytes: received, total_bytes: declared.or(request.expected_size) })?; progress_at = Instant::now(); }
         }
         if declared.is_some_and(|size| size != received) || request.expected_size.is_some_and(|size| size != received) { return Err(Error::new("OC_HTTP_SIZE", "HTTP actual size mismatch")); }
         let file_identity = if let Some(target) = &target { Some(target.finish(received)?) } else { None };
-        Ok(HttpResponse { bytes: received, body: Vec::new(), sha256: format!("{:x}", hash256.finalize()), sha512: STANDARD.encode(hash512.finalize()), file_identity })
+        Ok(HttpResponse { bytes: received, body: Vec::new(), sha256: format!("{:x}", hash256.finalize()), file_identity })
     }.await;
     let result = if let Some(target) = target { merge(result, target.close()) } else { result };
     if let Some(root) = budget { merge(result, root.close()) } else { result }

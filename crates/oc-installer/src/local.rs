@@ -109,7 +109,7 @@ impl Session {
         let executable = &actual.executable;
         fsx::real_path(executable)?;
         ensure(executable.parent() == Some(self.authorization.request.bundle.join("Contents/MacOS").as_path()), "local child executable is outside the authorized bundle")?;
-        crate::signature::executable_name(executable.file_name().and_then(OsStr::to_str).ok_or_else(|| reject("invalid executable name"))?)?;
+        executable_name(executable.file_name().and_then(OsStr::to_str).ok_or_else(|| reject("invalid executable name"))?)?;
         let executable_metadata = fs::symlink_metadata(executable).context("inspect current child executable")?;
         ensure(executable_metadata.is_file() && executable_metadata.nlink() == 1 && executable_metadata.uid() == unsafe { libc::geteuid() }
             && executable_metadata.mode() & 0o7022 == 0 && executable_metadata.mode() & 0o100 != 0, "unsafe current child executable")?;
@@ -139,6 +139,10 @@ fn validate_shape(authorization: &LocalInstallAuthorization, directory: &Path, n
     let born = request.process.birth_seconds.checked_mul(1000).and_then(|seconds| seconds.checked_add(request.process.birth_fraction / 1000)).ok_or_else(|| reject("child birth time overflow"))?;
     ensure(born <= request.issued_at_ms && (authorization.installer.birth_seconds, authorization.installer.birth_fraction) <= (request.process.birth_seconds, request.process.birth_fraction), "local authorization predates its child or parent")?;
     ensure(request.process.pid != authorization.installer.pid, "local gate cannot authenticate itself as its child")
+}
+fn executable_name(name: &str) -> Result<()> {
+    ensure(!name.is_empty() && name.len() <= 255 && name != "." && name != ".."
+        && !name.contains('/') && !name.bytes().any(|c| c < 32 || c == 127), "invalid bundle executable name")
 }
 fn normal_path(path: &Path) -> Result<()> {
     let bytes = path.as_os_str().as_bytes();

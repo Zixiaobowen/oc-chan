@@ -89,11 +89,11 @@ OC Chan 只读观察上游 Agent 和任务，不执行定时任务、不终止 A
 
 推送到 `main` 后，GitHub Actions 自动构建，并在检查通过后发布 [预览 Release](https://github.com/Zixiaobowen/oc-chan/releases)，标签为 `preview-<运行编号>-<提交短 SHA>`。下载其中的 DMG 或 ZIP，使用 `SHA256SUMS.txt` 核对摘要；预览版不进入应用内稳定更新通道。[Build macOS 构建记录](https://github.com/Zixiaobowen/oc-chan/actions/workflows/build.yml)同时保留产物和验收证据，PR 只验证、不发布。具体步骤见[本地交付与手动升级](docs/distribution.md#本地交付与手动升级)。
 
-本地和预览版采用 ad-hoc 签名，不等于 Developer ID 签名或 Apple 公证。正式版使用与包版本一致的 `vX.Y.Z` 标签，并要求 Apple 签名与公证密钥；正式签名、公证及签名版本的原地更新仍待验收。应用内更新仅适用于具备 Developer ID 签名的安装版。详见[发布与更新条件](docs/distribution.md#应用内更新)。
+应用内更新改用 Sparkle 2.10.1，以 Ed25519 验证稳定版更新源与 ZIP，无需付费 Apple 开发者会员。本地和默认发布包采用 ad-hoc 签名；这不等于 Developer ID 签名或 Apple 公证，也不消除 Gatekeeper 或首次安装的用户批准。正式版使用与包版本一致的 `vX.Y.Z` 标签；真实更新安装仍需独立验收。详见[发布与更新条件](docs/distribution.md#应用内更新)。
 
 产品版本采用 `X.Y.Z`，以根 `Cargo.toml` 为准。GitHub Actions 的 **Prepare release** 入口选择 `patch`（修复）、`minor`（功能）或 `major`（重大版本），填写发布说明后自动创建版本 PR；PR 合并后，在 **Release stable** 输入相同版本，自动创建标签并触发正式构建。CI 校验 Cargo、npm 和锁文件版本一致，发布说明随版本保存，已有 Release 不覆盖。本地可用 `npm run version:check` 和 `npm run version:bump -- patch --notes-file /path/to/notes.md`。首次启用条件、失败处理及命令见[版本管理](docs/distribution.md#版本管理)。
 
-在设置的“应用更新”中，点击“发行说明与下载”可打开 GitHub Releases。开发和未签名版本会提示从该页面下载并手动安装。
+设置的“应用更新”显示更新状态和自动检查选项，下载、安装与重启由 Sparkle 标准界面负责；普通退出不会自动安装更新。“发行说明与下载”打开 GitHub Releases。开发与无头实例只探测更新，不启动安装界面。旧版 0.2.0 未内置 Sparkle，首次切换须手动安装新包。
 
 ## 开发
 

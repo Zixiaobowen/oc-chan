@@ -7,13 +7,14 @@ import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { buildPluginMarketRust } from './build-plugin-market-rust.mjs'
 import { generateRustLicenses } from './rust-dependencies.mjs'
+import { embedSparkle, ensureSparkleSDK, readSparkleConfig } from './sparkle-sdk.mjs'
 
 export const ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
 export const TARGET = ['aarch64', 'apple', 'darwin'].join('-')
 export const BUNDLE_ID = 'local.oc-chan.desktop'
 export const BUILD_RECORD = path.join(ROOT, 'release/gpui/build.json')
-const RESOURCE_FILES = ['oc-data-worker', 'oc-installer', 'tern-navigation/present-window', 'tern-navigation/plugin/plugin.toml', 'tern-navigation/plugin/window.luau']
-export const NATIVE_RESOURCES = ['oc-data-worker', 'oc-installer', 'tern-navigation/present-window']
+const RESOURCE_FILES = ['oc-data-worker', 'tern-navigation/present-window', 'tern-navigation/plugin/plugin.toml', 'tern-navigation/plugin/window.luau']
+export const NATIVE_RESOURCES = ['oc-data-worker', 'tern-navigation/present-window']
 export async function codeDirectoryHash(filename) {
   const { stderr } = await promisify(execFile)('/usr/bin/codesign', ['-d', '--verbose=4', filename], { timeout: 10_000, maxBuffer: 128 * 1024 })
   const hashes = [...stderr.matchAll(/^CDHash=([a-f0-9]{40,64})\r?$/gm)]
@@ -51,7 +52,7 @@ export function run(file, args, { cwd = ROOT, env = process.env } = {}) {
 }
 export function signingIdentity(env = process.env) {
   const value = env.APPLE_SIGNING_IDENTITY?.trim() || '-'
-  assert(value === '-' || /^Developer ID Application: .+ \([A-Z0-9]{10}\)$/.test(value), 'APPLE_SIGNING_IDENTITY must name an explicit Developer ID Application identity or "-"')
+  assert(value === '-', 'Sparkle builds use ad-hoc signing; APPLE_SIGNING_IDENTITY must be "-"')
   return value
 }
 export function buildEnvironment({ resourcesDir, targetDir, instance, sign = '-' }, original = process.env) {
@@ -71,14 +72,27 @@ export function developmentBundleLayout(instance, targetDir = path.join(instance
     identifier: `${BUNDLE_ID}.development.i${createHash('sha256').update(path.resolve(instance)).digest('hex').slice(0, 24)}` }
 }
 export async function bundleApplication({ application, binary, resourcesDir, identifier = BUNDLE_ID, version, sign, development = false, execute = run, env = process.env }) {
+  assert(sign === '-', 'Sparkle bundles require the ad-hoc signing policy')
   await mkdir(path.join(application, 'Contents/MacOS'), { recursive: true })
   await cp(resourcesDir, path.join(application, 'Contents/Resources'), { recursive: true, force: false, errorOnExist: true })
   await copyFile(binary, path.join(application, 'Contents/MacOS/oc-chan'), constants.COPYFILE_EXCL)
   await copyFile(path.join(ROOT, 'resources/brand/oc-chan.icns'), path.join(application, 'Contents/Resources/oc-chan.icns'), constants.COPYFILE_EXCL)
+  await embedSparkle(application)
+  const sparkle = readSparkleConfig()
+  let feed = sparkle.feedURL, publicKey = sparkle.publicKey
+  if (development && env.OC_CHAN_SPARKLE_TEST_FEED_URL) {
+    const url = new URL(env.OC_CHAN_SPARKLE_TEST_FEED_URL)
+    assert(url.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(url.hostname) && !url.username && !url.password && !/[<>&"']/.test(url.href), 'Acceptance feed must be a loopback HTTP URL')
+    assert(/^[A-Za-z0-9+/]{43}=$/.test(env.OC_CHAN_SPARKLE_TEST_PUBLIC_KEY ?? ''), 'Acceptance feed requires an explicit Ed25519 public key')
+    feed = url.href; publicKey = env.OC_CHAN_SPARKLE_TEST_PUBLIC_KEY
+  }
+  const updaterPlist = `<key>SUFeedURL</key><string>${feed}</string><key>SUPublicEDKey</key><string>${publicKey}</string><key>SUVerifyUpdateBeforeExtraction</key><true/><key>SURequireSignedFeed</key><true/><key>SUSignedFeedFailureExpirationInterval</key><integer>0</integer><key>SUEnableSystemProfiling</key><false/><key>SUEnableJavaScript</key><false/><key>SUShowReleaseNotes</key><false/><key>SUEnableAutomaticChecks</key><${development ? 'false' : 'true'}/><key>SUAutomaticallyUpdate</key><false/>${development ? '<key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>' : ''}`
   assert(/^[A-Za-z0-9.-]+$/.test(identifier) && /^[0-9A-Za-z.+-]+$/.test(version), 'Invalid bundle identity')
-  const plist = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>${identifier}</string><key>CFBundleName</key><string>OC Chan</string><key>CFBundleDisplayName</key><string>OC Chan</string><key>CFBundleExecutable</key><string>oc-chan</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>${version}</string><key>CFBundleVersion</key><string>${version}</string><key>CFBundleIconFile</key><string>oc-chan.icns</string><key>LSMinimumSystemVersion</key><string>13.0</string><key>NSHighResolutionCapable</key><true/><key>LSUIElement</key><${development ? 'true' : 'false'}/><key>NSPrincipalClass</key><string>NSApplication</string></dict></plist>\n`
+  const plist = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>${identifier}</string><key>CFBundleName</key><string>OC Chan</string><key>CFBundleDisplayName</key><string>OC Chan</string><key>CFBundleExecutable</key><string>oc-chan</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>${version}</string><key>CFBundleVersion</key><string>${version}</string><key>CFBundleIconFile</key><string>oc-chan.icns</string><key>LSMinimumSystemVersion</key><string>13.0</string><key>NSHighResolutionCapable</key><true/><key>LSUIElement</key><${development ? 'true' : 'false'}/><key>NSPrincipalClass</key><string>NSApplication</string>${updaterPlist}</dict></plist>\n`
   await writeFile(path.join(application, 'Contents/Info.plist'), plist, { flag: 'wx', mode: 0o600 })
-  await execute('/usr/bin/codesign', ['--force', '--sign', sign, '--options', 'runtime', ...(sign === '-' ? [] : ['--timestamp']), application], { cwd: ROOT, env })
+  // Ad-hoc apps cannot use hardened library validation with the upstream signed framework.
+  // Do not weaken Gatekeeper or add a library-validation entitlement.
+  await execute('/usr/bin/codesign', ['--force', '--sign', '-', application], { cwd: ROOT, env })
 }
 export async function withBuildLock(resourcesDir, work) {
   const filename = path.join(path.dirname(resourcesDir), '.build-app.lock'); await mkdir(path.dirname(filename), { recursive: true, mode: 0o700 })
@@ -125,25 +139,26 @@ export async function buildApplication(options = {}) {
   const targetDir = path.resolve(options.targetDir ?? (instance ? path.join(instance, 'cargo') : path.join(ROOT, 'release/gpui/cargo')))
   const resourcesDir = path.resolve(options.resourcesDir ?? (instance ? path.join(instance, 'resources') : path.join(ROOT, 'out/host-resources')))
   for (const directory of [targetDir, resourcesDir]) assert(instance ? within(instance, directory) : within(path.join(ROOT, 'out'), directory) || within(path.join(ROOT, 'release/gpui'), directory), 'Build output must stay inside its owned output tree')
-  const sign = mode === 'development' ? '-' : options.sign ?? signingIdentity(); assert(sign === '-' || /^Developer ID Application: /.test(sign), 'Invalid explicit signing identity')
+  const sign = mode === 'development' ? '-' : options.sign ?? signingIdentity(); assert(sign === '-', 'Sparkle builds require ad-hoc signing')
   const execute = options.run ?? run
+  const sparkleSDK = await ensureSparkleSDK()
   return withBuildLock(resourcesDir, async () => {
     let primaryFailure
     const buildId = randomUUID(), development = instance ? developmentBundleLayout(instance, targetDir) : undefined
-    const env = buildEnvironment({ resourcesDir, targetDir, instance, sign })
+    const env = { ...buildEnvironment({ resourcesDir, targetDir, instance, sign }), SPARKLE_FRAMEWORK_DIR: sparkleSDK.directory }
     const packageInfo = await boundedJson(path.join(ROOT, 'package.json')); assert(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(packageInfo.version), 'Invalid package release version')
     await mkdir(path.dirname(resourcesDir), { recursive: true, mode: 0o700 }); const staged = await mkdtemp(path.join(path.dirname(resourcesDir), '.host-resources-'))
     let published = false
     try {
       await execute('cargo', ['build', '--release', '--locked', '--target', TARGET, '--target-dir', targetDir,
         ...(mode === 'development' ? ['--features', 'oc-core/acceptance'] : []),
-        '-p', 'oc-core', '--bin', 'oc-data-worker', '-p', 'oc-installer', '--bin', 'oc-installer', '-p', 'oc-system-monitor', '--bin', 'collector'], { cwd: ROOT, env })
+        '-p', 'oc-core', '--bin', 'oc-data-worker', '-p', 'oc-system-monitor', '--bin', 'collector'], { cwd: ROOT, env })
       const nativeRoot = path.join(targetDir, TARGET, 'release')
-      for (const binary of ['oc-data-worker', 'oc-installer']) await copyFile(path.join(nativeRoot, binary), path.join(staged, binary), constants.COPYFILE_EXCL)
+      await copyFile(path.join(nativeRoot, 'oc-data-worker'), path.join(staged, 'oc-data-worker'), constants.COPYFILE_EXCL)
       await mkdir(path.join(staged, 'tern-navigation/plugin'), { recursive: true })
       await execute('/usr/bin/xcrun', ['swiftc', '-O', '-target', 'arm64-apple-macos13.0', path.join(ROOT, 'native/tern-present.swift'), '-o', path.join(staged, 'tern-navigation/present-window')], { cwd: ROOT, env })
       for (const filename of ['plugin.toml', 'window.luau']) await copyFile(path.join(ROOT, 'resources/tern-navigation/plugin', filename), path.join(staged, 'tern-navigation/plugin', filename), constants.COPYFILE_EXCL)
-      for (const binary of ['oc-data-worker', 'oc-installer', 'tern-navigation/present-window']) {
+      for (const binary of NATIVE_RESOURCES) {
         await execute('/usr/bin/codesign', ['--force', '--sign', sign, '--options', 'runtime', ...(sign === '-' ? [] : ['--timestamp']), path.join(staged, binary)], { cwd: ROOT, env })
       }
       await buildPluginMarketRust({ collector: path.join(nativeRoot, 'collector'), manifest: path.join(ROOT, 'plugins/system-monitor/manifest.json'), outDir: path.join(staged, 'plugin-market'), sign })

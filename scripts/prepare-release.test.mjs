@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { prepareRelease } from './prepare-release.mjs'
-import { stableMetadata } from './dist.mjs'
+import { appcast, publicKey, privateSeed } from './sparkle-test-fixture.mjs'
 import { publicationInfo, releaseInfo, releaseRepository, requireReleaseEnvironment, signingSecrets } from './release-config.mjs'
 
 const previewEnv = { GITHUB_REPOSITORY: releaseRepository, GITHUB_EVENT_NAME: 'push', GITHUB_REF: 'refs/heads/main', GITHUB_SHA: `abcdef0${'1'.repeat(33)}`, GITHUB_RUN_NUMBER: '42' }
@@ -14,32 +14,27 @@ async function fixture(t, version = '0.2.0', preview = false) {
   const root = await mkdtemp(join(tmpdir(), 'oc-chan-release-')); t.after(() => rm(root, { recursive: true, force: true }))
   const directory = join(root, 'arm64'); await mkdir(directory)
   const env = preview ? { ...previewEnv } : { GITHUB_REPOSITORY: releaseRepository, GITHUB_EVENT_NAME: 'push', GITHUB_REF: `refs/tags/v${version}` }
-  const info = publicationInfo(version, env), options = { version, tag: info.tag, env, inputs: { arm64: directory }, output: join(root, 'output'), info }, sums = []
+  const info = publicationInfo(version, env), options = { version, tag: info.tag, env, inputs: { arm64: directory }, output: join(root, 'output'), info, publicKey }, sums = []
   const manifest = { schema: 2, arch: 'arm64', version, artifacts: {} }
   for (const extension of ['zip', 'dmg']) {
     const name = `OC-Chan-${version}-mac-arm64.${extension}`, content = Buffer.from(`release unit fixture ${version} ${extension}`)
     await writeFile(join(directory, name), content)
     manifest.artifacts[extension] = { path: `/build/runner/release/${name}`, bytes: content.length, digest: createHash(extension === 'zip' ? 'sha512' : 'sha256').update(content).digest(extension === 'zip' ? 'base64' : 'hex') }
     sums.push(`${createHash('sha256').update(content).digest('hex')}  ./${name}`)
-    if (extension === 'zip') await writeFile(join(directory, info.metadataName), JSON.stringify(stableMetadata(version, { bytes: content.length, digest: createHash('sha512').update(content).digest('base64') })))
+    if (extension === 'zip' && !preview) await writeFile(join(directory, info.metadataName), appcast(content, version))
   }
   await writeFile(join(directory, 'SHA256SUMS.txt'), `${sums.join('\n')}\n`)
   await writeFile(join(directory, 'package-manifest-arm64.json'), JSON.stringify(manifest))
   return options
 }
-async function changeMetadata(options, change) {
-  const filename = join(options.inputs.arm64, options.info.metadataName), metadata = JSON.parse(await readFile(filename, 'utf8'))
-  change(metadata); await writeFile(filename, JSON.stringify(metadata))
-}
 async function changeManifest(options, change) {
   const filename = join(options.inputs.arm64, 'package-manifest-arm64.json'), manifest = JSON.parse(await readFile(filename, 'utf8'))
   change(manifest); await writeFile(filename, JSON.stringify(manifest))
 }
-test('publishes one schema2 ZIP declaration and both bounded installer attachments', async t => {
-  const options = await fixture(t), metadata = await prepareRelease(options)
-  assert.deepEqual(metadata, JSON.parse(await readFile(join(options.output, 'latest.json'), 'utf8')))
-  assert.deepEqual(Object.keys(metadata).sort(), ['assets', 'schema', 'version'])
-  assert.equal(metadata.assets.length, 1); assert.equal(metadata.assets[0].target, ['darwin', 'aarch64'].join('-'))
+test('preserves the signed appcast and both bounded installer attachments', async t => {
+  const options = await fixture(t), result = await prepareRelease(options)
+  assert.deepEqual(await readFile(join(options.output, 'appcast.xml')), await readFile(join(options.inputs.arm64, 'appcast.xml')))
+  assert.equal(result.assets.length, 2)
   for (const extension of ['zip', 'dmg']) {
     const name = `OC-Chan-${options.version}-mac-arm64.${extension}`
     assert.deepEqual(await readFile(join(options.output, name)), await readFile(join(options.inputs.arm64, name)))
@@ -58,30 +53,20 @@ test('preview copies exactly three verified attachments without stable update me
     assert.deepEqual(content, await readFile(join(options.inputs.arm64, name)))
     assert.ok(checksums.includes(`${createHash('sha256').update(content).digest('hex')}  ${name}\n`))
   }
-  await assert.rejects(stat(join(options.output, 'latest.json')), { code: 'ENOENT' })
+  await assert.rejects(stat(join(options.output, 'appcast.xml')), { code: 'ENOENT' })
   await assert.rejects(prepareRelease(options), { code: 'EEXIST' })
 })
 const invalidCases = [
-  ['wrong version', options => changeMetadata(options, data => { data.version = '9.9.9' }), /version/],
-  ['unknown root field', options => changeMetadata(options, data => { data.files = [] }), /fields/],
-  ['unknown asset field', options => changeMetadata(options, data => { data.assets[0].url = 'https://example.invalid' }), /strict/],
-  ['wrong schema', options => changeMetadata(options, data => { data.schema = 1 }), /schema2/],
-  ['wrong architecture', options => changeMetadata(options, data => { data.assets[0].target = 'windows-x86_64' }), /target/],
-  ['wrong SHA512', options => changeMetadata(options, data => { data.assets[0].sha512 = 'incorrect' }), /SHA512 mismatch/],
-  ['wrong size', options => changeMetadata(options, data => { data.assets[0].size++ }), /size or SHA512/],
   ['missing ZIP', options => rm(join(options.inputs.arm64, `OC-Chan-${options.version}-mac-arm64.zip`)), /ENOENT/],
-  ['missing metadata', options => rm(join(options.inputs.arm64, 'latest.json')), /ENOENT/],
-  ['missing metadata asset', options => changeMetadata(options, data => { data.assets.pop() }), /exactly one/],
-  ['duplicate metadata asset', options => changeMetadata(options, data => { data.assets.push(data.assets[0]) }), /exactly one/],
-  ['path traversal', options => changeMetadata(options, data => { data.assets[0].name = '../unexpected.zip' }), /filename/],
+  ['missing appcast', options => rm(join(options.inputs.arm64, 'appcast.xml')), /ENOENT/],
   ['wrong tag', async options => { options.tag = 'v9.9.9' }, /must match package version/],
   ['unsupported architecture input', async options => { options.inputs.x64 = options.inputs.arm64 }, /exactly the arm64/],
   ['wrong SHA256', async options => { const filename = join(options.inputs.arm64, 'SHA256SUMS.txt'); await writeFile(filename, (await readFile(filename, 'utf8')).replace(/^[a-f0-9]{64}/, '0'.repeat(64))) }, /SHA256 mismatch/],
   ['missing checksum entry', async options => { const filename = join(options.inputs.arm64, 'SHA256SUMS.txt'); await writeFile(filename, `${(await readFile(filename, 'utf8')).split('\n')[0]}\n`) }, /Missing SHA256SUMS/],
   ['duplicate checksum entry', async options => { const filename = join(options.inputs.arm64, 'SHA256SUMS.txt'), text = await readFile(filename, 'utf8'); await writeFile(filename, text + text.split('\n')[0] + '\n') }, /duplicate SHA256SUMS/],
   ['oversized checksums', options => writeFile(join(options.inputs.arm64, 'SHA256SUMS.txt'), ' '.repeat(64 * 1024 + 1)), /budget/],
-  ['oversized metadata', options => writeFile(join(options.inputs.arm64, 'latest.json'), ' '.repeat(64 * 1024 + 1)), /budget/],
-  ['oversized sparse asset', options => truncate(join(options.inputs.arm64, `OC-Chan-${options.version}-mac-arm64.zip`), 512 * 1024 * 1024 + 1), /512MiB/],
+  ['oversized appcast', options => writeFile(join(options.inputs.arm64, 'appcast.xml'), ' '.repeat(256 * 1024 + 1)), /budget/],
+  ['oversized sparse asset', options => truncate(join(options.inputs.arm64, `OC-Chan-${options.version}-mac-arm64.zip`), 512 * 1024 * 1024 + 1), /budget|512MiB/],
   ['oversized sparse DMG', options => truncate(join(options.inputs.arm64, `OC-Chan-${options.version}-mac-arm64.dmg`), 512 * 1024 * 1024 + 1), /512MiB/],
   ['symlink asset', async options => { const filename = join(options.inputs.arm64, `OC-Chan-${options.version}-mac-arm64.zip`); await rm(filename); await symlink(`OC-Chan-${options.version}-mac-arm64.dmg`, filename) }, /ELOOP/]
 ]
@@ -117,24 +102,18 @@ for (const preview of [false, true]) {
     await assert.rejects(stat(options.output), { code: 'ENOENT' })
   })
 }
-test('preview still rejects tampered metadata SHA512 before creating output', async t => {
-  const options = await fixture(t, '0.2.0', true)
-  await changeMetadata(options, data => { data.assets[0].sha512 = 'incorrect' })
-  await assert.rejects(prepareRelease(options), /SHA512 mismatch/)
-  await assert.rejects(stat(options.output), { code: 'ENOENT' })
-})
-test('only strict stable semantic versions produce latest.json', () => {
-  assert.deepEqual(releaseInfo('1.2.3'), { version: '1.2.3', tag: 'v1.2.3', metadataName: 'latest.json' })
+test('only strict stable semantic versions produce appcast.xml', () => {
+  assert.deepEqual(releaseInfo('1.2.3'), { version: '1.2.3', tag: 'v1.2.3', metadataName: 'appcast.xml' })
   for (const version of ['../bad', '1.2', 'v1.2.3', '01.2.3', '1.2.3-beta.2', '1.2.3+build', '18446744073709551616.0.0']) assert.throws(() => releaseInfo(version), /strict stable/)
 })
-test('signed release preflight binds the tag, exact Developer ID team and all signing secrets', () => {
-  const info = releaseInfo('1.2.3'), env = { GITHUB_EVENT_NAME: 'push', GITHUB_REF: 'refs/tags/v1.2.3', ...Object.fromEntries(signingSecrets.map(name => [name, 'present'])), APPLE_TEAM_ID: 'ABCDE12345', APPLE_SIGNING_IDENTITY: 'Developer ID Application: Fixture (ABCDE12345)' }
-  assert.doesNotThrow(() => requireReleaseEnvironment(info, env))
-  for (const name of signingSecrets) assert.throws(() => requireReleaseEnvironment(info, { ...env, [name]: '' }), new RegExp(name))
-  assert.throws(() => requireReleaseEnvironment(info, { ...env, APPLE_SIGNING_IDENTITY: 'Developer ID Application: Other (AAAAA99999)' }), /APPLE_SIGNING_IDENTITY/)
-  assert.doesNotThrow(() => requireReleaseEnvironment(info, { ...env, GITHUB_EVENT_NAME: 'workflow_dispatch' }))
-  assert.throws(() => requireReleaseEnvironment(info, { ...env, GITHUB_EVENT_NAME: 'pull_request' }), /tag push\/dispatch/)
-  assert.throws(() => requireReleaseEnvironment(info, { ...env, GITHUB_REF: 'refs/tags/v1.2.4' }), /tag push\/dispatch/)
+test('signed release preflight binds the tag and matching Ed25519 seed', () => {
+  const info = releaseInfo('1.2.3'), env = { GITHUB_EVENT_NAME: 'push', GITHUB_REF: 'refs/tags/v1.2.3', SPARKLE_PRIVATE_KEY: privateSeed }
+  assert.doesNotThrow(() => requireReleaseEnvironment(info, env, publicKey))
+  for (const name of signingSecrets) assert.throws(() => requireReleaseEnvironment(info, { ...env, [name]: '' }, publicKey), new RegExp(name))
+  assert.throws(() => requireReleaseEnvironment(info, { ...env, SPARKLE_PRIVATE_KEY: Buffer.alloc(32).toString('base64') }, publicKey), /does not match/)
+  assert.doesNotThrow(() => requireReleaseEnvironment(info, { ...env, GITHUB_EVENT_NAME: 'workflow_dispatch' }, publicKey))
+  assert.throws(() => requireReleaseEnvironment(info, { ...env, GITHUB_EVENT_NAME: 'pull_request' }, publicKey), /tag push\/dispatch/)
+  assert.throws(() => requireReleaseEnvironment(info, { ...env, GITHUB_REF: 'refs/tags/v1.2.4' }, publicKey), /tag push\/dispatch/)
 })
 
 test('publication channels bind exact source, commit and canonical bounded run number', () => {

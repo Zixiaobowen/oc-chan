@@ -8,7 +8,7 @@ import test from 'node:test'
 import { publishRelease } from './publish-release.mjs'
 import { publicationInfo, releaseRepository } from './release-config.mjs'
 import { prepareRelease } from './prepare-release.mjs'
-import { stableMetadata } from './dist.mjs'
+import { appcast, publicKey } from './sparkle-test-fixture.mjs'
 
 const fixtureToken = ['isolated', 'test', 'token'].join('-')
 const previewEnv = { GITHUB_REPOSITORY: releaseRepository, GITHUB_EVENT_NAME: 'push', GITHUB_REF: 'refs/heads/main', GITHUB_SHA: `abcdef0${'1'.repeat(33)}`, GITHUB_RUN_NUMBER: '42' }
@@ -142,11 +142,11 @@ async function fixture(t, version = '1.2.3', serverOptions = {}, previewEvent) {
     const sha512 = createHash('sha512').update(content).digest('base64')
     sums.push(`${sha256}  ${name}\n`)
     manifest.artifacts[extension] = { path: name, bytes: content.length, digest: extension === 'zip' ? sha512 : sha256 }
-    if (extension === 'zip') await writeFile(join(input, info.metadataName), JSON.stringify(stableMetadata(version, { bytes: content.length, digest: sha512 })))
+    if (extension === 'zip' && !info.prerelease) await writeFile(join(input, info.metadataName), appcast(content, version))
   }
   await writeFile(join(input, 'SHA256SUMS.txt'), sums.join(''))
   await writeFile(join(input, 'package-manifest-arm64.json'), JSON.stringify(manifest))
-  await prepareRelease({ version, tag: info.tag, env, inputs: { arm64: input }, output: directory })
+  await prepareRelease({ version, tag: info.tag, env, inputs: { arm64: input }, output: directory, publicKey })
   const sizes = new Map(), digests = new Map()
   for (const name of names) {
     const content = await readFile(join(directory, name))
@@ -156,17 +156,18 @@ async function fixture(t, version = '1.2.3', serverOptions = {}, previewEvent) {
   const remote = github({ tags: info.prerelease ? [] : [info.tag], ...serverOptions })
   const notesFile = join(root, 'release-notes.md')
   await writeFile(notesFile, `# OC Chan ${version}\n\n修复更新检查；保留用户的设置。\n`)
-  const options = { directory, version, tag: info.tag, notesFile, env }
+  const options = { directory, version, tag: info.tag, notesFile, env, publicKey }
   return { remote, options, info, sizes, digests, publish: () => publishRelease(options, remote.run) }
 }
 
-test('stable publication uses reviewed notes verbatim, including shell metacharacters', async t => {
+test('stable publication preserves reviewed notes and explains Ed25519 versus Gatekeeper', async t => {
   const f = await fixture(t)
   const notes = '# Release\n\n修复路径处理：`$(touch should-not-exist)` 和 $HOME。\n'
   await writeFile(f.options.notesFile, notes)
   f.options.env.GITHUB_EVENT_NAME = 'workflow_dispatch'
   await f.publish()
-  assert.equal(f.remote.releases.get(f.info.tag).body, notes)
+  assert.ok(f.remote.releases.get(f.info.tag).body.startsWith(notes))
+  assert.match(f.remote.releases.get(f.info.tag).body, /Ed25519.*Gatekeeper/s)
   assertPublic(f, f.info.tag)
 })
 
@@ -187,7 +188,7 @@ for (const preview of [false, true]) {
       const path = join(directory, 'OC-Chan-1.2.3-mac-arm64.zip'), content = await readFile(path)
       content[0] ^= 1
       await writeFile(path, content)
-    }, /SHA256 mismatch/],
+    }, /SHA256 mismatch|Ed25519 signature mismatch/],
     ['wrong checksum', async directory => {
       const path = join(directory, 'SHA256SUMS.txt')
       await writeFile(path, (await readFile(path, 'utf8')).replace(/^[a-f0-9]{64}/, '0'.repeat(64)))
@@ -201,7 +202,7 @@ for (const preview of [false, true]) {
       await writeFile(path, text + text.split('\n')[0] + '\n')
     }, /duplicate SHA256SUMS/],
     ['oversized checksums', directory => writeFile(join(directory, 'SHA256SUMS.txt'), ' '.repeat(64 * 1024 + 1)), /budget/],
-    ...['zip', 'dmg'].map(extension => [`oversized ${extension}`, directory => truncate(join(directory, `OC-Chan-1.2.3-mac-arm64.${extension}`), 512 * 1024 * 1024 + 1), /512MiB/]),
+    ...['zip', 'dmg'].map(extension => [`oversized ${extension}`, directory => truncate(join(directory, `OC-Chan-1.2.3-mac-arm64.${extension}`), 512 * 1024 * 1024 + 1), /512MiB|budget/]),
   ]) test(`${preview ? 'preview' : 'stable'} rejects ${name} before any external call`, async t => {
     const f = await fixture(t, '1.2.3', {}, preview ? 'push' : undefined)
     await mutate(f.options.directory)
@@ -211,28 +212,16 @@ for (const preview of [false, true]) {
   })
 }
 
-for (const [name, mutate, expected] of [
-  ['schema', metadata => { metadata.schema = 1 }, /schema2/],
-  ['version', metadata => { metadata.version = '9.9.9' }, /version/],
-  ['root field', metadata => { metadata.extra = true }, /fields/],
-  ['asset field', metadata => { metadata.assets[0].url = 'https://example.invalid' }, /strict/],
-  ['target', metadata => { metadata.assets[0].target = 'darwin-x86_64' }, /target/],
-  ['filename', metadata => { metadata.assets[0].name = '../other.zip' }, /filename/],
-  ['missing asset', metadata => { metadata.assets = [] }, /exactly one/],
-  ['SHA512', metadata => { metadata.assets[0].sha512 = 'incorrect' }, /SHA512 mismatch/],
-  ['size', metadata => { metadata.assets[0].size += 1 }, /size or SHA512/],
-]) test(`stable rejects invalid latest.json ${name} before any external call`, async t => {
-  const f = await fixture(t), path = join(f.options.directory, 'latest.json')
-  const metadata = JSON.parse(await readFile(path, 'utf8'))
-  mutate(metadata)
-  await writeFile(path, JSON.stringify(metadata))
-  await assert.rejects(f.publish(), expected)
+test('stable rejects tampered appcast before any external call', async t => {
+  const f = await fixture(t), path = join(f.options.directory, 'appcast.xml')
+  await writeFile(path, (await readFile(path, 'utf8')).replace('更新说明', '篡改说明'))
+  await assert.rejects(f.publish(), /signature/)
   assert.deepEqual(f.remote.events, [])
 })
 
-test('stable rejects oversized latest.json before any external call', async t => {
+test('stable rejects oversized appcast before any external call', async t => {
   const f = await fixture(t)
-  await writeFile(join(f.options.directory, 'latest.json'), ' '.repeat(64 * 1024 + 1))
+  await writeFile(join(f.options.directory, 'appcast.xml'), ' '.repeat(256 * 1024 + 1))
   await assert.rejects(f.publish(), /budget/)
   assert.deepEqual(f.remote.events, [])
 })
@@ -322,7 +311,7 @@ for (const event of ['push', 'workflow_dispatch']) for (const isPrivate of [fals
     assert.deepEqual(f.remote.tags.get(f.info.tag), { type: 'commit', sha: previewEnv.GITHUB_SHA })
     const release = f.remote.releases.get(f.info.tag)
     assert.equal(release.assets.length, 3)
-    assert.ok(!release.assets.some(asset => asset.name === 'latest.json'))
+    assert.ok(!release.assets.some(asset => asset.name === 'appcast.xml'))
     assert.equal(release.name, 'OC Chan preview #42 (abcdef0)')
     assert.ok(release.body.includes(previewEnv.GITHUB_SHA))
     assert.match(release.body, /ad-hoc signed, not Developer ID signed, and not Apple notarized/)
@@ -383,7 +372,7 @@ for (const existing of ['draft', 'published', 'tag', 'rerun']) test(`preview ref
 
 for (const extraMetadata of [false, true]) test(`preview rejects ${extraMetadata ? 'stable update metadata' : 'missing local attachment'} before remote mutation`, async t => {
   const f = await fixture(t, '1.2.3', {}, 'push')
-  if (extraMetadata) await writeFile(join(f.options.directory, 'latest.json'), '{}')
+  if (extraMetadata) await writeFile(join(f.options.directory, 'appcast.xml'), '<rss/>')
   else await rm(join(f.options.directory, 'OC-Chan-1.2.3-mac-arm64.zip'))
   await assert.rejects(f.publish(), /Unexpected or missing release assets/)
   assert.deepEqual(f.remote.events, [])

@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [features]
 default = []
-acceptance = ["oc-core/acceptance", "oc-installer/acceptance"]
+acceptance = ["oc-core/acceptance"]
 
 [dependencies]
 oc-core = { path = "../oc-core" }

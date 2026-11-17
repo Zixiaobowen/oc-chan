@@ -2,6 +2,7 @@ mod api;
 mod config;
 mod host;
 mod native;
+mod updates;
 mod platform;
 mod session;
 mod settings;

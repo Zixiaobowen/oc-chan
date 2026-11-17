@@ -15,9 +15,9 @@ npm run package
 npm run dist
 ```
 
-`build`执行完整 Rust release 构建；`package`生成目录应用；`dist`生成目录应用、DMG、ZIP与schema 2更新元数据。入口生成Rust worker、安装器、系统插件、Swift导航助手及许可证，再构建 `oc-desktop` GPUI宿主；无前端打包。生产 features 为空，不含 `acceptance`，也没有 `custom-protocol` feature。
+`build`执行完整 Rust release 构建；`package`生成目录应用；`dist`生成目录应用、DMG和ZIP，稳定发布另生成签名 appcast。入口生成Rust worker、系统插件、Swift导航助手及许可证，准备固定版本的 Sparkle framework，再构建 `oc-desktop` GPUI宿主；无前端打包。生产 features 为空，不含 `acceptance`，也没有 `custom-protocol` feature。
 
-受控输出位于`release/gpui/`。`build.json`使用schema 3、`renderer: "gpui"`，绑定buildId、版本、架构、features、程序和资源摘要；开发features为`["acceptance"]`，生产为`[]`。每次分发有独立目录和`distribution.json`，实际路径以回执为准。归档命名为`OC-Chan-<版本>-mac-arm64.zip`和`.dmg`；更新元数据仍为schema 2的`latest.json`，不要与构建回执schema混淆。
+受控输出位于`release/gpui/`。`build.json`使用schema 3、`renderer: "gpui"`，绑定buildId、版本、架构、features、程序和资源摘要；开发features为`["acceptance"]`，生产为`[]`。每次分发有独立目录和`distribution.json`，实际路径以回执为准。归档命名为`OC-Chan-<版本>-mac-arm64.zip`和`.dmg`；稳定更新源为 `appcast.xml`，旧 `latest.json` 已删除，不要与构建回执schema混淆。
 
 需要从包含未提交改动的当前源码生成可核对交付时：
 
@@ -43,17 +43,13 @@ npm run install:local -- --delivery release/gpui/local-gpui-new
 
 ## 应用内更新
 
-正式安装版必须通过Developer ID信任链、固定Bundle ID和实际架构校验，才启用自动检查、下载和安装。开发和ad-hoc版本仍可手动检查新版、查看结果和重试真实错误，界面保留下载/安装受限原因；不支持的平台不能检查。固定公开源为`Zixiaobowen/oc-chan`；客户端不含GitHub凭据、用户自定义更新URL或远程上报。
+应用内更新由 Sparkle 2.10.1 负责，稳定 feed 和 ZIP 使用 Ed25519 签名。生产源固定为 `https://github.com/Zixiaobowen/oc-chan/releases/latest/download/appcast.xml`；客户端不含GitHub凭据、用户自定义更新URL或远程上报。启用 `SUVerifyUpdateBeforeExtraction`、`SURequireSignedFeed`，签名过期 fallback 为 0；签名错误不得降级放行。
 
-更新页的“发行说明与下载”打开 GitHub Releases。开发和未签名版本会明确提示从该页面下载并手动安装；此入口不绕过应用内安装的签名门禁。
+GPUI 设置显示状态和自动检查选项；显式检查、下载、安装与重启使用 Sparkle 标准界面。自动检查由 Sparkle 管理，自动下载关闭，普通退出不自动安装。“发行说明与下载”打开 GitHub Releases。检查失败保留真实错误，不能显示为“已是最新版本”。
 
-更新元数据返回 HTTP 404 时，更新页明确提示“尚无可用 Release，或发布仓库不可访问”，保留失败状态；不会显示为“已是最新版本”。其他 HTTP 错误及安装包下载失败保持各自错误，不套用此提示。
+不再以缺少 Developer ID 为由禁用应用更新，无需付费 Apple 开发者会员。ad-hoc 签名与 Ed25519 更新签名不等于 Apple 公证、Gatekeeper 认可或免除首次用户批准；不得关闭系统防护来代替验收。开发和无头实例只探测更新，不启动安装界面。
 
-具备完整更新资格时启动30秒后检查，此后每6小时检查，也可手动检查。元数据使用schema2的稳定语义版本和单个arm64资产，记录固定ZIP文件名、精确长度与SHA-512。HTTP仅允许受限HTTPS发布域，流式写入私有暂存文件；元数据、下载大小、磁盘空间、并发、超时和取消均有边界。
-
-下载、取消和“重启并安装”都是显式操作。普通退出不安装。安装前复验Developer ID、同Team、固定应用标识、架构和严格升级版本；Rust安装助手绑定父进程出生身份、应用路径及文件身份，持独占锁并记录事务阶段，同卷替换。
-
-提交成功必须收到当前事务的真实就绪回执：版本、进程、nonce及可执行身份匹配，`renderer_entry="main:gpui:paint"`、`renderer_committed=true`、`action_round_trip=true`，已启用采集域就绪，可用Hermes历史查询成功且进程持续存活。动作往返替代旧 renderer IPC 回执；停用分区和无历史来源明确记为disabled/unavailable，不能填成功空结果。失败回滚保留现场。完整规则见[更新事务契约](rust-migration/update-contract.md)。
+旧版 0.2.0 没有 Sparkle，首次切换须手动安装新包。旧核心更新器和在线安装助手已删除；`oc-installer` 只保留本地安装就绪库，不再把本地安装的自定义回执/回滚事务描述为 Sparkle 更新协议。真实隐藏场景、标准更新界面、安装与重启需分别验收。完整规则见[更新事务契约](rust-migration/update-contract.md)。
 
 ## 版本管理
 
@@ -63,7 +59,7 @@ npm run install:local -- --delivery release/gpui/local-gpui-new
 
 1. 在 `main` 运行 **Prepare release**（`release-prepare.yml`），选择 `patch`、`minor` 或 `major`，填写本次用户可见变化。工作流同步版本，保存 `releases/<版本>.md`，创建版本分支及目标为 `main` 的 PR，并显式启动该分支的 Build macOS 验证。PR 本身不发布正式版。
 2. 审阅版本、发布说明、中英文 README 和 CI 结果后合并 PR。发布准备不自动合并；main 的既有预览流程保持不变。
-3. 在 `main` 运行 **Release stable**（`release-stable.yml`），输入已合并的完整版本，例如 `0.2.0`。工作流检查版本、发布说明和签名配置，创建不可覆盖的 `v0.2.0` 标签，再显式启动该标签的 Build macOS；签名、公证、产物验证全部通过后才公开正式 Release。
+3. 在 `main` 运行 **Release stable**（`release-stable.yml`），输入已合并的完整版本。工作流检查版本、发布说明和 Sparkle 签名配置，创建不可覆盖的 `vX.Y.Z` 标签，再显式启动该标签的 Build macOS；签名和产物验证通过后才公开正式 Release。默认 ad-hoc 发布不要求 Apple 公证凭据。
 
 准备入口与正式入口使用内置 `GITHUB_TOKEN`。仓库 Settings → Actions → General 必须允许 GitHub Actions 创建 Pull Request；组织策略也须允许该操作。工作流合入默认分支后，手动入口才可使用。内置令牌创建 PR 或标签不会触发普通 push/PR 工作流，因此入口显式 dispatch 后续构建；不能把“PR/标签已创建”当成构建或发布成功。无需添加额外 PAT。
 
@@ -86,38 +82,29 @@ npm run test:release
 
 CI安装锁定npm/Cargo依赖，按变更映射运行行为测试；应用入口、采集、桥接、界面或构建改变时运行隔离、真实隐藏的GPUI场景。Metal capture与认证驱动仅在acceptance构建。未映射测试、未知代码路径、测试失败、许可证/公告查询失败和产物校验失败都阻止交付。只上传明确成功的安装材料，失败证据单独保存；工作流已更新不等于运行已通过。
 
-`main`推送或在`main`手动运行工作流时，检查通过后自动发布预览Release，标签为`preview-<运行编号>-<提交短SHA>`，绑定本次构建的完整提交。附件包含ad-hoc签名的arm64 DMG、ZIP和`SHA256SUMS.txt`；Release标为Pre-release，不设为Latest，也不上传`latest.json`，不会触发应用内稳定更新。仓库可见性不因发布而改变。
+`main`推送或在`main`手动运行工作流时，检查通过后自动发布预览Release，标签为`preview-<运行编号>-<提交短SHA>`，绑定本次构建的完整提交。附件包含ad-hoc签名的arm64 DMG、ZIP和`SHA256SUMS.txt`；Release标为Pre-release，不设为Latest，也不上传稳定 `appcast.xml`，不会触发应用内稳定更新。仓库可见性不因发布而改变。
 
 PR和其他分支上的手动构建只上传Actions产物，不发布。PR新提交可取消旧检查；main和标签运行不因后续推送取消在途发布。GitHub同一并发组只保留一个运行和一个待运行任务，密集推送可能合并为最新的待运行提交。
 
-正式版由与 Cargo workspace、npm 和锁文件一致的稳定标签 `vX.Y.Z` 的 push 或显式 dispatch 触发；标签提交必须属于 main，并提供对应发布说明。要求完整 Developer ID 签名和 Apple 公证密钥。已有 Release 和附件不得覆盖。同一次运行重跑会使用相同标签；若已存在 Release 或预览标签，发布会明确拒绝并保留现场，不能用覆盖或自动删除掩盖不完整发布。
+正式版由与 Cargo workspace、npm 和锁文件一致的稳定标签 `vX.Y.Z` 的 push 或显式 dispatch 触发；标签提交必须属于 main，并提供对应发布说明和 Sparkle Ed25519 签名配置。已有 Release 和附件不得覆盖。同一次运行重跑会使用相同标签；若已存在 Release 或预览标签，发布会明确拒绝并保留现场，不能用覆盖或自动删除掩盖不完整发布。
 
-签名CI使用以下Secrets，不将证书、密码或令牌写入仓库：
+GitHub Actions 使用 `SPARKLE_PRIVATE_KEY` Secret 签署稳定 feed 和 ZIP；该 Secret 已配置，但配置存在不代表发布或真实更新验收通过。源码只保存 `resources/sparkle.json` 中的公钥。本机私钥保存在专用 macOS keychain 的 `local.oc-chan.desktop` 账号；私钥不得写入源码、日志、公开文档或附件。
 
-| Secret | 用途 |
-| --- | --- |
-| `APPLE_CERTIFICATE` | 包含私钥的Developer ID Application p12，Base64编码 |
-| `APPLE_CERTIFICATE_PASSWORD` | p12导出密码 |
-| `APPLE_SIGNING_IDENTITY` | 完整`Developer ID Application: … (TEAMID)`身份，与Team匹配 |
-| `APPLE_ID` | 公证账号 |
-| `APPLE_PASSWORD` | Apple应用专用密码 |
-| `APPLE_TEAM_ID` | 10位Team ID |
+主应用采用 ad-hoc 签名并完整保留上游签名的 Sparkle framework，无需付费 Apple 开发者会员。构建拒绝另行注入 Developer ID 身份，避免 hardened runtime 的同 Team 动态库校验与上游 framework 身份冲突。Ed25519 更新签名不代表 Apple 公证或 Gatekeeper 认可。客户端只消费稳定版 `appcast.xml`，没有旧更新元数据兼容路径。
 
-构建签名输入统一为`APPLE_SIGNING_IDENTITY`。证书只导入runner临时keychain，构建后回收；本地ad-hoc构建不自动发现签名或公证凭据。标签流水线验证完整签名、公证票据和Gatekeeper，复核归档及元数据后先上传草稿，确认附件完整再公开。客户端只消费稳定版`latest.json`，没有旧Electron更新元数据兼容路径。
-
-Actions产物可在成功运行记录中下载`oc-chan-macos-arm64-<运行编号>`。预览版和稳定版都使用`Zixiaobowen/oc-chan`的Release，发布job显式申请Contents写权限，使用内置`github.token`，不需要额外PAT。两种发布共用并发锁，先上传草稿、核对附件完整性，再公开并回读验证；预览版额外核对标签指向构建提交，稳定版只在版本较新时更新Latest。校验失败不公开草稿，公开后的错误保留Release供诊断，不自动删除。实际签名、公证、公开下载及正式应用内升级须各自取得回执，不能以ad-hoc测试代替。
+Actions产物可在成功运行记录中下载`oc-chan-macos-arm64-<运行编号>`。预览版和稳定版都使用`Zixiaobowen/oc-chan`的Release，发布job显式申请Contents写权限，使用内置`github.token`，不需要额外PAT。两种发布共用并发锁，先上传草稿、核对附件完整性，再公开并回读验证；预览版额外核对标签指向构建提交，稳定版只在版本较新时更新Latest。校验失败不公开草稿，公开后的错误保留Release供诊断，不自动删除。实际签名、公开下载及正式应用内升级须各自取得回执，不能以脚本单测代替。
 
 草稿核验与公开后的最终回读均要求每个附件的GitHub `digest`严格等于发布前从同一已打开文件句柄流式计算的`sha256:<本地摘要>`；摘要缺失或不一致（即使文件名和大小相同）也明确失败。
 
 发布准备还必须读取 schema 2 的 `package-manifest-arm64.json`，核对版本、arm64 架构和完整 ZIP/DMG 附件集合，并将文件名、长度、ZIP SHA-512 与 DMG SHA-256 同本地重算结果交叉核验。报告超过 16 MiB、缺失或不一致时，在创建发布输出目录前拒绝。
 
-发布入口在访问 GitHub 前再次校验 ZIP/DMG 与 `SHA256SUMS.txt` 的一致性及各自 512 MiB 上限；稳定版还复验 schema 2 的 `latest.json`。准备完成后文件被修改、摘要清单缺项或元数据不一致都会拒绝发布，不能仅以远端附件等于上传字节视为安装材料有效。
+发布入口在访问 GitHub 前再次校验 ZIP/DMG 与 `SHA256SUMS.txt` 的一致性及各自 512 MiB 上限；稳定版还复验 `appcast.xml`、feed 与 ZIP 的 Ed25519 签名及声明的版本和归档信息。准备完成后文件被修改、摘要清单缺项或元数据不一致都会拒绝发布，不能仅以远端附件等于上传字节视为安装材料有效。
 
 若构建期间较新的main提交又修改了`.github/workflows/`，旧构建的workflow内容可能不同于当前默认分支。GitHub对此类目标要求Workflows写权限，而内置`GITHUB_TOKEN`不具备该权限，创建Release可能明确返回403/404。此时检查较新main的运行结果；流程不会用新提交给旧附件打标签，也不把权限错误解释为成功。
 
 ## 包内容、体积与依赖审查
 
-产物只允许主程序、Rust worker、安装器、Swift导航助手、Tern插件资源、原生系统插件包、图标和完整依赖许可。GPUI界面编译进Rust主程序；没有Vite资源或renderer npm清单。Rust闭包按目标平台、精确Cargo.lock、运行/构建依赖关系和crate摘要追踪；npm仅作开发工具依赖审查。
+产物只允许主程序、Rust worker、Swift导航助手、Tern插件资源、原生系统插件包、图标、完整 Sparkle 2.10.1 framework 和依赖许可。Sparkle 官方归档由 SHA-256 及逐文件 pin 校验；保留上游签名 helpers，Headers/Modules 也属于上游签名封印，不得裁剪或重签 helpers。旧在线安装助手不再打包。GPUI界面编译进Rust主程序；没有Vite资源或renderer npm清单。Rust闭包按目标平台、精确Cargo.lock、运行/构建依赖关系和crate摘要追踪；npm仅作开发工具依赖审查。
 
 Rust许可生成器校验锁定crate归档，收集完整LICENSE/NOTICE。未随crate发布的许可按精确VCS commit与上游文本摘要补齐，证据保留在`resources/rust-license-supplements/manifest.json`。产物使用明确的license-only目录，清单保留原始sourcePath和hash，不复制crate源码树。缺许可或来源不能证明时构建失败。
 
@@ -128,9 +115,11 @@ npm run check:package -- --app /absolute/path/to/OC-Chan.app --arch arm64 --outp
 
 包路径必须替换为`distribution.json`里的真实`.app`；验证归档时再传`--artifacts-dir`对应分发目录。依赖审查要求`cargo-audit 0.22.2`可用，实时查询npm公告和RustSec数据库；`docs/dependency-review-policy.json`绑定精确npm/Cargo锁与已核对许可，不豁免公告、不静默忽略查询失败。锁改变后须重新审查，不再传`--bundled-manifest`。
 
-包检查核对Mach-O架构、可执行权限、完整签名、资源摘要、编译期插件目录pin、许可证及实际条目；拒绝Electron、Chromium、Node、N-API、ASAR、验收驱动标记`OC_CHAN_GPUI_ACCEPTANCE_V1`、测试、源码、缓存、个人数据、多余资源和逃逸链接。Metal capture只属验收，不得进入生产。归档检查包含长度、摘要、ZIP条目和DMG校验。
+包检查核对Mach-O架构、可执行权限、完整签名、资源摘要、编译期插件目录pin、许可证及实际条目；拒绝Electron、Chromium、Node、N-API、ASAR、验收驱动标记`OC_CHAN_GPUI_ACCEPTANCE_V1`、测试、非 Sparkle 上游封印必需的源码、缓存、个人数据、多余资源和逃逸链接。Metal capture只属验收，不得进入生产。归档检查包含长度、摘要、ZIP条目和DMG校验。
 
 沿用`docs/package-baseline.json`中的arm64应用总量300MiB、Tern helper160KiB、ZIP125MiB及DMG130MiB上限；原ASAR和已删除依赖的历史分量只保留作证据，不伪造新运行时同类文件。遍历总量保护线不是发布体积预算，插件2MiB/展开9MiB预算也独立执行。历史测量不能当作当前包的体积或性能证明。
+
+本次本地生产构建已生成 DMG、ZIP 并通过包检查；具体大小与签名验收证据记录在本地交接。包含完整 framework 的成本由现有预算约束，不根据 SDK 归档大小推断最终应用体积。
 
 ## 本机安装与推送后的清理
 

@@ -5,12 +5,12 @@
 extern "C" {
 #endif
 /* macOS C ABI. Objective-C++17/ARC, deployment >=13, SDK >=26.
- * Build: cargo build --manifest-path native/Cargo.toml
+ * Build: SPARKLE_FRAMEWORK_DIR=<pinned SDK> cargo build --manifest-path native/Cargo.toml
  * The integrating crate can use oc-native-bridge as a path dependency; build.rs
- * links AppKit/Foundation/IOKit/ServiceManagement/UserNotifications/Carbon.
+ * links AppKit/Foundation/IOKit/ServiceManagement/UserNotifications/Carbon/Sparkle.
  * It also resolves and statically links the selected C++ compiler's macOS
  * compiler-rt archive for @available guards, including release builds with LTO.
- * Only oc_native.mm is compiled; oc_notifications.inc/oc_exports.inc are included.
+ * Only oc_native.mm is compiled; notification/Sparkle/export .inc files are included.
  * This source does NOT contain the acceptance eval/socket driver.
  *
  * All entry points except string_free MUST run on the AppKit main thread.
@@ -22,9 +22,10 @@ extern "C" {
  * Unknown commands, invalid types, OS errors and unsupported APIs are errors.
  * Error output is "<stage>\n<raw OS reason>"; stage is a fixed bridge label.
  * The host exposes only allowlisted operation/stage labels and error categories;
- * raw OS reasons must never enter IPC or logs.
- * Create requires the host's NSApplication subclass to be initialized first
- * (Tauri setup, after Tao creates TaoApp); the bridge never creates NSApplication.
+ * raw boundary OS reasons must never enter IPC or logs. Sparkle's bounded user-facing
+ * update errors are part of its presentation snapshot and are shown as supplied.
+ * Create requires GPUI's NSApplication subclass to be initialized first;
+ * the bridge never creates NSApplication or replaces its delegate.
  * Acceptance create and dockSet skip the policy setter when already at target;
  * actual policy is always read back. A requested change requires both setter
  * acceptance and matching readback; a failed mutation is never treated as success.
@@ -102,6 +103,16 @@ int oc_native_create(int acceptance_mode, oc_native_callback callback, void *use
  * URL and notification request/send. Normal readback never prompts or focuses.
  * savePanel is explicit UI; it never writes a file. Core creates a new destination
  * without replacement. The host must cancel/revoke its owner before window removal.
+ * updaterStart {development:bool}, updaterRead {}, updaterCheck {}, and
+ * updaterSetAutomaticChecks {enabled:bool} return a Sparkle snapshot. The controller
+ * and delegate are owned on the main thread; KVO/delegate observations emit
+ * updaterChanged. Development/acceptance uses information probes without windows,
+ * disables automatic checks, and rejects enabling them. Production uses standard UI.
+ * updaterInstallRequested requires host business drain before updaterResumeInstallation.
+ * updaterPrepareToQuit returns retainContext: when true the controller, native context,
+ * callback userdata and copied continuation must survive until process termination.
+ * Release rejects a live Sparkle session or pending continuation. No block pointer
+ * crosses the C ABI, and the continuation is invoked once on the main queue.
  */
 int oc_native_call(oc_native_context *context, const char *command, const char *args_json,
                    char **result_json, char **error);

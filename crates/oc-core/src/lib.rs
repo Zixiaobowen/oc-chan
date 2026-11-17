@@ -14,7 +14,6 @@ pub mod resources;
 pub mod settings;
 pub mod schedules;
 pub mod tern;
-pub mod updates;
 pub mod worker;
 #[cfg(feature = "acceptance")]
 pub mod performance;

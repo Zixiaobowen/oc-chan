@@ -3,14 +3,15 @@ import { appendFileSync, globSync, mkdtempSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
+import { readSparkleConfig } from './sparkle-sdk.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 export const suites = {
   install: ['scripts/install-local.test.mjs', 'scripts/local-app-lifecycle.test.mjs', 'scripts/local-install-readiness.test.mjs', 'scripts/push-main.test.mjs', 'scripts/develop.test.mjs'],
   closeout: ['scripts/closeout-task.test.mjs'],
   versioning: ['scripts/version.test.mjs', 'scripts/release-workflow.test.mjs'],
-  updates: ['scripts/prepare-release.test.mjs', 'scripts/publish-release.test.mjs'],
-  packaging: ['scripts/build-app.test.mjs', 'scripts/check-package.test.mjs', 'scripts/dependency-review.test.mjs', 'scripts/rust-dependencies.test.mjs'],
+  updates: ['scripts/prepare-release.test.mjs', 'scripts/publish-release.test.mjs', 'scripts/sparkle-appcast.test.mjs'],
+  packaging: ['scripts/build-app.test.mjs', 'scripts/check-package.test.mjs', 'scripts/dependency-review.test.mjs', 'scripts/rust-dependencies.test.mjs', 'scripts/sparkle-sdk.test.mjs'],
   marketplace: ['scripts/build-plugin-market-rust.test.mjs'],
   delivery: ['scripts/local-delivery.test.mjs', 'scripts/delivery-source.test.mjs', 'scripts/delivery-zip.test.mjs'],
   performance: ['scripts/performance/core.test.mjs', 'scripts/performance/measurement.test.mjs', 'scripts/performance/fixtures.test.mjs', 'scripts/performance/sampler.test.mjs', 'scripts/performance/native-harness.test.mjs'],
@@ -19,7 +20,7 @@ export const suites = {
 const core = filter => ({ package: 'oc-core', features: ['acceptance'], library: true, ...(filter ? { filter } : {}) })
 export const rustSuites = {
   core: core(), agents: core('agents::'), schedules: core('schedules::'), events: core('events::'),
-  updates: core('updates::'), marketplace: core('marketplace::'), plugins: core('plugins::'),
+  marketplace: core('marketplace::'), plugins: core('plugins::'),
   monitor: core('monitor::'), settings: core('settings::'), diagnostics: core('diagnostics::'),
   navigation: core('navigation::'), tern: core('tern::'),
   installer: { package: 'oc-installer', library: true }, sdk: { package: 'oc-plugin-sdk', library: true },
@@ -33,7 +34,6 @@ const rules = [
   [/^crates\/oc-core\/src\/agents\//, [], ['agents', 'monitor', 'tern'], 'Agent采集及调度、导航调用方'],
   [/^crates\/oc-core\/src\/schedules\//, [], ['schedules', 'events', 'monitor'], '任务采集及事件、调度调用方'],
   [/^crates\/oc-core\/src\/events\//, [], ['events', 'monitor', 'host'], '事件、通知和持久worker链路'],
-  [/^crates\/oc-core\/src\/updates\//, ['updates'], ['updates'], '更新状态机与有界下载解压'],
   [/^crates\/oc-core\/src\/marketplace\//, ['marketplace'], ['marketplace', 'plugins'], '原生市场与插件生命周期'],
   [/^crates\/oc-core\/src\/plugins\//, ['marketplace'], ['plugins', 'marketplace', 'monitor'], '原生插件宿主及直接调用方'],
   [/^crates\/oc-core\/src\/monitor(?:\/|\.rs)/, [], ['monitor', 'host'], '调度、快照与宿主退出'],
@@ -42,7 +42,7 @@ const rules = [
   [/^crates\/oc-core\/src\/navigation\//, [], ['navigation', 'host'], '对象导航及宿主边界'],
   [/^crates\/oc-core\/src\/tern\//, [], ['tern', 'host'], 'Tern实例与真实出生身份'],
   [/^crates\/oc-core\//, ['performance'], ['core'], '核心包的其余行为与资源测量'],
-  [/^crates\/oc-installer\//, ['install', 'updates'], ['installer', 'updates', 'host'], '持久安装事务及更新、就绪调用方'],
+  [/^crates\/oc-installer\//, ['install'], ['installer', 'host'], '本地安装授权与就绪回执及宿主调用方'],
   [/^crates\/oc-plugin-sdk\//, ['marketplace'], ['sdk', 'plugins', 'marketplace', 'system'], '原生插件协议及消费者'],
   [/^plugins\/system-monitor\//, ['marketplace'], ['system', 'plugins'], '系统插件与宿主协议'],
   [/^crates\/oc-desktop\//, ['install'], ['host'], 'GPUI视图、交互与桌面宿主'],
@@ -52,8 +52,8 @@ const rules = [
   [/^scripts\/push-main\.mjs$/, ['install', 'delivery', 'closeout'], ['installer'], 'GitHub推送确认及其收尾消费者'],
   [/^scripts\/(?:install-(?:local|validation)|local-install-(?:readiness|process)|local-app-lifecycle|develop)\.(?:mjs|m)$|^\.githooks\//, ['install', 'delivery'], ['installer'], '本机安装、真实就绪与实例归属'],
   [/^scripts\/(?:version|release-workflow)\.mjs$|^\.github\/workflows\/release-(?:prepare|stable)\.yml$|^releases\//, ['versioning', 'updates'], [], '版本一致性与发布准备、正式发布入口'],
-  [/^scripts\/(?:prepare-release|publish-release|release-config|dist)\.mjs$/, ['updates', 'packaging'], ['updates'], 'schema2发布与打包'],
-  [/^scripts\/(?:build-app|check-package|dependency-review|rust-dependencies)\.mjs$|^docs\/(?:package-baseline|dependency-review-policy)\.json$|^resources\/rust-license-supplements\//, ['packaging', 'delivery'], [], 'Rust产物、锁绑定审计与完整许可证'],
+  [/^scripts\/(?:prepare-release|publish-release|release-config|dist|sparkle-appcast|sparkle-test-fixture)\.mjs$/, ['updates', 'packaging'], [], 'Sparkle签名发布与打包'],
+  [/^scripts\/(?:build-app|check-package|dependency-review|rust-dependencies|sparkle-sdk)\.mjs$|^docs\/(?:package-baseline|dependency-review-policy)\.json$|^resources\/(?:rust-license-supplements\/|sparkle(?:-sdk-manifest)?\.json$)/, ['packaging', 'delivery'], [], 'Rust和Sparkle产物、锁绑定审计与完整许可证'],
   [/^scripts\/build-plugin-market-rust\.mjs$|^plugin-market\//, ['marketplace', 'packaging'], ['marketplace', 'system'], '原生插件发布目录'],
   [/^scripts\/build-marketplace-fixtures\.mjs$/, ['marketplace', 'performance', 'install'], ['marketplace', 'plugins', 'system'], '原生市场验收夹具与真实宿主场景'],
   [/^scripts\/(?:local-delivery|delivery-source|delivery-zip)\.mjs$/, ['delivery', 'packaging', 'install'], [], '交付快照与归档完整性'],
@@ -65,6 +65,7 @@ const rules = [
 ]
 // Retired entry points are accepted only as deletions, with their replacement modules.
 const retiredRules = [
+  [/^crates\/oc-core\/src\/updates\//, ['updates'], ['host'], '移除旧更新器，由Sparkle宿主与签名发布接管'],
   [/^(?:src\/|src-tauri\/|scripts\/probes\/wk\/|(?:electron\.)?vite\.config\.ts$|tsconfig\.json$|scripts\/bundled-licenses\.ts$)/, ['packaging', 'install'], ['host'], '移除WebView实现，验证GPUI宿主与交付']
 ]
 export function selectTests(files, fullReason, removedFiles = []) {
@@ -115,6 +116,11 @@ export function runTests(files, { cwd = root, stdio = 'inherit' } = {}) {
 export function rustCommands(groups, { cwd = root, environment = process.env, hostDirectory = path.join(path.resolve(cwd, environment.CARGO_TARGET_DIR ?? 'target'), 'ci-host') } = {}) {
   if (!Array.isArray(groups) || groups.some(group => !Object.hasOwn(rustSuites, group))) throw new Error('未知Rust测试组')
   const commands = [], prerequisites = [], env = { ...environment }
+  if (groups.some(group => ['host', 'native'].includes(group))) {
+    const sdk = path.join(cwd, 'out/sparkle-sdk', readSparkleConfig().version)
+    env.SPARKLE_FRAMEWORK_DIR = sdk; env.DYLD_FRAMEWORK_PATH = sdk
+    prerequisites.push([process.execPath, [path.join(cwd, 'scripts/sparkle-sdk.mjs')]])
+  }
   if (groups.includes('host')) {
     const target = path.resolve(cwd, environment.CARGO_TARGET_DIR ?? 'target')
     const resources = path.join(hostDirectory, 'resources')

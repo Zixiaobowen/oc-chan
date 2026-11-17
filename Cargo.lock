@@ -3651,7 +3651,6 @@ dependencies = [
  "futures-util",
  "libc",
  "notify",
- "oc-installer",
  "oc-plugin-sdk",
  "plist",
  "regex",
@@ -3707,7 +3706,6 @@ name = "oc-installer"
 version = "0.2.0"
 dependencies = [
  "libc",
- "plist",
  "semver",
  "serde",
  "serde_json",

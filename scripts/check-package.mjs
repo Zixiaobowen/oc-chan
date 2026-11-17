@@ -7,10 +7,11 @@ import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { ROOT, TARGET, BUNDLE_ID, NATIVE_RESOURCES, assert, within, boundedJson, digestFile, codeDirectoryHash } from './build-app.mjs'
 import { readBounded, RUST_LIMITS, RUST_ROOTS, RUST_TARGET, sha256 } from './rust-dependencies.mjs'
+import { readSparkleConfig, readSparkleManifest, runtimeSparkleEntries } from './sparkle-sdk.mjs'
 
 const execute = promisify(execFile)
 const MAX_ENTRIES = 4096, MAX_TOTAL = 2 * 1024 ** 3, MAX_FILE = 512 * 1024 ** 2
-const REQUIRED = ['oc-data-worker', 'oc-installer', 'tern-navigation/present-window', 'tern-navigation/plugin/plugin.toml', 'tern-navigation/plugin/window.luau', 'plugin-market/catalog.json', 'rust-dependencies/manifest.json']
+const REQUIRED = ['oc-data-worker', 'tern-navigation/present-window', 'tern-navigation/plugin/plugin.toml', 'tern-navigation/plugin/window.luau', 'plugin-market/catalog.json', 'rust-dependencies/manifest.json']
 export function forbiddenPackagePath(value) {
   return value.split('/').some(part => /^(?:electron(?: framework)?(?:\.framework)?|chromium(?: framework)?(?:\.framework)?|node(?:\.exe)?|node_modules|tests?|__tests__|__mocks__|fixtures?|drivers?|coverage|logs?|caches?|\.git|\.DS_Store)$/i.test(part))
     || /\.(?:node|asar|map|ts|tsx|sqlite|db|log|pem|key)$/i.test(value) || /(?:^|\/)[^/]*\.(?:test|spec)\.[^/]+$/i.test(value)
@@ -70,14 +71,18 @@ export async function inspectBuildMarkers(filename, expected) {
     assert(bytes === info.size && pins.size === 1 && pins.has(expected), 'Host compiled catalog pin does not match packaged plugin catalog')
   } finally { await handle.close() }
 }
-export function validatePlist(plist, version) {
+export function validatePlist(plist, version, root = ROOT) {
   assert(plist.CFBundleIdentifier === BUNDLE_ID && plist.CFBundlePackageType === 'APPL', 'Unexpected application bundle identity/type')
-  assert(plist.CFBundleExecutable === 'oc-chan' && plist.CFBundleShortVersionString === version, 'Application executable/version does not match this build')
+  assert(plist.CFBundleExecutable === 'oc-chan' && plist.CFBundleShortVersionString === version && plist.CFBundleVersion === version, 'Application executable/version does not match this build')
+  const sparkle = readSparkleConfig(root)
+  assert(plist.SUFeedURL === sparkle.feedURL && plist.SUPublicEDKey === sparkle.publicKey, 'Sparkle feed/public key does not match release configuration')
+  assert(plist.SUVerifyUpdateBeforeExtraction === true && plist.SURequireSignedFeed === true && plist.SUSignedFeedFailureExpirationInterval === 0, 'Sparkle update signature checks must be enforced')
+  assert(plist.SUEnableSystemProfiling === false && plist.SUEnableJavaScript === false, 'Sparkle profiling and JavaScript must be disabled')
 }
 function validateRecord(record, root) {
   assert(record.schema === 3 && record.renderer === 'gpui' && record.root === root && record.mode === 'release' && record.arch === 'arm64' && record.target === TARGET
     && JSON.stringify(record.features) === JSON.stringify([]) && /^[a-f0-9]{64}$/.test(record.catalogSha256), 'Production GPUI build receipt is missing or invalid')
-  assert(record.sign === '-' || /^Developer ID Application: /.test(record.sign), 'Invalid package signing policy')
+  assert(record.sign === '-', 'Sparkle package requires ad-hoc signing policy')
 }
 export function validateRustLegalManifest(manifest, expected, resourceDigest) {
   assert(manifest?.schema === 1 && manifest.target === RUST_TARGET && manifest.lockSha256 === expected.lockSha256 && manifest.supplementManifestSha256 === expected.supplementManifestSha256 && JSON.stringify(manifest.roots) === JSON.stringify(RUST_ROOTS), 'Rust legal manifest does not match the exact Cargo lock, source supplements or production roots')
@@ -125,7 +130,7 @@ export async function inspectPackage(options) {
     return { bytes: entry.bytes, digest: entry.sha256 }
   }
   const { stdout } = await execute('/usr/bin/plutil', ['-convert', 'json', '-o', '-', path.join(app, 'Contents/Info.plist')], { timeout: 10_000, maxBuffer: 64 * 1024 })
-  validatePlist(JSON.parse(stdout), record.version)
+  validatePlist(JSON.parse(stdout), record.version, root)
   const resourceRoot = path.join(app, 'Contents/Resources'); const catalog = await boundedJson(path.join(resourceRoot, 'plugin-market/catalog.json'), 256 * 1024)
   assert(catalog.schema === 1 && Array.isArray(catalog.plugins) && catalog.plugins.length > 0 && catalog.plugins.length <= 16, 'Invalid packaged plugin catalog')
   const allowedResources = new Set(REQUIRED), ids = new Set()
@@ -153,22 +158,32 @@ export async function inspectPackage(options) {
   const rustLegal = validateRustLegalManifest(rustManifest, { lockSha256: sha256(readBounded(path.join(root, 'Cargo.lock'))), supplementManifestSha256: sha256(readBounded(path.join(root, 'resources/rust-license-supplements/manifest.json'), 256 * 1024)) }, resourceDigest)
   for (const [relative, actual] of rustLegal.resources) { allowedResources.add(relative); resources[relative] = actual }
   const allowedFiles = new Set(['Contents/Info.plist', 'Contents/PkgInfo', 'Contents/MacOS/oc-chan', 'Contents/_CodeSignature/CodeResources', ...[...allowedResources].map(value => `Contents/Resources/${value}`)])
+  const sparkleEntries = new Map(runtimeSparkleEntries(root).map(entry => [`Contents/Frameworks/${entry.path}`, entry]))
+  const allEntries = new Map(tree.entries.map(entry => [entry.path, entry]))
+  for (const [filename, expected] of sparkleEntries) {
+    const actual = allEntries.get(filename)
+    assert(actual && (expected.target !== undefined
+      ? actual.kind === 'symlink' && actual.target === expected.target
+      : actual.kind === 'file' && actual.bytes === expected.bytes && actual.sha256 === expected.sha256 && Boolean(actual.mode & 0o111) === expected.executable), `Packaged Sparkle differs from pinned SDK: ${filename}`)
+    allowedFiles.add(filename)
+  }
+  const sparkleLicense = readSparkleManifest(root).entries.find(entry => entry.path === 'LICENSE')
+  const licenseDigest = resourceDigest('Sparkle-LICENSE.txt')
+  assert(licenseDigest.bytes === sparkleLicense.bytes && licenseDigest.digest === sparkleLicense.sha256, 'Missing or altered Sparkle license')
+  allowedFiles.add('Contents/Resources/Sparkle-LICENSE.txt')
   const allowedDirectories = new Set()
   for (const file of allowedFiles) for (let directory = path.posix.dirname(file); directory !== '.'; directory = path.posix.dirname(directory)) allowedDirectories.add(directory)
   for (const entry of tree.entries) {
     if (entry.kind === 'directory') { assert(allowedDirectories.has(entry.path), `Unexpected directory in Rust application: ${entry.path}`); continue }
     const icon = /^Contents\/Resources\/[^/]+\.icns$/.test(entry.path)
-    assert(entry.kind === 'file' && (allowedFiles.has(entry.path) || icon), `Unexpected file in Rust application: ${entry.path}`)
+    assert((entry.kind === 'file' || sparkleEntries.has(entry.path)) && (allowedFiles.has(entry.path) || icon), `Unexpected file in Rust application: ${entry.path}`)
   }
   const executableBytes = {}
-  for (const relative of ['Contents/MacOS/oc-chan', ...['oc-data-worker', 'oc-installer', 'tern-navigation/present-window'].map(value => `Contents/Resources/${value}`)]) executableBytes[relative] = await inspectExecutable(path.join(app, relative))
+  for (const relative of ['Contents/MacOS/oc-chan', ...NATIVE_RESOURCES.map(value => `Contents/Resources/${value}`)]) executableBytes[relative] = await inspectExecutable(path.join(app, relative))
   await inspectBuildMarkers(path.join(app, 'Contents/MacOS/oc-chan'), record.catalogSha256)
+  const linked = await execute('/usr/bin/otool', ['-L', path.join(app, 'Contents/MacOS/oc-chan')], { timeout: 10_000, maxBuffer: 64 * 1024 })
+  assert(linked.stdout.includes('@rpath/Sparkle.framework/Versions/B/Sparkle') && !linked.stdout.includes('/out/sparkle-sdk/'), 'Packaged host must link the bundled Sparkle framework')
   await execute('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--all-architectures', app], { timeout: 120_000, maxBuffer: 256 * 1024 })
-  const signed = record.sign !== '-'
-  if (signed) {
-    await execute('/usr/bin/codesign', ['--verify', '--strict', '--test-requirement', `=anchor apple generic and identifier "${BUNDLE_ID}" and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists`, app], { timeout: 120_000, maxBuffer: 256 * 1024 })
-    await execute('/usr/sbin/spctl', ['--assess', '--type', 'execute', app], { timeout: 120_000, maxBuffer: 256 * 1024 })
-  }
   const artifacts = {}
   if (options.artifactsDir) {
     const prefix = `OC-Chan-${record.version}-mac-arm64`
@@ -179,7 +194,7 @@ export async function inspectPackage(options) {
     await execute('/usr/bin/hdiutil', ['verify', artifacts.dmg.path], { timeout: 120_000, maxBuffer: 256 * 1024 })
   }
   const report = { schema: 2, arch: 'arm64', buildId: record.buildId, version: record.version, app, appBytes: tree.bytes, entries: tree.entries,
-    executableBytes, catalogSha256: record.catalogSha256, resources, artifacts, rustDependencies: { lockSha256: rustManifest.lockSha256, manifestSha256: resources['rust-dependencies/manifest.json'].digest, packages: rustLegal.packages, licenseFiles: rustLegal.licenseFiles, licenseBytes: rustLegal.licenseBytes }, signature: signed ? 'Developer ID and Gatekeeper verified' : 'ad-hoc verified; online updates disabled',
+    executableBytes, catalogSha256: record.catalogSha256, resources, artifacts, sparkle: { version: readSparkleConfig(root).version, frameworkBytes: [...sparkleEntries.values()].reduce((sum, entry) => sum + (entry.bytes ?? 0), 0) }, rustDependencies: { lockSha256: rustManifest.lockSha256, manifestSha256: resources['rust-dependencies/manifest.json'].digest, packages: rustLegal.packages, licenseFiles: rustLegal.licenseFiles, licenseBytes: rustLegal.licenseBytes }, signature: 'ad-hoc verified; Sparkle Ed25519 updates',
     limits: { entries: MAX_ENTRIES, expandedBytes: MAX_TOTAL, singleFileBytes: MAX_FILE, pathBytes: 256 * 1024 } }
   report.frozenBudgets = validateFrozenBudgets(report, await boundedJson(path.join(root, 'docs/package-baseline.json')))
   if (options.output) {

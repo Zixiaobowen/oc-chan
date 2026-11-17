@@ -7,7 +7,7 @@ import { promisify } from 'node:util'
 
 // Only fixture feed configuration is seeded. All product mutations below are
 // performed by native pointer/keyboard events against measured, rendered controls.
-export async function exerciseGpui({ driver, instance, output, manifest, scenario = 'all', feed, record }) {
+export async function exerciseGpui({ driver, instance, output, manifest, scenario = 'all', feed, sparkle, record }) {
   const inspect = async () => { const state = await driver.request('inspect'); assert.notEqual(state.ui?.buttonsLimited, true, 'Native control inspection exceeded its declared budget'); return state }
   async function expect(name, predicate, timeout = 40000) {
     const deadline = Date.now() + timeout
@@ -102,6 +102,28 @@ export async function exerciseGpui({ driver, instance, output, manifest, scenari
   const active = (ui, version) => !ui.market.operation && !ui.market.error && item(ui)?.installedVersion === version && item(ui).installed && !ui.monitor.system.error && ui.monitor.system.data?.cpuCores > 0 && ui.monitor.system.data.memoryTotal > 0
   await driver.request('resize', { width: 1280, height: 860 })
   await expect('settings and monitor loaded', ui => ui.settings && ui.monitor && ui.market)
+  if (scenario === 'updates') {
+    assert(sparkle && ['available', 'no-update', 'error'].includes(sparkle.expectedPhase), 'Sparkle probe requires an explicit expected feed result')
+    await stage('sparkle-information-probe', async () => {
+      await navigate('settings')
+      const initial = await expect('Sparkle information probe is available', ui => ui.updates?.canCheck)
+      assert.equal(initial.updates.probeOnly, true)
+      assert.equal(initial.updates.automaticChecks, false)
+      assert.equal(initial.updates.sessionInProgress, false)
+      for (const obsolete of ['updates_download', 'updates_cancel', 'updates_install']) assert(!initial.buttons[obsolete], `${obsolete} must be removed`)
+      const generation = initial.requests.updates_check?.generation ?? 0
+      await click('updates_check')
+      const result = await expect('Sparkle reports the real feed outcome', ui => ui.requests.updates_check?.generation > generation && !ui.pending.includes('updates_check') && !ui.requests.updates_check.error && !ui.updates.sessionInProgress && ui.updates.phase === sparkle.expectedPhase)
+      assert.equal(result.updates.probeOnly, true)
+      assert.equal(result.updates.automaticChecks, false)
+      assert.equal(result.updates.canCheck, true)
+      if (sparkle.expectedVersion) assert.equal(result.updates.availableVersion, sparkle.expectedVersion)
+      if (sparkle.expectedPhase === 'error') assert(result.updates.error?.length > 0, 'Sparkle failures must remain visible')
+      else assert.equal(result.updates.error, null)
+      return { snapshot: result.updates, nativeClicks: 1 }
+    })
+    return {}
+  }
   if (scenario === 'schedules') {
     await stage('schedule-configuration-details', async () => {
       const started = Date.now(), rssSamples = []

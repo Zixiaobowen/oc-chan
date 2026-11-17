@@ -6,6 +6,7 @@
 #import <IOKit/pwr_mgt/IOPMLib.h>
 #import <objc/runtime.h>
 #import <Carbon/Carbon.h>
+#import <Sparkle/Sparkle.h>
 #include <atomic>
 #include <cmath>
 #include <cstdlib>
@@ -14,6 +15,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+@class OCUpdaterDelegate;
 
 // State is confined to the main thread. Apple completions capture shared_ptr by
 // VALUE, then dispatch once to main. A busy slot is not freed before that dispatch.
@@ -31,6 +33,8 @@ struct State {
   __strong NSString *sending = nil;
   __strong id delegate = nil;
   __strong NSSavePanel *panel = nil;
+  __strong SPUStandardUpdaterController *updaterController = nil;
+  __strong id updaterDelegate = nil;
   bool launchObserved = false, launchedAtLogin = false;
   std::atomic<unsigned> eventQueued{0};
   std::atomic<unsigned> eventOverflow{0};
@@ -202,4 +206,5 @@ static NSDictionary *LoginRead(std::shared_ptr<State> state) {
 }
 
 #include "oc_notifications.inc"
+#include "oc_sparkle.inc"
 #include "oc_exports.inc"

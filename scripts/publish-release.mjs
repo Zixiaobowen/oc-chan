@@ -9,7 +9,7 @@ import { readBounded } from './rust-dependencies.mjs'
 
 // The workflow must serialize every writer to this repository from Latest read
 // through publication and readback. GitHub has no conditional Latest update API.
-export async function publishRelease({ directory, version, tag, notesFile, env = process.env }, run = spawnSync) {
+export async function publishRelease({ directory, version, tag, notesFile, env = process.env, publicKey }, run = spawnSync) {
   const info = publicationInfo(version, env)
   if (!directory || tag !== info.tag) throw new Error(`Release tag must match package version and publication source: ${info.tag}`)
   if (!env.GH_TOKEN?.trim()) throw new Error('Missing required release environment: GH_TOKEN')
@@ -93,7 +93,7 @@ export async function publishRelease({ directory, version, tag, notesFile, env =
     if (actual.length > names.length) throw new Error('Unexpected or missing release assets')
   }
   if (JSON.stringify(actual.sort()) !== JSON.stringify(names)) throw new Error('Unexpected or missing release assets')
-  const { assets, documents } = await inspectReleaseAssets({ directory, version: info.version, metadataName: info.prerelease ? undefined : info.metadataName })
+  const { assets, documents } = await inspectReleaseAssets({ directory, version: info.version, metadataName: info.prerelease ? undefined : info.metadataName, publicKey })
   const expected = new Map(assets.map(asset => [asset.name, { size: asset.size, digest: `sha256:${asset.sha256}` }]))
   for (const [name, content] of documents) {
     expected.set(name, { size: content.length, digest: `sha256:${createHash('sha256').update(content).digest('hex')}` })
@@ -130,7 +130,7 @@ export async function publishRelease({ directory, version, tag, notesFile, env =
     const title = info.prerelease ? `OC Chan preview #${env.GITHUB_RUN_NUMBER} (${info.commit.slice(0, 7)})` : `OC Chan ${tag}`
     const notes = info.prerelease
       ? `OC Chan main preview\n\nBuilt from main commit ${info.commit}.\n\nApple Silicon macOS installers are ad-hoc signed, not Developer ID signed, and not Apple notarized. Download and install manually. This prerelease does not enter the application's stable update channel.`
-      : stableNotes
+      : `${stableNotes}\n\nUpdates and the appcast are authenticated with Sparkle Ed25519 signatures. The application is ad-hoc signed, not Developer ID signed or Apple notarized. Ed25519 authenticates update integrity; it does not grant Gatekeeper approval. Initial installation remains manual.`
     gh(['release', 'create', tag, ...(info.prerelease ? ['--target', info.commit, '--prerelease'] : ['--verify-tag']), '--draft', '--title', title, '--notes-file', '-', '--latest=false'], notes)
     stage = 'resolving created draft'
     const created = releaseByTag()

@@ -3,7 +3,8 @@ mod pages;
 mod preferences;
 mod labels;
 use gpui::{prelude::*, *};
-use oc_core::{model::*, settings::*, marketplace::MarketplaceSnapshot, updates::UpdateSnapshot};
+use oc_core::{model::*, settings::*, marketplace::MarketplaceSnapshot};
+use crate::updates::UpdateSnapshot;
 use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, sync::Arc};
@@ -107,6 +108,7 @@ impl RootView {
         state["buttonsLimited"]=json!(self.button_overflow.get());
         state["settings"]=json!(self.settings);state["market"]=json!(self.market);state["monitor"]=json!(self.monitor);
         state["drafts"]=json!({"quietStart":self.quiet_start.read(cx).text,"quietEnd":self.quiet_end.read(cx).text,"glass":self.glass_input.read(cx).text});
+        state["updates"]=json!(self.updates);
         state["inputs"]=json!(self.input_bounds.borrow().iter().map(|(id,b)|(id.clone(),json!({"x":f32::from(b.left()),"y":f32::from(b.top()),"width":f32::from(b.size.width),"height":f32::from(b.size.height)}))).collect::<BTreeMap<_,_>>());
         state["requests"]=json!(self.requests.iter().map(|(command,request)|(*command,json!({"generation":request.generation,"busy":request.busy,"error":request.error}))).collect::<BTreeMap<_,_>>());
         // Explicit acceptance permission; an alternate home alone does not authorize exposing task text.
@@ -167,7 +169,7 @@ impl RootView {
         "settings_update_login_item"=>{if let Some(result)=self.decode::<LoginItemUpdateResult>(value){if !result.ok{self.error=result.details;}if let Some(snapshot)=&mut self.settings{snapshot.login_item=result.state;}}},
         "settings_request_notification_permission"=>{self.request("settings_snapshot",json!({}),cx);},
         "marketplace_snapshot"|"marketplace_check"|"marketplace_install"|"marketplace_update"|"marketplace_uninstall"=>{self.market=self.decode(value);},
-        "updates_snapshot"|"updates_check"|"updates_download"|"updates_cancel"|"updates_install"=>{self.updates=self.decode(value);},
+        "updates_snapshot"|"updates_check"|"updates_set_automatic_checks"=>{self.updates=self.decode(value);},
         "monitor_schedule_history"=>{if let Some(history)=self.decode::<ScheduleHistory>(value){self.history_offset=history.offset;self.history=Some(history);}},"monitor_events"=>{let result=serde_json::from_value::<EventPage>(value).map_err(|e|e.to_string());if let Err(error)=commit_event_result(&mut self.event_query,&mut self.event_stack,&mut self.event_page,&mut self.pending_events,result){self.error=Some(error);}},
         "monitor_focus_agent_in_tern"=>{if let Some(error)=value.get("error").and_then(Value::as_str){self.error=Some(error.into());}},
         "diagnostics_generate"|"diagnostics_copy"|"diagnostics_save"=>{if let Some(reply)=self.decode::<DiagnosticReply>(value){match reply{DiagnosticReply::Ready{preview}=>self.diagnostic=Some(preview),DiagnosticReply::Copied=>self.notice=Some(self.t("已复制诊断报告","Diagnostic report copied").into()),DiagnosticReply::Saved=>self.notice=Some(self.t("已保存诊断报告","Diagnostic report saved").into()),DiagnosticReply::Cancelled=>self.notice=Some(self.t("已取消","Cancelled").into()),DiagnosticReply::Error{reason,details}=>self.error=Some(format!("{reason}: {details}"))}}},
@@ -326,7 +328,7 @@ impl Render for RootView {
             .child(div().flex_1().child(self.title(self.page).to_owned()))
             .child(self.button("pause",if self.paused{self.t("恢复显示","Resume display")}else{self.t("暂停显示","Pause display")},Action::Pause,true,cx))
             .child(self.command("monitor_refresh",self.t("刷新","Refresh"),cx));
-        if self.updates.as_ref().is_some_and(|u|matches!(u.phase,oc_core::updates::UpdatePhase::Available|oc_core::updates::UpdatePhase::Downloaded)){header=header.child(self.button("update-banner",self.t("有可用更新","Update available"),Action::Navigate(NavigationTarget::Page{page:AppPage::Settings}),true,cx));}
+        if self.updates.as_ref().is_some_and(|u|matches!(u.phase,crate::updates::UpdatePhase::Available|crate::updates::UpdatePhase::Downloaded|crate::updates::UpdatePhase::ReadyToInstall)){header=header.child(self.button("update-banner",self.t("有可用更新","Update available"),Action::Navigate(NavigationTarget::Page{page:AppPage::Settings}),true,cx));}
         root=root.child(header);
         if let Some(error)=&self.error{root=root.child(div().px_5().py_2().bg(rgb(if self.dark(){0x482c37}else{0xffe9ee})).child(error.clone()));}
         if let Some(notice)=&self.notice{root=root.child(self.note(notice.clone()).px_5());}

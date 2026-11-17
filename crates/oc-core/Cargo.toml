@@ -29,7 +29,6 @@ plist.workspace = true
 zip.workspace = true
 regex.workspace = true
 oc-plugin-sdk = { path = "../oc-plugin-sdk" }
-oc-installer = { path = "../oc-installer" }
 unicode-normalization.workspace = true
 
 [dev-dependencies]

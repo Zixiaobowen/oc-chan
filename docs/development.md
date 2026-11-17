@@ -79,6 +79,8 @@ npm run test:release
 
 宿主组先构建 release 系统 collector，并用原生市场构建器生成签名包，将独立资源目录通过 `OC_CHAN_RESOURCE_DIR` 传给 `oc-desktop --features acceptance`；不再构建 Vite 或传入 `TAURI_CONFIG`。直接 `cargo test -p oc-desktop` 时仍须满足实际构建资源要求，优先使用已有 CI 宿主组编排。
 
+应用更新使用独立场景 `npm run smoke:renderer -- --scenario updates`。开发与无头实例只执行更新探测，不启动 Sparkle 下载/安装界面；正常安装版的自动检查由 Sparkle 管理。场景通过不代表真实安装、重启或可见标准更新界面已通过，相关证据须分别记录。
+
 GPUI 入口、原生 capture、视图及构建变更按选择器映射到真实 renderer smoke。删除路径必须保留删除状态，重命名展开两侧路径，不能把未知删除当作全量测试；下面仅输出计划：
 
 ```sh
@@ -112,7 +114,7 @@ npm run package
 npm run dist
 ```
 
-`build`执行 Rust/GPUI release 构建；`typecheck` 单独映射为 `cargo check -p oc-desktop`。`package`生成目录应用，`dist`生成DMG、ZIP和schema 2的`latest.json`。产物位于`release/gpui/`，实际路径以schema 3的`build.json`和对应`distribution.json`为准；回执标记`renderer: "gpui"`，生产features为空。构建验证Rust依赖许可证，包内没有Node/Electron/WebView运行时。
+`build`执行 Rust/GPUI release 构建；`typecheck` 单独映射为 `cargo check -p oc-desktop`。`package`生成目录应用，`dist`生成DMG和ZIP，稳定发布另生成签名的 `appcast.xml`，不再生成 `latest.json`。产物位于`release/gpui/`，实际路径以schema 3的`build.json`和对应`distribution.json`为准；回执标记`renderer: "gpui"`，生产features为空。构建验证Rust依赖许可证及 Sparkle 2.10.1 官方归档 SHA-256/逐文件 pin，保留完整 framework 和上游签名 helpers（包括封印内的 Headers/Modules）；包内没有Node/Electron/WebView运行时。Sparkle 的生产体积增量须以实际产物测量，不能以历史预算证明已达标。
 
 本地默认ad-hoc签名，不代表Developer ID、公证或正式安装验收。打包不替换`/Applications/OC Chan.app`；安装、发布和推送的授权与回执分别处理。完整门禁和清理要求见[安装、构建与发布](distribution.md)。
 

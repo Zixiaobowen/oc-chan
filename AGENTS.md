@@ -8,6 +8,8 @@
 
 后台采用 `crates/oc-core/` 的 Rust 核心，GPUI 宿主在 `crates/oc-desktop/`，SQLite/HTTP 等可中断工作由受统一预算约束的 `oc-data-worker` 子进程执行。系统监控由 `plugins/system-monitor/` 通过公开 `oc-plugin-sdk` 独立构建为带签名封装的 `.ocplugin`，首次运行不自动安装。核心保留生命周期、目录与包校验；禁止恢复 Electron/Node 生产后台、旧 CJS 插件或兼容导出。官方插件与内置插件使用同一全局资源预算；受信任原生代码不是沙箱。市场验收使用 `npm run smoke:renderer -- --scenario marketplace`。
 
+应用更新由 GPUI 宿主接入 Sparkle 2.10.1；旧核心更新器、`latest.json` 和在线安装助手已删除，`oc-installer` 仅保留本地安装就绪库。保留完整官方 framework（包括上游签名 helpers 及签名封印内的 Headers/Modules），以归档 SHA-256 和逐文件 pin 校验，不得为缩包裁剪或重签上游 helpers。稳定版 appcast 与 ZIP 必须通过 Ed25519 签名，私钥不得写入源码、日志或公开文档；生产源固定，要求提取前验证、签名 feed，签名过期 fallback 为 0。开发/无头实例只探测，更新验收独立使用 updates smoke；自动检查由 Sparkle 管理，自动下载关闭，普通退出不自动安装。新增依赖仍须测量生产体积增量；ad-hoc 不代表 Apple 公证或 Gatekeeper 豁免，真实安装验收不得以单测代替。
+
 ## 1. 插件式架构
 
 - 采用最小核心加插件扩展的架构。核心负责共享契约、插件生命周期与调度；采集器、数据源和外部工具集成通过明确的插件接口注册，新增具体能力不得继续堆入核心。

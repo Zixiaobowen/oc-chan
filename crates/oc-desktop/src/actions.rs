@@ -97,14 +97,15 @@ impl Desktop {
                 self.native.call("openPermissionSettings", json!({"target":target})).await?; reply(&())
             },
             "settings_show_main_window" => { let input: ShowMain = decode(args)?; self.show_main(input.target).await?; reply(&()) },
-            "updates_snapshot" => reply(&services.updates.snapshot()),
-            "updates_check" => reply(&services.updates.check().await?),
-            "updates_download" => reply(&services.updates.download().await?),
-            "updates_cancel" => reply(&services.updates.cancel().await?),
-            "updates_install" => { let prepared = services.updates.prepare_install().await?; let snapshot = reply(&services.updates.snapshot()); self.request_install(prepared); snapshot },
+            "updates_snapshot" => reply(&crate::updates::decode(self.native.call("updaterRead", json!({})).await?)?),
+            "updates_check" => reply(&crate::updates::decode(self.native.call("updaterCheck", json!({})).await?)?),
+            "updates_set_automatic_checks" => {
+                let input: crate::updates::AutomaticChecks = decode(args)?;
+                reply(&crate::updates::decode(self.native.call("updaterSetAutomaticChecks", json!({"enabled": input.enabled})).await?)?)
+            },
             "updates_open_release_notes" => {
                 if self.config.headless { return Err(Error::new("OC_HEADLESS", "无头实例不能打开外部页面 / Headless instances cannot open external pages")); }
-                self.native.open_release_notes(oc_core::updates::RELEASES_URL, &document.cancel).await?; reply(&())
+                self.native.open_release_notes("https://github.com/Zixiaobowen/oc-chan/releases", &document.cancel).await?; reply(&())
             },
             "marketplace_snapshot" => reply(&services.market.snapshot()),
             "marketplace_check" => reply(&services.market.check().await?),
