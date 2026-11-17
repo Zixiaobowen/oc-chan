@@ -127,13 +127,14 @@ test('only strict stable semantic versions produce latest.json', () => {
   assert.deepEqual(releaseInfo('1.2.3'), { version: '1.2.3', tag: 'v1.2.3', metadataName: 'latest.json' })
   for (const version of ['../bad', '1.2', 'v1.2.3', '01.2.3', '1.2.3-beta.2', '1.2.3+build', '18446744073709551616.0.0']) assert.throws(() => releaseInfo(version), /strict stable/)
 })
-test('signed release preflight binds the push tag, exact Developer ID team and all Tauri secrets', () => {
+test('signed release preflight binds the tag, exact Developer ID team and all signing secrets', () => {
   const info = releaseInfo('1.2.3'), env = { GITHUB_EVENT_NAME: 'push', GITHUB_REF: 'refs/tags/v1.2.3', ...Object.fromEntries(signingSecrets.map(name => [name, 'present'])), APPLE_TEAM_ID: 'ABCDE12345', APPLE_SIGNING_IDENTITY: 'Developer ID Application: Fixture (ABCDE12345)' }
   assert.doesNotThrow(() => requireReleaseEnvironment(info, env))
   for (const name of signingSecrets) assert.throws(() => requireReleaseEnvironment(info, { ...env, [name]: '' }), new RegExp(name))
   assert.throws(() => requireReleaseEnvironment(info, { ...env, APPLE_SIGNING_IDENTITY: 'Developer ID Application: Other (AAAAA99999)' }), /APPLE_SIGNING_IDENTITY/)
-  assert.throws(() => requireReleaseEnvironment(info, { ...env, GITHUB_EVENT_NAME: 'workflow_dispatch' }), /tag push/)
-  assert.throws(() => requireReleaseEnvironment(info, { ...env, GITHUB_REF: 'refs/tags/v1.2.4' }), /tag push/)
+  assert.doesNotThrow(() => requireReleaseEnvironment(info, { ...env, GITHUB_EVENT_NAME: 'workflow_dispatch' }))
+  assert.throws(() => requireReleaseEnvironment(info, { ...env, GITHUB_EVENT_NAME: 'pull_request' }), /tag push\/dispatch/)
+  assert.throws(() => requireReleaseEnvironment(info, { ...env, GITHUB_REF: 'refs/tags/v1.2.4' }), /tag push\/dispatch/)
 })
 
 test('publication channels bind exact source, commit and canonical bounded run number', () => {
@@ -141,6 +142,7 @@ test('publication channels bind exact source, commit and canonical bounded run n
     assert.deepEqual(publicationInfo('1.2.3', { ...previewEnv, GITHUB_EVENT_NAME: event }), { ...releaseInfo('1.2.3'), tag: 'preview-42-abcdef0', prerelease: true, commit: previewEnv.GITHUB_SHA })
   }
   assert.deepEqual(publicationInfo('1.2.3', { ...previewEnv, GITHUB_REF: 'refs/tags/v1.2.3' }), { ...releaseInfo('1.2.3'), prerelease: false })
+  assert.deepEqual(publicationInfo('1.2.3', { ...previewEnv, GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF: 'refs/tags/v1.2.3' }), { ...releaseInfo('1.2.3'), prerelease: false })
   assert.equal(publicationInfo('1.2.3', { ...previewEnv, GITHUB_RUN_NUMBER: String(Number.MAX_SAFE_INTEGER) }).tag, 'preview-9007199254740991-abcdef0')
   for (const run of [undefined, '', '0', '01', '-1', '1.5', '1e3', ' 1', '1\n', 1, '9007199254740992', '9'.repeat(100)]) {
     assert.throws(() => publicationInfo('1.2.3', { ...previewEnv, GITHUB_RUN_NUMBER: run }), /GITHUB_RUN_NUMBER/)
@@ -153,6 +155,5 @@ test('publication channels bind exact source, commit and canonical bounded run n
     { GITHUB_REPOSITORY: 'fork/oc-chan' }, { GITHUB_REPOSITORY: undefined },
     { GITHUB_EVENT_NAME: 'pull_request' }, { GITHUB_EVENT_NAME: 'pull_request_target' },
     { GITHUB_REF: 'refs/heads/feature' }, { GITHUB_REF: 'refs/tags/v1.2.4' },
-    { GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF: 'refs/tags/v1.2.3' },
   ]) assert.throws(() => publicationInfo('1.2.3', { ...previewEnv, ...overrides }), /Publishing requires/)
 })

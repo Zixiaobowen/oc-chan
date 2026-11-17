@@ -8,6 +8,7 @@ const root = fileURLToPath(new URL('..', import.meta.url))
 export const suites = {
   install: ['scripts/install-local.test.mjs', 'scripts/local-app-lifecycle.test.mjs', 'scripts/local-install-readiness.test.mjs', 'scripts/push-main.test.mjs', 'scripts/develop.test.mjs'],
   closeout: ['scripts/closeout-task.test.mjs'],
+  versioning: ['scripts/version.test.mjs', 'scripts/release-workflow.test.mjs'],
   updates: ['scripts/prepare-release.test.mjs', 'scripts/publish-release.test.mjs'],
   packaging: ['scripts/build-app.test.mjs', 'scripts/check-package.test.mjs', 'scripts/dependency-review.test.mjs', 'scripts/rust-dependencies.test.mjs'],
   marketplace: ['scripts/build-plugin-market-rust.test.mjs'],
@@ -50,6 +51,7 @@ const rules = [
   [/^scripts\/closeout-task\.mjs$/, ['closeout'], [], '任务工作树收尾与远端交接门禁'],
   [/^scripts\/push-main\.mjs$/, ['install', 'delivery', 'closeout'], ['installer'], 'GitHub推送确认及其收尾消费者'],
   [/^scripts\/(?:install-(?:local|validation)|local-install-(?:readiness|process)|local-app-lifecycle|develop)\.(?:mjs|m)$|^\.githooks\//, ['install', 'delivery'], ['installer'], '本机安装、真实就绪与实例归属'],
+  [/^scripts\/(?:version|release-workflow)\.mjs$|^\.github\/workflows\/release-(?:prepare|stable)\.yml$|^releases\//, ['versioning', 'updates'], [], '版本一致性与发布准备、正式发布入口'],
   [/^scripts\/(?:prepare-release|publish-release|release-config|dist)\.mjs$/, ['updates', 'packaging'], ['updates'], 'schema2发布与打包'],
   [/^scripts\/(?:build-app|check-package|dependency-review|rust-dependencies)\.mjs$|^docs\/(?:package-baseline|dependency-review-policy)\.json$|^resources\/rust-license-supplements\//, ['packaging', 'delivery'], [], 'Rust产物、锁绑定审计与完整许可证'],
   [/^scripts\/build-plugin-market-rust\.mjs$|^plugin-market\//, ['marketplace', 'packaging'], ['marketplace', 'system'], '原生插件发布目录'],
@@ -57,7 +59,7 @@ const rules = [
   [/^scripts\/(?:local-delivery|delivery-source|delivery-zip)\.mjs$/, ['delivery', 'packaging', 'install'], [], '交付快照与归档完整性'],
   [/^scripts\/performance\//, ['performance'], [], '资源性能测量工具'],
   [/^scripts\/smoke-renderer\.mjs$|^scripts\/smoke\//, ['performance', 'install'], ['host'], '真实GPUI验收与隔离夹具'],
-  [/^scripts\/ci-tests\.mjs$|^\.github\/workflows\//, ['ci'], [], 'CI行为选择与执行门禁'],
+  [/^scripts\/ci-tests\.mjs$|^\.github\/workflows\//, ['ci', 'versioning'], [], 'CI行为选择与执行门禁'],
   [/^resources\//, ['packaging'], ['host'], '生产原生资源'],
   [/\.md$|^docs\/|^\.impeccable\/|^\.gitignore$|^LICENSE(?:\..*)?$/, [], [], '文档与开发说明']
 ]

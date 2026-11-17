@@ -89,6 +89,8 @@ OC Chan 只读观察上游 Agent 和任务，不执行定时任务、不终止 A
 
 本地和预览版采用 ad-hoc 签名，不等于 Developer ID 签名或 Apple 公证。正式版使用与包版本一致的 `vX.Y.Z` 标签，并要求 Apple 签名与公证密钥；正式签名、公证及签名版本的原地更新仍待验收。应用内更新仅适用于具备 Developer ID 签名的安装版。详见[发布与更新条件](docs/distribution.md#应用内更新)。
 
+产品版本采用 `X.Y.Z`，以根 `Cargo.toml` 为准。GitHub Actions 的 **Prepare release** 入口选择 `patch`（修复）、`minor`（功能）或 `major`（重大版本），填写发布说明后自动创建版本 PR；PR 合并后，在 **Release stable** 输入相同版本，自动创建标签并触发正式构建。CI 校验 Cargo、npm 和锁文件版本一致，发布说明随版本保存，已有 Release 不覆盖。本地可用 `npm run version:check` 和 `npm run version:bump -- patch --notes-file /path/to/notes.md`。首次启用条件、失败处理及命令见[版本管理](docs/distribution.md#版本管理)。
+
 在设置的“应用更新”中，点击“发行说明与下载”可打开 GitHub Releases。开发和未签名版本会提示从该页面下载并手动安装。
 
 ## 开发

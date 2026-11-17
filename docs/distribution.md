@@ -55,6 +55,31 @@ npm run install:local -- --delivery release/gpui/local-gpui-new
 
 提交成功必须收到当前事务的真实就绪回执：版本、进程、nonce及可执行身份匹配，`renderer_entry="main:gpui:paint"`、`renderer_committed=true`、`action_round_trip=true`，已启用采集域就绪，可用Hermes历史查询成功且进程持续存活。动作往返替代旧 renderer IPC 回执；停用分区和无历史来源明确记为disabled/unavailable，不能填成功空结果。失败回滚保留现场。完整规则见[更新事务契约](rust-migration/update-contract.md)。
 
+## 版本管理
+
+产品版本只接受 `X.Y.Z`。根 `Cargo.toml` 的 `[workspace.package].version` 是权威来源；`package.json`、npm 锁文件及 Cargo 锁文件中的 workspace 继承版本包必须一致。`patch` 递增修订号，`minor` 递增次版本并清零修订号，`major` 递增主版本并清零其余两项。发布后修复必须用新版本，不覆盖旧安装包。预览构建继续用运行编号与提交 SHA 区分，不进入稳定自动更新；本流程不新增 beta 更新通道。
+
+默认使用 GitHub Actions 的两个入口：
+
+1. 在 `main` 运行 **Prepare release**（`release-prepare.yml`），选择 `patch`、`minor` 或 `major`，填写本次用户可见变化。工作流同步版本，保存 `releases/<版本>.md`，创建版本分支及目标为 `main` 的 PR，并显式启动该分支的 Build macOS 验证。PR 本身不发布正式版。
+2. 审阅版本、发布说明、中英文 README 和 CI 结果后合并 PR。发布准备不自动合并；main 的既有预览流程保持不变。
+3. 在 `main` 运行 **Release stable**（`release-stable.yml`），输入已合并的完整版本，例如 `0.2.0`。工作流检查版本、发布说明和签名配置，创建不可覆盖的 `v0.2.0` 标签，再显式启动该标签的 Build macOS；签名、公证、产物验证全部通过后才公开正式 Release。
+
+准备入口与正式入口使用内置 `GITHUB_TOKEN`。仓库 Settings → Actions → General 必须允许 GitHub Actions 创建 Pull Request；组织策略也须允许该操作。工作流合入默认分支后，手动入口才可使用。内置令牌创建 PR 或标签不会触发普通 push/PR 工作流，因此入口显式 dispatch 后续构建；不能把“PR/标签已创建”当成构建或发布成功。无需添加额外 PAT。
+
+本地也可准备同样的变更：
+
+```sh
+npm run version:check
+npm run version:bump -- patch --notes-file /absolute/path/to/notes.md
+npm run version:check -- --release
+npm run test:release
+```
+
+本地递增命令只修改版本相关文件和新增发布说明，不提交、不推送、不创建标签、不替换正式应用。发布说明必须非空且受大小上限约束；不要用 `npm version` 单独修改 npm 版本。递增前会验证原始锁文件与依赖审计记录一致，仅在外部依赖未改变时同步新锁摘要，不重写许可、公告、审查日期或审查结论。普通版本检查不要求为既有历史版本补写发布说明；正式发布检查必须有对应说明。
+
+重复版本、版本漂移、锁摘要漂移、缺失发布说明、签名配置缺失及非 main 来源均明确失败。发生网络中断时先查看工作流日志和已创建的分支、PR、标签、草稿；不删除或覆盖既有对象来伪装重试成功。正式安装和签名版之间的原地升级仍需独立验收，版本自动化不替代这些证据。
+
 ## GitHub Actions构建与发布
 
 [Build macOS工作流](https://github.com/Zixiaobowen/oc-chan/actions/workflows/build.yml)覆盖main、目标为main的PR、版本标签及手动构建。macOS安装包使用GitHub Releases分发；GitHub Packages用于依赖包或容器镜像，不用于本项目的DMG/ZIP。原生验收运行器需要macOS 26+；生产最低系统要求与验收系统不能混同。云端执行状态以对应提交的实际Actions回执为准，本地修改工作流不等于CI已经通过。
@@ -65,7 +90,7 @@ CI安装锁定npm/Cargo依赖，按变更映射运行行为测试；应用入口
 
 PR和其他分支上的手动构建只上传Actions产物，不发布。PR新提交可取消旧检查；main和标签运行不因后续推送取消在途发布。GitHub同一并发组只保留一个运行和一个待运行任务，密集推送可能合并为最新的待运行提交。
 
-正式版仍由匹配`package.json`的稳定版本标签`vX.Y.Z`触发，要求完整Developer ID签名和Apple公证密钥。已有Release和附件不得覆盖。同一次运行重跑会使用相同标签；若已存在Release或预览标签，发布会明确拒绝并保留现场，不能用覆盖或自动删除掩盖不完整发布。
+正式版由与 Cargo workspace、npm 和锁文件一致的稳定标签 `vX.Y.Z` 的 push 或显式 dispatch 触发；标签提交必须属于 main，并提供对应发布说明。要求完整 Developer ID 签名和 Apple 公证密钥。已有 Release 和附件不得覆盖。同一次运行重跑会使用相同标签；若已存在 Release 或预览标签，发布会明确拒绝并保留现场，不能用覆盖或自动删除掩盖不完整发布。
 
 签名CI使用以下Secrets，不将证书、密码或令牌写入仓库：
 

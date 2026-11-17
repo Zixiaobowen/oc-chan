@@ -7,6 +7,11 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact commit requested by release automation
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -44,8 +49,16 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
+      - name: Install pinned Rust toolchain for version metadata
+        run: rustup toolchain install 1.99.0 --profile minimal
+
+      - name: Validate product versions and release ancestry
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: node scripts/release-workflow.mjs verify-build
+
       - name: Preflight signed release
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref, 'refs/tags/')
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -66,12 +79,11 @@ jobs:
           xcrun --find swiftc
           xcrun --find clang++
           xcrun --sdk macosx --show-sdk-version
-          rustup toolchain install 1.99.0 --profile minimal
           cargo install cargo-audit --version 0.22.2 --locked --root "$RUNNER_TEMP/oc-audit-tools"
           printf '%s\n' "$RUNNER_TEMP/oc-audit-tools/bin" >> "$GITHUB_PATH"
 
       - name: Import release identity into a job-owned temporary keychain
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref, 'refs/tags/')
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -115,11 +127,11 @@ jobs:
           retention-days: 14
 
       - name: Build ad-hoc signed Rust DMG and ZIP
-        if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
+        if: (github.event_name != 'push' && github.event_name != 'workflow_dispatch') || !startsWith(github.ref, 'refs/tags/')
         run: npm run dist -- --arm64
 
       - name: Build Developer ID signed and notarized Rust DMG and ZIP
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref, 'refs/tags/')
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -152,7 +164,7 @@ jobs:
         run: npm run check:package -- --app "$APP_DIRECTORY" --arch arm64 --artifacts-dir "$DISTRIBUTION_DIRECTORY" --output "$DISTRIBUTION_DIRECTORY/package-manifest-arm64.json"
 
       - name: Verify Developer ID team and notarization
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref, 'refs/tags/')
         env:
           APP_DIRECTORY: ${{ steps.distribution.outputs.app }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -199,7 +211,7 @@ jobs:
           compression-level: 0
 
       - name: Remove only this job's signing material
-        if: always() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref, 'refs/tags/')
         run: |
           if test -f "$RUNNER_TEMP/oc-release.p12"; then rm "$RUNNER_TEMP/oc-release.p12"; fi
           if test -f "$RUNNER_TEMP/oc-release.keychain-db"; then security delete-keychain "$RUNNER_TEMP/oc-release.keychain-db"; fi
@@ -209,7 +221,7 @@ jobs:
     needs: build
     if: >-
       ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+      ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:

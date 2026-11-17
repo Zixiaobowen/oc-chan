@@ -89,6 +89,8 @@ Each push to `main` starts a GitHub Actions build. After the checks pass, it pub
 
 Local and preview builds use ad-hoc signing, which is not Developer ID signing or Apple notarization. Stable releases require a `vX.Y.Z` tag matching the package version and Apple signing and notarization secrets. Formal signing, notarization, and in-place updates for signed builds still require validation. In-app updates apply only to installed builds signed with Developer ID. See [release and update requirements (Chinese)](docs/distribution.md#应用内更新).
 
+Product versions follow `X.Y.Z`, with the root `Cargo.toml` as the source of truth. In GitHub Actions, run **Prepare release**, choose `patch` (fixes), `minor` (features), or `major` (a major release), and supply release notes to create a version PR automatically. After merging it, run **Release stable** with the same version to create the tag and start the signed build. CI checks Cargo, npm, and lockfile versions; notes are retained per version, and existing Releases are never overwritten. Local commands are `npm run version:check` and `npm run version:bump -- patch --notes-file /path/to/notes.md`. See [version management (Chinese)](docs/distribution.md#版本管理) for setup requirements, failure handling, and commands.
+
 In Settings → App updates, choose **Release notes and downloads** to open GitHub Releases. Development and unsigned builds explain how to download from that page and install manually.
 
 ## Development

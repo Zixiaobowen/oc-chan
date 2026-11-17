@@ -2,24 +2,28 @@ import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { opendir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { packageReleaseInfo, publicationInfo, releaseInfo, releaseRepository } from './release-config.mjs'
 import { inspectReleaseAssets } from './prepare-release.mjs'
+import { readBounded } from './rust-dependencies.mjs'
 
 // The workflow must serialize every writer to this repository from Latest read
 // through publication and readback. GitHub has no conditional Latest update API.
-export async function publishRelease({ directory, version, tag, env = process.env }, run = spawnSync) {
+export async function publishRelease({ directory, version, tag, notesFile, env = process.env }, run = spawnSync) {
   const info = publicationInfo(version, env)
   if (!directory || tag !== info.tag) throw new Error(`Release tag must match package version and publication source: ${info.tag}`)
   if (!env.GH_TOKEN?.trim()) throw new Error('Missing required release environment: GH_TOKEN')
+  const stableNotes = info.prerelease ? undefined : readBounded(notesFile, 64 * 1024).toString('utf8')
+  if (!info.prerelease && !stableNotes.trim()) throw new Error('Stable release notes must not be empty')
 
-  function gh(args) {
+  function gh(args, input) {
     const result = run('gh', args, {
       encoding: 'utf8',
       maxBuffer: 1024 * 1024,
       timeout: 10 * 60 * 1000,
       env: { ...env, GH_REPO: releaseRepository },
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
+      ...(input === undefined ? {} : { input }),
     })
     if (result.error) throw result.error
     if (args[0] === 'api') {
@@ -126,8 +130,8 @@ export async function publishRelease({ directory, version, tag, env = process.en
     const title = info.prerelease ? `OC Chan preview #${env.GITHUB_RUN_NUMBER} (${info.commit.slice(0, 7)})` : `OC Chan ${tag}`
     const notes = info.prerelease
       ? `OC Chan main preview\n\nBuilt from main commit ${info.commit}.\n\nApple Silicon macOS installers are ad-hoc signed, not Developer ID signed, and not Apple notarized. Download and install manually. This prerelease does not enter the application's stable update channel.`
-      : `OC Chan ${tag}\n\nmacOS installers and signed application update packages for Apple Silicon.`
-    gh(['release', 'create', tag, ...(info.prerelease ? ['--target', info.commit, '--prerelease'] : ['--verify-tag']), '--draft', '--title', title, '--notes', notes, '--latest=false'])
+      : stableNotes
+    gh(['release', 'create', tag, ...(info.prerelease ? ['--target', info.commit, '--prerelease'] : ['--verify-tag']), '--draft', '--title', title, '--notes-file', '-', '--latest=false'], notes)
     stage = 'resolving created draft'
     const created = releaseByTag()
     if (!created || !created.isDraft || created.isPrerelease !== info.prerelease) throw new Error('Created draft identity or state mismatch')
@@ -173,6 +177,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const [directory, tag] = process.argv.slice(2)
   const info = publicationInfo(packageReleaseInfo().version)
   if (!directory || tag !== info.tag || process.argv.length !== 4) throw new Error(`Usage: node scripts/publish-release.mjs <verified-assets-dir> ${info.tag}`)
-  const result = await publishRelease({ directory, version: info.version, tag, env: process.env })
+  const notesFile = fileURLToPath(new URL(`../releases/${info.version}.md`, import.meta.url))
+  const result = await publishRelease({ directory, version: info.version, tag, notesFile, env: process.env })
   console.log(`Published ${releaseRepository} ${result.tag} (Prerelease: ${result.prerelease}, Latest: ${result.latest}) ${result.url}`)
 }
