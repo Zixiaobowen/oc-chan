@@ -53,6 +53,8 @@ Right-click a linked OMP node to jump to its Tern tab. For subagents, OC Chan fo
 
 View launchd, cron, OMP, and Hermes tasks together, filtering by type, scope, status, or name. Hermes tasks include per-run history, duration, and delivery results. Confirmed execution and delivery failures, sustained data-source outages, and recoveries appear in the local event list. Notifications are off by default; you can subscribe by source or task.
 
+Open a task to read its instructions, script or command, arguments, working directory, model, and raw schedule configuration, where supplied by its source. Configuration and execution history refresh independently. Task bodies are read locally on demand, excluded from periodic snapshots, events, and redacted diagnostics, and never executed.
+
 ### Add system monitoring when you need it
 
 Install the official system-monitor plugin from **Plugins** in the app to view CPU, memory, and network trends, disk space, and processes ranked by CPU or memory usage. The menu-bar panel can combine agent, task, and system summaries.

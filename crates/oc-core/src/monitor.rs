@@ -179,6 +179,19 @@ impl Monitor {
         };
         let result = self.registry.history(&id, job.clone(), offset, cancel).await?; self.shared.require_job(&job)?; self.open()?; Ok(result)
     }
+    pub async fn schedule_detail(self: &Arc<Self>, job_id: &str, identity: &str, cancel: CancellationToken) -> Result<ScheduleDetail> {
+        self.ready()?; check_cancel(&cancel)?;
+        let target = NavigationTarget::Schedule { id: job_id.into(), identity: identity.into() }; target.validate()?;
+        let (id, job) = {
+            let state = self.shared.state.lock().expect("monitor state poisoned");
+            let owner = state.owners[index(MonitorSection::Schedules)].as_ref().filter(|owner| owner.enabled).ok_or_else(|| Error::new("OC_PLUGIN_DISABLED", "Schedule collection is disabled"))?;
+            let job = state.snapshot.schedules.data.as_ref().and_then(|data| data.jobs.iter().find(|job| job.id == job_id)).cloned().ok_or_else(|| Error::new("ENOENT", "Unknown scheduled job"))?;
+            if target != NavigationTarget::schedule(&job) { return Err(Error::new("OC_SCHEDULE_IDENTITY", "所选任务配置已变化，请重新选择 / Selected schedule identity changed; select the task again")); }
+            (owner.id.clone(), job)
+        };
+        let result = self.registry.schedule_detail(&id, job.clone(), cancel).await?;
+        self.shared.require_job(&job)?; self.open()?; Ok(result)
+    }
     pub async fn query_events(self: &Arc<Self>, query: EventQuery, cancel: CancellationToken) -> Result<EventPage> {
         self.ready()?; check_cancel(&cancel)?; query.validate()?;
         let id = { let state = self.shared.state.lock().expect("monitor state poisoned"); state.owners[index(MonitorSection::Events)].as_ref().filter(|owner| owner.enabled).ok_or_else(|| Error::new("OC_EVENTS_DISABLED", "Local events are disabled"))?.id.clone() };

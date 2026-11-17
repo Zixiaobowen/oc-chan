@@ -38,9 +38,12 @@ npm run smoke:renderer -- --scenario marketplace --out /tmp/oc-chan-marketplace-
 npm run smoke:renderer -- --scenario notifications --out /tmp/oc-chan-notifications-new
 npm run smoke:renderer -- --scenario topology --out /tmp/oc-chan-topology-new
 npm run smoke:renderer -- --scenario sidebar --out /tmp/oc-chan-sidebar-new
+npm run smoke:renderer -- --scenario schedules --out /tmp/oc-chan-schedules-new
 ```
 
-当前 `scripts/smoke-renderer.mjs` 复用真实开发启动器，检查隐藏且非 key 的 GPUI 窗口，按1280×860和880×640导航页面，通过 Metal capture 保存 PNG，打开隐藏托盘并验证退出与实例清理。`--out` 指定证据目录；脚本会创建目录，建议每轮使用独立路径。`marketplace` 目前选择插件/设置页，`topology` 选择 Agent 页，其余场景选择全部主要页面；场景名称本身不证明原有专项行为已覆盖。报告保留 `visibleWindowAcceptance: false`，当前文档不宣称这轮 GPUI smoke 已运行通过。
+当前 `scripts/smoke-renderer.mjs` 复用真实开发启动器，检查隐藏且非 key 的 GPUI 窗口，按1280×860和880×640导航页面，通过 Metal capture 保存 PNG，并验证退出与实例清理。`--out` 指定证据目录；脚本会创建目录，建议每轮使用独立路径。`marketplace` 选择插件/设置页，`topology` 选择 Agent 页，`schedules` 选择定时任务页，其余场景选择全部主要页面；除 `schedules` 外还检查隐藏托盘及设置恢复。场景名称本身不证明原有专项行为已覆盖。报告保留 `visibleWindowAcceptance: false`，是否通过以实际运行证据为准。
+
+`schedules` 只验收定时任务页及配置详情：读取隔离 Hermes 配置中的长正文、工作目录和模型，检查 1280×860 / 880×640 的正文宽度、配置与历史独立刷新、任务切换、关闭与离页释放。该场景不安装插件、不运行设置恢复流程，退出时核对本次实例已回收。
 
 验收 driver 使用真实 GPUI 状态和动作，不提供 DOM setter、JavaScript eval、React 提交或 WebKit 探针。请求20秒截止，启动等待最多1200秒，首个设置状态等待默认60秒，退出排空30秒；以当前脚本为准，不沿用旧 WebView runner 的分阶段预算或 `--fault` 参数。失败输出 `result.json`、`launcher.log` 和已捕获截图并返回非零。
 

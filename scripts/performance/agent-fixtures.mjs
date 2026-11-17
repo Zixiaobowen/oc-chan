@@ -1,7 +1,7 @@
 import { constants } from 'node:fs'
 import { open } from 'node:fs/promises'
 import assert from 'node:assert/strict'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
@@ -11,6 +11,11 @@ import { prepareFixtures } from './fixtures.mjs'
 export async function prepareSmokeFixtures(directory, seed = 20261104, sessionCount = 32) {
   assert([32, 128].includes(sessionCount), 'Fixture sessions must be 32 or 128')
   const manifest = await prepareFixtures(directory, { seed, now: Date.now() })
+  const taskDocument = JSON.parse(await readFile(manifest.jobsFile, 'utf8'))
+  const detailPrompt = '检查项目每日构建结果，列出失败原因与需要人工处理的事项。\n保留原始错误信息，不执行部署。\n' + '这是一段用于验证窄窗口换行的任务说明。'.repeat(24) + '\n/workspace/' + 'unbroken-path-segment'.repeat(12)
+  Object.assign(taskDocument.jobs[0], { prompt: detailPrompt, workdir: manifest.root, model: 'acceptance-detail-model' })
+  await writeFile(manifest.jobsFile, JSON.stringify(taskDocument) + '\n', { mode: 0o600 })
+  manifest.taskDetail = { prompt: detailPrompt, workdir: manifest.root, model: 'acceptance-detail-model' }
   const fixtureModel = `acceptance-fixture-${randomUUID()}`
   const sessions = path.join(manifest.home, '.omp/agent/sessions')
   const owners = path.join(manifest.home, '.omp/run/session-owners')

@@ -72,9 +72,13 @@ impl RootView {
             let mut detail=div().flex().flex_col().gap_3();
             if let Some(job)=self.monitor.schedules.data.as_ref().and_then(|s|s.jobs.iter().find(|j|&j.id==id)).filter(|j|NavigationTarget::schedule(j)==*target){
                 if !self.schedule_matches(job,cx){detail=detail.child(self.note(self.t("此任务不在当前筛选结果中；已保留筛选条件，可清除筛选后定位。","This schedule is outside the current filters. Filters are preserved; clear them to reveal it.")));}
-                detail=detail.child(self.row(self.t("名称","Name"),job.name.clone())).child(self.row(self.t("状态","State"),format!("{} · {}",self.label(job.state),self.label(job.state_reason))))
+                detail=detail.child(self.row(self.t("名称","Name"),job.name.clone()))
                     .child(self.row(self.t("计划","Schedule"),job.schedule.clone())).child(self.row(self.t("作用范围 / 来源类型","Scope / Origin"),format!("{} / {}",self.label(job.scope),self.label(job.origin))))
-                    .child(self.row(self.t("配置路径","Configuration"),job.file.clone().unwrap_or_else(||"—".into()))).child(self.row(self.t("程序","Executable"),job.executable.clone().unwrap_or_else(||"—".into())))
+                    .child(self.row(self.t("配置路径","Configuration"),job.file.clone().unwrap_or_else(||"—".into())))
+                    .child(self.schedule_configuration(id,cx))
+                    .child(div().pt_3().font_weight(FontWeight::SEMIBOLD).child(self.t("运行状态","Execution status")))
+                    .child(self.row(self.t("状态","State"),format!("{} · {}",self.label(job.state),self.label(job.state_reason))))
+                    .child(self.row(self.t("程序","Executable"),job.executable.clone().unwrap_or_else(||"—".into())))
                     .child(self.row("PID",job.pid.map(|n|n.to_string()).unwrap_or_else(||"—".into()))).child(self.row(self.t("下次运行","Next run"),job.next_run.clone().unwrap_or_else(||"—".into())))
                     .child(self.row(self.t("最近退出码","Last exit code"),job.last_exit_code.map(|n|n.to_string()).unwrap_or_else(||"—".into())));
                 if let Some(run)=&job.last_run{detail=detail.child(self.row(self.t("最近执行","Last execution"),format!("{} · {}",self.label(run.result),run.at.as_deref().unwrap_or("—"))));}
@@ -95,6 +99,44 @@ impl RootView {
             }else{detail=detail.child(self.note(self.t("任务已移除或身份发生改变","This schedule was removed or changed identity")));}body=body.child(detail);
         }body.into_any_element()
     }
+    fn schedule_configuration(&self,id:&str,cx:&mut Context<Self>)->AnyElement{
+        let busy=self.busy("monitor_schedule_detail")||self.deferred_queries.contains_key("monitor_schedule_detail");
+        let error=self.requests.get("monitor_schedule_detail").and_then(|request|request.error.as_ref());
+        let mut section=div().w_full().min_w_0().flex().flex_col().gap_2().pt_3()
+            .child(self.toolbar().child(div().flex_1().font_weight(FontWeight::SEMIBOLD).child(self.t("任务配置","Task configuration")))
+                .child(self.button("schedule-detail-refresh",if error.is_some(){self.t("重试读取配置","Retry configuration")}else{self.t("刷新配置","Refresh configuration")},Action::ScheduleDetail,self.schedule_detail_allowed()&&!busy,cx)));
+        if self.paused{section=section.child(self.note(self.t("监控已暂停；恢复后读取任务配置。","Monitoring is paused. Configuration loads when resumed.")));}
+        else if !self.settings.as_ref().is_some_and(|s|s.settings.plugins.schedules){section=section.child(self.note(self.t("定时任务采集已关闭；启用后读取任务配置。","Schedule collection is disabled. Enable it to read configuration.")));}
+        if busy{section=section.child(self.note(self.t("正在读取任务配置…","Loading task configuration…")));}
+        if let Some(error)=error{section=section.child(self.note(error.clone()));}
+        if let Some(config)=self.schedule_config.as_ref().filter(|config|config.job_id==id){
+            section=section.child(self.note(format!("{} · {}",self.t("读取时间","Read at"),config.collected_at)));
+            if config.fields.is_empty(){section=section.child(self.note(self.t("此来源未提供可显示的任务配置。","This source provided no task configuration fields.")));}
+            for field in &config.fields{
+                let key=format!("schedule-field-{}",field.key);
+                let row=div().id(SharedString::from(key.clone())).relative().w_full().min_w_0().flex().flex_col().gap_1().py_2().border_b_1().border_color(rgb(self.palette().line))
+                    .child(div().text_sm().text_color(rgb(self.palette().muted)).child(self.schedule_field_label(&field.key).to_owned()))
+                    .child(div().w_full().min_w_0().whitespace_normal().child(if field.value.is_empty(){self.t("未填写","Not specified").to_owned()}else{field.value.clone()}));
+                section=section.child(self.mark_bounds(&key,row,cx));
+            }
+            for note in &config.notes{section=section.child(self.note(note.clone()));}
+        }else if !busy&&error.is_none()&&self.schedule_detail_allowed(){section=section.child(self.note(self.t("尚未读取任务配置，请刷新配置。","Task configuration has not been loaded. Refresh configuration to read it.")));}
+        section.into_any_element()
+    }
+    fn schedule_field_label<'a>(&self,key:&'a str)->&'a str{let (zh,en)=match key{
+        "configurationFile"=>("配置文件","Configuration file"),"metadataFile"=>("元数据文件","Metadata file"),
+        "prompt"=>("任务正文","Task prompt"),"command"=>("执行命令","Command"),"program"=>("程序","Program"),"argv"=>("程序参数","Arguments"),
+        "launchdArguments"=>("launchd 程序参数","launchd program arguments"),
+        "cwd"=>("工作目录","Working directory"),"model"=>("模型","Model"),"provider"=>("模型提供商","Provider"),
+        "workdir"=>("Hermes 工作目录","Hermes working directory"),"workingDirectory"=>("launchd 工作目录","launchd working directory"),
+        "script"=>("脚本","Script"),"interpreter"=>("解释器","Interpreter"),"noAgent"=>("不使用 Agent","No agent"),"monitorScript"=>("监控脚本","Monitor script"),
+        "skills"=>("技能列表","Skills"),"skill"=>("技能","Skill"),"repeatCompleted"=>("已重复次数","Completed repetitions"),"repeatTimes"=>("重复次数","Repetitions"),
+        "schedule"=>("调度规则","Schedule rule"),"calendar"=>("日历计划","Calendar"),"timezone"=>("时区","Time zone"),"notBefore"=>("最早执行时间","Not before"),"originalSchedule"=>("原始调度规则","Original schedule"),
+        "defaultTimezone"=>("默认时区","Default time zone"),"metadataNotBefore"=>("元数据最早执行时间","Metadata not before"),
+        "enabled"=>("是否启用","Enabled"),"state"=>("配置状态","Configured state"),"startInterval"=>("启动间隔","Start interval"),"startCalendarInterval"=>("日历启动条件","Calendar start conditions"),
+        "runAtLoad"=>("加载时运行","Run at load"),"keepAlive"=>("保持运行","Keep alive"),"standardInPath"=>("标准输入路径","Standard input path"),"standardOutPath"=>("标准输出路径","Standard output path"),"standardErrorPath"=>("标准错误路径","Standard error path"),
+        _=>return key,
+    };self.t(zh,en)}
     pub(super) fn events(&self,cx:&mut Context<Self>)->AnyElement{
         let mut body=div().flex().flex_col().gap_3().child(self.source_search.clone())
             .child(self.chips("event-type",&[("全部类型","All types"),("执行失败","Execution failed"),("投递失败","Delivery failed"),("来源不可用","Source unavailable"),("来源恢复","Source recovered")],cx))
