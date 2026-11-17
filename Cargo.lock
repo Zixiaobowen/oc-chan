@@ -3644,7 +3644,7 @@ dependencies = [
 
 [[package]]
 name = "oc-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -3672,7 +3672,7 @@ dependencies = [
 
 [[package]]
 name = "oc-desktop"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-channel 2.5.0",
@@ -3704,7 +3704,7 @@ dependencies = [
 
 [[package]]
 name = "oc-installer"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "libc",
  "plist",
@@ -3726,7 +3726,7 @@ dependencies = [
 
 [[package]]
 name = "oc-plugin-sdk"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
  "libc",
@@ -3738,7 +3738,7 @@ dependencies = [
 
 [[package]]
 name = "oc-system-monitor"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "oc-plugin-sdk",
  "serde",
