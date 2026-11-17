@@ -15,7 +15,7 @@ function receiptFixture() {
   const request = { schema: 1, transaction: 'b53a76cd-a128-478c-b028-d49ba9f9bc2e', bundle: '/isolated/OC Chan.app', version: '1.2.3', issued_at_ms: 1000, expires_at_ms: 61000,
     process: { pid: 1234, birth_seconds: 1, birth_fraction: 0, executable: '/isolated/OC Chan.app/Contents/MacOS/oc-chan' } }
   const ready = { enabled: true, installed: true, state: 'ready', reason: null }
-  const receipt = { request: structuredClone(request), checked_at_ms: 2000, evidence: { host_version: '1.2.3', renderer_entry: '/src/main.tsx', renderer_committed: true, ipc_round_trip: true,
+  const receipt = { request: structuredClone(request), checked_at_ms: 2000, evidence: { host_version: '1.2.3', renderer_entry: 'main:gpui:paint', renderer_committed: true, action_round_trip: true,
     partitions: { agents: { ...ready }, schedules: { ...ready }, events: { ...ready }, system: { enabled: false, installed: false, state: 'not-installed', reason: null } },
     hermes_history: 'unavailable', history_entries: 0, history_reason: 'No history source is installed' } }
   return { request, receipt }
@@ -27,7 +27,8 @@ test('receipt validation accepts explicit actual unavailability without claiming
 })
 for (const [name, mutate] of [
   ['missing real renderer commit', value => { value.evidence.renderer_committed = false }],
-  ['missing IPC', value => { value.evidence.ipc_round_trip = false }],
+  ['foreign renderer', value => { value.evidence.renderer_entry = '/src/main.tsx' }],
+  ['missing action round trip', value => { value.evidence.action_round_trip = false }],
   ['foreign process birth', value => { value.request.process.birth_fraction++ }],
   ['installed system failure', value => { value.evidence.partitions.system = { enabled: true, installed: true, state: 'unavailable', reason: 'collector failed' } }],
   ['unexplained unavailable history', value => { value.evidence.history_reason = null }],

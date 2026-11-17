@@ -7,9 +7,9 @@ import { promisify } from 'node:util'
 import { readBounded } from './rust-dependencies.mjs'
 
 const exec = promisify(execFile)
-const directories = ['src', 'src-tauri', 'crates', 'native', 'scripts', 'resources', 'plugins']
+const directories = ['crates', 'native', 'scripts', 'resources', 'plugins']
 const requiredFiles = [
-  'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'vite.config.ts', 'package.json', 'package-lock.json', 'tsconfig.json',
+  'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'package.json', 'package-lock.json',
   'docs/dependency-review-policy.json', 'docs/package-baseline.json'
 ]
 const maxFiles = 1024
@@ -21,7 +21,7 @@ const versionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]
 const statFields = ['dev', 'ino', 'mode', 'nlink', 'size', 'mtimeNs', 'ctimeNs']
 const sha256 = value => createHash('sha256').update(value).digest('hex')
 const comparePath = (a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0
-const cargoOutputs = new Set(['src-tauri/target', 'native/target', 'scripts/probes/wk/target'])
+const cargoOutputs = new Set(['native/target'])
 
 function unchanged(before, after, name) {
   if (statFields.some(field => before[field] !== after[field])) {
@@ -129,7 +129,6 @@ export async function captureDeliverySource(root) {
     const directory = await opendir(path.join(base, relative), { bufferSize: 32 })
     for await (const entry of directory) {
       const child = `${relative}/${entry.name}`
-      if (child === 'src-tauri/gen' && entry.isDirectory()) continue
       if (cargoOutputs.has(child)) {
         if (!entry.isDirectory() || entry.isSymbolicLink()) throw new Error(`Cargo output path is not a real directory: ${child}`)
         const manifest = readBounded(path.join(base, path.dirname(child), 'Cargo.toml'), 64 * 1024).toString('utf8')

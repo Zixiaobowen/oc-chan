@@ -1,7 +1,7 @@
 import { execFile, spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
-import { copyFile, lstat, mkdir, mkdtemp, open, rename, rm, writeFile } from 'node:fs/promises'
+import { copyFile, cp, lstat, mkdir, mkdtemp, open, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
@@ -11,8 +11,7 @@ import { generateRustLicenses } from './rust-dependencies.mjs'
 export const ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
 export const TARGET = ['aarch64', 'apple', 'darwin'].join('-')
 export const BUNDLE_ID = 'local.oc-chan.desktop'
-export const BUILD_RECORD = path.join(ROOT, 'release/tauri/build.json')
-const TAURI = path.join(ROOT, 'node_modules/@tauri-apps/cli/tauri.js')
+export const BUILD_RECORD = path.join(ROOT, 'release/gpui/build.json')
 const RESOURCE_FILES = ['oc-data-worker', 'oc-installer', 'tern-navigation/present-window', 'tern-navigation/plugin/plugin.toml', 'tern-navigation/plugin/window.luau']
 export const NATIVE_RESOURCES = ['oc-data-worker', 'oc-installer', 'tern-navigation/present-window']
 export async function codeDirectoryHash(filename) {
@@ -55,9 +54,9 @@ export function signingIdentity(env = process.env) {
   assert(value === '-' || /^Developer ID Application: .+ \([A-Z0-9]{10}\)$/.test(value), 'APPLE_SIGNING_IDENTITY must name an explicit Developer ID Application identity or "-"')
   return value
 }
-export function buildEnvironment({ resourcesDir, targetDir, instance, sign = '-', configuration }, original = process.env) {
-  const env = { ...original, CARGO_TARGET_DIR: targetDir, OC_CHAN_RESOURCE_DIR: resourcesDir, TAURI_CONFIG: JSON.stringify(configuration), APPLE_SIGNING_IDENTITY: sign }
-  for (const key of ['ELECTRON_RUN_AS_NODE', 'TAURI_DEV', 'TAURI_DEBUG', 'TAURI_SIGNING_PRIVATE_KEY', 'TAURI_SIGNING_PRIVATE_KEY_PATH', 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD']) delete env[key]
+export function buildEnvironment({ resourcesDir, targetDir, instance, sign = '-' }, original = process.env) {
+  const env = { ...original, CARGO_TARGET_DIR: targetDir, OC_CHAN_RESOURCE_DIR: resourcesDir, APPLE_SIGNING_IDENTITY: sign }
+  for (const key of ['ELECTRON_RUN_AS_NODE', 'TAURI_CONFIG', 'TAURI_DEV', 'TAURI_DEBUG', 'TAURI_SIGNING_PRIVATE_KEY', 'TAURI_SIGNING_PRIVATE_KEY_PATH', 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD']) delete env[key]
   assert(!/acceptance/.test(`${env.RUSTFLAGS ?? ''} ${env.CARGO_ENCODED_RUSTFLAGS ?? ''}`), 'Do not inject acceptance cfg through compiler flags')
   if (instance) env.OC_CHAN_DEV_INSTANCE = instance
   else { for (const key of Object.keys(env)) if (key.startsWith('OC_CHAN_') && key !== 'OC_CHAN_RESOURCE_DIR') delete env[key] }
@@ -71,11 +70,15 @@ export function developmentBundleLayout(instance, targetDir = path.join(instance
     resourcesDir: path.join(application, 'Contents/Resources'),
     identifier: `${BUNDLE_ID}.development.i${createHash('sha256').update(path.resolve(instance)).digest('hex').slice(0, 24)}` }
 }
-export function tauriConfiguration(frontendDir, resourcesDir, sign, development) {
-  return { ...(development ? { identifier: development.identifier } : {}),
-    build: { frontendDist: frontendDir, beforeBuildCommand: '', beforeBundleCommand: '', features: [] },
-    bundle: { active: true, createUpdaterArtifacts: false, resources: { [`${resourcesDir}${path.sep}`]: '' },
-      macOS: { signingIdentity: sign, ...(development ? { infoPlist: development.infoPlist } : {}) } } }
+export async function bundleApplication({ application, binary, resourcesDir, identifier = BUNDLE_ID, version, sign, development = false, execute = run, env = process.env }) {
+  await mkdir(path.join(application, 'Contents/MacOS'), { recursive: true })
+  await cp(resourcesDir, path.join(application, 'Contents/Resources'), { recursive: true, force: false, errorOnExist: true })
+  await copyFile(binary, path.join(application, 'Contents/MacOS/oc-chan'), constants.COPYFILE_EXCL)
+  await copyFile(path.join(ROOT, 'resources/brand/oc-chan.icns'), path.join(application, 'Contents/Resources/oc-chan.icns'), constants.COPYFILE_EXCL)
+  assert(/^[A-Za-z0-9.-]+$/.test(identifier) && /^[0-9A-Za-z.+-]+$/.test(version), 'Invalid bundle identity')
+  const plist = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>${identifier}</string><key>CFBundleName</key><string>OC Chan</string><key>CFBundleDisplayName</key><string>OC Chan</string><key>CFBundleExecutable</key><string>oc-chan</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>${version}</string><key>CFBundleVersion</key><string>${version}</string><key>CFBundleIconFile</key><string>oc-chan.icns</string><key>LSMinimumSystemVersion</key><string>13.0</string><key>NSHighResolutionCapable</key><true/><key>LSUIElement</key><${development ? 'true' : 'false'}/><key>NSPrincipalClass</key><string>NSApplication</string></dict></plist>\n`
+  await writeFile(path.join(application, 'Contents/Info.plist'), plist, { flag: 'wx', mode: 0o600 })
+  await execute('/usr/bin/codesign', ['--force', '--sign', sign, '--options', 'runtime', ...(sign === '-' ? [] : ['--timestamp']), application], { cwd: ROOT, env })
 }
 export async function withBuildLock(resourcesDir, work) {
   const filename = path.join(path.dirname(resourcesDir), '.build-app.lock'); await mkdir(path.dirname(filename), { recursive: true, mode: 0o700 })
@@ -119,19 +122,15 @@ export async function buildApplication(options = {}) {
   const instance = options.instance && path.resolve(options.instance)
   if (mode === 'development') assert(instance && path.dirname(instance) === path.join(ROOT, '.dev-instances') && /^instance-[\w-]+$/.test(path.basename(instance)), 'Development builds require an owned instance directory')
   else assert(!instance, 'Release builds cannot include a development instance')
-  const targetDir = path.resolve(options.targetDir ?? (instance ? path.join(instance, 'cargo') : path.join(ROOT, 'release/tauri/cargo')))
+  const targetDir = path.resolve(options.targetDir ?? (instance ? path.join(instance, 'cargo') : path.join(ROOT, 'release/gpui/cargo')))
   const resourcesDir = path.resolve(options.resourcesDir ?? (instance ? path.join(instance, 'resources') : path.join(ROOT, 'out/host-resources')))
-  const frontendDir = path.resolve(options.frontendDir ?? (instance ? path.join(instance, 'frontend') : path.join(ROOT, 'out/renderer')))
-  for (const directory of [targetDir, resourcesDir, frontendDir]) assert(instance ? within(instance, directory) : within(path.join(ROOT, 'out'), directory) || within(path.join(ROOT, 'release/tauri'), directory), 'Build output must stay inside its owned output tree')
+  for (const directory of [targetDir, resourcesDir]) assert(instance ? within(instance, directory) : within(path.join(ROOT, 'out'), directory) || within(path.join(ROOT, 'release/gpui'), directory), 'Build output must stay inside its owned output tree')
   const sign = mode === 'development' ? '-' : options.sign ?? signingIdentity(); assert(sign === '-' || /^Developer ID Application: /.test(sign), 'Invalid explicit signing identity')
   const execute = options.run ?? run
   return withBuildLock(resourcesDir, async () => {
     let primaryFailure
     const buildId = randomUUID(), development = instance ? developmentBundleLayout(instance, targetDir) : undefined
-    const infoPlist = instance && path.join(instance, `build-${buildId}.Info.plist`)
-    if (development) await writeFile(infoPlist, '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>LSUIElement</key><true/></dict></plist>\n', { flag: 'wx', mode: 0o600 })
-    const configuration = tauriConfiguration(frontendDir, resourcesDir, sign, development && { identifier: development.identifier, infoPlist })
-    const env = buildEnvironment({ resourcesDir, targetDir, instance, sign, configuration })
+    const env = buildEnvironment({ resourcesDir, targetDir, instance, sign })
     const packageInfo = await boundedJson(path.join(ROOT, 'package.json')); assert(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(packageInfo.version), 'Invalid package release version')
     await mkdir(path.dirname(resourcesDir), { recursive: true, mode: 0o700 }); const staged = await mkdtemp(path.join(path.dirname(resourcesDir), '.host-resources-'))
     let published = false
@@ -150,18 +149,11 @@ export async function buildApplication(options = {}) {
       await buildPluginMarketRust({ collector: path.join(nativeRoot, 'collector'), manifest: path.join(ROOT, 'plugins/system-monitor/manifest.json'), outDir: path.join(staged, 'plugin-market'), sign })
       generateRustLicenses({ root: ROOT, output: path.join(staged, 'rust-dependencies') })
       await publishResources(staged, resourcesDir, buildId); published = true
-      await execute(process.execPath, [path.join(ROOT, 'node_modules/vite/bin/vite.js'), 'build', '--outDir', frontendDir, '--emptyOutDir'], { cwd: ROOT, env })
-      const configurationFile = path.join(instance ?? path.join(ROOT, 'release/tauri'), `build-${buildId}.config.json`)
-      await mkdir(path.dirname(configurationFile), { recursive: true, mode: 0o700 }); await writeFile(configurationFile, `${JSON.stringify(configuration, null, 2)}\n`, { flag: 'wx', mode: 0o600 })
-      const features = mode === 'development' ? ['acceptance', 'custom-protocol'] : ['custom-protocol']
-      await execute(process.execPath, [TAURI, 'build', '--no-bundle', '--ci', ...(mode === 'development' ? ['--debug'] : []), '--target', TARGET,
-        '--features', features.join(','), '--config', configurationFile, '--', '--no-default-features'], { cwd: ROOT, env })
-      if (development) {
-        // Use the same Tauri bundler as distribution. It creates and signs a real
-        // application in the owned target tree; do not copy or relocate it again.
-        await execute(process.execPath, [TAURI, 'bundle', '--debug', '--ci', '--no-binary-patching', '--target', TARGET,
-          '--features', features.join(','), '--config', configurationFile, '--bundles', 'app'], { cwd: ROOT, env })
-      }
+      const features = mode === 'development' ? ['acceptance'] : []
+      await execute('cargo', ['build', '--locked', '-p', 'oc-desktop', '--bin', 'oc-chan', '--target', TARGET,
+        ...(mode === 'development' ? ['--features', 'acceptance'] : ['--release'])], { cwd: ROOT, env })
+      if (development) await bundleApplication({ application: development.application, binary: path.join(targetDir, TARGET, 'debug/oc-chan'), resourcesDir,
+        identifier: development.identifier, version: packageInfo.version, sign, development: true, execute, env })
       const binary = development?.binary ?? path.join(targetDir, TARGET, 'release', 'oc-chan')
       const catalog = await boundedJson(path.join(resourcesDir, 'plugin-market/catalog.json'))
       const files = [...RESOURCE_FILES, 'plugin-market/catalog.json', 'rust-dependencies/manifest.json', ...catalog.plugins.map(entry => `plugin-market/${entry.package}`)]
@@ -172,8 +164,8 @@ export async function buildApplication(options = {}) {
         resources[filename] = await digestFile(path.join(resourcesDir, filename))
         if (NATIVE_RESOURCES.includes(filename)) resources[filename].codeDirectoryHash = await codeDirectoryHash(path.join(resourcesDir, filename))
       }
-      const record = { schema: 2, buildId, root: ROOT, mode, version: packageInfo.version, arch: 'arm64', target: TARGET, features, sign,
-        resourcesDir, frontendDir, targetDir, configurationFile, binary, binaryIdentity: await digestFile(binary), resources,
+      const record = { schema: 3, renderer: 'gpui', buildId, root: ROOT, mode, version: packageInfo.version, arch: 'arm64', target: TARGET, features, sign,
+        resourcesDir, targetDir, binary, binaryIdentity: await digestFile(binary), resources,
         catalogSha256: resources['plugin-market/catalog.json'].digest,
         ...(development ? { developmentBundle: { ...development, infoPlistIdentity: await digestFile(path.join(development.application, 'Contents/Info.plist'), 'sha256', 64 * 1024) } } : {}) }
       const recordPath = instance ? path.join(instance, 'build.json') : BUILD_RECORD
@@ -191,8 +183,8 @@ export async function buildApplication(options = {}) {
 }
 export async function loadBuild() {
   const record = await boundedJson(BUILD_RECORD)
-  assert(record.schema === 2 && record.root === ROOT && record.mode === 'release' && record.arch === 'arm64' && record.target === TARGET
-    && JSON.stringify(record.features) === JSON.stringify(['custom-protocol']), 'A current production Rust build is required')
+  assert(record.schema === 3 && record.renderer === 'gpui' && record.root === ROOT && record.mode === 'release' && record.arch === 'arm64' && record.target === TARGET
+    && JSON.stringify(record.features) === JSON.stringify([]), 'A current production GPUI build is required')
   const binary = await digestFile(record.binary); assert(binary.digest === record.binaryIdentity.digest, 'Built binary changed; rebuild before bundling')
   for (const [filename, expected] of Object.entries(record.resources)) {
     assert(!filename.includes('..') && !path.isAbsolute(filename), 'Invalid resource receipt path')

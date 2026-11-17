@@ -173,7 +173,7 @@ pub struct ReadyEvidence {
     /// An actual committed renderer entry identifier; not a first-frame flag.
     pub renderer_entry: String,
     pub renderer_committed: bool,
-    pub ipc_round_trip: bool,
+    pub action_round_trip: bool,
     /// Exactly agents, schedules, events and system.
     pub partitions: BTreeMap<String, PartitionEvidence>,
     pub hermes_history: HistoryReadiness,
@@ -190,8 +190,8 @@ pub struct ReadyReceipt {
 
 impl ReadyEvidence {
     pub(crate) fn validate(&self, version: &str) -> Result<()> {
-        ensure(self.host_version == version && self.renderer_committed && self.ipc_round_trip,
-            "host version, real renderer commit or IPC round trip is missing")?;
+        ensure(self.host_version == version && self.renderer_committed && self.action_round_trip,
+            "host version, real renderer commit or view action round trip is missing")?;
         ensure(!self.renderer_entry.is_empty() && self.renderer_entry.len() <= 512,
             "renderer entry identifier is missing or oversized")?;
         ensure(self.partitions.len() == 4, "unexpected readiness partitions")?;

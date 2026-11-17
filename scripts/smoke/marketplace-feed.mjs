@@ -5,7 +5,7 @@ import { open, realpath } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { once } from 'node:events'
 import path from 'node:path'
-import { boundedFile } from './main-probe.mjs'
+import { boundedFile } from '../performance/agent-fixtures.mjs'
 import { buildMarketplaceFixtures } from '../build-marketplace-fixtures.mjs'
 
 const PACKAGE_LIMIT = 64 * 1024 * 1024

@@ -1,6 +1,6 @@
 # 更新与安装事务契约
 
-Rust更新控制器替换Electron/Squirrel。该实现不发布资产、不替换本机正式应用；正式接受路径需要Developer ID、公证与相应用户操作。本文件要求本地隔离环境完成真实文件/进程事务测试，不能只mock成功。
+Rust更新控制器由 GPUI 原生宿主调用。该实现不等于已经发布资产或替换本机正式应用；正式接受路径需要Developer ID、公证与相应用户操作。本文件要求本地隔离环境完成真实文件/进程事务测试，不能只mock成功。GPUI构建、视觉、安装及签名升级尚须各自取得实际验收证据。
 
 ## 发布源与下载
 
@@ -34,9 +34,11 @@ check30s、download15min、install120s；仅完整更新资格启动30s和每6h�
 
 ## 成功回执
 
-回执来自被启动的新应用，0600独占文件/私有目录，包含事务UUID、bundle realpath、版本、pid与birth、宿主版本、真实renderer入口提交、IPC往返、已启用采集分区就绪、Hermes历史可用性及system未装/已装状态。未知/unsupported按真实来源表达，不能强求用户没有的来源成功，也不能跳过已安装但失败的插件。
+回执来自被启动的新应用，0600独占文件/私有目录，包含事务UUID、bundle realpath、版本、pid与birth，以及 `ReadyEvidence`：宿主版本、`renderer_entry="main:gpui:paint"`、`renderer_committed=true`、`action_round_trip=true`、已启用采集分区就绪、Hermes历史可用性及system未装/已装状态。`crates/oc-desktop/src/readiness.rs` 等待真实绘制提交与宿主动作完成后生成证据，不使用旧 `ipc_round_trip` 字段。未知/unsupported按真实来源表达，不能强求用户没有的来源成功，也不能跳过已安装但失败的插件。
 
 助手校验全部字段和当前NSWorkspace运行实例、真实可执行路径、出生身份及finishedLaunching，再等待2秒确认持续存活。只spawn、只rename、只首帧或只snapshot不算安装成功。最大等待45s，受120s整体事务截止约束；过期/伪造/其他实例回执拒绝。
+
+构建回执与更新元数据分开：`release/gpui/` 的 `build.json` 使用schema 3和`renderer: "gpui"`；开发features为`["acceptance"]`，生产为`[]`；公开`latest.json`仍为schema 2。认证driver和真实隐藏窗口Metal capture只在acceptance构建，不能把验收入口带进生产，也不能用截图替代安装就绪协议。
 
 ## 临时环境验收
 

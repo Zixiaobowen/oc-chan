@@ -60,32 +60,24 @@ try{
   assert.equal((await provenance(baseline)).digest,frozen.digest,'Baseline source changed during comparison')
   assert.equal((await provenance(candidate)).digest,candidateFrozen.digest,'Candidate/shared fixture source changed during comparison')
   const first=runs[0].result,second=runs[1].result
+  assert.equal(first.schema,4,'Baseline must use the same native GPUI measurement contract')
+  assert.equal(second.schema,4)
+  assert.equal(first.renderer,'gpui');assert.equal(second.renderer,'gpui')
   assert.equal(first.host.arch,second.host.arch);assert.equal(first.host.memoryBytes,second.host.memoryBytes)
-  assert.equal(first.seed??first.options.seed,second.options.seed);assert.equal(first.mode??first.options.mode,second.options.mode)
-  assert.equal(first.scenario??first.options.scenario,second.options.scenario)
+  for(const key of ['mode','scenario','seed','sampler'])assert.equal(first.options[key],second.options[key])
+  assert.deepEqual(first.scope,second.scope,'Measurement coverage differs')
   assert.equal(first.runs.length,second.runs.length,'Repetition count differs')
-  const candidateFiles=new Map(candidateFrozen.files.map(file=>[file.path,file.sha256]))
-  const alignedRuns=[]
-  for(let index=0;index<first.runs.length;index++) {
-    const before=first.runs[index],after=second.runs[index]
-    assert(before.workload && after.workload,'Missing shared workload contract')
-    assert.deepEqual(before.viewport,after.viewport,'Actual CSS viewport or devicePixelRatio differs')
-    assert.deepEqual(before.settingsObserved,after.settingsObserved,'Observed theme/language/settings input differs')
-    assert.deepEqual(before.workloadExecuted,after.workloadExecuted,'Actual fixture writes/navigation/history/mutation load differs')
-    assert.deepEqual(before.workload,after.workload,'Fixture generation or workload configuration differs')
-    for(const source of before.workload.sources) assert.equal(source.sha256,candidateFiles.get(path.posix.normalize('scripts/performance/'+source.file)),'Shared fixture implementation differs from frozen candidate')
-    assert.equal(before.counters.expected,after.counters.expected,'Actual measured event workload differs')
-    if(args['--scenario']==='daily') {
-      assert.deepEqual(before.fixtureDiscovery,{sessions:32,processes:4})
-      assert.deepEqual(after.fixtureDiscovery,before.fixtureDiscovery)
-      assert.equal(before.counters.expected,before.workload.measuredSeconds*32,'Requested event workload was not achieved')
-    }
-    alignedRuns.push({index,workload:before.workload,fixtureDiscovery:before.fixtureDiscovery,expectedEvents:before.counters.expected})
-  }
-  const report={schema:2,host:{hostname:os.hostname(),arch:process.arch},order:['baseline','candidate'],baselineProvenance:frozen,candidateProvenance:candidateFrozen,alignedRuns,
+  const alignedRuns=first.runs.map((before,index)=>{
+    const after=second.runs[index]
+    assert.equal(before.scenario,after.scenario)
+    assert.equal(before.navigationCommands,after.navigationCommands,'Actual navigation workload differs')
+    assert.deepEqual(before.workload,after.workload,'Actual session writes, bytes, rotations or schedule mutations differ')
+    assert.deepEqual(before.native,after.native,'Actual native viewport or visibility differs')
+    return {index,scenario:before.scenario,navigationCommands:before.navigationCommands,workload:before.workload}
+  })
+  const report={schema:3,host:{hostname:os.hostname(),arch:process.arch},order:['baseline','candidate'],baselineProvenance:frozen,candidateProvenance:candidateFrozen,alignedRuns,
     configuredLoad:{mode:args['--mode'],scenario:args['--scenario'],seed:args['--seed']},runs,
-    comparison:{totalApplicationCpuRss:'no exclusive-cost improvement claim: compare native descendants and separate birth-verified associated-process samples, explicit coverage gaps and potentially shared XPC cost',
-      workloadEquivalence:'Same frozen fixture/session-writer/mutation implementation, seed, real process discovery, isolated HOME, cadence, viewport and measured expected counts are asserted. PID/UUID/absolute dates differ per run; actual host source churn remains observable. Startup build pipelines, CDP versus WK input/driver overhead, watch availability and process attribution coverage differ; no automatic improvement claim.',historicalFiguresUsed:false}}
+    comparison:{scope:'Observed native GPUI host and descendants only; actual host source activity can differ between runs. Missing resource fields and CPU intervals remain explicit. No automatic performance improvement claim.',historicalFiguresUsed:false}}
   await writeFile(path.join(output,'comparison.json'),JSON.stringify(report,null,2),{flag:'wx',mode:0o600})
 }finally{await log.close();for(const signal of ['SIGINT','SIGTERM','SIGHUP'])process.off(signal,interrupt)}
 console.log(`Sequential comparison: ${output}`)

@@ -52,8 +52,8 @@ async function bundleFixture(t) {
     await mkdir(path.dirname(filename), { recursive: true }); await writeFile(filename, name)
     resources[name] = await digestFile(filename)
   }
-  const record = { schema: 2, root: ROOT, mode: 'development', arch: 'arm64', target: TARGET, sign: '-', version: '0.1.0',
-    features: ['acceptance', 'custom-protocol'], targetDir: path.join(instance, 'cargo'), binary: layout.binary,
+  const record = { schema: 3, renderer: 'gpui', root: ROOT, mode: 'development', arch: 'arm64', target: TARGET, sign: '-', version: '0.1.0',
+    features: ['acceptance'], targetDir: path.join(instance, 'cargo'), binary: layout.binary,
     binaryIdentity: await digestFile(layout.binary), resources, catalogSha256: resources['plugin-market/catalog.json'].digest,
     developmentBundle: { ...layout, infoPlistIdentity: await digestFile(plist) } }
   const save = () => writeFile(path.join(instance, 'build.json'), JSON.stringify(record))
@@ -69,9 +69,9 @@ async function bundleFixture(t) {
 }
 test('development receipts reject release features and bare executable paths', async t => {
   const f = await bundleFixture(t)
-  f.record.features = ['custom-protocol']; await f.save()
+  f.record.features = []; await f.save()
   await assert.rejects(loadDevelopmentBuild(f.instance, f.command), /Invalid isolated/)
-  f.record.features = ['acceptance', 'custom-protocol']; f.record.binary = path.join(f.instance, 'cargo', TARGET, 'debug/oc-chan'); await f.save()
+  f.record.features = ['acceptance']; f.record.binary = path.join(f.instance, 'cargo', TARGET, 'debug/oc-chan'); await f.save()
   await assert.rejects(loadDevelopmentBuild(f.instance, f.command), /real isolated application/)
   assert.equal(f.calls.length, 0)
 })

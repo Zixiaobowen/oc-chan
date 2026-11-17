@@ -237,7 +237,7 @@ pub struct SettingsUpdateFailure { pub reason: SettingsFailureReason, pub detail
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SettingsSnapshot {
     pub settings: AppSettings, pub resolved_theme: ResolvedTheme, pub resolved_language: ResolvedLanguage,
-    pub platform: String, pub liquid_glass: LiquidGlassState,
+    pub platform: String, pub liquid_glass: LiquidGlassState, pub reduced_motion: bool,
     pub geometry_error: Option<SettingsUpdateFailure>, pub login_item: LoginItemState, pub notifications: NotificationState,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

@@ -63,7 +63,7 @@ export async function inspectBuildMarkers(filename, expected) {
     for await (const chunk of handle.createReadStream({ autoClose: false, highWaterMark: 64 * 1024 })) {
       bytes += chunk.length; assert(bytes <= MAX_FILE, 'Host binary grew beyond package budget')
       const window = Buffer.concat([overlap, chunk]); const text = window.toString('latin1')
-      assert(!['OC_CHAN_ACCEPTANCE_DRIVER_V1', '_webProcessIdentifier', '_provisionalWebProcessIdentifier', '_gpuProcessIdentifier', '_networkProcessIdentifier'].some(marker => text.includes(marker)), 'Acceptance driver or private WebKit selector is compiled into the production application')
+      assert(!text.includes('OC_CHAN_GPUI_ACCEPTANCE_V1'), 'GPUI acceptance driver is compiled into the production application')
       for (const match of text.matchAll(/OC_CHAN_CATALOG_SHA256=([a-f0-9]{64})/g)) pins.add(match[1])
       overlap = window.subarray(Math.max(0, window.length - 128))
     }
@@ -75,8 +75,8 @@ export function validatePlist(plist, version) {
   assert(plist.CFBundleExecutable === 'oc-chan' && plist.CFBundleShortVersionString === version, 'Application executable/version does not match this build')
 }
 function validateRecord(record, root) {
-  assert(record.schema === 2 && record.root === root && record.mode === 'release' && record.arch === 'arm64' && record.target === TARGET
-    && JSON.stringify(record.features) === JSON.stringify(['custom-protocol']) && /^[a-f0-9]{64}$/.test(record.catalogSha256), 'Production Rust build receipt is missing or invalid')
+  assert(record.schema === 3 && record.renderer === 'gpui' && record.root === root && record.mode === 'release' && record.arch === 'arm64' && record.target === TARGET
+    && JSON.stringify(record.features) === JSON.stringify([]) && /^[a-f0-9]{64}$/.test(record.catalogSha256), 'Production GPUI build receipt is missing or invalid')
   assert(record.sign === '-' || /^Developer ID Application: /.test(record.sign), 'Invalid package signing policy')
 }
 export function validateRustLegalManifest(manifest, expected, resourceDigest) {
@@ -116,7 +116,7 @@ export function validateFrozenBudgets(report, baseline) {
 export async function inspectPackage(options) {
   const root = path.resolve(options.root ?? ROOT), app = path.resolve(options.app ?? '')
   assert(options.app && options.arch === 'arm64' && process.platform === 'darwin', 'Expected a macOS --app ABS_APP --arch arm64 package')
-  const record = options.buildRecord ?? await boundedJson(path.join(root, 'release/tauri/build.json')); validateRecord(record, root)
+  const record = options.buildRecord ?? await boundedJson(path.join(root, 'release/gpui/build.json')); validateRecord(record, root)
   const tree = await inspectTree(app)
   const fileEntries = new Map(tree.entries.filter(entry => entry.kind === 'file').map(entry => [entry.path, entry]))
   function resourceDigest(relative) {

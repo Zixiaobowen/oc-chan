@@ -30,8 +30,8 @@ export function validateReadyReceipt(receipt, request, now = Date.now()) {
   integer(receipt.checked_at_ms, 'checked_at_ms')
   requireThat(receipt.checked_at_ms >= request.issued_at_ms && receipt.checked_at_ms <= now && now <= request.expires_at_ms, 'Readiness receipt is stale or from the future')
   const evidence = receipt.evidence
-  keys(evidence, ['host_version', 'renderer_entry', 'renderer_committed', 'ipc_round_trip', 'partitions', 'hermes_history', 'history_entries', 'history_reason'], 'readiness evidence')
-  requireThat(evidence.host_version === request.version && evidence.renderer_committed === true && evidence.ipc_round_trip === true && text(evidence.renderer_entry), 'Actual renderer commit, host version or IPC round trip is missing')
+  keys(evidence, ['host_version', 'renderer_entry', 'renderer_committed', 'action_round_trip', 'partitions', 'hermes_history', 'history_entries', 'history_reason'], 'readiness evidence')
+  requireThat(evidence.host_version === request.version && evidence.renderer_committed === true && evidence.action_round_trip === true && evidence.renderer_entry === 'main:gpui:paint', 'Actual GPUI paint, host version or action round trip is missing')
   keys(evidence.partitions, ['agents', 'schedules', 'events', 'system'], 'partitions')
   for (const [name, partition] of Object.entries(evidence.partitions)) {
     keys(partition, ['enabled', 'installed', 'state', 'reason'], 'partition')
@@ -158,7 +158,7 @@ export async function launchForReadiness({ tool, bundle, version, evidenceDirect
           requireThat(actual && actual.birth_seconds === request.process.birth_seconds && actual.birth_fraction === request.process.birth_fraction, 'New application exited before publishing readiness')
           await delay(100)
         }
-        throw new Error('Application did not complete real renderer, IPC, collection and history readiness within 45 seconds')
+        throw new Error('Application did not complete real renderer, action, collection and history readiness within 45 seconds')
       }
     }
   } catch (error) {

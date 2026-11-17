@@ -120,8 +120,8 @@ fn evidence() -> ReadyEvidence {
         partitions.insert(name.into(), PartitionEvidence { enabled: true, installed: true, state: PartitionReadiness::Ready, reason: None });
     }
     partitions.insert("system".into(), PartitionEvidence { enabled: false, installed: false, state: PartitionReadiness::NotInstalled, reason: None });
-    ReadyEvidence { host_version: "2.0.0".into(), renderer_entry: "fixture-react-commit-7".into(), renderer_committed: true,
-        ipc_round_trip: true, partitions, hermes_history: HistoryReadiness::Unavailable, history_entries: 0,
+    ReadyEvidence { host_version: "2.0.0".into(), renderer_entry: "fixture-gpui-frame-7".into(), renderer_committed: true,
+        action_round_trip: true, partitions, hermes_history: HistoryReadiness::Unavailable, history_entries: 0,
         history_reason: Some("no Hermes history database in isolated fixture".into()) }
 }
 

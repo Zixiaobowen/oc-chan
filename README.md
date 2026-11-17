@@ -12,7 +12,7 @@
   <strong>看清 Mac 上的 Agent、定时任务与系统状态。</strong>
 </p>
 
-<p align="center">macOS · Apple Silicon · 本地只读观察</p>
+<p align="center">macOS · Apple Silicon · Rust / GPUI / Metal · 本地只读观察</p>
 
 <p align="center">
   <a href="#功能">功能</a> ·
@@ -23,10 +23,10 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/agent-project-buildings.png" width="1100" height="620" alt="OC Chan 的 3D 协作拓扑：一栋建筑对应一个项目，每个任务独占一层，主 Agent 使用办公室，子 Agent 使用共享工位" />
+  <img src="docs/images/gpui-agent-project-buildings.png" width="1100" alt="OC Chan 的 GPUI 原生 3D 协作拓扑：项目建筑、任务楼层、办公室与共享工位" />
 </p>
 
-<p align="center"><sub>真实 3D 场景渲染截图，使用合成演示数据。</sub></p>
+<p align="center"><sub>GPUI / Metal 实际渲染截图，使用本次验收的 32 个合成 Agent。</sub></p>
 
 同时开着多个 Agent 和后台任务时，OC Chan 提供一个集中查看的桌面窗口：找到对应的工作目录和会话，检查任务状态，再看机器的资源占用。
 
@@ -39,7 +39,7 @@
 <details>
 <summary>查看 2D 协作视图</summary>
 
-![OC Chan 的 2D 协作拓扑，连线展示主 Agent 与子代理的关系](docs/images/agent-topology.png)
+![OC Chan 的 GPUI 原生 2D 协作拓扑，连线展示主 Agent 与子代理的关系](docs/images/gpui-agent-topology.png)
 
 同一批合成演示数据的 2D 视图，沿连线查看主 Agent 与子代理。
 
@@ -63,9 +63,9 @@
 
 界面支持中英文、浅色／深色和六套主题；macOS 26 及以上可使用原生 Liquid Glass，并遵循系统辅助功能设置。
 
-红绿灯右侧按钮或 **⌃⌘S** 可收起侧栏，主导航和已安装插件移到顶栏，数据来源与设置保留在右侧。拖动分隔线超过最小宽度 64px 也可收起，再次展开恢复原宽度；布局偏好会保存。窄视口使用紧凑导航菜单，减少动态效果跟随系统设置。
+顶部「导航」按钮或 **⌃⌘S** 可收起侧栏，主导航和已安装插件移到顶栏，数据来源与设置保留在右侧。拖动分隔线可调整宽度，继续向内收拢可折叠，再次展开恢复保存宽度。窄窗口使用紧凑导航，详情面板尊重系统“减少动态效果”设置。
 
-14px 矢量 Logo 与 OC Chan 字标位于标题栏侧栏按钮右侧，与红绿灯和按钮中心齐平；展开或收起时位置保持不变。左侧从标题栏下直接排列功能菜单，不再显示大品牌、副标题或底部设备说明；数据来源与设置仍在左下方。
+窗口顶部显示 14px OC 单色矢量标志、字标和导航按钮；原生窗口控制由 macOS 管理。数据来源与设置固定在展开侧栏的左下方，页面内容和详情分别滚动。
 
 ## 支持范围
 
@@ -93,7 +93,7 @@ OC Chan 只读观察上游 Agent 和任务，不执行定时任务、不终止 A
 
 ## 开发
 
-使用 **Rust 1.99（仓库固定工具链）、Node.js 22.12+（建议 24）**、npm，以及包含 macOS 26 或更新 SDK 的 Xcode Command Line Tools。以下命令在仓库根目录执行；默认启动真实的无头 Tauri / WKWebView，不显示桌面窗口。自动化原生输入验收需要 macOS 26+：
+使用 **Rust 1.99（仓库固定工具链）、Node.js 22.12+（建议 24）**、npm，以及包含 macOS 26 或更新 SDK 的 Xcode Command Line Tools。桌面宿主与界面使用 **GPUI 0.2.2 / Metal**，shader 在运行时编译，无需独立 `metal` 编译工具。以下命令在仓库根目录执行；默认启动真实隐藏的 GPUI 应用，不显示桌面窗口：
 
 ```sh
 npm ci
@@ -115,6 +115,6 @@ npm run dev:window
 - [功能、操作与数据边界](docs/features.md)：拓扑、任务历史、本地事件、通知和设置。
 - [开发与验证](docs/development.md)：环境、无头调试、定向测试和性能验证。
 - [安装、构建与发布](docs/distribution.md)：交付、升级、CI、签名更新和本机清理。
-- [架构与插件](docs/architecture.md)：采集生命周期、独立插件包、IPC 和品牌资源。
+- [架构与插件](docs/architecture.md)：采集生命周期、独立插件包、GPUI 视图与品牌资源。
 - [性能基准](docs/performance-baseline.md)：已测负载、结果和未覆盖项。
 - [产品约定](PRODUCT.md) · [设计规范](DESIGN.md) · [工程规则](AGENTS.md)。

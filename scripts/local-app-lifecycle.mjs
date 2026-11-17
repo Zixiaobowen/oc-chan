@@ -126,7 +126,7 @@ async function releaseApplications(root) {
       requireThat(!entry.isSymbolicLink(), `release 中存在符号链接，拒绝清理：${filename}`)
       if (!entry.isDirectory()) continue
       if (entry.name === 'source-snapshot') continue
-      if (current === path.join(root, 'release/tauri') && entry.name === 'cargo') {
+      if (current === path.join(root, 'release/gpui') && entry.name === 'cargo') {
         const application = path.join(filename, 'aarch64-apple-darwin/release/bundle/macos/OC Chan.app')
         if (await maybeStat(application)) { requireThat(applications.length < limits.candidates, 'release 应用候选数量超出预算'); applications.push(await bundle(application)) }
         continue
@@ -310,7 +310,7 @@ async function inventory(directory, kind) {
     }
     requireThat(info.isDirectory() || info.isFile() || info.isSymbolicLink(), `待清理目录包含特殊文件：${filename}`)
     // Private instance symlinks are leaf entries. Never follow a link during
-    // inventory or deletion, including system-managed WebKit state links.
+    // inventory or deletion, including private state links.
     if (info.isSymbolicLink() && kind === 'application') {
       const target = path.resolve(path.dirname(filename), await readlink(filename))
       requireThat(inside(directory, target), `待清理目录含越界符号链接：${filename}`)

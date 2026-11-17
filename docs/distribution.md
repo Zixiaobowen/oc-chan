@@ -2,7 +2,7 @@
 
 [返回首页](../README.md)
 
-命令和代码路径均相对仓库根目录。应用采用Rust/Tauri和系统WKWebView，构建目标为Apple Silicon。构建、产物验证、正式安装、Git推送和对外发布各有独立回执；其中一步成功不能代替其他步骤。
+命令和代码路径均相对仓库根目录。应用采用 Rust / GPUI / Metal，构建目标为 Apple Silicon。构建、产物验证、正式安装、Git推送和对外发布各有独立回执；其中一步成功不能代替其他步骤。当前迁移文档不构成 GPUI 构建、视觉、签名或安装已通过的证据。
 
 ## 本地交付与手动升级
 
@@ -15,24 +15,24 @@ npm run package
 npm run dist
 ```
 
-`build`执行前端类型检查和完整release构建；`package`生成目录应用；`dist`生成目录应用、DMG、ZIP与schema2更新元数据。构建入口先生成Rust worker、安装器、系统插件、Swift导航助手、许可证及前端，再构建Tauri宿主。生产feature明确为`custom-protocol`，不含`acceptance`。
+`build`执行完整 Rust release 构建；`package`生成目录应用；`dist`生成目录应用、DMG、ZIP与schema 2更新元数据。入口生成Rust worker、安装器、系统插件、Swift导航助手及许可证，再构建 `oc-desktop` GPUI宿主；无前端打包。生产 features 为空，不含 `acceptance`，也没有 `custom-protocol` feature。
 
-受控输出位于`release/tauri/`。`build.json`绑定本次buildId、版本、架构、feature、程序和资源摘要；每次分发有独立目录和`distribution.json`，实际应用路径以该回执为准。归档命名为`OC-Chan-<版本>-mac-arm64.zip`和`.dmg`；稳定版元数据为`latest.json`，不再生成Electron YAML、ASAR或N-API资源。
+受控输出位于`release/gpui/`。`build.json`使用schema 3、`renderer: "gpui"`，绑定buildId、版本、架构、features、程序和资源摘要；开发features为`["acceptance"]`，生产为`[]`。每次分发有独立目录和`distribution.json`，实际路径以回执为准。归档命名为`OC-Chan-<版本>-mac-arm64.zip`和`.dmg`；更新元数据仍为schema 2的`latest.json`，不要与构建回执schema混淆。
 
 需要从包含未提交改动的当前源码生成可核对交付时：
 
 ```sh
-npm run delivery:local -- --out release/tauri/local-rust-new
+npm run delivery:local -- --out release/gpui/local-gpui-new
 ```
 
-输出目录必须全新且位于当前工作区的`release/tauri/`内，工具创建父目录。工具记录实际HEAD、分支、dirty状态、精确构建输入和逐文件摘要，在独立源码快照中构建；HEAD不代表未提交内容。源码在构建期间变化会失败，不生成成功交付清单。源码、依赖审计、包内容、ZIP/DMG一致性和签名回执随交付保留，失败记录不能冒充可安装版本。此入口不启动、退出或替换正式应用。
+输出目录必须全新且位于当前工作区的`release/gpui/`内，工具创建父目录。工具记录实际HEAD、分支、dirty状态、精确构建输入和逐文件摘要，在独立源码快照中构建；HEAD不代表未提交内容。源码在构建期间变化会失败，不生成成功交付清单。源码、依赖审计、包内容、ZIP/DMG一致性和签名回执随交付保留，失败记录不能冒充可安装版本。此入口不启动、退出或替换正式应用。
 
 核验与安装使用不同操作：
 
 ```sh
-npm run install:local -- --check-delivery release/tauri/local-rust-new
+npm run install:local -- --check-delivery release/gpui/local-gpui-new
 # 只有获得替换正式应用的授权后：
-npm run install:local -- --delivery release/tauri/local-rust-new
+npm run install:local -- --delivery release/gpui/local-gpui-new
 ```
 
 第一条只核对已有交付；第二条会退出旧应用、同卷暂存并整包替换`/Applications/OC Chan.app`，验证新包就绪，失败尝试还原。也可在获得对应授权后用`npm run install:local`安装当前工作目录。工具不把旧交付当作当前源码，不改写或迁移个人设置、事件库及上游数据；目标被其他任务替换、安装锁占用、签名/摘要不符或路径不安全时拒绝操作。
@@ -53,13 +53,13 @@ npm run install:local -- --delivery release/tauri/local-rust-new
 
 下载、取消和“重启并安装”都是显式操作。普通退出不安装。安装前复验Developer ID、同Team、固定应用标识、架构和严格升级版本；Rust安装助手绑定父进程出生身份、应用路径及文件身份，持独占锁并记录事务阶段，同卷替换。
 
-提交成功必须收到当前事务的真实就绪回执：版本、进程、nonce及可执行身份匹配，renderer已提交、IPC往返成功、已启用采集域就绪，可用Hermes历史查询成功，且进程持续存活。停用分区和无历史来源明确记为disabled/unavailable，不能填充成功空结果。失败回滚保留可定位现场。完整规则见[更新事务契约](rust-migration/update-contract.md)。
+提交成功必须收到当前事务的真实就绪回执：版本、进程、nonce及可执行身份匹配，`renderer_entry="main:gpui:paint"`、`renderer_committed=true`、`action_round_trip=true`，已启用采集域就绪，可用Hermes历史查询成功且进程持续存活。动作往返替代旧 renderer IPC 回执；停用分区和无历史来源明确记为disabled/unavailable，不能填成功空结果。失败回滚保留现场。完整规则见[更新事务契约](rust-migration/update-contract.md)。
 
 ## GitHub Actions构建与发布
 
 [Build macOS工作流](https://github.com/Zixiaobowen/oc-chan/actions/workflows/build.yml)覆盖main、目标为main的PR、版本标签及手动构建。macOS安装包使用GitHub Releases分发；GitHub Packages用于依赖包或容器镜像，不用于本项目的DMG/ZIP。原生验收运行器需要macOS 26+；生产最低系统要求与验收系统不能混同。云端执行状态以对应提交的实际Actions回执为准，本地修改工作流不等于CI已经通过。
 
-CI安装锁定的npm/Cargo依赖，按变更映射运行行为测试；应用入口、采集、桥接、界面或构建改变时运行真实隔离WKWebView场景。未映射测试、未知代码路径、测试失败、许可证/公告查询失败和产物校验失败都阻止交付。只上传明确成功的安装材料，失败场景证据单独保存。
+CI安装锁定npm/Cargo依赖，按变更映射运行行为测试；应用入口、采集、桥接、界面或构建改变时运行隔离、真实隐藏的GPUI场景。Metal capture与认证驱动仅在acceptance构建。未映射测试、未知代码路径、测试失败、许可证/公告查询失败和产物校验失败都阻止交付。只上传明确成功的安装材料，失败证据单独保存；工作流已更新不等于运行已通过。
 
 `main`推送或在`main`手动运行工作流时，检查通过后自动发布预览Release，标签为`preview-<运行编号>-<提交短SHA>`，绑定本次构建的完整提交。附件包含ad-hoc签名的arm64 DMG、ZIP和`SHA256SUMS.txt`；Release标为Pre-release，不设为Latest，也不上传`latest.json`，不会触发应用内稳定更新。仓库可见性不因发布而改变。
 
@@ -92,7 +92,7 @@ Actions产物可在成功运行记录中下载`oc-chan-macos-arm64-<运行编号
 
 ## 包内容、体积与依赖审查
 
-产物只允许主程序、Rust worker、安装器、Swift导航助手、Tern插件资源、原生系统插件包、图标和完整依赖许可。前端编译进Tauri资源，实际使用的npm模块通过Vite清单追踪；Rust闭包按目标平台、精确Cargo.lock、运行/构建依赖关系和crate摘要追踪。
+产物只允许主程序、Rust worker、安装器、Swift导航助手、Tern插件资源、原生系统插件包、图标和完整依赖许可。GPUI界面编译进Rust主程序；没有Vite资源或renderer npm清单。Rust闭包按目标平台、精确Cargo.lock、运行/构建依赖关系和crate摘要追踪；npm仅作开发工具依赖审查。
 
 Rust许可生成器校验锁定crate归档，收集完整LICENSE/NOTICE。未随crate发布的许可按精确VCS commit与上游文本摘要补齐，证据保留在`resources/rust-license-supplements/manifest.json`。产物使用明确的license-only目录，清单保留原始sourcePath和hash，不复制crate源码树。缺许可或来源不能证明时构建失败。
 
@@ -101,9 +101,9 @@ npm run audit:dependencies -- --output release/dependency-review-arm64.json
 npm run check:package -- --app /absolute/path/to/OC-Chan.app --arch arm64 --output release/package-manifest-arm64.json
 ```
 
-包路径必须替换为`distribution.json`里的真实`.app`；验证归档时再传`--artifacts-dir`对应分发目录。依赖审查要求`cargo-audit 0.22.2`可用，实时查询npm公告和RustSec数据库；`docs/dependency-review-policy.json`绑定精确npm/Cargo锁与已核对许可，不豁免公告、不静默忽略查询失败。锁或实际前端清单改变后必须重新审查。
+包路径必须替换为`distribution.json`里的真实`.app`；验证归档时再传`--artifacts-dir`对应分发目录。依赖审查要求`cargo-audit 0.22.2`可用，实时查询npm公告和RustSec数据库；`docs/dependency-review-policy.json`绑定精确npm/Cargo锁与已核对许可，不豁免公告、不静默忽略查询失败。锁改变后须重新审查，不再传`--bundled-manifest`。
 
-包检查核对Mach-O架构、可执行权限、完整签名、资源摘要、编译期插件目录pin、许可证及实际条目；拒绝Electron、Chromium、Node、N-API、ASAR、验收驱动和私有XPC观察selector、测试、源码、缓存、个人数据、任意多余资源和逃逸链接。归档检查包含长度、摘要、ZIP条目和DMG校验。
+包检查核对Mach-O架构、可执行权限、完整签名、资源摘要、编译期插件目录pin、许可证及实际条目；拒绝Electron、Chromium、Node、N-API、ASAR、验收驱动标记`OC_CHAN_GPUI_ACCEPTANCE_V1`、测试、源码、缓存、个人数据、多余资源和逃逸链接。Metal capture只属验收，不得进入生产。归档检查包含长度、摘要、ZIP条目和DMG校验。
 
 沿用`docs/package-baseline.json`中的arm64应用总量300MiB、Tern helper160KiB、ZIP125MiB及DMG130MiB上限；原ASAR和已删除依赖的历史分量只保留作证据，不伪造新运行时同类文件。遍历总量保护线不是发布体积预算，插件2MiB/展开9MiB预算也独立执行。历史测量不能当作当前包的体积或性能证明。
 

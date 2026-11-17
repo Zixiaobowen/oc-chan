@@ -57,11 +57,11 @@ async function realPush(root) {
 }
 
 function application(root) {
-  const app = path.join(root, 'release/tauri/cargo/aarch64-apple-darwin/release/bundle/macos/OC Chan.app')
+  const app = path.join(root, 'release/gpui/cargo/aarch64-apple-darwin/release/bundle/macos/OC Chan.app')
   mkdirSync(path.join(app, 'Contents/MacOS'), { recursive: true })
   writeFileSync(path.join(app, 'Contents/Info.plist'), '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>local.oc-chan.desktop</string><key>CFBundleExecutable</key><string>oc-chan</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>')
   copyFileSync('/bin/sleep', path.join(app, 'Contents/MacOS/oc-chan'))
-  const retained = ['release/archive.zip', 'release/archive.dmg', 'release/delivery.json', 'release/evidence.log', 'release/tauri/cargo/aarch64-apple-darwin/release/deps/retained.rlib']
+  const retained = ['release/archive.zip', 'release/archive.dmg', 'release/delivery.json', 'release/evidence.log', 'release/gpui/cargo/aarch64-apple-darwin/release/deps/retained.rlib']
   for (const name of retained) {
     mkdirSync(path.dirname(path.join(root, name)), { recursive: true })
     writeFileSync(path.join(root, name), name)

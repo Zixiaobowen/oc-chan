@@ -1,79 +1,68 @@
 # 桌面 API 与异步订阅契约
 
-这是全量迁移的实施清单，覆盖44个公开方法及内部订阅协议。主窗记为M、托盘T、恢复窗R。授权来自宿主登记的真实WebView身份，不能由前端传label决定；所有命令均拒绝非法参数、未知键、失效窗口和退出阶段。恢复态只能R调用恢复三项。
+GPUI 视图通过 `Desktop::action(owner, command, args)` 调用下表动作；实际分派在 `crates/oc-desktop/src/actions.rs`，权限在 `api.rs`，窗口会话在 `session.rs`，状态发布在 `host.rs`。主窗记为 M、托盘 T、恢复窗 R。权限来自已登记的真实窗口 owner 与 View，不能由参数伪造；非法参数、未知键、失效窗口及退出阶段均拒绝。下表描述当前接口，验收结论以对应运行证据为准。
 
 ## 命令与事件
 
-|API方法|允许窗口|返回与错误语义|取消/释放所有者|
+|动作名称|允许窗口|返回与错误语义|取消与释放|
 |---|---|---|---|
-|monitor.snapshot|M/T|MonitorSnapshot；只读当前真实快照|无需新采集|
-|monitor.refresh(section?)|M/T|void；合法分区或全部；同分区在途合并|插件代次/应用退出|
-|monitor.retrySource(sourceId)|M|void；仅已声明可重试来源|对应来源/插件|
-|monitor.focusAgentInTern(agentId)|M|{error:null或受控错误}；headless拒绝|单导航；10s总截止；窗口关闭/隐藏导航/退出|
-|monitor.scheduleHistory(jobId,offset?)|M|ScheduleHistory；非Hermes返回unavailable|窗口；单active+单最新pending|
-|monitor.cancelScheduleHistory|M|Promise<void>；取消必须等真实IO结束|当前窗口历史，不得取消其他owner|
-|monitor.events(query?)|M|EventPage；严格查询、事件停用拒绝|新查询替换旧查询、窗口关闭/退出|
-|monitor.cancelEvents|M|Promise<void>；清理失败显式拒绝|当前窗口事件查询|
-|monitor.generateDiagnostics|M|ready/cancelled/error；唯一UUID预览|唯一操作、10分钟预览到期|
-|monitor.copyDiagnostics(id)|M|copied/cancelled/error；只复制宿主预览|窗口、5s截止|
-|monitor.saveDiagnostics(id)|M|saved/cancelled/error；系统选新文件，不覆盖|原生dialog owner、5s IO截止；提交后取消不撤回|
-|monitor.cancelDiagnostics|M|Promise<void>；撤销预览并等清理|窗口关闭/导航/退出|
-|monitor.navigation|M|NavigationIntent或null|单可替换槽|
-|monitor.acknowledgeNavigation(sequence)|M|void；旧sequence不清新目标|宿主导航槽|
-|monitor.onNavigation(listener)|M|同步幂等退订函数；无payload提醒|本组件listener；窗口销毁统一清理|
-|monitor.subscribe(listener)|M/T|同步退订；MonitorUpdate分区事件|本组件listener与订阅计数|
-|monitor.subscribeSources(listener)|M|同步退订；SourceHeartbeat|本组件listener与订阅计数|
-|desktopSettings.snapshot|M/T|SettingsSnapshot，包含真实原生状态|不隐式申请权限|
-|desktopSettings.update(patch)|M|ok snapshot或ok:false error；回滚失败fatal|最多16队列；串行事务；退出排空|
-|desktopSettings.previewGlass(intensity|null)|M|void；仅当前窗口，错误可见|blur/hide/导航/取消恢复已保存值|
-|desktopSettings.retryGeometry|M|SettingsUpdateResult；只保存宿主当前正常几何|同设置事务|
-|desktopSettings.updateLoginItem(enabled)|M|LoginItemUpdateResult含actual state/rollbackFailed|headless/开发拒绝；写后读回|
-|desktopSettings.requestNotificationPermission|M|NotificationState；仅显式请求|30s调用等待；系统pending直到真实回调释放|
-|desktopSettings.accessibilityState|M|AccessibilityState；只读AXIsProcessTrusted、不弹授权；headless返回unknown|有界原生主线程调用|
-|desktopSettings.openPermissionSettings(target)|M|void；仅accessibility/notifications固定设置页；headless拒绝|显式操作；失败传播|
-|desktopSettings.showMainWindow(target?)|M/T|void；严格导航目标；headless拒绝|单主窗/导航槽|
-|desktopSettings.subscribe(listener)|M/T|同步退订；SettingsSnapshot|本组件listener|
-|appUpdates.snapshot|M|UpdateSnapshot|只读|
-|appUpdates.check|M|UpdateSnapshot；development/unsigned允许手动查询并报告失败，platform不发网络；30s|单operation；仅完整更新资格启动自动调度|
-|appUpdates.download|M|UpdateSnapshot；development/unsigned/platform均拒绝；流式摘要/大小校验；15min|单operation；取消删除part并释放|
-|appUpdates.cancel|M|UpdateSnapshot；取消下载后保留available|等下载与文件关闭|
-|appUpdates.install|M|UpdateSnapshot；只能已下载且验证通过，120s|排空业务后移交可信安装助手；不await自身形成死锁|
-|appUpdates.openReleaseNotes|M|void；固定受限发布URL；headless拒绝|系统外部打开|
-|appUpdates.subscribe(listener)|M|同步退订；revision防旧状态覆盖|本组件listener|
-|pluginMarketplace.snapshot|M/T|MarketplaceSnapshot|只读|
-|pluginMarketplace.check|M|MarketplaceSnapshot；单exclusive|30s/退出|
-|pluginMarketplace.install(id)|M|MarketplaceSnapshot；启用时真实首采样后成功，停用时静态验证后dormant提交且不启动进程|市场单事务；与设置启停共用串行协调|
-|pluginMarketplace.update(id)|M|MarketplaceSnapshot；严格高版本；旧版验证下载期间运行|失败停止新代后恢复旧版；清理失败保留现场|
-|pluginMarketplace.uninstall(id)|M|MarketplaceSnapshot；损坏包可卸载|先stop；进入删除提交后取消仍完成删除|
-|pluginMarketplace.cancel|M|Promise<void>；等事务rollback/drain|市场当前operation|
-|pluginMarketplace.subscribe(listener)|M/T|同步退订；真实状态|本组件listener|
-|startupRecovery.snapshot|R|StartupRecoverySnapshot|只读受控故障|
-|startupRecovery.retry|R|{ready:true}或{ready:false,snapshot}|合并重试；关闭后晚完成不启动正常宿主|
-|startupRecovery.quit|R|void|关闭admission、取消retry、退出|
+|`monitor_snapshot`|M/T|当前真实 MonitorSnapshot|不启动额外采集|
+|`monitor_refresh`|M/T|合法分区或全部；同分区合并|插件代次与退出|
+|`monitor_retry_source`|M|仅已声明可重试来源|对应来源与插件|
+|`monitor_focus_agent_in_tern`|M|受控错误；无头拒绝外部跳转|单导航、10s 截止、隐藏或退出取消|
+|`monitor_schedule_history`|M|ScheduleHistory；非 Hermes 明确 unavailable|owner 的历史槽，替换前取消排空|
+|`monitor_cancel_schedule_history`|M|等待真实 IO 结束|仅本 owner|
+|`monitor_events`|M|EventPage；严格查询，停用拒绝|owner 的事件槽|
+|`monitor_cancel_events`|M|等待清理，错误保留|仅本 owner|
+|`monitor_navigation`|M|NavigationIntent 或 null|单可替换槽|
+|`monitor_acknowledge_navigation`|M|旧 sequence 不清除新目标|宿主导航槽|
+|`diagnostics_generate`|M|ready/cancelled/error，唯一预览 ID|唯一操作，10 分钟预览到期|
+|`diagnostics_copy`|M|只复制当前宿主预览|owner、5s 截止|
+|`diagnostics_save`|M|原生对话框选择新文件，不覆盖|对话框 owner；提交后的取消不撤回文件|
+|`diagnostics_cancel`|M|撤销预览并等待排空|窗口关闭、导航、退出|
+|`settings_snapshot`|M/T|SettingsSnapshot，包含只读 reducedMotion 等系统状态|不隐式申请权限|
+|`settings_update`|M|成功快照或明确失败；回滚失败保留|串行事务，退出排空|
+|`settings_preview_glass`|M|本窗口临时强度或 null 撤销|失焦、隐藏、离页恢复保存值|
+|`settings_retry_geometry`|M|只保存宿主读取的正常几何|设置事务|
+|`settings_update_login_item`|M|真实系统状态和回滚结果|开发、无头拒绝；写后读回|
+|`settings_request_notification_permission`|M|NotificationState，显式请求|系统 pending 保留到真实回调|
+|`settings_accessibility_state`|M|只读授权状态，不弹框|无头明确 unavailable/unknown|
+|`settings_open_permission_settings`|M|仅固定辅助功能/通知设置页|无头拒绝外部打开|
+|`settings_show_main_window`|M/T|严格导航目标|单主窗、单导航槽；无头拒绝显示|
+|`tray_preferences_snapshot` / `tray_preferences_save`|T|托盘组合的真实持久值|私有 profile 内有界读写|
+|`updates_snapshot` / `updates_check`|M|UpdateSnapshot；开发/未签名可手动查询|单操作；自动调度仅对合格安装版启用|
+|`updates_download`|M|签名资格、大小与摘要校验|流式下载；取消清理临时文件|
+|`updates_cancel`|M|取消后保留可用版本状态|等待下载和文件关闭|
+|`updates_install`|M|仅已下载且验证通过的更新|排空业务后移交可信安装助手|
+|`updates_open_release_notes`|M|固定受限发布 URL|无头拒绝外部打开|
+|`marketplace_snapshot`|M/T|MarketplaceSnapshot|只读|
+|`marketplace_check`|M|单独占目录检查|30s/退出|
+|`marketplace_install` / `marketplace_update`|M|启用时真实首采样后成功；停用时静态验证后提交|单事务；失败排空并回滚|
+|`marketplace_uninstall`|M|损坏包也可卸载|先停插件；提交后取消仍完成删除|
+|`marketplace_cancel`|M|等待真实回滚及排空|当前市场事务|
+|`recovery_snapshot` / `recovery_retry` / `recovery_quit`|R|受控故障、重试结果或退出|关闭先撤销启动权，晚到重试不得复活应用|
 
-所有原有单向cancel方法迁为可等待Promise；全部消费者同步更新，事件处理器明确接住拒绝并展示真实诊断，不能留下未处理rejection。API方法数量不变，无旧Electron取消通道。
+取消动作返回可等待的 Rust 异步结果；消费者必须展示真实错误并等待资源排空，不允许把取消发出当作完成。原 JS Promise、Electron 通道和 Tauri invoke/listen 已由原生会话与动作取代，不保留兼容层。
 
-Rust错误对象的`code`、`message`、`osError`及`causes`由桌面适配器保留。聚合错误转换为`AggregateError`，普通错误消息同时包含有界因果摘要，来源页能够显示具体超限或权限原因。转换最多检查64个节点、8层及16KiB UTF-8消息；深度、节点、字节或重复引用导致省略时明确标注。无效错误对象显式报格式错误。该本地受控错误与可分享诊断报告的脱敏投影分别处理。
+Rust错误的`code`、`message`、`osError`及`causes`须保留在本地受控诊断中，聚合错误保留各真实原因，不转换为 JavaScript `AggregateError`。界面应显示有界因果摘要；共享诊断另做脱敏投影。原有64节点、8层、16KiB UTF-8消息上限与明确省略标记仍是错误展示要求，不能因原生迁移静默截断或隐藏错误。
 
-宿主最多接收16个在途桌面请求，其中普通业务请求最多12个，为文档登记、订阅握手、消息确认、取消和恢复窗口退出保留4个槽位。控制请求仍受同一个16槽总预算约束，超限明确返回`OC_IPC_BUSY`，不增加等待队列。业务请求并发突增不能饿死消息确认；突发全部完成后，下一次刷新及历史查询必须直接成功，不依赖前端重试。
+当前宿主最多接收16个在途动作，普通业务最多12个，为取消和恢复退出保留4个槽位，控制动作仍受16总预算约束。超限返回`OC_DESKTOP_BUSY`，不增加等待队列。业务突发不得饿死取消；完成后新刷新与历史查询应直接可用，不依赖界面重试。
 
-## 监听就绪与首个快照
+## 状态订阅与首个快照
 
-1. `desktop-api.ts` 在React挂载前初始化当前窗口允许的Tauri事件监听；全部 `listen()` 完成后才能挂载正常页面。恢复入口只初始化恢复API。
-2. UI的subscribe向本地listener集合同步加入监听，并产生幂等退订函数；同一个回调重复注册也各自拥有独立订阅，退订一份不删除另一份。仅首个订阅/最后退订改变宿主兴趣。宿主interest只有一个在途更新和一个最新待提交状态，不能无界排队。
-3. `snapshot()` 等待当时已请求的interest更新被宿主确认后才读快照。全局Tauri监听早已存在，因此注册期间不会丢更新；消费者保留现有“期间已更新分区不被旧snapshot覆盖”逻辑。
-4. `desktop_interest` 上报当前文档对 monitor、sources、settings、updates、marketplace、navigation 六类消息的订阅兴趣；仅登记窗口允许的通道，sources 仅主窗可用。该内部命令不属于面向页面的业务 API，renderer 不能指定其他窗口。
-5. `desktop_register` 返回必需的 `owner`、`view`、`headless`；前端严格验证后才挂载。生产推送要求原生可见且未最小化、当前document已登记且有对应订阅。无头窗口默认允许逻辑展示，仍要求显式订阅；统一的文档展示状态驱动数据、拓扑和预览的暂停恢复。性能探针只在无头模式显式覆盖该状态并发送可见性变更通知，不改写浏览器的 `document.hidden` 或 `visibilityState`。正常窗口继续服从真实原生可见性，用户暂停显示独立生效。
-6. 退订即刻移除本地listener；宿主迟到事件不能回调已退订组件。文档重载/窗口销毁撤销整个登记。React StrictMode反复mount/unmount不增加常驻监听数量。
-7. 初始注册失败阻止页面进入正常就绪，展示真实连接错误；不使用轮询snapshot或默认假数据兜底。
+`Desktop::subscribe()` 提供 Tokio `watch::Receiver<DesktopState>`；宿主使用有界的通道/分区键保留最新事件，GPUI视图接收原生状态并触发更新。主窗、托盘、恢复窗通过 `Session` 绑定身份与取消令牌，历史、事件和诊断各自拥有释放责任。不再存在 `desktop-api.ts`、Tauri全局监听或文档握手命令。
 
-验收：监听建立期间真实数据变化、订阅握手期间变化、旧snapshot迟到、100次订退订、卸载先于listen完成、隐藏窗口增量、暂停后零回调、恢复最新快照、M/T互不影响。
+必须保持原有语义：订阅建立期间不丢最新状态，迟到快照不覆盖较新分区，离页/隐藏取消对应查询，销毁会话禁止晚到结果复活视图；M/T相互独立，恢复窗口不能调用普通业务动作。用户暂停显示独立于后台采集，恢复应呈现最新快照。原生隐藏验收模式不得误当真实可见窗口；生产可见性、最小化、预览取消和资源暂停仍需按实际窗口事件验证。
+
+实体持有状态接收器及订阅任务；重复进入和退出不得累积常驻订阅。导航事件携带当前 intent，消费者读取待处理目标并按 sequence 确认；重复值比较不得丢失新序号。初始化失败显示真实错误，不生成假快照。
+
+待验收范围仍包括：初始化期间变化、旧快照迟到、100次进入退出、隐藏窗口增量、暂停后零视图回调、恢复最新快照以及M/T互不影响。当前文档不把历史Tauri监听测试当作这些GPUI行为通过证据。
 
 ## 登录与启动恢复
 
 登录启动由系统真实状态判定，不接受普通页面伪造。此启动不创建主窗，本次运行关闭Dock和防休眠但不覆盖持久偏好，仅创建托盘。用户打开主窗复用当前应用；requires-approval不等于enabled。
 
-普通启动设置读取只有ENOENT使用默认值；坏UTF-8/JSON、权限、FIFO、链接、身份变化进入恢复流程，原文件不覆盖。真实隐藏recovery场景使用验收专用配置创建隐藏恢复WebView；生产headless读取失败仍明确失败退出，不冒充已验证恢复UI。恢复窗口拒绝所有普通commands，修复文件后的并发retry只初始化一次；quit/close先撤销启动权，晚到retry不得复活应用。
+普通启动设置读取只有ENOENT使用默认值；坏UTF-8/JSON、权限、FIFO、链接、身份变化进入恢复流程，原文件不覆盖。验收配置可创建真实隐藏 GPUI 恢复窗口；生产headless读取失败仍明确失败退出，不冒充已验证恢复UI。恢复窗口拒绝普通动作，修复文件后的并发retry只初始化一次；quit/close先撤销启动权，晚到retry不得复活应用。
 
 ## 事件与通知持久不变量
 
