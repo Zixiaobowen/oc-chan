@@ -1,0 +1,179 @@
+import { useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { useI18n } from './i18n'
+import { DEFAULT_SETTINGS, MIN_SIDEBAR_WIDTH as MIN_WIDTH, MAX_SIDEBAR_WIDTH as MAX_WIDTH } from '../../shared/settings'
+import { useSettings } from './settings'
+import { isDesktopDocumentVisible, scheduleDesktopUpdate, type DesktopUpdate } from './desktop-visibility'
+
+const DEFAULT_WIDTH = DEFAULT_SETTINGS.sidebarWidth
+const MIN_WORKSPACE_WIDTH = 560
+const COLLAPSE_OVERSHOOT = 64
+
+type Drag = { pointerId: number; startX: number; startWidth: number; previousWidth: number }
+
+export default function SidebarResizeHandle({ inactive, onCollapse }: { inactive: boolean; onCollapse: () => void }) {
+  const { t } = useI18n()
+  const { snapshot: { settings }, update, saving, error } = useSettings()
+  const persisted = useRef({ width: settings.sidebarWidth, update, saving, error })
+  persisted.current = { width: settings.sidebarWidth, update, saving, error }
+  const handle = useRef<HTMLDivElement>(null)
+  const preferredWidth = useRef(settings.sidebarWidth)
+  const maximum = useRef(MAX_WIDTH)
+  const currentWidth = useRef(settings.sidebarWidth)
+  const drag = useRef<Drag | null>(null)
+  const frame = useRef<DesktopUpdate | null>(null)
+  const [size, setSize] = useState({ width: settings.sidebarWidth, max: MAX_WIDTH })
+  const keyboardTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const keyboardWidth = useRef<number | null>(null)
+  const releaseSelection = useRef<(() => void) | null>(null)
+
+  function saveKeyboardWidth() {
+    clearTimeout(keyboardTimer.current)
+    keyboardTimer.current = undefined
+    const width = keyboardWidth.current
+    keyboardWidth.current = null
+    if (width !== null) void persisted.current.update({ sidebarWidth: width })
+  }
+
+  function applyWidth() {
+    const width = Math.max(MIN_WIDTH, Math.min(maximum.current, preferredWidth.current))
+    currentWidth.current = width
+    handle.current?.parentElement?.style.setProperty('--sidebar-width', `${width}px`)
+    setSize(previous => previous.width === width && previous.max === maximum.current
+      ? previous : { width, max: maximum.current })
+  }
+
+  function finishDrag(cancel = false) {
+    const active = drag.current
+    if (!active) return
+    drag.current = null
+    frame.current?.cancel()
+    frame.current = null
+    if (cancel) {
+      preferredWidth.current = active.previousWidth
+      if (!persisted.current.saving && persisted.current.error?.patch.sidebarWidth !== undefined)
+        preferredWidth.current = persisted.current.width
+    } else void persisted.current.update({ sidebarWidth: preferredWidth.current })
+    applyWidth()
+    handle.current?.parentElement?.removeAttribute('data-sidebar-resizing')
+    if (handle.current?.hasPointerCapture(active.pointerId)) handle.current.releasePointerCapture(active.pointerId)
+  }
+
+  useLayoutEffect(() => {
+    if (drag.current || saving || keyboardWidth.current !== null) return
+    preferredWidth.current = settings.sidebarWidth
+    applyWidth()
+  }, [settings.sidebarWidth, saving, error])
+
+  useLayoutEffect(() => {
+    const shell = handle.current!.parentElement!
+    const resize = () => {
+      maximum.current = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, shell.clientWidth - MIN_WORKSPACE_WIDTH))
+      applyWidth()
+    }
+    const interrupt = () => { finishDrag(true); saveKeyboardWidth() }
+    const visibility = () => { if (!isDesktopDocumentVisible()) interrupt() }
+    const observer = new ResizeObserver(resize)
+    resize()
+    observer.observe(shell)
+    window.addEventListener('blur', interrupt)
+    window.addEventListener('pagehide', saveKeyboardWidth)
+    document.addEventListener('visibilitychange', visibility)
+    return () => {
+      observer.disconnect()
+      releaseSelection.current?.()
+      saveKeyboardWidth()
+      window.removeEventListener('pagehide', saveKeyboardWidth)
+      window.removeEventListener('blur', interrupt)
+      document.removeEventListener('visibilitychange', visibility)
+      frame.current?.cancel()
+      frame.current = null
+      shell.removeAttribute('data-sidebar-resizing')
+    }
+  }, [])
+
+  useLayoutEffect(() => {
+    if (inactive) finishDrag(true)
+  }, [inactive])
+
+  function startDrag(event: PointerEvent<HTMLDivElement>) {
+    if (inactive || event.button !== 0 || !event.isPrimary || drag.current) return
+    event.preventDefault()
+    saveKeyboardWidth()
+    event.currentTarget.focus({ preventScroll: true })
+    event.currentTarget.setPointerCapture(event.pointerId)
+    drag.current = { pointerId: event.pointerId, startX: event.clientX, startWidth: currentWidth.current, previousWidth: preferredWidth.current }
+    event.currentTarget.parentElement!.setAttribute('data-sidebar-resizing', 'true')
+  }
+
+  function moveDrag(event: PointerEvent<HTMLDivElement>) {
+    const active = drag.current
+    if (!active || active.pointerId !== event.pointerId) return
+    const requested = Math.round(active.startWidth + event.clientX - active.startX)
+    if (requested <= MIN_WIDTH - COLLAPSE_OVERSHOOT) {
+      releaseSelection.current?.()
+      const block = (selection: Event) => selection.preventDefault()
+      const release = () => {
+        document.removeEventListener('selectstart', block)
+        window.removeEventListener('pointerup', release)
+        window.removeEventListener('pointercancel', release)
+        window.removeEventListener('blur', release)
+        document.removeEventListener('visibilitychange', release)
+        releaseSelection.current = null
+      }
+      releaseSelection.current = release
+      document.addEventListener('selectstart', block)
+      window.addEventListener('pointerup', release)
+      window.addEventListener('pointercancel', release)
+      window.addEventListener('blur', release)
+      document.addEventListener('visibilitychange', release)
+      finishDrag(true)
+      onCollapse()
+      return
+    }
+    preferredWidth.current = Math.max(MIN_WIDTH, Math.min(maximum.current, requested))
+    if (frame.current === null) frame.current = scheduleDesktopUpdate(() => {
+      frame.current = null
+      if (isDesktopDocumentVisible()) applyWidth()
+    })
+  }
+
+  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'Escape' && drag.current) {
+      event.preventDefault()
+      finishDrag(true)
+      return
+    }
+    const step = event.shiftKey ? 32 : 8
+    const next = event.key === 'ArrowLeft' ? currentWidth.current - step
+      : event.key === 'ArrowRight' ? currentWidth.current + step
+      : event.key === 'Home' ? MIN_WIDTH
+      : event.key === 'End' ? maximum.current
+      : null
+    if (next === null || drag.current) return
+    event.preventDefault()
+    preferredWidth.current = Math.max(MIN_WIDTH, Math.min(maximum.current, next))
+    applyWidth()
+    keyboardWidth.current = preferredWidth.current
+    clearTimeout(keyboardTimer.current)
+    keyboardTimer.current = setTimeout(saveKeyboardWidth, 250)
+  }
+
+  return <div ref={handle} className="sidebar-resize-handle" role="separator" tabIndex={inactive ? -1 : 0}
+    aria-hidden={inactive || undefined} aria-orientation="vertical" aria-controls="main-navigation"
+    aria-label={t('调整侧栏宽度', 'Resize sidebar')}
+    aria-valuemin={MIN_WIDTH} aria-valuemax={size.max} aria-valuenow={size.width}
+    aria-valuetext={t(`${size.width} 像素`, `${size.width} pixels`)}
+    title={t('拖动调整侧栏宽度，向左拖到底收起；方向键微调，双击恢复默认', 'Drag to resize or far left to hide; use arrow keys to adjust, double-click to reset')}
+    onPointerDown={startDrag} onPointerMove={moveDrag}
+    onPointerUp={event => { if (drag.current?.pointerId === event.pointerId) finishDrag() }}
+    onPointerCancel={event => { if (drag.current?.pointerId === event.pointerId) finishDrag(true) }}
+    onLostPointerCapture={() => finishDrag(true)} onKeyDown={onKeyDown}
+    onDoubleClick={() => {
+      clearTimeout(keyboardTimer.current)
+      keyboardTimer.current = undefined
+      keyboardWidth.current = null
+      preferredWidth.current = DEFAULT_WIDTH
+      applyWidth()
+      void persisted.current.update({ sidebarWidth: DEFAULT_WIDTH })
+    }} />
+}

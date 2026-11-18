@@ -2,7 +2,7 @@
 
 [返回首页](../README.md)
 
-命令和代码路径均相对仓库根目录。应用采用 Rust / GPUI / Metal，构建目标为 Apple Silicon。构建、产物验证、正式安装、Git推送和对外发布各有独立回执；其中一步成功不能代替其他步骤。当前迁移文档不构成 GPUI 构建、视觉、签名或安装已通过的证据。
+命令和代码路径均相对仓库根目录。应用采用 Rust 核心、`src-tauri` 宿主和 React / TypeScript 界面，使用系统 WKWebView，构建目标为 Apple Silicon。构建、产物验证、正式安装、Git推送和对外发布各有独立回执；其中一步成功不能代替其他步骤。当前恢复实现尚未验证，文档不构成构建、视觉、签名或安装已通过的证据。
 
 ## 本地交付与手动升级
 
@@ -15,24 +15,24 @@ npm run package
 npm run dist
 ```
 
-`build`执行完整 Rust release 构建；`package`生成目录应用；`dist`生成目录应用、DMG和ZIP，稳定发布另生成签名 appcast。入口生成Rust worker、系统插件、Swift导航助手及许可证，准备固定版本的 Sparkle framework，再构建 `oc-desktop` GPUI宿主；无前端打包。生产 features 为空，不含 `acceptance`，也没有 `custom-protocol` feature。
+`build`执行 Vite 前端打包和 Rust release 构建；`package`生成目录应用；`dist`生成目录应用、DMG和ZIP，稳定发布另生成签名 appcast。入口生成Rust worker、系统插件、Swift导航助手及许可证，准备固定版本的 Sparkle framework，再构建 `src-tauri` 宿主。生产 features 为 `["custom-protocol"]`，不含 `acceptance`。
 
-受控输出位于`release/gpui/`。`build.json`使用schema 3、`renderer: "gpui"`，绑定buildId、版本、架构、features、程序和资源摘要；开发features为`["acceptance"]`，生产为`[]`。每次分发有独立目录和`distribution.json`，实际路径以回执为准。归档命名为`OC-Chan-<版本>-mac-arm64.zip`和`.dmg`；稳定更新源为 `appcast.xml`，旧 `latest.json` 已删除，不要与构建回执schema混淆。
+受控输出位于`release/tauri/`。`build.json`使用schema 3、`renderer: "react"`，绑定buildId、版本、架构、features、程序和资源摘要；开发features为`["acceptance", "custom-protocol"]`，生产为`["custom-protocol"]`。每次分发有独立目录和`distribution.json`，实际路径以回执为准。归档命名为`OC-Chan-<版本>-mac-arm64.zip`和`.dmg`；稳定更新源为 `appcast.xml`，旧 `latest.json` 已删除，不要与构建回执schema混淆。
 
 需要从包含未提交改动的当前源码生成可核对交付时：
 
 ```sh
-npm run delivery:local -- --out release/gpui/local-gpui-new
+npm run delivery:local -- --out release/tauri/local-react-new
 ```
 
-输出目录必须全新且位于当前工作区的`release/gpui/`内，工具创建父目录。工具记录实际HEAD、分支、dirty状态、精确构建输入和逐文件摘要，在独立源码快照中构建；HEAD不代表未提交内容。源码在构建期间变化会失败，不生成成功交付清单。源码、依赖审计、包内容、ZIP/DMG一致性和签名回执随交付保留，失败记录不能冒充可安装版本。此入口不启动、退出或替换正式应用。
+输出目录必须全新且位于当前工作区的`release/tauri/`内，工具创建父目录。工具记录实际HEAD、分支、dirty状态、精确构建输入和逐文件摘要，在独立源码快照中构建；HEAD不代表未提交内容。源码在构建期间变化会失败，不生成成功交付清单。源码、依赖审计、包内容、ZIP/DMG一致性和签名回执随交付保留，失败记录不能冒充可安装版本。此入口不启动、退出或替换正式应用。
 
 核验与安装使用不同操作：
 
 ```sh
-npm run install:local -- --check-delivery release/gpui/local-gpui-new
+npm run install:local -- --check-delivery release/tauri/local-react-new
 # 只有获得替换正式应用的授权后：
-npm run install:local -- --delivery release/gpui/local-gpui-new
+npm run install:local -- --delivery release/tauri/local-react-new
 ```
 
 第一条只核对已有交付；第二条会退出旧应用、同卷暂存并整包替换`/Applications/OC Chan.app`，验证新包就绪，失败尝试还原。也可在获得对应授权后用`npm run install:local`安装当前工作目录。工具不把旧交付当作当前源码，不改写或迁移个人设置、事件库及上游数据；目标被其他任务替换、安装锁占用、签名/摘要不符或路径不安全时拒绝操作。
@@ -45,7 +45,7 @@ npm run install:local -- --delivery release/gpui/local-gpui-new
 
 应用内更新由 Sparkle 2.10.1 负责，稳定 feed 和 ZIP 使用 Ed25519 签名。生产源固定为 `https://github.com/Zixiaobowen/oc-chan/releases/latest/download/appcast.xml`；客户端不含GitHub凭据、用户自定义更新URL或远程上报。启用 `SUVerifyUpdateBeforeExtraction`、`SURequireSignedFeed`，签名过期 fallback 为 0；签名错误不得降级放行。
 
-GPUI 设置显示状态和自动检查选项；显式检查、下载、安装与重启使用 Sparkle 标准界面。自动检查由 Sparkle 管理，自动下载关闭，普通退出不自动安装。“发行说明与下载”打开 GitHub Releases。检查失败保留真实错误，不能显示为“已是最新版本”。
+React 设置显示状态和自动检查选项；显式检查经 Tauri 命令调用 Sparkle，下载、安装与重启使用 Sparkle 标准界面。自动检查由 Sparkle 管理，自动下载关闭，普通退出不自动安装。“发行说明与下载”打开 GitHub Releases。检查失败保留真实错误，不能显示为“已是最新版本”。
 
 不再以缺少 Developer ID 为由禁用应用更新，无需付费 Apple 开发者会员。ad-hoc 签名与 Ed25519 更新签名不等于 Apple 公证、Gatekeeper 认可或免除首次用户批准；不得关闭系统防护来代替验收。开发和无头实例只探测更新，不启动安装界面。
 
@@ -80,7 +80,7 @@ npm run test:release
 
 [Build macOS工作流](https://github.com/Zixiaobowen/oc-chan/actions/workflows/build.yml)覆盖main、目标为main的PR、版本标签及手动构建。macOS安装包使用GitHub Releases分发；GitHub Packages用于依赖包或容器镜像，不用于本项目的DMG/ZIP。原生验收运行器需要macOS 26+；生产最低系统要求与验收系统不能混同。云端执行状态以对应提交的实际Actions回执为准，本地修改工作流不等于CI已经通过。
 
-CI安装锁定npm/Cargo依赖，按变更映射运行行为测试；应用入口、采集、桥接、界面或构建改变时运行隔离、真实隐藏的GPUI场景。Metal capture与认证驱动仅在acceptance构建。未映射测试、未知代码路径、测试失败、许可证/公告查询失败和产物校验失败都阻止交付。只上传明确成功的安装材料，失败证据单独保存；工作流已更新不等于运行已通过。
+CI安装锁定npm/Cargo依赖，按变更映射运行行为测试；应用入口、采集、桥接、界面或构建改变时运行隔离、真实隐藏的WKWebView场景。页面探针、截图与认证驱动仅在acceptance构建。未映射测试、未知代码路径、测试失败、许可证/公告查询失败和产物校验失败都阻止交付。只上传明确成功的安装材料，失败证据单独保存；工作流已更新不等于运行已通过。
 
 `main`推送或在`main`手动运行工作流时，检查通过后自动发布预览Release，标签为`preview-<运行编号>-<提交短SHA>`，绑定本次构建的完整提交。附件包含ad-hoc签名的arm64 DMG、ZIP和`SHA256SUMS.txt`；Release标为Pre-release，不设为Latest，也不上传稳定 `appcast.xml`，不会触发应用内稳定更新。仓库可见性不因发布而改变。
 
@@ -104,7 +104,7 @@ Actions产物可在成功运行记录中下载`oc-chan-macos-arm64-<运行编号
 
 ## 包内容、体积与依赖审查
 
-产物只允许主程序、Rust worker、Swift导航助手、Tern插件资源、原生系统插件包、图标、完整 Sparkle 2.10.1 framework 和依赖许可。Sparkle 官方归档由 SHA-256 及逐文件 pin 校验；保留上游签名 helpers，Headers/Modules 也属于上游签名封印，不得裁剪或重签 helpers。旧在线安装助手不再打包。GPUI界面编译进Rust主程序；没有Vite资源或renderer npm清单。Rust闭包按目标平台、精确Cargo.lock、运行/构建依赖关系和crate摘要追踪；npm仅作开发工具依赖审查。
+产物只允许主程序及其打包的React页面资源、Rust worker、Swift导航助手、Tern插件资源、原生系统插件包、图标、完整 Sparkle 2.10.1 framework 和依赖许可。Sparkle 官方归档由 SHA-256 及逐文件 pin 校验；保留上游签名 helpers，Headers/Modules 也属于上游签名封印，不得裁剪或重签 helpers。旧在线安装助手不再打包。Vite打包真实renderer依赖，ReactFlow与Three.js属于界面运行依赖；WKWebView由系统提供。Rust闭包按目标平台、精确Cargo.lock、运行/构建依赖关系和crate摘要追踪；renderer npm闭包与仅开发工具分别审查。
 
 Rust许可生成器校验锁定crate归档，收集完整LICENSE/NOTICE。未随crate发布的许可按精确VCS commit与上游文本摘要补齐，证据保留在`resources/rust-license-supplements/manifest.json`。产物使用明确的license-only目录，清单保留原始sourcePath和hash，不复制crate源码树。缺许可或来源不能证明时构建失败。
 
@@ -113,13 +113,13 @@ npm run audit:dependencies -- --output release/dependency-review-arm64.json
 npm run check:package -- --app /absolute/path/to/OC-Chan.app --arch arm64 --output release/package-manifest-arm64.json
 ```
 
-包路径必须替换为`distribution.json`里的真实`.app`；验证归档时再传`--artifacts-dir`对应分发目录。依赖审查要求`cargo-audit 0.22.2`可用，实时查询npm公告和RustSec数据库；`docs/dependency-review-policy.json`绑定精确npm/Cargo锁与已核对许可，不豁免公告、不静默忽略查询失败。锁改变后须重新审查，不再传`--bundled-manifest`。
+包路径必须替换为`distribution.json`里的真实`.app`；验证归档时再传`--artifacts-dir`对应分发目录。依赖审查要求`cargo-audit 0.22.2`可用，实时查询npm公告和RustSec数据库；`docs/dependency-review-policy.json`绑定精确npm/Cargo锁与已核对许可，不豁免公告、不静默忽略查询失败。锁改变后须重新审查，renderer打包依赖须纳入实际产物闭包。
 
-包检查核对Mach-O架构、可执行权限、完整签名、资源摘要、编译期插件目录pin、许可证及实际条目；拒绝Electron、Chromium、Node、N-API、ASAR、验收驱动标记`OC_CHAN_GPUI_ACCEPTANCE_V1`、测试、非 Sparkle 上游封印必需的源码、缓存、个人数据、多余资源和逃逸链接。Metal capture只属验收，不得进入生产。归档检查包含长度、摘要、ZIP条目和DMG校验。
+包检查核对Mach-O架构、可执行权限、完整签名、资源摘要、编译期插件目录pin、许可证及实际条目；拒绝Electron、Chromium、Node、N-API、ASAR、验收驱动/探针、测试、非 Sparkle 上游封印必需的源码、缓存、个人数据、多余资源和逃逸链接。WKWebView验收入口不得进入生产。归档检查包含长度、摘要、ZIP条目和DMG校验。
 
 沿用`docs/package-baseline.json`中的arm64应用总量300MiB、Tern helper160KiB、ZIP125MiB及DMG130MiB上限；原ASAR和已删除依赖的历史分量只保留作证据，不伪造新运行时同类文件。遍历总量保护线不是发布体积预算，插件2MiB/展开9MiB预算也独立执行。历史测量不能当作当前包的体积或性能证明。
 
-本次本地生产构建已生成 DMG、ZIP 并通过包检查；具体大小与签名验收证据记录在本地交接。包含完整 framework 的成本由现有预算约束，不根据 SDK 归档大小推断最终应用体积。
+此前本地生产构建的 DMG、ZIP 与包检查结果仅是历史证据，具体大小与签名回执记录在当时的本地交接，不能作为本次恢复实现已通过的证据。包含完整 framework 的成本仍由现有预算约束，不根据 SDK 归档大小推断最终应用体积。
 
 ## 本机安装与推送后的清理
 
@@ -134,6 +134,6 @@ npm run cleanup:local -- --apply
 
 第一条只报告；第二条执行受管清理。先复验launcher的出生身份与工作目录，等待它及确认后代退出，再删除本任务临时目录；不跟随符号链接，不凭进程名批量终止。失败保留现场，不把未处理目录称为已清理。
 
-本机永久应用只保留 `/Applications/OC Chan.app`。分支、未提交改动、个人数据库和必要交付证据继续保留。完整任务交付还须执行 [任务收尾](development.md#任务收尾)：先把交接提交到 GitHub main，将原始证据保全到目标外，再从保留工作区用 `npm run closeout:task -- --worktree <任务临时目录> --handoff <已推送交接>` 预检；逐项审阅 ignored 材料并明确可丢弃条目，无阻塞后加 `--apply` 移除本任务临时 worktree。已有目录和其他任务不能自动纳入，任何未提交材料或在用状态都阻止删除。收尾回执保存在 Git common dir 的 `task-closeouts/`，不随目标消失。
+本机永久应用只保留 `/Applications/OC Chan.app`。分支、未提交改动、个人数据库和必要交付证据继续保留。交接保存在本地被忽略的 `docs/codex-handoffs/`，不要求提交或推送；原始证据须保全到目标 worktree 外。按[任务收尾](development.md#任务收尾)记录独立清理授权及现场状态：现有 `closeout:task` 的远端交接blob门禁不适用于本地交接，因此保留工作树并报告阻塞，不强制添加忽略文件、不借用无关交接或绕过门禁。已有目录和其他任务不能自动纳入，未提交材料或在用状态均阻止删除。工具已有收尾回执保存在 Git common dir 的 `task-closeouts/`，不随目标消失。
 
 无头测试只覆盖软件链路，正式安装、Dock、物理托盘、VoiceOver和可见动画仍须独立验收；任务收尾也不代表这些验收已经完成。

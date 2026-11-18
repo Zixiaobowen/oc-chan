@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-marketplace-install"
+description = "Enables the marketplace_install command without any pre-configured scope."
+commands.allow = ["marketplace_install"]
+
+[[permission]]
+identifier = "deny-marketplace-install"
+description = "Denies the marketplace_install command without any pre-configured scope."
+commands.deny = ["marketplace_install"]

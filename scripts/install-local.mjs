@@ -94,9 +94,9 @@ export async function installLocal(options) {
     else {
       const source = await captureDeliverySource(root)
       await command('npm', ['run', 'package'], { cwd: root, timeout: 900000, signal: controller.signal })
-      const buildRecord = await installationJson(path.join(root, 'release/gpui/build.json'))
-      requireThat(buildRecord.schema === 3 && buildRecord.renderer === 'gpui' && /^[a-f0-9-]{36}$/.test(buildRecord.buildId), 'Invalid GPUI build receipt')
-      const distribution = await installationJson(path.join(root, 'release/gpui', buildRecord.buildId, 'distribution.json'))
+      const buildRecord = await installationJson(path.join(root, 'release/tauri/build.json'))
+      requireThat(buildRecord.schema === 3 && buildRecord.renderer === 'react' && /^[a-f0-9-]{36}$/.test(buildRecord.buildId), 'Invalid Tauri build receipt')
+      const distribution = await installationJson(path.join(root, 'release/tauri', buildRecord.buildId, 'distribution.json'))
       requireThat(distribution.schema === 2 && distribution.buildId === buildRecord.buildId && distribution.version === source.version, 'Distribution differs from captured source')
       const bundle = distribution.app
       requireThat(deliveryCleanupRoot({ root, application: bundle }) === root, 'Built application belongs to another source worktree')
@@ -105,7 +105,7 @@ export async function installLocal(options) {
       prepared = { bundle, ...verified, buildRecord, version: source.version, source }
     }
     controller.signal.throwIfAborted()
-    const evidenceParent = path.join(root, 'release/gpui/installations'); mkdirSync(evidenceParent, { recursive: true, mode: 0o700 })
+    const evidenceParent = path.join(root, 'release/tauri/installations'); mkdirSync(evidenceParent, { recursive: true, mode: 0o700 })
     evidenceDirectory = realpathSync(mkdtempSync(path.join(evidenceParent, 'installation-')))
     const tool = await compileLocalProcessTool(root, evidenceDirectory)
     const staged = await stageInstallBundle(prepared.bundle, destination, { ...prepared, root: buildRoot }); staging = staged.directory

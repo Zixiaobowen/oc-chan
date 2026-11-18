@@ -63,7 +63,7 @@
 - (BOOL)updater:(SPUUpdater *)updater shouldPostponeRelaunchForUpdate:(SUAppcastItem *)item untilInvokingBlock:(void (^)(void))handler {
   MainThread();
   // Retain the block and controller until Rust finishes draining real work. Never
-  // replace NSApplicationDelegate: GPUI still owns its normal termination path.
+  // replace NSApplicationDelegate: Tao still owns its normal termination path.
   Require(!self.installationContinuation, "Sparkle installation continuation still pending");
   self.installationContinuation = handler; self.phase = @"awaiting-quit"; [self publish];
   auto state = owner.lock(); Require(state != nullptr, "Sparkle owner unavailable");

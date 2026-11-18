@@ -69,6 +69,11 @@ static Known known[MAX_KNOWN];
 static size_t knownCount;
 static Track tracked[MAX_TRACKED];
 static size_t trackedCount;
+/* Explicit identities come only from the runner's authenticated WK instance
+ * observations. Never infer XPC ownership from a name, UID or parent process. */
+typedef struct { Identity id; uint64_t admitted; } Association;
+static Association associated[16];
+static size_t associatedCount;
 static struct proc_fdinfo fdBuffer[MAX_FDS + 1];
 static size_t walk[MAX_SYSTEM];
 static char output[OUTPUT_BYTES];
@@ -356,6 +361,26 @@ static ObservedCoverage emit_processes(unsigned group) {
     append("]");
     return observed;
 }
+static ObservedCoverage emit_associated(void) {
+    ObservedCoverage observed = {0};
+    append("[");
+    for (size_t i = 0; i < associatedCount; i++) {
+        Identity id = associated[i].id;
+        uint64_t age = monotonic_ns() - associated[i].admitted;
+        Measurement value = {0};
+        if (age <= UINT64_C(2000000000)) value = measure(id);
+        else value.identityError = ESTALE;
+        if (value.identityError) value.rssValid = value.cpuValid = value.fdValid = false;
+        observed.processes++; observed.rss += value.rssValid;
+        observed.cpu += value.cpuValid; observed.fd += value.fdValid;
+        append("%s{\"pid\":%d,\"startId\":\"%" PRIu64 ":%06" PRIu64 "\",\"associationAgeMs\":%.3f,\"mayBeShared\":true,\"rssBytes\":", i ? "," : "", id.pid, id.sec, id.usec, (double)age / 1e6);
+        number_or_null(value.rssValid, value.rss);
+        append(",\"cpuNs\":"); number_or_null(value.cpuValid, value.cpu);
+        append(",\"fdCount\":"); number_or_null(value.fdValid, value.fd);
+        append(",\"sampleErrors\":{\"taskInfo\":%d,\"descriptors\":%d,\"identity\":%d}}", value.taskError, value.fdError, value.identityError);
+    }
+    append("]"); return observed;
+}
 static void emit_observed_coverage(ObservedCoverage observed) {
     append("{\"processes\":%" PRIu64 ",\"rssSamples\":%" PRIu64
            ",\"cpuSamples\":%" PRIu64 ",\"fdSamples\":%" PRIu64 ",\"complete\":%s}",
@@ -371,6 +396,8 @@ static void resources(bool refresh) {
     ObservedCoverage observedApp = emit_processes(APP);
     append(",\"development\":");
     ObservedCoverage observedDevelopment = emit_processes(DEVELOPMENT);
+    append(",\"associated\":");
+    ObservedCoverage observedAssociated = emit_associated();
     append(",\"coverage\":{\"interval\":\"sincePreviousResources\","
            "\"scope\":\"observedProcessesOnly\",\"treeScanIntervalMs\":1000,"
            "\"lifecycleSampleIntervalMs\":10,\"unobservedShortProcessesPossible\":true,"
@@ -390,6 +417,8 @@ static void resources(bool refresh) {
     emit_observed_coverage(observedApp);
     append(",\"observedDevelopment\":");
     emit_observed_coverage(observedDevelopment);
+    append(",\"observedAssociated\":");
+    emit_observed_coverage(observedAssociated);
     append("}}\n");
     flush_output();
     memset(&coverage, 0, sizeof(coverage));
@@ -501,9 +530,34 @@ static void start_track(pid_t pid, pid_t parent) {
     remember(tracked[index].id, group);
     (void)sample_track(index);
 }
+static uint64_t association_number(const char **cursor, uint64_t maximum) {
+    const char *text = *cursor;
+    if (*text < '0' || *text > '9') fail("invalid association identity");
+    uint64_t value = 0;
+    do {
+        unsigned digit = (unsigned)(*text++ - '0');
+        if (value > (maximum - digit) / 10) fail("association identity out of range");
+        value = value * 10 + digit;
+    } while (*text >= '0' && *text <= '9');
+    *cursor = text; return value;
+}
 static bool command(const char *line) {
     require_owner();
     if (strcmp(line, "stop") == 0) return false;
+    if (!strcmp(line, "xpc-reset")) { if (!configured) fail("XPC before roots"); associatedCount = 0; return true; }
+    if (!strncmp(line, "xpc ", 4)) {
+        if (!configured || associatedCount == 16) fail("XPC association budget");
+        const char *cursor = line + 4;
+        pid_t pid = parse_pid(&cursor);
+        if (*cursor++ != ' ') fail("missing XPC birth seconds");
+        uint64_t sec = association_number(&cursor, UINT64_C(9007199254740991));
+        if (*cursor++ != ' ') fail("missing XPC birth microseconds");
+        uint64_t usec = association_number(&cursor, UINT64_C(999999));
+        if (*cursor || !sec || pid == selfPid || pid == ownerPid) fail("invalid XPC identity");
+        for (size_t i = 0; i < associatedCount; i++) if (associated[i].id.pid == pid) fail("duplicate XPC identity");
+        associated[associatedCount++] = (Association){ .id = {pid, sec, usec}, .admitted = monotonic_ns() };
+        return true;
+    }
     bool roots = strncmp(line, "roots ", 6) == 0;
     bool track = strncmp(line, "track ", 6) == 0;
     bool exited = strncmp(line, "exit ", 5) == 0;

@@ -22,9 +22,9 @@ concurrency:
 
 jobs:
   build:
-    name: Rust arm64 and real GPUI acceptance
+    name: Rust arm64 and real Tauri acceptance
     # Official arm64 macOS 26 image: https://github.com/actions/runner-images#available-images
-    # GPUI uses the native Metal renderer; production deployment target is 13.0.
+    # Hidden WebKit acceptance requires macOS 14 or newer.
     runs-on: macos-26
     timeout-minutes: 90
     defaults:
@@ -63,13 +63,13 @@ jobs:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: node --input-type=module -e 'import {packageReleaseInfo,requireReleaseEnvironment} from "./scripts/release-config.mjs";requireReleaseEnvironment(packageReleaseInfo())'
 
-      - name: Verify native GPUI acceptance environment
+      - name: Verify native Tauri acceptance environment
         run: |
           node --input-type=module <<'NODE'
           import { execFileSync } from 'node:child_process'
           if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('Native arm64 macOS runner required')
           const major = Number(execFileSync('sw_vers', ['-productVersion'], { encoding: 'utf8' }).trim().split('.')[0])
-          if (!Number.isInteger(major) || major < 13) throw new Error('GPUI requires macOS 13 or newer')
+          if (!Number.isInteger(major) || major < 14) throw new Error('Hidden WebKit acceptance requires macOS 14 or newer')
           NODE
           xcrun --find swiftc
           xcrun --find clang++
@@ -83,24 +83,38 @@ jobs:
       - name: Cache and verify pinned Sparkle SDK
         run: node scripts/sparkle-sdk.mjs
 
+      - name: Check React types
+        run: npm run typecheck
+
       - name: Run affected Rust and JavaScript behavior tests
         id: behavior_tests
         env:
           OC_CHAN_CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: npm run test:ci
 
-      - name: Run isolated real GPUI acceptance
+      - name: Run isolated real Tauri acceptance
         id: renderer_smoke
         if: steps.behavior_tests.outputs.renderer_smoke == 'true'
         timeout-minutes: 30
         run: npm run smoke:renderer -- --out "$RUNNER_TEMP/oc-chan-renderer-smoke"
 
-      - name: Upload real GPUI acceptance evidence
+      - name: Verify isolated Sparkle outcomes through React
+        if: steps.behavior_tests.outputs.renderer_smoke == 'true'
+        timeout-minutes: 45
+        run: |
+          for phase in available no-update error; do
+            npm run smoke:renderer -- --scenario updates --sparkle-phase "$phase" --out "$RUNNER_TEMP/oc-chan-sparkle-$phase"
+          done
+          npm run smoke:updates
+
+      - name: Upload real Tauri acceptance evidence
         if: ${{ !cancelled() && (steps.renderer_smoke.outcome == 'success' || steps.renderer_smoke.outcome == 'failure') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: oc-chan-renderer-smoke-${{ github.run_number }}
-          path: ${{ runner.temp }}/oc-chan-renderer-smoke
+          path: |
+            ${{ runner.temp }}/oc-chan-renderer-smoke
+            ${{ runner.temp }}/oc-chan-sparkle-*
           if-no-files-found: error
           retention-days: 14
 
@@ -121,7 +135,7 @@ jobs:
           import { appendFileSync } from 'node:fs'
           import path from 'node:path'
           import { ROOT, loadBuild, boundedJson } from './scripts/build-app.mjs'
-          const build = await loadBuild(), directory = path.join(ROOT, 'release/gpui', build.buildId)
+          const build = await loadBuild(), directory = path.join(ROOT, 'release/tauri', build.buildId)
           const record = await boundedJson(path.join(directory, 'distribution.json'))
           if (record.schema !== 2 || record.buildId !== build.buildId || record.destination !== directory || record.arch !== 'arm64' || record.version !== build.version) throw new Error('Distribution does not match this build')
           appendFileSync(process.env.GITHUB_OUTPUT, `directory=${directory}\napp=${record.app}\n`)

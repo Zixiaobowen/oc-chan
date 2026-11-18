@@ -24,7 +24,7 @@ extern "C" {
  * The host exposes only allowlisted operation/stage labels and error categories;
  * raw boundary OS reasons must never enter IPC or logs. Sparkle's bounded user-facing
  * update errors are part of its presentation snapshot and are shown as supplied.
- * Create requires GPUI's NSApplication subclass to be initialized first;
+ * Create requires Tao's NSApplication subclass to be initialized first;
  * the bridge never creates NSApplication or replaces its delegate.
  * Acceptance create and dockSet skip the policy setter when already at target;
  * actual policy is always read back. A requested change requires both setter

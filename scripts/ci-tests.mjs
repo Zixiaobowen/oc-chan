@@ -7,6 +7,11 @@ import { readSparkleConfig } from './sparkle-sdk.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 export const suites = {
+  topology: ['src/renderer/src/agent-topology.test.ts', 'src/renderer/src/agent-topology-3d-layout.test.ts'],
+  views: ['src/renderer/src/view-state.test.ts', 'src/renderer/src/plugin-registry.test.ts', 'src/renderer/src/tray-selection.test.ts'],
+  navigation: ['src/shared/navigation.test.ts'],
+  diagnostics: ['src/shared/diagnostics.test.ts'],
+
   install: ['scripts/install-local.test.mjs', 'scripts/local-app-lifecycle.test.mjs', 'scripts/local-install-readiness.test.mjs', 'scripts/push-main.test.mjs', 'scripts/develop.test.mjs'],
   closeout: ['scripts/closeout-task.test.mjs'],
   versioning: ['scripts/version.test.mjs', 'scripts/release-workflow.test.mjs'],
@@ -14,7 +19,7 @@ export const suites = {
   packaging: ['scripts/build-app.test.mjs', 'scripts/check-package.test.mjs', 'scripts/dependency-review.test.mjs', 'scripts/rust-dependencies.test.mjs', 'scripts/sparkle-sdk.test.mjs'],
   marketplace: ['scripts/build-plugin-market-rust.test.mjs'],
   delivery: ['scripts/local-delivery.test.mjs', 'scripts/delivery-source.test.mjs', 'scripts/delivery-zip.test.mjs'],
-  performance: ['scripts/performance/core.test.mjs', 'scripts/performance/measurement.test.mjs', 'scripts/performance/fixtures.test.mjs', 'scripts/performance/sampler.test.mjs', 'scripts/performance/native-harness.test.mjs'],
+  performance: ['scripts/performance/core.test.mjs', 'scripts/performance/measurement.test.mjs', 'scripts/performance/fixtures.test.mjs', 'scripts/performance/soak-scenario.test.mjs', 'scripts/performance/sampler.test.mjs', 'scripts/performance/native-harness.test.mjs'],
   ci: ['scripts/ci-tests.test.mjs']
 }
 const core = filter => ({ package: 'oc-core', features: ['acceptance'], library: true, ...(filter ? { filter } : {}) })
@@ -25,11 +30,18 @@ export const rustSuites = {
   navigation: core('navigation::'), tern: core('tern::'),
   installer: { package: 'oc-installer', library: true }, sdk: { package: 'oc-plugin-sdk', library: true },
   system: { package: 'oc-system-monitor' }, native: { package: 'oc-native-bridge', library: true },
-  host: { package: 'oc-desktop', features: ['acceptance'] }
+  host: { package: 'oc-chan', features: ['acceptance'] }
 }
 const all = Object.keys(suites), allRust = ['core', 'installer', 'sdk', 'system', 'native', 'host']
 const rules = [
-  [/^(?:package(?:-lock)?\.json|Cargo\.(?:toml|lock)|rust-toolchain(?:\.toml)?)$/, all, allRust, '依赖与跨语言构建契约变更'],
+  [/^src-tauri\//, ['views', 'diagnostics', 'install'], ['host'], 'Tauri宿主与真实WebKit入口'],
+  [/^src\/renderer\/src\/(?:AgentTopology|agent-topology|agent-office|AgentsView)/, ['topology', 'views'], ['navigation'], '拓扑交互及定位'],
+  [/^src\/renderer\//, ['topology', 'views'], [], '渲染与视图状态'],
+  [/^src\/plugins\//, ['views', 'marketplace'], ['system', 'plugins'], '插件界面贡献与原生插件契约'],
+  [/^src\/shared\//, ['diagnostics', 'views', 'navigation'], ['core', 'host'], '前后端DTO契约'],
+  [/^scripts\/probes\/wk\//, ['performance', 'install'], ['host'], '独立WKWebView探针与原生验收驱动'],
+  [/^scripts\/bundled-licenses\.ts$/, ['packaging'], [], '前端打包许可证'],
+  [/^(?:package(?:-lock)?\.json|Cargo\.(?:toml|lock)|rust-toolchain(?:\.toml)?|tsconfig\.json|vite\.config\.ts)$/, all, allRust, '依赖与跨语言构建契约变更'],
   [/^crates\/oc-core\/src\/(?:io(?:\/|\.rs)|http(?:\/|\.rs)|resources\.rs|error\.rs|lib\.rs|worker(?:\/|\.rs)|bin\/|model\/|process\.rs)/, [], ['core', 'host'], '共享IO、worker与DTO及直接宿主调用方'],
   [/^crates\/oc-core\/src\/agents\//, [], ['agents', 'monitor', 'tern'], 'Agent采集及调度、导航调用方'],
   [/^crates\/oc-core\/src\/schedules\//, [], ['schedules', 'events', 'monitor'], '任务采集及事件、调度调用方'],
@@ -45,7 +57,6 @@ const rules = [
   [/^crates\/oc-installer\//, ['install'], ['installer', 'host'], '本地安装授权与就绪回执及宿主调用方'],
   [/^crates\/oc-plugin-sdk\//, ['marketplace'], ['sdk', 'plugins', 'marketplace', 'system'], '原生插件协议及消费者'],
   [/^plugins\/system-monitor\//, ['marketplace'], ['system', 'plugins'], '系统插件与宿主协议'],
-  [/^crates\/oc-desktop\//, ['install'], ['host'], 'GPUI视图、交互与桌面宿主'],
   [/^native\//, ['install', 'packaging'], ['native', 'host'], '原生窗口、权限、材质和输入桥接'],
   [/^scripts\/local-install-lock\.test\.c$/, ['install'], [], '本机安装锁的原生测试观察器'],
   [/^scripts\/closeout-task\.mjs$/, ['closeout'], [], '任务工作树收尾与远端交接门禁'],
@@ -58,7 +69,7 @@ const rules = [
   [/^scripts\/build-marketplace-fixtures\.mjs$/, ['marketplace', 'performance', 'install'], ['marketplace', 'plugins', 'system'], '原生市场验收夹具与真实宿主场景'],
   [/^scripts\/(?:local-delivery|delivery-source|delivery-zip)\.mjs$/, ['delivery', 'packaging', 'install'], [], '交付快照与归档完整性'],
   [/^scripts\/performance\//, ['performance'], [], '资源性能测量工具'],
-  [/^scripts\/smoke-renderer\.mjs$|^scripts\/smoke\//, ['performance', 'install'], ['host'], '真实GPUI验收与隔离夹具'],
+  [/^scripts\/smoke-renderer\.mjs$|^scripts\/smoke\//, ['performance', 'install'], ['host'], '真实WKWebView验收与隔离夹具'],
   [/^scripts\/ci-tests\.mjs$|^\.github\/workflows\//, ['ci', 'versioning'], [], 'CI行为选择与执行门禁'],
   [/^resources\//, ['packaging'], ['host'], '生产原生资源'],
   [/\.md$|^docs\/|^\.impeccable\/|^\.gitignore$|^LICENSE(?:\..*)?$/, [], [], '文档与开发说明']
@@ -66,7 +77,8 @@ const rules = [
 // Retired entry points are accepted only as deletions, with their replacement modules.
 const retiredRules = [
   [/^crates\/oc-core\/src\/updates\//, ['updates'], ['host'], '移除旧更新器，由Sparkle宿主与签名发布接管'],
-  [/^(?:src\/|src-tauri\/|scripts\/probes\/wk\/|(?:electron\.)?vite\.config\.ts$|tsconfig\.json$|scripts\/bundled-licenses\.ts$)/, ['packaging', 'install'], ['host'], '移除WebView实现，验证GPUI宿主与交付']
+  [/^(?:crates\/oc-desktop\/|scripts\/smoke\/gpui-scenarios\.mjs$)/, ['packaging', 'install'], ['host'], '移除GPUI宿主，验证React与Rust交付'],
+  [/^(?:src\/main\/|electron\.vite\.config\.ts$)/, ['packaging', 'install'], ['host'], '移除旧Electron入口']
 ]
 export function selectTests(files, fullReason, removedFiles = []) {
   if (fullReason) return { tests: Object.values(suites).flat().sort(), rust: [...allRust], reasons: [fullReason], rendererSmoke: true }
@@ -111,7 +123,7 @@ export function changedFiles(base, cwd = root) {
 }
 function exitStatus(result) { if (result.error) throw result.error; if (result.signal) throw new Error(`行为测试被信号终止：${result.signal}`); return result.status }
 export function runTests(files, { cwd = root, stdio = 'inherit' } = {}) {
-  return files.length ? exitStatus(spawnSync(process.execPath, ['--test', '--test-concurrency=2', ...files], { cwd, stdio, timeout: 10 * 60 * 1000, maxBuffer: 256 * 1024 })) : 0
+  return files.length ? exitStatus(spawnSync(process.execPath, ['--import', 'tsx', '--test', '--test-concurrency=2', ...files], { cwd, stdio, timeout: 10 * 60 * 1000, maxBuffer: 256 * 1024 })) : 0
 }
 export function rustCommands(groups, { cwd = root, environment = process.env, hostDirectory = path.join(path.resolve(cwd, environment.CARGO_TARGET_DIR ?? 'target'), 'ci-host') } = {}) {
   if (!Array.isArray(groups) || groups.some(group => !Object.hasOwn(rustSuites, group))) throw new Error('未知Rust测试组')
@@ -123,14 +135,16 @@ export function rustCommands(groups, { cwd = root, environment = process.env, ho
   }
   if (groups.includes('host')) {
     const target = path.resolve(cwd, environment.CARGO_TARGET_DIR ?? 'target')
-    const resources = path.join(hostDirectory, 'resources')
+    const resources = path.join(hostDirectory, 'resources'), frontend = path.join(hostDirectory, 'frontend')
     env.OC_CHAN_RESOURCE_DIR = resources
+    env.TAURI_CONFIG = JSON.stringify({ build: { frontendDist: frontend } })
     prerequisites.push(
       ['cargo', ['build', '--locked', '--release', '--target', 'aarch64-apple-darwin', '--target-dir', target, '-p', 'oc-system-monitor', '--bin', 'collector']],
-      [process.execPath, [path.join(cwd, 'scripts/build-plugin-market-rust.mjs'), '--collector', path.join(target, 'aarch64-apple-darwin/release/collector'), '--manifest', path.join(cwd, 'plugins/system-monitor/manifest.json'), '--out', path.join(resources, 'plugin-market'), '--sign', '-']]
+      [process.execPath, [path.join(cwd, 'scripts/build-plugin-market-rust.mjs'), '--collector', path.join(target, 'aarch64-apple-darwin/release/collector'), '--manifest', path.join(cwd, 'plugins/system-monitor/manifest.json'), '--out', path.join(resources, 'plugin-market'), '--sign', '-']],
+      [process.execPath, [path.join(cwd, 'node_modules/vite/bin/vite.js'), 'build', '--outDir', frontend, '--emptyOutDir']]
     )
   }
-  if (groups.some(group => ['oc-core', 'oc-desktop'].includes(rustSuites[group].package))) {
+  if (groups.some(group => ['oc-core', 'oc-chan'].includes(rustSuites[group].package))) {
     commands.push(['build', '--locked', '-p', 'oc-core', '--bin', 'oc-data-worker', '--features', 'acceptance'])
     const worker = path.join(path.resolve(cwd, environment.CARGO_TARGET_DIR ?? 'target'), 'debug/oc-data-worker')
     env.OC_DATA_WORKER_TEST_EXECUTABLE = worker; env.OC_DATA_WORKER = worker
@@ -160,7 +174,7 @@ export function runRustTests(groups, { cwd = root, stdio = 'inherit', environmen
 function main() {
   const args = process.argv.slice(2), planOnly = args[0] === '--plan'; if (planOnly) args.shift()
   if (args.some(arg => arg.startsWith('-'))) throw new Error('Usage: npm run test:ci -- [--plan] [changed/path ...]')
-  validateTestCoverage(globSync('scripts/**/*.test.mjs', { cwd: root }))
+  validateTestCoverage(globSync(['src/**/*.test.ts', 'plugins/**/*.test.ts', 'scripts/**/*.test.mjs'], { cwd: root }))
   const range = args.length ? {} : changeRange(process.env), changes = args.length || range.fullReason ? { files: args, removed: [] } : changedFiles(range.base)
   const plan = selectTests(changes.files, range.fullReason, changes.removed); console.log(JSON.stringify(plan, null, 2))
   if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `renderer_smoke=${plan.rendererSmoke}\n`)

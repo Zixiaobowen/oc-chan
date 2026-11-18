@@ -15,7 +15,7 @@ function receiptFixture() {
   const request = { schema: 1, transaction: 'b53a76cd-a128-478c-b028-d49ba9f9bc2e', bundle: '/isolated/OC Chan.app', version: '1.2.3', issued_at_ms: 1000, expires_at_ms: 61000,
     process: { pid: 1234, birth_seconds: 1, birth_fraction: 0, executable: '/isolated/OC Chan.app/Contents/MacOS/oc-chan' } }
   const ready = { enabled: true, installed: true, state: 'ready', reason: null }
-  const receipt = { request: structuredClone(request), checked_at_ms: 2000, evidence: { host_version: '1.2.3', renderer_entry: 'main:gpui:paint', renderer_committed: true, action_round_trip: true,
+  const receipt = { request: structuredClone(request), checked_at_ms: 2000, evidence: { host_version: '1.2.3', renderer_entry: 'main:index.html:react-commit', renderer_committed: true, action_round_trip: true,
     partitions: { agents: { ...ready }, schedules: { ...ready }, events: { ...ready }, system: { enabled: false, installed: false, state: 'not-installed', reason: null } },
     hermes_history: 'unavailable', history_entries: 0, history_reason: 'No history source is installed' } }
   return { request, receipt }

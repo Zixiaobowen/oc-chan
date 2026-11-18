@@ -17,7 +17,7 @@ test('production builds strip development overrides and do not discover signing 
   assert.throws(() => buildEnvironment({ configuration: {} }, { RUSTFLAGS: '--cfg feature="acceptance"' }), /acceptance/)
   assert.equal(signingIdentity({}), '-'); assert.throws(() => signingIdentity({ APPLE_SIGNING_IDENTITY: 'Apple Development: Someone' }), /ad-hoc/)
 })
-test('GPUI bundle copies the executable and resources and signs the finished bundle', async t => {
+test('Tauri bundle copies the executable and resources and signs the finished bundle', async t => {
   const root = await fixture(t), binary = path.join(root, 'host'), resourcesDir = path.join(root, 'resources'), application = path.join(root, 'OC Chan.app')
   await mkdir(resourcesDir); await writeFile(binary, 'native host'); await writeFile(path.join(resourcesDir, 'oc-data-worker'), 'worker')
   const calls = []

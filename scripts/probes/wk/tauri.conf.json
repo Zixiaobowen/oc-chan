@@ -1,0 +1,14 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "OC WK Hidden Probe",
+  "version": "0.1.0",
+  "identifier": "dev.occhan.wk-hidden-probe",
+  "build": { "frontendDist": "frontend-dist" },
+  "app": {
+    "macOSPrivateApi": true,
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": { "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost; img-src 'self' data:", "capabilities": [{ "identifier": "probe-events", "windows": ["probe"], "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"] }] }
+  },
+  "bundle": { "active": false, "icon": ["../../../resources/brand/oc-chan-icon.png"] }
+}

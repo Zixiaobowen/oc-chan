@@ -1,6 +1,6 @@
 import { constants } from 'node:fs'
 import { open } from 'node:fs/promises'
-import { boundedFile } from './agent-fixtures.mjs'
+import { boundedFile } from '../smoke/main-probe.mjs'
 
 // Keep each real descriptor's inode: truncation exercises the production reader reset.
 export class SessionLoad {

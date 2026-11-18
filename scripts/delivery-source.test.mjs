@@ -11,18 +11,20 @@ import { captureDeliverySource } from './delivery-source.mjs'
 const exec = promisify(execFile)
 const sha256 = value => createHash('sha256').update(value).digest('hex')
 const initialFiles = {
-  'crates/oc-desktop/src/main.rs': 'fn main() { let _answer = 42; }\n',
+  'src/renderer/index.ts': 'export const answer = 42\n',
   'scripts/build.mjs': 'console.log("build")\n',
   'resources/icon.txt': 'icon\n',
   'plugins/system-monitor/src/main.rs': 'fn main() {}\n',
+  'vite.config.ts': 'export default {}\n',
   'Cargo.toml': '[workspace]\n',
   'Cargo.lock': 'version = 4\n',
   'rust-toolchain.toml': '[toolchain]\nchannel="1.99.0"\nprofile="minimal"\n',
-  'crates/oc-desktop/Cargo.toml': '[package]\nname="oc-desktop"\n',
+  'src-tauri/Cargo.toml': '[package]\nname="host"\n',
   'crates/oc-core/src/lib.rs': 'pub fn captured() {}\n',
   'native/helper.swift': 'import Foundation\n',
   'package.json': '{"name":"delivery-fixture","version":"1.2.3"}\n',
   'package-lock.json': '{"name":"delivery-fixture","version":"1.2.3","lockfileVersion":3}\n',
+  'tsconfig.json': '{}\n',
   'docs/dependency-review-policy.json': '{}\n',
   'docs/package-baseline.json': '{}\n'
 }
@@ -91,7 +93,7 @@ test('captures actual HEAD, sorted scoped paths, permissions, lengths and conten
 test('dirty modifications and untracked additions change digest without inventing a commit', async t => {
   const root = await fixture(t)
   const before = await captureDeliverySource(root)
-  await put(root, 'crates/oc-desktop/src/main.rs', 'fn main() { let _answer = 43; }\n')
+  await put(root, 'src/renderer/index.ts', 'export const answer = 43\n')
   const modified = await captureDeliverySource(root)
   assert.equal(modified.commit, before.commit)
   assert.equal(modified.workspace.dirty, true)
@@ -120,17 +122,17 @@ test('source digest binds path and complete permission bits', async t => {
 test('scopes file contents, includes ignored build inputs, and reports workspace changes separately', async t => {
   const root = await fixture(t)
   const before = await captureDeliverySource(root)
-  await put(root, '.gitignore', 'crates/ignored.ts\n')
+  await put(root, '.gitignore', 'src/ignored.ts\n')
   await put(root, '.env', 'PRIVATE_TOKEN=fixture-only\n')
   await put(root, 'docs/private-notes.txt', 'outside source scope\n')
   const outside = await captureDeliverySource(root)
   assert.equal(outside.digest, before.digest)
   assert.equal(outside.workspace.dirty, true)
   assert.ok(!outside.files.some(file => file.path === '.env' || file.path === 'docs/private-notes.txt'))
-  await put(root, 'crates/ignored.ts', 'export const ignored = true\n')
+  await put(root, 'src/ignored.ts', 'export const ignored = true\n')
   const ignored = await captureDeliverySource(root)
   assert.notEqual(ignored.digest, outside.digest)
-  assert.ok(ignored.files.some(file => file.path === 'crates/ignored.ts'))
+  assert.ok(ignored.files.some(file => file.path === 'src/ignored.ts'))
 })
 
 test('only declared Cargo output roots with real Cargo markers are excluded', async t => {
@@ -141,8 +143,8 @@ test('only declared Cargo output roots with real Cargo markers are excluded', as
   await put(root, 'native/target/.rustc_info.json', '{"rustc_fingerprint":1,"outputs":{}}')
   await sparse(root, 'native/target/debug/large.rlib', 20 * 1024 * 1024)
   assert.equal((await captureDeliverySource(root)).digest, before.digest)
-  await put(root, 'crates/target/owned-source.rs', 'pub fn real_source() {}\n')
-  assert.ok((await captureDeliverySource(root)).files.some(file => file.path === 'crates/target/owned-source.rs'))
+  await put(root, 'src/target/owned-source.rs', 'pub fn real_source() {}\n')
+  assert.ok((await captureDeliverySource(root)).files.some(file => file.path === 'src/target/owned-source.rs'))
   await put(root, 'native/target/CACHEDIR.TAG', 'not Cargo evidence')
   await assert.rejects(captureDeliverySource(root), /ownership evidence/)
 })
@@ -186,7 +188,7 @@ test('uses only HEAD tags and accepts SemVer prereleases and build metadata', as
 })
 
 test('rejects missing inputs and incorrect required input types', async t => {
-  for (const input of ['crates', 'native', 'scripts', 'resources', 'plugins', ...Object.keys(initialFiles).filter(name => !/^(crates|native|scripts|resources|plugins)\//.test(name))]) {
+  for (const input of ['src', 'src-tauri', 'crates', 'native', 'scripts', 'resources', 'plugins', ...Object.keys(initialFiles).filter(name => !/^(src|src-tauri|crates|native|scripts|resources|plugins)\//.test(name))]) {
     await t.test(input, async t => {
       const root = await fixture(t)
       await rm(path.join(root, input), { recursive: true })
@@ -195,8 +197,8 @@ test('rejects missing inputs and incorrect required input types', async t => {
   }
   await t.test('directory replacing file', async t => {
     const root = await fixture(t)
-    await rm(path.join(root, 'Cargo.lock'))
-    await mkdir(path.join(root, 'Cargo.lock'))
+    await rm(path.join(root, 'tsconfig.json'))
+    await mkdir(path.join(root, 'tsconfig.json'))
     await assert.rejects(captureDeliverySource(root), /expected file/)
   })
 })
@@ -219,12 +221,12 @@ test('rejects leaf symlinks even when their targets remain inside the root', asy
 
 test('rejects directory symlinks, external escapes, and a symlink root', async t => {
   const root = await fixture(t)
-  await symlink('../resources', path.join(root, 'crates/linked'))
+  await symlink('../resources', path.join(root, 'src/linked'))
   await assert.rejects(captureDeliverySource(root), /symlink/)
-  await rm(path.join(root, 'crates/linked'))
-  await symlink(tmpdir(), path.join(root, 'crates/outside'))
+  await rm(path.join(root, 'src/linked'))
+  await symlink(tmpdir(), path.join(root, 'src/outside'))
   await assert.rejects(captureDeliverySource(root), /symlink/)
-  await rm(path.join(root, 'crates/outside'))
+  await rm(path.join(root, 'src/outside'))
   await rename(path.join(root, 'docs'), path.join(root, 'docs-real'))
   await symlink('docs-real', path.join(root, 'docs'))
   await assert.rejects(captureDeliverySource(root), /symlink/)
@@ -236,12 +238,12 @@ test('rejects directory symlinks, external escapes, and a symlink root', async t
 
 test('rejects source hard links', async t => {
   const root = await fixture(t)
-  await link(path.join(root, 'crates/oc-desktop/src/main.rs'), path.join(root, 'crates/alias.ts'))
+  await link(path.join(root, 'src/renderer/index.ts'), path.join(root, 'src/alias.ts'))
   await assert.rejects(captureDeliverySource(root), /hard link/)
 })
 
 test('rejects private inputs and ambiguous path characters before reading contents', async t => {
-  for (const name of ['crates/.env', 'crates/.ssh/id_rsa', 'scripts/bad\\name.mjs', 'resources/bad\nname']) {
+  for (const name of ['src/.env', 'src/.ssh/id_rsa', 'scripts/bad\\name.mjs', 'resources/bad\nname']) {
     await t.test(JSON.stringify(name), async t => {
       const root = await fixture(t)
       await put(root, name, 'fixture data\n')
@@ -266,12 +268,12 @@ test('rejects files over 16 MiB and total inputs over 64 MiB', async t => {
 test('rejects more than 1024 source files and depth beyond 32', async t => {
   await t.test('file count', async t => {
     const root = await fixture(t)
-    for (let index = 0; index < 1024; index++) await put(root, `crates/file-${index}.ts`, '')
+    for (let index = 0; index < 1024; index++) await put(root, `src/file-${index}.ts`, '')
     await assert.rejects(captureDeliverySource(root), /exceeds 1024 files/)
   })
   await t.test('depth', async t => {
     const root = await fixture(t)
-    await put(root, `crates/${Array(31).fill('nested').join('/')}/too-deep.ts`, '')
+    await put(root, `src/${Array(31).fill('nested').join('/')}/too-deep.ts`, '')
     await assert.rejects(captureDeliverySource(root), /exceeds depth 32/)
   })
 })
@@ -282,13 +284,13 @@ test('fails explicitly outside Git, before the first commit, and below a worktre
   await git(root, 'init', '-b', 'empty-fixture')
   await assert.rejects(captureDeliverySource(root), /Git rev-parse failed/)
   const committed = await fixture(t)
-  await assert.rejects(captureDeliverySource(path.join(committed, 'crates')), /must be the Git worktree root/)
+  await assert.rejects(captureDeliverySource(path.join(committed, 'src')), /must be the Git worktree root/)
 })
 
 test('accepts an exact 16 MiB file and depth 32', async t => {
   const root = await fixture(t)
   await sparse(root, 'resources/at-limit.bin', 16 * 1024 * 1024)
-  const deepPath = `crates/${Array(30).fill('nested').join('/')}/at-limit.ts`
+  const deepPath = `src/${Array(30).fill('nested').join('/')}/at-limit.ts`
   await put(root, deepPath, 'export {}\n')
   const captured = await captureDeliverySource(root)
   assert.equal(captured.files.find(file => file.path === 'resources/at-limit.bin').bytes, 16 * 1024 * 1024)

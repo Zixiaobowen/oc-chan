@@ -17,7 +17,7 @@ impl DiagnosticNative for Native {
 }
 fn controller(native:Arc<Native>,headless:bool)->Arc<Diagnostics>{
     let io=BoundedIo::new(ResourceBudget::default());let budget=io.resources().clone();
-    Diagnostics::new(DiagnosticsOptions{io,native,headless,owner:1,build:Arc::new(move||build_report(&MonitorSnapshot::default(),&budget.snapshot(),&ReportMetadata{version:"1.0.0".into(),gpui:"0.2.2".into(),platform:"darwin".into(),arch:"arm64".into(),os_release:"27.2.0".into()}))})
+    Diagnostics::new(DiagnosticsOptions{io,native,headless,owner:1,build:Arc::new(move||build_report(&MonitorSnapshot::default(),&budget.snapshot(),&ReportMetadata{version:"1.0.0".into(),tauri:"2.12.5".into(),platform:"darwin".into(),arch:"arm64".into(),os_release:"27.2.0".into()}))})
 }
 async fn preview(controller:&Arc<Diagnostics>)->DiagnosticPreview{match controller.generate().await{DiagnosticResult::Ready{preview}=>preview,other=>panic!("unexpected result: {other:?}")}}
 #[tokio::test]async fn replacement_and_expiry_reject_old_ids(){

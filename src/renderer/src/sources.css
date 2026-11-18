@@ -1,0 +1,50 @@
+.source-row .source-body { container-type: inline-size; }
+.source-row .source-title { align-items: flex-start; flex-wrap: wrap; gap: 8px 16px; }
+.source-row .source-title strong { overflow-wrap: anywhere; }
+.source-row .source-title .badge { flex-shrink: 0; }
+.source-list .source-row p { font-size: max(12px, calc(12px * var(--font-scale))); }
+.source-timing { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 12px 0 0; font-size: max(11px, calc(11px * var(--font-scale))); font-variant-numeric: tabular-nums; }
+.source-timing > div { min-width: 0; }
+.source-timing dt { color: var(--muted); }
+.source-timing dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.source-diagnostic { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 14px; padding-top: 10px; font-size: max(12px, calc(12px * var(--font-scale))); }
+.source-diagnostic code { color: var(--error); overflow-wrap: anywhere; }
+.source-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 12px; }
+.source-actions > span { flex: 1 1 240px; color: var(--muted); font-size: max(11px, calc(11px * var(--font-scale))); }
+.source-actions button { min-height: 32px; white-space: normal; }
+.source-actions button[aria-disabled='true'] { cursor: default; }
+.source-row .source-retry-error { color: var(--error); }
+.source-capabilities { margin-top: 14px; font-size: max(12px, calc(12px * var(--font-scale))); }
+.source-capabilities summary { width: fit-content; max-width: 100%; cursor: pointer; padding: 3px 0; color: var(--accent); }
+.source-capabilities summary:hover { text-decoration: underline; text-underline-offset: 3px; }
+.source-capabilities summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+.source-capabilities > dl { margin: 8px 0 0; }
+.source-capability { display: grid; grid-template-columns: minmax(130px, 1fr) minmax(0, 3fr); gap: 8px 24px; padding: 12px 0; border-top: 1px solid var(--border); }
+.source-capability dt { min-width: 0; font-weight: 550; overflow-wrap: anywhere; }
+.source-capability dd { margin: 0; min-width: 0; line-height: 1.65; overflow-wrap: anywhere; color: var(--muted); }
+.source-support { display: block; margin-top: 3px; font-weight: 400; color: var(--muted); }
+.source-support-supported { color: var(--accent); }
+.source-support-partial { color: var(--warning); }
+.source-section-error { padding: 0 20px 16px; font-size: max(12px, calc(12px * var(--font-scale))); }
+.source-section-error > p { margin-bottom: 8px; overflow-wrap: anywhere; }
+.source-section-error > p:first-child { color: var(--error); }
+.source-section-error button[aria-disabled='true'] { cursor: default; }
+.source-section-times { display: flex; flex-wrap: wrap; gap: 5px 24px; font-variant-numeric: tabular-nums; }
+.badge-empty { color: var(--muted); background: var(--hover); }
+@container (max-width: 40em) {
+  .source-capability { grid-template-columns: minmax(0, 1fr); gap: 5px; }
+  .source-capability dt { display: flex; flex-wrap: wrap; gap: 5px 14px; align-items: baseline; }
+  .source-support { margin-top: 0; }
+  .source-actions { align-items: flex-start; }
+}
+
+.source-group-heading { flex-wrap: wrap; }
+.source-group-heading h2 { min-width: 0; overflow-wrap: anywhere; }
+.source-group-heading .setting-toggle { min-width: 0; max-width: 100%; }
+.source-group-heading .setting-toggle > span { overflow-wrap: anywhere; }
+.source-collection-help { margin: 0; padding: 0 20px 16px; color: var(--muted); font-size: max(12px, calc(12px * var(--font-scale))); line-height: 1.6; overflow-wrap: anywhere; }
+.collection-status { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0 0 16px; color: var(--muted); font-size: max(12px, calc(12px * var(--font-scale))); line-height: 1.6; overflow-wrap: anywhere; }
+.collection-status > strong { color: var(--ink); }
+.collection-status > span { min-width: 0; }
+.source-group > .collection-status, .source-group > .settings-save-error { margin-inline: 20px; }
+.tray-counts dt > small { display: block; font-size: inherit; font-weight: 400; }

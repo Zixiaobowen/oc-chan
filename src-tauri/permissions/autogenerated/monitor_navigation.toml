@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-monitor-navigation"
+description = "Enables the monitor_navigation command without any pre-configured scope."
+commands.allow = ["monitor_navigation"]
+
+[[permission]]
+identifier = "deny-monitor-navigation"
+description = "Denies the monitor_navigation command without any pre-configured scope."
+commands.deny = ["monitor_navigation"]

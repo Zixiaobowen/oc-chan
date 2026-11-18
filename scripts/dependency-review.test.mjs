@@ -6,6 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { assertManifestLock, licenseInventory, parseArgs, parseAuditResult, readBounded, reviewDependencies, reviewFindings, validatePolicy } from './dependency-review.mjs'
+import { rendererLicensePlugin } from './bundled-licenses.ts'
 
 const advisoryId = 'GHSA-g3hv-75wg-m249'
 const hash = bytes => createHash('sha256').update(bytes).digest('hex')
@@ -18,12 +19,13 @@ function fixture() {
     'node_modules/minimatch': { version: '9.0.9', license: 'ISC', dev: true },
     'node_modules/builder': { version: '1.0.0', license: 'MIT', dev: true }
   } }
-  const policy = { schema: 2, lockSha256: hash(JSON.stringify(lock)), cargoLockSha256: 'c'.repeat(64), allowedLicenses: ['MIT', 'ISC'], allowedCargoLicenses: ['MIT'], advisories: [], dependencyChangeReason: 'Unit fixture distinguishes delivery build tools; Rust uses its exact independent lock.' }
+  const bundled = { schema: 1, packages: [{ name: 'react', version: '19.3.1', license: 'MIT', renderedBytes: 100 }] }
+  const policy = { schema: 2, lockSha256: hash(JSON.stringify(lock)), cargoLockSha256: 'c'.repeat(64), allowedLicenses: ['MIT', 'ISC'], allowedCargoLicenses: ['MIT'], advisories: [], dependencyChangeReason: 'Unit fixture distinguishes actual renderer bytes, external runtime dependencies and build tools; Rust uses its exact independent lock.' }
   const audit = { auditReportVersion: 2, vulnerabilities: {
     minimatch: { name: 'minimatch', severity: 'moderate', range: '<11', nodes: ['node_modules/minimatch'], via: [{ source: 123, name: 'minimatch', title: 'Pattern denial of service', severity: 'moderate', url: `https://github.com/advisories/${advisoryId}`, range: '<11' }] },
     builder: { name: 'builder', severity: 'moderate', range: '*', nodes: ['node_modules/builder'], via: ['minimatch'] }
   }, metadata: { vulnerabilities: { moderate: 2, total: 2 } } }
-  return { manifest, lock, policy, audit }
+  return { manifest, lock, bundled, policy, audit }
 }
 function temporary(t) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'oc-chan-dependency-review-'))
@@ -74,29 +76,36 @@ test('policy pins both exact lock files and rejects advisory exemptions', () => 
   assert.throws(() => validatePolicy(policy, policy.lockSha256, policy.cargoLockSha256), /rationale/)
 })
 
-test('npm inventory contains delivery tools only, preserving exact nested versions', () => {
-  const { lock } = fixture()
+test('inventory classifies dev renderer code as bundled and distinguishes exact nested versions', () => {
+  const { lock, bundled } = fixture()
   lock.packages['node_modules/builder/node_modules/react'] = { version: '18.0.0', license: 'MIT', dev: true }
-  const rows = licenseInventory(lock)
-  assert.ok(rows.every(row => row.classification === 'build' && row.bundled === false))
-  assert.equal(rows.filter(row => row.name === 'react').length, 2)
+  const rows = licenseInventory(lock, bundled)
+  assert.equal(rows.find(row => row.path === 'node_modules/react').classification, 'bundled')
+  assert.equal(rows.find(row => row.path === 'node_modules/systeminformation').classification, 'runtime')
+  assert.equal(rows.find(row => row.version === '18.0.0').classification, 'build')
+  assert.ok(rows.every(row => row.name !== 'fixture'))
+  bundled.packages[0].version = '20.0.0'
+  assert.throws(() => licenseInventory(lock, bundled), /absent from lock/)
 })
 
-test('inventory rejects traversal and linked packages', () => {
+test('inventory rejects traversal, linked packages, duplicate bundles and mismatched licenses', () => {
   for (const change of [
     ({ lock }) => { lock.packages['node_modules/../escape'] = { version: '1', license: 'MIT' } },
     ({ lock }) => { lock.packages['node_modules/react'].link = true },
+    ({ bundled }) => { bundled.packages.push({ ...bundled.packages[0] }) },
+    ({ bundled }) => { bundled.packages[0].license = 'ISC' },
+    ({ bundled }) => { bundled.packages[0].renderedBytes = -1 }
   ]) {
     const data = fixture()
     change(data)
-    assert.throws(() => licenseInventory(data.lock))
+    assert.throws(() => licenseInventory(data.lock, data.bundled))
   }
 })
 
 test('known advisories propagate through cyclic build dependencies without being treated as clean', () => {
-  const { lock, audit } = fixture()
+  const { lock, bundled, audit } = fixture()
   audit.vulnerabilities.minimatch.via.push('builder')
-  const findings = reviewFindings(audit, licenseInventory(lock))
+  const findings = reviewFindings(audit, licenseInventory(lock, bundled))
   assert.equal(findings.length, 2)
   assert.ok(findings.every(item => item.decision === 'rejected' && item.reason.includes('remediation')))
   const propagated = findings.find(item => item.name === 'builder')
@@ -104,15 +113,16 @@ test('known advisories propagate through cyclic build dependencies without being
   assert.equal(propagated.advisories[0].npmRange, '<11')
 })
 
-test('review rejects new advisories and unknown lock nodes regardless of npm dependency flags', () => {
+test('review rejects new advisories, runtime exposure, bundled exposure and unknown lock nodes', () => {
   for (const change of [
     data => { delete data.lock.packages['node_modules/minimatch'].dev },
+    data => { data.bundled.packages.push({ name: 'minimatch', version: '9.0.9', license: 'ISC', renderedBytes: 10 }) },
     data => { data.audit.vulnerabilities.minimatch.nodes.push('node_modules/missing') },
     data => { data.audit.vulnerabilities.minimatch.via[0].url = 'https://github.com/advisories/GHSA-new-unreviewed-advisory' }
   ]) {
     const data = fixture()
     change(data)
-    const findings = reviewFindings(data.audit, licenseInventory(data.lock))
+    const findings = reviewFindings(data.audit, licenseInventory(data.lock, data.bundled))
     assert.equal(findings.find(item => item.name === 'minimatch').decision, 'rejected')
   }
 })
@@ -120,15 +130,15 @@ test('review rejects new advisories and unknown lock nodes regardless of npm dep
 test('incomplete and cyclic advisory propagation cannot be treated as clean', () => {
   const data = fixture()
   data.audit.vulnerabilities.minimatch.via = ['builder']
-  assert.throws(() => reviewFindings(data.audit, licenseInventory(data.lock)))
+  assert.throws(() => reviewFindings(data.audit, licenseInventory(data.lock, data.bundled)))
   data.audit.vulnerabilities.minimatch.via = ['missing']
-  assert.throws(() => reviewFindings(data.audit, licenseInventory(data.lock)), /Unresolved/)
+  assert.throws(() => reviewFindings(data.audit, licenseInventory(data.lock, data.bundled)), /Unresolved/)
   data.audit.vulnerabilities.minimatch.nodes = []
-  assert.throws(() => reviewFindings(data.audit, licenseInventory(data.lock)), /Missing affected/)
+  assert.throws(() => reviewFindings(data.audit, licenseInventory(data.lock, data.bundled)), /Missing affected/)
 })
 
 test('dense advisory graphs stop at the traversal budget', () => {
-  const { lock, audit } = fixture()
+  const { lock, bundled, audit } = fixture()
   const names = Array.from({ length: 350 }, (_, index) => `build-${index}`)
   const via = ['minimatch', ...names]
   for (const name of names) {
@@ -136,7 +146,7 @@ test('dense advisory graphs stop at the traversal budget', () => {
     lock.packages[location] = { version: '1.0.0', license: 'MIT', dev: true }
     audit.vulnerabilities[name] = { name, via, nodes: [location] }
   }
-  assert.throws(() => reviewFindings(audit, licenseInventory(lock)), /traversal budget/)
+  assert.throws(() => reviewFindings(audit, licenseInventory(lock, bundled)), /traversal budget/)
 })
 
 test('npm exit 1 with valid findings is verified evidence; malformed, transport and count failures are not', () => {
@@ -172,9 +182,10 @@ test('metadata size limit allows exact boundary and refuses overflow before load
 
 test('failed local preconditions produce an unverified report without changing evidence', t => {
   const root = temporary(t)
-  const { manifest, lock, policy } = fixture()
+  const { manifest, lock, bundled, policy } = fixture()
   put(root, 'package.json', manifest)
   const lockFile = put(root, 'package-lock.json', lock)
+  put(root, 'out/renderer/bundled-dependencies.json', bundled)
   put(root, 'Cargo.lock', 'version = 4\n')
   put(root, 'docs/dependency-review-policy.json', { ...policy, lockSha256: '0'.repeat(64) })
   const before = readFileSync(lockFile)
@@ -193,5 +204,50 @@ test('CLI prevents report paths overwriting evidence, including symlink aliases'
   assert.throws(() => parseArgs(['--output', 'alias.json'], root), /overwrite/)
   assert.throws(() => parseArgs(['--output', 'report.json', '--output', 'another.json'], root), /Usage/)
   assert.throws(() => parseArgs(['--policy'], root), /Usage/)
+})
+
+function bundleFixture(t, { missingLicense = false } = {}) {
+  const root = temporary(t)
+  const directory = 'node_modules/@fixture/retained'
+  put(root, `${directory}/package.json`, { name: '@fixture/retained', version: '1.2.3', license: 'MIT' })
+  const moduleA = put(root, `${directory}/index.js`, 'export const retained = 1')
+  const moduleB = put(root, `${directory}/other.js`, 'export const other = 2')
+  if (!missingLicense) put(root, `${directory}/LICENSE`, 'Copyright (c) Fixture Authors\nPermission is hereby granted to use this fixture.\n')
+  if (!missingLicense) put(root, `${directory}/licenses/vendor.txt`, 'Vendor license grant in a dedicated license directory.\n')
+  put(root, `${directory}/vendor/NOTICE.txt`, 'Third-party vendor copyright and attribution.\n')
+  put(root, 'node_modules/unused/package.json', { name: 'unused', version: '1', license: 'GPL-3.0' })
+  const unused = put(root, 'node_modules/unused/index.js', 'export const unused = 1')
+  const plugin = rendererLicensePlugin()
+  plugin.configResolved({ root })
+  const assets = []
+  const run = () => plugin.generateBundle.call({ emitFile: asset => assets.push(asset) }, {}, {
+    'chunk.js': { type: 'chunk', modules: { [moduleA]: { renderedLength: 12 }, [moduleB]: { renderedLength: 7 }, [unused]: { renderedLength: 0 } } }
+  })
+  return { root, directory, moduleA, assets, run }
+}
+
+test('renderer inventory follows retained chunk IDs and preserves complete license and nested notices', t => {
+  const { assets, run } = bundleFixture(t)
+  run()
+  const inventory = JSON.parse(assets.find(asset => asset.fileName === 'bundled-dependencies.json').source)
+  assert.deepEqual(inventory, { schema: 1, packages: [{ name: '@fixture/retained', version: '1.2.3', license: 'MIT', renderedBytes: 19 }] })
+  const notice = assets.find(asset => asset.fileName === 'THIRD_PARTY_NOTICES.txt').source
+  assert.match(notice, /Copyright \(c\) Fixture Authors\nPermission is hereby granted to use this fixture\./)
+  assert.match(notice, /vendor\/NOTICE.txt[\s\S]*Third-party vendor copyright and attribution/)
+  assert.match(notice, /licenses\/vendor.txt[\s\S]*Vendor license grant in a dedicated license directory/)
+  assert.doesNotMatch(notice, /unused|GPL-3.0/)
+})
+
+test('renderer license collection rejects missing notices, path escapes and oversized metadata', t => {
+  const missing = bundleFixture(t, { missingLicense: true })
+  assert.throws(missing.run, /No license\/copyright notice/)
+  const escaped = bundleFixture(t)
+  const license = path.join(escaped.root, escaped.directory, 'LICENSE')
+  rmSync(license)
+  symlinkSync(put(escaped.root, 'outside.txt', 'external text'), license)
+  assert.throws(escaped.run, /escapes package/)
+  const huge = bundleFixture(t)
+  put(huge.root, `${huge.directory}/LICENSE`, 'x'.repeat(1024 * 1024 + 1))
+  assert.throws(huge.run, /bounded file/)
 })
 

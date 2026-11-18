@@ -126,7 +126,7 @@ async function releaseApplications(root) {
       requireThat(!entry.isSymbolicLink(), `release 中存在符号链接，拒绝清理：${filename}`)
       if (!entry.isDirectory()) continue
       if (entry.name === 'source-snapshot') continue
-      if (current === path.join(root, 'release/gpui') && entry.name === 'cargo') {
+      if (current === path.join(root, 'release/tauri') && entry.name === 'cargo') {
         const application = path.join(filename, 'aarch64-apple-darwin/release/bundle/macos/OC Chan.app')
         if (await maybeStat(application)) { requireThat(applications.length < limits.candidates, 'release 应用候选数量超出预算'); applications.push(await bundle(application)) }
         continue

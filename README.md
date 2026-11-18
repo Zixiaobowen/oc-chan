@@ -12,7 +12,7 @@
   <strong>看清 Mac 上的 Agent、定时任务与系统状态。</strong>
 </p>
 
-<p align="center">macOS · Apple Silicon · Rust / GPUI / Metal · 本地只读观察</p>
+<p align="center">macOS · Apple Silicon · Rust / Tauri / React · 本地只读观察</p>
 
 <p align="center">
   <a href="#功能">功能</a> ·
@@ -22,12 +22,6 @@
   <a href="#文档">文档</a>
 </p>
 
-<p align="center">
-  <img src="docs/images/gpui-agent-project-buildings.png" width="1100" alt="OC Chan 的 GPUI 原生 3D 协作拓扑：项目建筑、任务楼层、办公室与共享工位" />
-</p>
-
-<p align="center"><sub>GPUI / Metal 实际渲染截图，使用本次验收的 32 个合成 Agent。</sub></p>
-
 同时开着多个 Agent 和后台任务时，OC Chan 提供一个集中查看的桌面窗口：找到对应的工作目录和会话，检查任务状态，再看机器的资源占用。
 
 ## 功能
@@ -35,15 +29,6 @@
 ### 看见 Agent 之间的协作关系
 
 默认的 3D 视图中，一个项目对应一栋建筑，一个主会话任务及其子代理对应一层。主 Agent 使用独立办公室，子 Agent 坐开放共享长桌。选中任务楼层查看内部，点击员工打开详情，也可以切换到 2D 关系图，搜索、折叠分支和调整布局。父子关系来自实际采集证据，缺失或循环的分支会标为待归属。
-
-<details>
-<summary>查看 2D 协作视图</summary>
-
-![OC Chan 的 GPUI 原生 2D 协作拓扑，连线展示主 Agent 与子代理的关系](docs/images/gpui-agent-topology.png)
-
-同一批合成演示数据的 2D 视图，沿连线查看主 Agent 与子代理。
-
-</details>
 
 ### 从 Agent 回到对应会话
 
@@ -97,7 +82,7 @@ OC Chan 只读观察上游 Agent 和任务，不执行定时任务、不终止 A
 
 ## 开发
 
-使用 **Rust 1.99（仓库固定工具链）、Node.js 22.12+（建议 24）**、npm，以及包含 macOS 26 或更新 SDK 的 Xcode Command Line Tools。桌面宿主与界面使用 **GPUI 0.2.2 / Metal**，shader 在运行时编译，无需独立 `metal` 编译工具。以下命令在仓库根目录执行；默认启动真实隐藏的 GPUI 应用，不显示桌面窗口：
+使用 **Rust 1.99（仓库固定工具链）、Node.js 22.12+（建议 24）**、npm，以及包含 macOS 26 或更新 SDK 的 Xcode Command Line Tools。Rust 核心由 **Tauri 2** 承载，**React 19** 界面运行于 macOS WKWebView，3D 使用 Three.js、2D 使用 React Flow。以下命令在仓库根目录执行；默认启动真实隐藏的 Tauri 应用，不显示桌面窗口：
 
 ```sh
 npm ci
@@ -119,6 +104,6 @@ npm run dev:window
 - [功能、操作与数据边界](docs/features.md)：拓扑、任务历史、本地事件、通知和设置。
 - [开发与验证](docs/development.md)：环境、无头调试、定向测试和性能验证。
 - [安装、构建与发布](docs/distribution.md)：交付、升级、CI、签名更新和本机清理。
-- [架构与插件](docs/architecture.md)：采集生命周期、独立插件包、GPUI 视图与品牌资源。
+- [架构与插件](docs/architecture.md)：采集生命周期、独立插件包、React 界面与品牌资源。
 - [性能基准](docs/performance-baseline.md)：已测负载、结果和未覆盖项。
 - [产品约定](PRODUCT.md) · [设计规范](DESIGN.md) · [工程规则](AGENTS.md)。

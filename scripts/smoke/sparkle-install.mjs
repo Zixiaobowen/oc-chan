@@ -46,7 +46,7 @@ try {
   feed = await readFile(path.join(archives, 'appcast.xml')); zipBytes = await readFile(path.join(archives, 'update.zip'))
   const expectedHash = createHash('sha256').update(await readFile(path.join(staged, 'Contents/MacOS/fixture'))).digest('hex')
   const harness = path.join(directory, 'sparkle-install')
-  await run('/usr/bin/xcrun', ['clang++', '-std=c++17', '-fobjc-arc', '-mmacosx-version-min=13.0', '-F', sdk.directory, '-framework', 'AppKit', '-framework', 'Sparkle', `-Wl,-rpath,${sdk.directory}`, path.join(root, 'crates/oc-desktop/acceptance/sparkle-install.mm'), '-o', harness])
+  await run('/usr/bin/xcrun', ['clang++', '-std=c++17', '-fobjc-arc', '-mmacosx-version-min=13.0', '-F', sdk.directory, '-framework', 'AppKit', '-framework', 'Sparkle', `-Wl,-rpath,${sdk.directory}`, path.join(root, 'src-tauri/acceptance/sparkle-install.mm'), '-o', harness])
   const result = await run(harness, [directory, old, `${url}/appcast.xml`, key, '1.0.1', expectedHash])
   process.stdout.write(result.stdout)
   assert.ok(requestCount >= 2, 'Feed and ZIP must both be downloaded')

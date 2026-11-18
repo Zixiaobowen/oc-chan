@@ -12,7 +12,8 @@ import { embedSparkle, ensureSparkleSDK, readSparkleConfig } from './sparkle-sdk
 export const ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
 export const TARGET = ['aarch64', 'apple', 'darwin'].join('-')
 export const BUNDLE_ID = 'local.oc-chan.desktop'
-export const BUILD_RECORD = path.join(ROOT, 'release/gpui/build.json')
+const TAURI = path.join(ROOT, 'node_modules/@tauri-apps/cli/tauri.js')
+export const BUILD_RECORD = path.join(ROOT, 'release/tauri/build.json')
 const RESOURCE_FILES = ['oc-data-worker', 'tern-navigation/present-window', 'tern-navigation/plugin/plugin.toml', 'tern-navigation/plugin/window.luau']
 export const NATIVE_RESOURCES = ['oc-data-worker', 'tern-navigation/present-window']
 export async function codeDirectoryHash(filename) {
@@ -55,9 +56,9 @@ export function signingIdentity(env = process.env) {
   assert(value === '-', 'Sparkle builds use ad-hoc signing; APPLE_SIGNING_IDENTITY must be "-"')
   return value
 }
-export function buildEnvironment({ resourcesDir, targetDir, instance, sign = '-' }, original = process.env) {
-  const env = { ...original, CARGO_TARGET_DIR: targetDir, OC_CHAN_RESOURCE_DIR: resourcesDir, APPLE_SIGNING_IDENTITY: sign }
-  for (const key of ['ELECTRON_RUN_AS_NODE', 'TAURI_CONFIG', 'TAURI_DEV', 'TAURI_DEBUG', 'TAURI_SIGNING_PRIVATE_KEY', 'TAURI_SIGNING_PRIVATE_KEY_PATH', 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD']) delete env[key]
+export function buildEnvironment({ resourcesDir, targetDir, instance, sign = '-', configuration }, original = process.env) {
+  const env = { ...original, CARGO_TARGET_DIR: targetDir, OC_CHAN_RESOURCE_DIR: resourcesDir, TAURI_CONFIG: JSON.stringify(configuration), APPLE_SIGNING_IDENTITY: sign }
+  for (const key of ['ELECTRON_RUN_AS_NODE', 'TAURI_DEV', 'TAURI_DEBUG', 'TAURI_SIGNING_PRIVATE_KEY', 'TAURI_SIGNING_PRIVATE_KEY_PATH', 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD']) delete env[key]
   assert(!/acceptance/.test(`${env.RUSTFLAGS ?? ''} ${env.CARGO_ENCODED_RUSTFLAGS ?? ''}`), 'Do not inject acceptance cfg through compiler flags')
   if (instance) env.OC_CHAN_DEV_INSTANCE = instance
   else { for (const key of Object.keys(env)) if (key.startsWith('OC_CHAN_') && key !== 'OC_CHAN_RESOURCE_DIR') delete env[key] }
@@ -136,16 +137,18 @@ export async function buildApplication(options = {}) {
   const instance = options.instance && path.resolve(options.instance)
   if (mode === 'development') assert(instance && path.dirname(instance) === path.join(ROOT, '.dev-instances') && /^instance-[\w-]+$/.test(path.basename(instance)), 'Development builds require an owned instance directory')
   else assert(!instance, 'Release builds cannot include a development instance')
-  const targetDir = path.resolve(options.targetDir ?? (instance ? path.join(instance, 'cargo') : path.join(ROOT, 'release/gpui/cargo')))
+  const targetDir = path.resolve(options.targetDir ?? (instance ? path.join(instance, 'cargo') : path.join(ROOT, 'release/tauri/cargo')))
   const resourcesDir = path.resolve(options.resourcesDir ?? (instance ? path.join(instance, 'resources') : path.join(ROOT, 'out/host-resources')))
-  for (const directory of [targetDir, resourcesDir]) assert(instance ? within(instance, directory) : within(path.join(ROOT, 'out'), directory) || within(path.join(ROOT, 'release/gpui'), directory), 'Build output must stay inside its owned output tree')
+  const frontendDir = path.resolve(options.frontendDir ?? (instance ? path.join(instance, 'frontend') : path.join(ROOT, 'out/renderer')))
+  for (const directory of [targetDir, resourcesDir, frontendDir]) assert(instance ? within(instance, directory) : within(path.join(ROOT, 'out'), directory) || within(path.join(ROOT, 'release/tauri'), directory), 'Build output must stay inside its owned output tree')
   const sign = mode === 'development' ? '-' : options.sign ?? signingIdentity(); assert(sign === '-', 'Sparkle builds require ad-hoc signing')
   const execute = options.run ?? run
   const sparkleSDK = await ensureSparkleSDK()
   return withBuildLock(resourcesDir, async () => {
     let primaryFailure
     const buildId = randomUUID(), development = instance ? developmentBundleLayout(instance, targetDir) : undefined
-    const env = { ...buildEnvironment({ resourcesDir, targetDir, instance, sign }), SPARKLE_FRAMEWORK_DIR: sparkleSDK.directory }
+    const configuration = { ...(development ? { identifier: development.identifier } : {}), build: { frontendDist: frontendDir, beforeBuildCommand: '', beforeBundleCommand: '', features: [] } }
+    const env = { ...buildEnvironment({ resourcesDir, targetDir, instance, sign, configuration }), SPARKLE_FRAMEWORK_DIR: sparkleSDK.directory }
     const packageInfo = await boundedJson(path.join(ROOT, 'package.json')); assert(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(packageInfo.version), 'Invalid package release version')
     await mkdir(path.dirname(resourcesDir), { recursive: true, mode: 0o700 }); const staged = await mkdtemp(path.join(path.dirname(resourcesDir), '.host-resources-'))
     let published = false
@@ -164,9 +167,12 @@ export async function buildApplication(options = {}) {
       await buildPluginMarketRust({ collector: path.join(nativeRoot, 'collector'), manifest: path.join(ROOT, 'plugins/system-monitor/manifest.json'), outDir: path.join(staged, 'plugin-market'), sign })
       generateRustLicenses({ root: ROOT, output: path.join(staged, 'rust-dependencies') })
       await publishResources(staged, resourcesDir, buildId); published = true
-      const features = mode === 'development' ? ['acceptance'] : []
-      await execute('cargo', ['build', '--locked', '-p', 'oc-desktop', '--bin', 'oc-chan', '--target', TARGET,
-        ...(mode === 'development' ? ['--features', 'acceptance'] : ['--release'])], { cwd: ROOT, env })
+      await execute(process.execPath, [path.join(ROOT, 'node_modules/vite/bin/vite.js'), 'build', '--outDir', frontendDir, '--emptyOutDir'], { cwd: ROOT, env })
+      const configurationFile = path.join(instance ?? path.join(ROOT, 'release/tauri'), `build-${buildId}.config.json`)
+      await mkdir(path.dirname(configurationFile), { recursive: true, mode: 0o700 }); await writeFile(configurationFile, `${JSON.stringify(configuration, null, 2)}\n`, { flag: 'wx', mode: 0o600 })
+      const features = mode === 'development' ? ['acceptance', 'custom-protocol'] : ['custom-protocol']
+      await execute(process.execPath, [TAURI, 'build', '--no-bundle', '--ci', ...(mode === 'development' ? ['--debug'] : []), '--target', TARGET,
+        '--features', features.join(','), '--config', configurationFile, '--', '--no-default-features'], { cwd: ROOT, env })
       if (development) await bundleApplication({ application: development.application, binary: path.join(targetDir, TARGET, 'debug/oc-chan'), resourcesDir,
         identifier: development.identifier, version: packageInfo.version, sign, development: true, execute, env })
       const binary = development?.binary ?? path.join(targetDir, TARGET, 'release', 'oc-chan')
@@ -179,8 +185,8 @@ export async function buildApplication(options = {}) {
         resources[filename] = await digestFile(path.join(resourcesDir, filename))
         if (NATIVE_RESOURCES.includes(filename)) resources[filename].codeDirectoryHash = await codeDirectoryHash(path.join(resourcesDir, filename))
       }
-      const record = { schema: 3, renderer: 'gpui', buildId, root: ROOT, mode, version: packageInfo.version, arch: 'arm64', target: TARGET, features, sign,
-        resourcesDir, targetDir, binary, binaryIdentity: await digestFile(binary), resources,
+      const record = { schema: 3, renderer: 'react', buildId, root: ROOT, mode, version: packageInfo.version, arch: 'arm64', target: TARGET, features, sign,
+        resourcesDir, frontendDir, targetDir, configurationFile, binary, binaryIdentity: await digestFile(binary), resources,
         catalogSha256: resources['plugin-market/catalog.json'].digest,
         ...(development ? { developmentBundle: { ...development, infoPlistIdentity: await digestFile(path.join(development.application, 'Contents/Info.plist'), 'sha256', 64 * 1024) } } : {}) }
       const recordPath = instance ? path.join(instance, 'build.json') : BUILD_RECORD
@@ -198,8 +204,8 @@ export async function buildApplication(options = {}) {
 }
 export async function loadBuild() {
   const record = await boundedJson(BUILD_RECORD)
-  assert(record.schema === 3 && record.renderer === 'gpui' && record.root === ROOT && record.mode === 'release' && record.arch === 'arm64' && record.target === TARGET
-    && JSON.stringify(record.features) === JSON.stringify([]), 'A current production GPUI build is required')
+  assert(record.schema === 3 && record.renderer === 'react' && record.root === ROOT && record.mode === 'release' && record.arch === 'arm64' && record.target === TARGET
+    && JSON.stringify(record.features) === JSON.stringify(['custom-protocol']), 'A current production React/Tauri build is required')
   const binary = await digestFile(record.binary); assert(binary.digest === record.binaryIdentity.digest, 'Built binary changed; rebuild before bundling')
   for (const [filename, expected] of Object.entries(record.resources)) {
     assert(!filename.includes('..') && !path.isAbsolute(filename), 'Invalid resource receipt path')

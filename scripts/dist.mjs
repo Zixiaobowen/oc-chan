@@ -17,7 +17,7 @@ export async function distribute({ directoryOnly = false, execute = run } = {}) 
     const record = await loadBuild(); assert(record.buildId === initial.buildId, 'Build changed before distribution acquired ownership')
     if (process.env.GITHUB_REF?.startsWith('refs/tags/')) requireReleaseEnvironment(releaseInfo(record.version))
     const env = buildEnvironment({ resourcesDir: record.resourcesDir, targetDir: record.targetDir, sign: record.sign })
-    const destination = path.join(ROOT, 'release/gpui', record.buildId)
+    const destination = path.join(ROOT, 'release/tauri', record.buildId)
     await mkdir(destination, { mode: 0o700 })
     const app = path.join(destination, 'OC Chan.app')
     await bundleApplication({ application: app, binary: record.binary, resourcesDir: record.resourcesDir, version: record.version, sign: record.sign, execute, env })
@@ -37,7 +37,7 @@ export async function distribute({ directoryOnly = false, execute = run } = {}) 
     const distribution = { schema: 2, buildId: record.buildId, version: record.version, arch: 'arm64', app, destination, artifacts, catalogSha256: record.catalogSha256,
       signature: report.signature, published: false }
     await writeFile(path.join(destination, 'distribution.json'), `${JSON.stringify(distribution, null, 2)}\n`, { flag: 'wx', mode: 0o600 })
-    console.log(`[oc-chan] 本地 GPUI 产物：${destination}\n[oc-chan] 临时应用：${app}`)
+    console.log(`[oc-chan] 本地 React/Tauri 产物：${destination}\n[oc-chan] 临时应用：${app}`)
     return distribution
   })
 }

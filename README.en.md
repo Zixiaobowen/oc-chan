@@ -12,7 +12,7 @@
   <strong>See your Mac's agents, scheduled tasks, and system status.</strong>
 </p>
 
-<p align="center">macOS · Apple Silicon · Rust / GPUI / Metal · Local, read-only observation</p>
+<p align="center">macOS · Apple Silicon · Rust / Tauri / React · Local, read-only observation</p>
 
 <p align="center">
   <a href="#features">Features</a> ·
@@ -22,12 +22,6 @@
   <a href="#documentation">Documentation</a>
 </p>
 
-<p align="center">
-  <img src="docs/images/gpui-agent-project-buildings.png" width="1100" alt="OC Chan native GPUI 3D topology: project buildings, task floors, offices, and shared desks" />
-</p>
-
-<p align="center"><sub>Actual GPUI / Metal rendering with the 32 synthetic agents from this validation run.</sub></p>
-
 When you run several agents and background tasks at once, OC Chan gives you one desktop window to find their working directories and sessions, check task status, and inspect your Mac's resource usage.
 
 ## Features
@@ -35,15 +29,6 @@ When you run several agents and background tasks at once, OC Chan gives you one 
 ### See how agents work together
 
 In the default 3D view, each project occupies a building, and each main session task and its subagents occupy a floor. Main agents have private offices; subagents share open desks. Select a task floor to look inside and click an employee for details. You can also switch to a 2D relationship graph to search, collapse branches, and adjust the layout. Parent–child relationships come from collected evidence; branches with missing parents or cycles are marked as unassigned.
-
-<details>
-<summary>See the 2D collaboration view</summary>
-
-![OC Chan native GPUI 2D topology, with edges connecting main agents and subagents](docs/images/gpui-agent-topology.png)
-
-The same synthetic demo data in 2D, with edges showing main agents and their subagents.
-
-</details>
 
 ### Return to an agent's session
 
@@ -97,7 +82,7 @@ Settings → App updates shows update status and the automatic-check option. Spa
 
 ## Development
 
-Use **Rust 1.99 (pinned by the repository), Node.js 22.12+ (24 recommended)**, npm, and Xcode Command Line Tools with the macOS 26 SDK or later. The desktop host and interface use **GPUI 0.2.2 / Metal**, with runtime shader compilation; a separate `metal` compiler is not required. Run these commands from the repository root. The default starts a real hidden GPUI application without displaying a desktop window:
+Use **Rust 1.99 (pinned by the repository), Node.js 22.12+ (24 recommended)**, npm, and Xcode Command Line Tools with the macOS 26 SDK or later. **Tauri 2** hosts the Rust core and the **React 19** interface in macOS WKWebView; Three.js renders 3D and React Flow renders 2D topology. Run these commands from the repository root. The default starts a real hidden Tauri application without displaying a desktop window:
 
 ```sh
 npm ci
@@ -121,6 +106,6 @@ The following documents are currently in Chinese:
 - [Features, controls, and data boundaries](docs/features.md): topology, task history, local events, notifications, and settings.
 - [Development and validation](docs/development.md): environment setup, headless debugging, targeted tests, and performance validation.
 - [Installation, builds, and releases](docs/distribution.md): delivery, upgrades, CI, signed updates, and local cleanup.
-- [Architecture and plugins](docs/architecture.md): collector lifecycle, standalone plugin packages, GPUI views, and brand assets.
+- [Architecture and plugins](docs/architecture.md): collector lifecycle, standalone plugin packages, React views, and brand assets.
 - [Performance baseline](docs/performance-baseline.md): measured workloads, results, and untested scenarios.
 - [Product scope](PRODUCT.md) · [Design guidelines](DESIGN.md) · [Engineering rules](AGENTS.md).

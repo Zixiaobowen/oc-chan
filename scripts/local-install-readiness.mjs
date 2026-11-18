@@ -31,7 +31,7 @@ export function validateReadyReceipt(receipt, request, now = Date.now()) {
   requireThat(receipt.checked_at_ms >= request.issued_at_ms && receipt.checked_at_ms <= now && now <= request.expires_at_ms, 'Readiness receipt is stale or from the future')
   const evidence = receipt.evidence
   keys(evidence, ['host_version', 'renderer_entry', 'renderer_committed', 'action_round_trip', 'partitions', 'hermes_history', 'history_entries', 'history_reason'], 'readiness evidence')
-  requireThat(evidence.host_version === request.version && evidence.renderer_committed === true && evidence.action_round_trip === true && evidence.renderer_entry === 'main:gpui:paint', 'Actual GPUI paint, host version or action round trip is missing')
+  requireThat(evidence.host_version === request.version && evidence.renderer_committed === true && evidence.action_round_trip === true && evidence.renderer_entry === 'main:index.html:react-commit', 'Actual React commit, host version or action round trip is missing')
   keys(evidence.partitions, ['agents', 'schedules', 'events', 'system'], 'partitions')
   for (const [name, partition] of Object.entries(evidence.partitions)) {
     keys(partition, ['enabled', 'installed', 'state', 'reason'], 'partition')

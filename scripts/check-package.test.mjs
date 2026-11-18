@@ -17,7 +17,7 @@ test('production pin scanning spans stream boundaries and excludes acceptance co
   await writeFile(binary, Buffer.concat([Buffer.alloc(64 * 1024 - 12), Buffer.from(`OC_CHAN_CATALOG_SHA256=${pin}\0`)]))
   await inspectBuildMarkers(binary, pin)
   await assert.rejects(inspectBuildMarkers(binary, 'b'.repeat(64)), /catalog pin/)
-  await writeFile(binary, Buffer.concat([Buffer.from(`OC_CHAN_CATALOG_SHA256=${pin}`), Buffer.alloc(64 * 1024 - 100), Buffer.from('OC_CHAN_GPUI_ACCEPTANCE_V1')]))
+  await writeFile(binary, Buffer.concat([Buffer.from(`OC_CHAN_CATALOG_SHA256=${pin}`), Buffer.alloc(64 * 1024 - 100), Buffer.from('OC_CHAN_ACCEPTANCE_DRIVER_V1')]))
   await assert.rejects(inspectBuildMarkers(binary, pin))
 })
 test('a second different catalog marker fails closed', async t => {

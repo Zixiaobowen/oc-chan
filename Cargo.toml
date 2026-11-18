@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/oc-core", "crates/oc-plugin-sdk", "crates/oc-installer", "plugins/system-monitor", "native", "crates/oc-desktop"]
+members = ["crates/oc-core", "crates/oc-plugin-sdk", "crates/oc-installer", "plugins/system-monitor", "native", "src-tauri"]
 
 [workspace.package]
 version = "0.2.0"

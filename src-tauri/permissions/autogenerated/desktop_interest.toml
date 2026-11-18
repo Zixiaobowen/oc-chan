@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-desktop-interest"
+description = "Enables the desktop_interest command without any pre-configured scope."
+commands.allow = ["desktop_interest"]
+
+[[permission]]
+identifier = "deny-desktop-interest"
+description = "Denies the desktop_interest command without any pre-configured scope."
+commands.deny = ["desktop_interest"]

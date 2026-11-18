@@ -1,6 +1,0 @@
-// This library is released under the same terms as Rust itself.
-
-//! Leaky cows: convert a clone-on-write reference into a plain reference. If it's just the
-//! plain reference, just return that. If it's the owned structure, leak it and return a
-//! reference to it.
-

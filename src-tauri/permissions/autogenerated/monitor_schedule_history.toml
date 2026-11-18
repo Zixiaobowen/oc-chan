@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-monitor-schedule-history"
+description = "Enables the monitor_schedule_history command without any pre-configured scope."
+commands.allow = ["monitor_schedule_history"]
+
+[[permission]]
+identifier = "deny-monitor-schedule-history"
+description = "Denies the monitor_schedule_history command without any pre-configured scope."
+commands.deny = ["monitor_schedule_history"]

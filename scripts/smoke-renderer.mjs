@@ -1,287 +1,289 @@
 import assert from 'node:assert/strict'
-import { execFile, spawn } from 'node:child_process'
-import { connect } from 'node:net'
-import { mkdir, mkdtemp, readFile, writeFile, copyFile, lstat, realpath } from 'node:fs/promises'
+import { spawn, execFile } from 'node:child_process'
+import { mkdir, mkdtemp, writeFile, rm, realpath } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { promisify, inspect } from 'node:util'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { setTimeout as delay } from 'node:timers/promises'
-import { promisify } from 'node:util'
-import { prepareSmokeFixtures } from './performance/agent-fixtures.mjs'
-import { exerciseGpui } from './smoke/gpui-scenarios.mjs'
+import { EvidenceLog, readLines, until } from './performance/core.mjs'
+import { Driver, boundedFile, absent, prepareSmokeFixtures } from './smoke/main-probe.mjs'
+import { exerciseSmoke, verifyRestart, exerciseRecovery } from './smoke/scenarios.mjs'
+import { cleanupDevelopmentInstance } from './local-app-lifecycle.mjs'
 import { createMarketFeed } from './smoke/marketplace-feed.mjs'
 import { createSparkleFeed } from './smoke/sparkle-feed.mjs'
 
-const root = fileURLToPath(new URL('..', import.meta.url))
-export class Driver {
-  static async open(receipt) {
-    assert.equal(receipt.protocol, 'OC_CHAN_GPUI_ACCEPTANCE_V1')
-    assert(Number.isSafeInteger(receipt.pid) && receipt.pid > 0)
-    assert.match(receipt.driverDirectory, new RegExp(`^/tmp/ocgpui-${receipt.pid}-[a-f0-9]{12}$`))
-    const directory = await lstat(receipt.driverDirectory)
-    assert(directory.isDirectory() && !directory.isSymbolicLink() && directory.uid === process.getuid() && (directory.mode & 0o777) === 0o700)
-    const tokenPath = path.join(receipt.driverDirectory, 'token'), info = await lstat(tokenPath)
-    assert(info.isFile() && !info.isSymbolicLink() && info.size === 64 && (info.mode & 0o777) === 0o600)
-    const token = await readFile(tokenPath, 'utf8'); assert.match(token, /^[a-f0-9]{64}$/)
-    return new Driver(receipt, token)
-  }
-  constructor(receipt, token) { this.receipt = receipt; this.token = token; this.sequence = 0; this.pending = 0; this.closed = false }
-  async request(command, args = {}) {
-    assert(!this.closed && this.pending < 4, 'Driver is closed or busy'); this.pending++
-    try {
-      return await new Promise((resolve, reject) => {
-        const id = ++this.sequence, socket = connect(path.join(this.receipt.driverDirectory, 'driver.sock'))
-        let bytes = 0, chunks = [], settled = false
-        const finish = (error, value) => { if (settled) return; settled = true; socket.destroy(); error ? reject(error) : resolve(value) }
-        socket.setTimeout(20000, () => finish(new Error('GPUI driver request deadline')))
-        socket.on('error', error => finish(error))
-        socket.on('connect', () => socket.write(JSON.stringify({ ...args, id, token: this.token, command }) + '\n'))
-        socket.on('data', chunk => {
-          bytes += chunk.length
-          if (bytes > 1024 * 1024) return finish(new Error('GPUI driver output exceeds budget'))
-          chunks.push(chunk)
-          if (!chunk.includes(10)) return
-          try {
-            const response = JSON.parse(Buffer.concat(chunks).toString('utf8')); assert.equal(response.id, id)
-            if (!response.result?.ok) throw new Error(response.result?.error ?? 'GPUI request failed')
-            finish(null, response.result.value)
-          } catch (error) { finish(error) }
-        })
-        socket.on('end', () => { if (!settled) finish(new Error('GPUI driver disconnected')) })
-      })
-    } finally { this.pending-- }
-  }
-  close() { this.closed = true }
+const root = fileURLToPath(new URL('..', import.meta.url)), exec = promisify(execFile)
+const limits = Object.freeze({ totalMs: 1200000, buildMs: 600000, startupMs: 300000, scenarioMs: 360000, restartMs: 60000,
+  logBytes: 8 * 1024 * 1024, records: 16384, screenshots: 96, screenshotBytes: 1024 * 1024, settingsBytes: 64 * 1024 })
+const options = {}
+for (let index = 2; index < process.argv.length; index += 2) {
+  const key = process.argv[index]
+  if (!['--fault', '--out', '--scenario', '--sparkle-phase'].includes(key) || !process.argv[index + 1] || Object.hasOwn(options, key)) throw new Error('Usage: node scripts/smoke-renderer.mjs [--scenario all|notifications|topology|marketplace|collectors|sidebar|updates|schedules] [--sparkle-phase available|no-update|error] [--fault fixture|ipc] [--out NEW_DIRECTORY]')
+  options[key] = process.argv[index + 1]
 }
-async function until(action, timeout = 60000) {
-  const end = Date.now() + timeout
-  let last
-  while (Date.now() < end) {
-    try { const result = await action(); if (result) return result } catch (error) { if (error.fatal) throw error; last = error }
-    await delay(100)
-  }
-  throw new Error('GPUI readiness deadline', { cause: last })
+const scenario = options['--scenario'] ?? 'all', fault = options['--fault'] ?? null
+assert(['all', 'notifications', 'topology', 'marketplace', 'collectors', 'sidebar', 'updates', 'schedules'].includes(scenario), 'Unknown smoke scenario')
+assert(fault === null || scenario === 'all' && ['fixture', 'ipc'].includes(fault), 'Unknown or incompatible fault')
+assert(process.platform === 'darwin' && process.arch === 'arm64', 'WK smoke requires macOS arm64')
+const output = options['--out'] ? path.resolve(options['--out']) : await mkdtemp(path.join(os.tmpdir(), 'oc-chan-smoke-evidence-'))
+if (options['--out']) await mkdir(output, { mode: 0o700 })
+const log = new EvidenceLog(path.join(output, 'evidence'), { maxBytes: limits.logBytes, chunkBytes: 1024 * 1024 })
+await log.initialize()
+const result = { schema: 2, startedAt: new Date().toISOString(), complete: false, scenario, fault, limits,
+  scope: { execution: 'real hidden Tauri/WKWebView + React + Rust IPC', input: 'AppKit responder mouse/key/text; native select controls and time drafts explicitly use DOM setters',
+    fixtures: 'owned live descriptor processes, JSONL/JSON/plist and SQLite files read by production Rust collectors',
+    nativeVisibleWindowAcceptance: false, osNotificationDelivery: false, marketplaceUpgradeRollback: ['all','marketplace'].includes(scenario) ? 'real signed Rust versions and bounded loopback HTTP through production worker' : 'not selected' }, stages: [], runs: [], errors: [], cleanup: {} }
+const abort = new AbortController()
+let current, manifest, feed, sparkleFeed, work, count = 0, screenshotCount = 0
+const runningStages = new Set()
+const retainedInstances = new Set()
+const fail = error => { if (!abort.signal.aborted) abort.abort(error instanceof Error ? error : new Error(String(error))) }
+const message = error => inspect(error, { depth: 4, maxArrayLength: 8, maxStringLength: 4096, customInspect: false }).slice(0, 16384)
+function record(name, details) {
+  assert(++count <= limits.records && name.length <= 160, 'Evidence count/name limit')
+  const row = { at: new Date().toISOString(), run: current?.label ?? null, name, details }
+  assert(Buffer.byteLength(JSON.stringify(row)) <= 256 * 1024, 'Evidence row limit')
+  void log.append(row).catch(fail)
 }
-export async function smoke({ output, scenario = 'all', sparklePhase = 'available', ...unsupported } = {}) {
-  assert.deepEqual(Object.keys(unsupported), [], 'Smoke only owns instances created by this invocation')
-  assert(['all', 'basic', 'marketplace', 'topology', 'notifications', 'collectors', 'sidebar', 'schedules', 'updates'].includes(scenario), 'Unknown GPUI scenario')
-  output ??= await mkdtemp(path.join(os.tmpdir(), 'oc-gpui-evidence-'))
-  await mkdir(output, { recursive: true, mode: 0o700 })
-  output = await realpath(output)
-  const fixtureDirectory = path.join(output, 'fixtures'); await mkdir(fixtureDirectory, { mode: 0o700 })
-  const manifest = await prepareSmokeFixtures(fixtureDirectory)
-  const result = { renderer: 'gpui-metal', scenario, complete: false, visibleWindowAcceptance: false, screenshots: [], checks: [], errors: [] }
-  let evidenceBytes = 0
-  const record = (name, details) => {
-    const bytes = Buffer.byteLength(JSON.stringify({ name, details }))
-    assert(result.checks.length < 512 && bytes <= 1024 * 1024 && evidenceBytes + bytes <= 32 * 1024 * 1024, 'Smoke evidence exceeds its explicit record/byte budget')
-    evidenceBytes += bytes; result.checks.push({ name, details })
-  }
-  let feed
-  let sparkleFeed
-  let startupEnvironment
-  let instance, driver, active, buildBytes, settingsBytes, corrupted = false, failure
-  const runs = []
-  const deadline = async (promise, milliseconds, message) => {
-    let timer
-    try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), milliseconds) })]) }
-    finally { clearTimeout(timer) }
-  }
-  function hidden(state) {
-    assert.equal(state.native.visible, false); assert.equal(state.native.key, false)
-    assert.equal(state.native.appActive, false); assert.equal(state.native.activationPolicy, 2)
-    return state
-  }
-  async function launch(name, recovery = false, cleanupInstance = false) {
-    const resumed = Boolean(instance)
-    const run = { name, log: '', receipt: null, exit: null, failure: null }
-    runs.push(run); active = run
-    run.child = spawn(process.execPath, ['scripts/develop.mjs', ...(cleanupInstance ? [] : ['--no-cleanup']), ...(resumed ? ['--resume-instance', instance] : [])], {
-      cwd: root, env: { ...startupEnvironment, ...(recovery ? { OC_CHAN_ACCEPTANCE_RECOVERY: '1' } : {}) }, stdio: ['ignore', 'pipe', 'pipe'] })
-    run.completion = new Promise(resolve => run.child.once('close', (code, signal) => { run.exit = { code, signal }; resolve(run.exit) }))
-    run.child.once('error', error => { run.failure = error })
-    for (const stream of [run.child.stdout, run.child.stderr]) {
-      let buffered = ''
-      stream.on('data', chunk => {
-        const text = chunk.toString(); run.log += text; process.stdout.write(text); buffered += text
-        if (Buffer.byteLength(run.log) > 8 * 1024 * 1024) { run.failure = new Error('Launcher log exceeds budget'); run.log = run.log.slice(-1024 * 1024) }
-        if (buffered.length > 256 * 1024) { run.failure = new Error('Launcher line exceeds budget'); buffered = ''; return }
-        let end
-        while ((end = buffered.indexOf('\n')) !== -1) {
-          const line = buffered.slice(0, end); buffered = buffered.slice(end + 1)
-          try {
-            const match = /^\[oc-chan\] 独立 Rust 实例：(.*)$/.exec(line)
-            if (match) {
-              const owned = match[1]
-              assert.equal(path.dirname(owned), path.join(root, '.dev-instances'))
-              assert.match(path.basename(owned), /^instance-[\w-]+$/)
-              if (instance) assert.equal(owned, instance)
-              else instance = owned
-              run.instance = owned
-            }
-            if (line.startsWith('{')) {
-              const parsed = JSON.parse(line)
-              if (parsed.driverDirectory) { assert(!run.receipt, 'Duplicate driver receipt'); run.receipt = parsed }
-              if (parsed.developmentStage === 'build-complete') { assert.equal(parsed.instance, instance); assert.equal(parsed.resumed, resumed); run.buildReady = true }
-            }
-          } catch (error) { run.failure = error }
-        }
-      })
+async function deadline(promise, ms, label) {
+  let timer
+  try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`${label} deadline exceeded`)), ms) })]) }
+  finally { clearTimeout(timer) }
+}
+async function stage(name, ms, action) {
+  abort.signal.throwIfAborted()
+  const entry = { name, startedAt: new Date().toISOString(), status: 'running' }; result.stages.push(entry)
+  let onAbort
+  const operation = Promise.resolve().then(action)
+  runningStages.add(operation)
+  operation.then(() => runningStages.delete(operation), () => runningStages.delete(operation))
+  try {
+    const value = await deadline(Promise.race([operation, new Promise((_, reject) => {
+      onAbort = () => reject(abort.signal.reason); abort.signal.addEventListener('abort', onAbort, { once: true })
+    })]), ms, name)
+    entry.status = 'passed'; return value
+  } catch (error) {
+    fail(error)
+    if (runningStages.has(operation)) {
+      current?.driver?.close()
+      try { await operation }
+      catch (drainError) { if (drainError !== error) error = new AggregateError([error, drainError], `${name}: failure and owned operation drainage`) }
     }
-    await until(() => {
-      if (run.failure) throw Object.assign(run.failure, { fatal: true })
-      if (run.exit) throw Object.assign(new Error(`Launcher exited ${JSON.stringify(run.exit)}`), { fatal: true })
-      return run.receipt && run.instance && run.buildReady
-    }, resumed ? 120000 : 1200000)
-    driver = await Driver.open(run.receipt); run.driver = driver
-    const { stdout } = await promisify(execFile)('/bin/ps', ['-p', String(run.receipt.pid), '-o', 'ppid='], { timeout: 2000, maxBuffer: 4096 })
-    assert.equal(Number(stdout.trim()), run.child.pid, 'Driver must belong to this launcher child')
-    const currentBuild = await readFile(path.join(instance, 'build.json'))
-    if (buildBytes) assert.deepEqual(currentBuild, buildBytes, 'Restart must reuse the identical build receipt')
-    else buildBytes = currentBuild
-    record(`${name}-receipt`, { launcherPid: run.child.pid, receipt: run.receipt, instance, resumed })
+    entry.status = 'failed'; entry.error = message(error); throw error
   }
-  async function stop() {
-    await driver.request('quit'); driver.close()
-    await deadline(active.completion, 30000, 'Owned launcher did not drain')
-    assert.deepEqual(active.exit, { code: 0, signal: null })
-    if (active.failure) throw active.failure
-    await assert.rejects(lstat(active.receipt.driverDirectory), { code: 'ENOENT' })
-    record(`${active.name}-stopped`, { exit: active.exit, driverDirectoryRemoved: true })
+  finally { abort.signal.removeEventListener('abort', onAbort); entry.finishedAt = new Date().toISOString(); record(name, entry) }
+}
+async function capture(name, view = 'main') {
+  assert(current?.driver && ++screenshotCount <= limits.screenshots, 'Screenshot admission exceeded')
+  const image = await current.driver.view(view).capture()
+  assert(typeof image.pngBase64 === 'string' && image.pngBase64.length <= Math.ceil(limits.screenshotBytes / 3) * 4, 'Screenshot response exceeded limit')
+  const bytes = Buffer.from(image.pngBase64, 'base64')
+  assert(bytes.length <= limits.screenshotBytes && bytes.subarray(0,8).toString('hex') === '89504e470d0a1a0a', 'Invalid WK PNG')
+  const filename = `${String(screenshotCount).padStart(2,'0')}-${current.label}-${name.replace(/[^a-zA-Z0-9_-]/g,'_')}.png`
+  await writeFile(path.join(output, filename), bytes, { flag: 'wx', mode: 0o600 })
+  record('native-wk-snapshot', { file: filename, width: image.width, height: image.height, bytes: bytes.length, view })
+}
+async function processes() {
+  const { stdout } = await exec('/bin/ps', ['-axo', 'pid=,ppid=,lstart=,command='], { timeout: 3000, maxBuffer: 2 * 1024 * 1024, env: { ...process.env, LC_ALL: 'C' } })
+  const rows = stdout.trim().split('\n'); assert(rows.length <= 16384, 'Process enumeration limit')
+  return rows.map(line => { const match = /^\s*(\d+)\s+(\d+)\s+(\w{3}\s+\w{3}\s+\d+\s+\d+:\d+:\d+\s+\d{4})\s+(.*)$/.exec(line); assert(match, 'Invalid process identity'); return { pid: Number(match[1]), parent: Number(match[2]), birth: match[3], command: match[4] } })
+}
+class Instance {
+  constructor(label) { this.label = label; this.stopping = false; this.exited = false; this.evidence = { label }; result.runs.push(this.evidence) }
+  async build(settingsSeed, recovery = false, resumeInstance = null) {
+    this.keep = !recovery && !['collectors', 'updates', 'schedules'].includes(scenario)
+    const env = { ...process.env, OC_CHAN_HEADLESS: '1', OC_CHAN_SMOKE: '1', OC_CHAN_HOME: manifest.home, OC_CHAN_ACCEPTANCE_RECOVERY: recovery ? '1' : '0' }
+    if (sparkleFeed) { env.OC_CHAN_SPARKLE_TEST_FEED_URL = sparkleFeed.url; env.OC_CHAN_SPARKLE_TEST_PUBLIC_KEY = sparkleFeed.publicKey }
+    delete env.OC_CHAN_ACCEPTANCE_SETTINGS
+    delete env.OC_CHAN_ACCEPTANCE_MARKET_FIXTURES
+    if (feed) env.OC_CHAN_ACCEPTANCE_MARKET_FIXTURES = JSON.stringify(feed.startupRoots())
+    if (settingsSeed) env.OC_CHAN_ACCEPTANCE_SETTINGS = settingsSeed
+    const args = ['run', 'dev']
+    if (this.keep || resumeInstance) args.push('--', ...(resumeInstance ? ['--resume-instance', resumeInstance] : []), ...(this.keep ? ['--no-cleanup'] : []))
+    this.launcher = spawn('npm', args, { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] })
+    this.launcher.once('error', fail)
+    this.completion = new Promise(resolve => this.launcher.once('close', (code, signal) => {
+      this.exited = true; this.exit = { code, signal }; resolve(this.exit)
+      if (!this.stopping) fail(new Error(`Owned npm dev exited unexpectedly: ${signal ?? code}`))
+    }))
+    const consume = line => {
+      const instance = /^\[oc-chan\] 独立 Rust 实例：(.*)$/.exec(line)
+      if (instance) {
+        assert.equal(path.dirname(instance[1]), path.join(root, '.dev-instances'))
+        assert.match(path.basename(instance[1]), /^instance-[a-zA-Z0-9]+$/)
+        assert(!this.instance || this.instance === instance[1], 'Development instance identity changed')
+        this.instance = instance[1]
+        if (this.keep) retainedInstances.add(this.instance)
+      }
+      if (line.startsWith('{')) {
+        let value
+        try { value = JSON.parse(line) } catch (error) { throw new Error('Invalid application JSON evidence', { cause: error }) }
+        if (value.developmentStage !== undefined) {
+          assert.equal(value.developmentStage, 'build-complete', 'Unknown development lifecycle signal')
+          assert.equal(value.instance, this.instance, 'Build completion must belong to this instance')
+          assert.equal(value.resumed, resumeInstance !== null, 'Build completion resume mode mismatch')
+          assert.equal(this.buildCompletedAt, undefined, 'Duplicate build completion')
+          this.buildCompletedAt = performance.now()
+          record('development-build-complete', value)
+        }
+        if (value.driverDirectory) { assert(!this.receipt, 'Driver restarted unexpectedly'); this.receipt = value }
+        if (value.shutdownReport) this.shutdownReport = value.shutdownReport
+      }
+      record('launcher', { line })
+    }
+    readLines(this.launcher.stdout, consume, fail); readLines(this.launcher.stderr, consume, fail)
+    // Match the existing performance harness's bounded cold-build budget.
+    await until(() => this.buildCompletedAt !== undefined, { timeout: limits.buildMs, signal: abort.signal })
   }
-  async function settingsState(expected) {
-    await until(async () => { const state = hidden(await driver.request('inspect')); return state.ui?.settingsLoaded && state })
-    await driver.request('navigate', { page: 'settings' })
-    const state = await until(async () => { const value = hidden(await driver.request('inspect')); return value.ui?.page === 'settings' && value.ui?.settings?.settings && value })
-    for (const [key, value] of Object.entries(expected)) assert.deepEqual(state.ui.settings.settings[key], value, `Restart UI ${key}`)
-    record(`${active.name}-settings`, state)
+  async start(recovery = false) {
+    assert(this.buildCompletedAt !== undefined, 'Application startup requires verified build completion')
+    await until(() => this.instance && this.receipt, { timeout: limits.startupMs, signal: abort.signal })
+    this.driver = await Driver.open(this.receipt, record)
+    this.renderer = this.driver.view(recovery ? 'recovery' : 'main')
+    this.appIdentity = (await processes()).find(row => row.pid === this.receipt.pid)
+    assert(this.appIdentity, 'Native application identity is missing')
+    await this.driver.waitForView(recovery ? 'recovery' : 'main', { timeout: 60000, signal: abort.signal })
+    await until(() => this.renderer.evaluate(recovery ? 'Boolean(window.startupRecovery && document.querySelector("main"))' : 'Boolean(window.monitor && window.desktopSettings && document.querySelector(".app-shell"))'), { timeout: 60000, signal: abort.signal })
+    if (!recovery) {
+      const info = await this.driver.host('info'); assert.equal(info.profile, path.join(this.instance, 'profile')); assert.equal(info.home, manifest.home)
+      await this.driver.host('shutdown-report')
+    }
+    await this.hidden(recovery ? 'recovery' : 'main')
+    this.evidence.instance = this.instance; this.evidence.driverDirectory = this.receipt.driverDirectory; this.evidence.pid = this.receipt.pid
+  }
+  async hidden(view = 'main') {
+    const native = await this.driver.view(view).inspect()
+    assert.equal(native.visible, false); assert.equal(native.key, false); assert.equal(native.appActive, false); assert.equal(native.activationPolicy, 2)
+    assert.deepEqual(native.inactiveScheduling, { supported: true, policy: 'none', value: 2 }, 'Headless acceptance requires active WebKit scheduling (macOS 14+)')
+    record('headless-invariant', { view, native }); return native
+  }
+  async quit() {
+    this.stopping = true
+    await this.driver.request('quit')
+    this.driver.close()
+    await deadline(this.completion, 30000, 'owned instance exit')
+    assert.deepEqual(this.exit, { code: 0, signal: null }, 'npm dev did not exit normally')
+    await this.confirmCleanup()
+  }
+  async confirmCleanup() {
+    assert.equal(await absent(this.instance), !this.keep, this.keep ? 'Retained restart instance disappeared' : 'Development profile was not removed by its launcher')
+    assert(await absent(this.receipt.driverDirectory), 'WK socket/token directory survived shutdown')
+    const alive = (await processes()).find(row => row.pid === this.receipt.pid && row.birth === this.appIdentity.birth)
+    assert(!alive, 'Owned native application is still alive')
+    assert(this.shutdownReport, 'Host omitted the requested shutdown resource receipt')
+    this.evidence.shutdownReport = this.shutdownReport
+    assert.equal(this.shutdownReport.documents, 0, 'Host retained document owners after shutdown')
+    assert.equal(this.shutdownReport.requests, 0, 'Host retained admitted requests after shutdown')
+    for (const value of Object.values(this.shutdownReport.resources.global.current)) assert.equal(value, 0, 'Host retained a resource reservation')
+    this.evidence.cleanup = { launcherExited: this.exited, applicationExited: true, profileRetainedForRestart: this.keep, profileRemoved: !this.keep, driverRemoved: true }
+  }
+  async cleanup() {
+    this.stopping = true
+    const errors = []
+    if (!this.exited && this.driver && !this.driver.closed) {
+      try { await this.quit() } catch (error) { errors.push(error) }
+    }
+    this.driver?.close()
+    if (!this.exited) {
+      // Signal only the actual develop.mjs descendant of our own npm process.
+      // Its ownership-aware shutdown drains its detached build/application children.
+      try {
+        const rows = await processes(), descendants = new Set([this.launcher.pid])
+        for (let pass = 0; pass < 8; pass++) for (const row of rows) if (descendants.has(row.parent)) descendants.add(row.pid)
+        const developers = rows.filter(row => descendants.has(row.pid) && /(?:^|\s)(?:\S*\/)?scripts\/develop\.mjs(?:\s|$)/.test(row.command))
+        assert.equal(developers.length, 1, 'Cannot identify the owned developer process; preserving instance')
+        const developer = developers[0], current = (await processes()).find(row => row.pid === developer.pid)
+        assert.equal(current?.birth, developer.birth, 'Developer process identity changed')
+        process.kill(developer.pid, 'SIGTERM')
+        await deadline(this.completion, 20000, 'owned developer drain')
+      } catch (error) { errors.push(error) }
+    }
+    if (this.exited && this.instance && this.receipt && this.appIdentity) {
+      try { await this.confirmCleanup() } catch (error) { errors.push(error) }
+    }
+    if (errors.length) throw new AggregateError(errors, 'Owned instance cleanup failed')
+  }
+}
+for (const signal of ['SIGINT','SIGTERM','SIGHUP']) process.once(signal, () => fail(new Error(`Smoke interrupted: ${signal}`)))
+const timer = setTimeout(() => fail(new Error('Smoke total deadline exceeded')), limits.totalMs)
+try {
+  console.log(`[smoke] 证据目录：${output}`)
+  work = await mkdtemp(path.join(os.tmpdir(), 'oc-chan-smoke-work-'))
+  work = await realpath(work)
+  const fixtures = path.join(work, 'fixtures'); await mkdir(fixtures, { mode: 0o700 })
+  manifest = await stage('prepare-real-fixtures', 60000, () => prepareSmokeFixtures(fixtures))
+  record('fixture-identities', { home: manifest.home, agents: manifest.agentIds, pids: manifest.agentPids, historyRows: manifest.historyRows })
+  if (['all','marketplace'].includes(scenario)) feed = await stage('build-signed-market-fixtures', 300000, () => createMarketFeed(path.join(work, 'market-fixtures'), { signal: abort.signal, record }))
+  if (scenario === 'updates') sparkleFeed = await createSparkleFeed({ phase: options['--sparkle-phase'] ?? 'available' })
+  current = new Instance('first')
+  await stage('first-build', limits.buildMs, () => current.build())
+  await stage('first-startup', limits.startupMs - (performance.now() - current.buildCompletedAt), () => current.start())
+  await capture('startup')
+  const exercised = await stage('real-wk-scenarios', limits.scenarioMs, () => exerciseSmoke({ main: current.driver, renderer: current.renderer, manifest, record, capture, fault, scenario, feed, sparkle: sparkleFeed?.expectation }))
+  assert(!fault, `Injected ${fault} fault did not fail its mandatory assertion`)
+  if (!['collectors', 'updates', 'schedules'].includes(scenario)) {
+    assert(exercised?.settings && Object.keys(exercised.settings).length, 'Scenario omitted expected persisted settings')
+    const bytes = await boundedFile(path.join(current.instance, 'profile/settings.json'), limits.settingsBytes)
+    const saved = JSON.parse(bytes.toString('utf8'))
+    for (const [key, value] of Object.entries(exercised.settings)) assert.deepEqual(saved[key], value, `Persisted setting mismatch: ${key}`)
+    const seed = path.join(output, 'saved-settings.json'); await writeFile(seed, bytes, { flag: 'wx', mode: 0o600 })
+    record('settings-file', { bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') })
+    const first = current.instance
+    await stage('first-exit', 30000, () => current.quit())
+    current = new Instance('restart')
+    await stage('restart-build', limits.buildMs, () => current.build(undefined, false, first))
+    await stage('restart-startup', limits.startupMs - (performance.now() - current.buildCompletedAt), () => current.start())
+    assert.equal(current.instance, first, 'Restart must reopen the original profile and installed plugin identities')
+    await stage('restart-state', limits.restartMs, () => verifyRestart({ main: current.driver, renderer: current.renderer, savedSettings: saved, record, capture, scenario }))
+    await stage('restart-exit', 30000, () => current.quit())
+    if (scenario === 'all') {
+      const broken = path.join(work, 'broken-settings.json'); await writeFile(broken, '{"broken":', { flag: 'wx', mode: 0o600 })
+      current = new Instance('recovery')
+      await stage('recovery-build', limits.buildMs, () => current.build(broken, true))
+      await stage('recovery-startup', limits.startupMs - (performance.now() - current.buildCompletedAt), () => current.start(true))
+      await stage('recovery-boundary-and-retry', 60000, () => exerciseRecovery({ driver: current.driver, profile: path.join(current.instance, 'profile'), bytes, capture }))
+      await current.driver.host('shutdown-report')
+      await stage('recovery-exit', 30000, () => current.quit())
+    }
+  } else await stage('collector-exit', 30000, () => current.quit())
+  result.complete = true
+} catch (error) {
+  result.errors.push(message(error)); fail(error); process.exitCode = 1
+} finally {
+  clearTimeout(timer)
+  try { if (current && !current.exited) await current.cleanup() } catch (error) { result.errors.push(message(error)); result.complete = false; process.exitCode = 1 }
+  let stagesDrained = false
+  try {
+    if (runningStages.size) current?.driver?.close()
+    await Promise.allSettled([...runningStages])
+    stagesDrained = true
+  } catch (error) { result.errors.push(message(error)); result.complete = false; process.exitCode = 1 }
+  let feedClosed = !feed
+  if (feed) {
+    try { result.marketplaceFeed = feed.evidence(); await feed.close(); feedClosed = true }
+    catch (error) { result.errors.push(message(error)); result.complete = false; process.exitCode = 1 }
+  }
+  if (sparkleFeed) {
+    try { await sparkleFeed.close() } catch (error) { result.errors.push(message(error)); result.complete = false; process.exitCode = 1 }
+  }
+  result.cleanup.retainedInstances = []
+  if (stagesDrained) for (const instance of retainedInstances) {
+    try {
+      const receipt = await cleanupDevelopmentInstance({ root, instance })
+      assert(await absent(instance), 'Owned resumed instance survived targeted cleanup')
+      result.cleanup.retainedInstances.push({ instance, removed: true, receipt })
+    } catch (error) { result.errors.push(message(error)); result.complete = false; process.exitCode = 1 }
   }
   try {
-    feed = ['all', 'marketplace'].includes(scenario) ? await createMarketFeed(path.join(output, 'market-fixtures'), { record }) : null
-    if (scenario === 'updates') sparkleFeed = await createSparkleFeed({ phase: sparklePhase })
-    startupEnvironment = { ...process.env, OC_CHAN_HOME: manifest.home,
-      ...(sparkleFeed ? { OC_CHAN_SPARKLE_TEST_FEED_URL: sparkleFeed.url, OC_CHAN_SPARKLE_TEST_PUBLIC_KEY: sparkleFeed.publicKey } : {}),
-      ...(scenario === 'schedules' ? { OC_CHAN_ACCEPTANCE_SCHEDULE_DETAIL: '1' } : {}),
-      ...(feed ? { OC_CHAN_ACCEPTANCE_MARKET_FIXTURES: JSON.stringify(feed.startupRoots()) } : {}) }
-    delete startupEnvironment.OC_CHAN_ACCEPTANCE_RECOVERY
-    await launch('initial', false, ['schedules', 'updates'].includes(scenario))
-    const first = await until(async () => { const value = await driver.request('inspect'); return value.ui?.settingsLoaded && value })
-    assert.equal(first.native.visible, false); assert.equal(first.native.key, false); assert.equal(first.native.appActive, false); assert.equal(first.native.activationPolicy, 2)
-    record('real-hidden-gpui-view', first)
-    const glyphPath = path.join(instance, 'native-text-probe.png')
-    const glyph = await driver.request('text-probe', { path: glyphPath })
-    assert(glyph.probe.paintSucceeded && glyph.probe.manualLine.glyphCount > 0 && glyph.probe.directAscii.metrics.glyphCount > 0, 'Native GPUI text system did not paint real glyphs')
-    assert.equal(glyph.probe.native.visible, false); assert.equal(glyph.probe.native.key, false)
-    await copyFile(glyphPath, path.join(output, 'native-text-probe.png')); record('real-native-glyphs', glyph.probe)
-    await until(async () => { const state = await driver.request('inspect'); const seen = new Set(state.ui?.agents?.map(agent => agent.id)); return manifest.agentIds.every(id => seen.has(id)) })
-    const pages = scenario === 'updates' ? ['settings'] : scenario === 'schedules' ? ['schedules'] : scenario === 'marketplace' ? ['plugins', 'settings'] : scenario === 'topology' ? ['agents'] : ['overview', 'agents', 'schedules', 'events', 'sources', 'settings', 'plugins']
-    for (const [width, height] of [[1280, 860], [880, 640]]) {
-      await driver.request('resize', { width, height })
-      for (const page of pages) {
-        await driver.request('navigate', { page })
-        const state = await until(async () => { const value = await driver.request('inspect'); return value.ui?.page === page && value })
-        assert.equal(state.native.visible, false); assert.equal(state.native.key, false); assert.equal(state.native.appActive, false); assert.equal(state.native.activationPolicy, 2)
-        const name = `${page}-${width}x${height}.png`, capture = path.join(instance, name)
-        await driver.request('capture', { path: capture })
-        await copyFile(capture, path.join(output, name))
-        const image = await readFile(path.join(output, name)); assert.equal(image.subarray(0, 8).toString('hex'), '89504e470d0a1a0a')
-        result.screenshots.push(name); record(`${page}-${width}`, state)
-      }
-    }
-    const expectedSettings = await exerciseGpui({ driver, instance, output, manifest, scenario, feed, sparkle: sparkleFeed?.expectation, record })
-    if (['schedules', 'updates'].includes(scenario)) {
-      await stop()
-      await assert.rejects(lstat(instance), { code: 'ENOENT' })
-      result.complete = true
-      return result
-    }
-    settingsBytes = await readFile(path.join(instance, 'profile/settings.json'))
-    assert(settingsBytes.length <= 64 * 1024, 'Settings file exceeds budget')
-    const saved = JSON.parse(settingsBytes)
-    for (const [key, value] of Object.entries(expectedSettings)) assert.deepEqual(saved[key], value, `Persisted ${key}`)
-    result.expectedSettings = expectedSettings
-    await driver.request('open', { view: 'tray' })
-    const tray = await until(async () => { const value = await driver.request('inspect', { view: 'tray' }); return value.ui && value })
-    hidden(tray); record('tray-view', tray)
-    await stop()
-    await launch('restart')
-    await settingsState(expectedSettings)
-    await stop()
-    const settingsPath = path.join(instance, 'profile/settings.json')
-    const profile = await lstat(path.dirname(settingsPath)), settingsFile = await lstat(settingsPath)
-    assert(profile.isDirectory() && !profile.isSymbolicLink() && profile.uid === process.getuid())
-    assert(settingsFile.isFile() && !settingsFile.isSymbolicLink() && settingsFile.uid === process.getuid())
-    assert.equal(await realpath(settingsPath), settingsPath)
-    await writeFile(path.join(output, 'settings-valid.json'), settingsBytes, { mode: 0o600 })
-    corrupted = true
-    await writeFile(settingsPath, '{"invalid":', { mode: 0o600 })
-    await launch('recovery', true)
-    const recovery = await until(async () => {
-      const state = hidden(await driver.request('inspect', { view: 'recovery' }))
-      return state.ui?.buttons?.recovery_retry && state.ui?.buttons?.recovery_quit && state
-    })
-    record('recovery-real-view', recovery)
-    const capture = path.join(instance, 'recovery-failure.png')
-    await driver.request('capture', { view: 'recovery', path: capture })
-    await copyFile(capture, path.join(output, 'recovery-failure.png'))
-    assert.equal((await readFile(capture)).subarray(0, 8).toString('hex'), '89504e470d0a1a0a')
-    result.screenshots.push('recovery-failure.png')
-    await writeFile(settingsPath, settingsBytes); corrupted = false
-    const rect = recovery.ui.buttons.recovery_retry
-    assert(rect.width > 0 && rect.height > 0)
-    const point = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
-    assert(point.x > 0 && point.x < recovery.native.width && point.y > 0 && point.y < recovery.native.height)
-    for (const kind of ['move', 'down', 'up']) await driver.request('mouse', { view: 'recovery', ...point, kind })
-    await settingsState(expectedSettings)
-    record('recovery-native-retry', { button: 'recovery_retry', nativeMouseEvents: 3 })
-    await stop()
-    await launch('cleanup', false, true)
-    await settingsState(expectedSettings)
-    await stop()
-    await assert.rejects(lstat(instance), { code: 'ENOENT' })
-    result.complete = true
-  } catch (error) {
-    failure = error; result.errors.push(error.stack)
-    if (driver && !driver.closed && active?.driver === driver) {
-      const view = active.name === 'recovery' && corrupted ? 'recovery' : 'main'
-      try {
-        const state = await driver.request('inspect', { view })
-        await writeFile(path.join(output, `${active.name}-failed.json`), JSON.stringify(state, null, 2) + '\n', { mode: 0o600 })
-        const capture = path.join(instance, `${active.name}-failed.png`)
-        await driver.request('capture', { view, path: capture })
-        await copyFile(capture, path.join(output, `${active.name}-failed.png`))
-      } catch (diagnostic) { result.errors.push(diagnostic.stack); failure = new AggregateError([failure, diagnostic], 'Smoke and failure capture failed') }
-    }
+    result.cleanup.fixtureProcessesStopped = false
+    if (manifest) { await manifest.stopAgents(); result.cleanup.fixtureProcessesStopped = true }
+  } catch (error) { result.errors.push(message(error)); result.complete = false; process.exitCode = 1 }
+  if (work && stagesDrained && feedClosed && result.cleanup.fixtureProcessesStopped) {
+    try { await rm(work, { recursive: true }); result.cleanup.fixtureDirectoryRemoved = true } catch (error) { result.errors.push(message(error)); result.complete = false; process.exitCode = 1 }
   }
-  finally {
-    const cleanupErrors = []
-    const cleanup = async action => { try { await action() } catch (error) { cleanupErrors.push(error); result.errors.push(error.stack ?? String(error)) } }
-    if (active && !active.exit) {
-      if (driver && !driver.closed) await cleanup(async () => { await driver.request('quit'); driver.close(); await deadline(active.completion, 30000, 'Owned application shutdown deadline') })
-      if (!active.exit) await cleanup(async () => { active.child.kill('SIGTERM'); await deadline(active.completion, 35000, 'Owned development launcher failed to drain; preserving instance') })
-    }
-    driver?.close()
-    if (active?.receipt) await cleanup(() => assert.rejects(lstat(active.receipt.driverDirectory), { code: 'ENOENT' }))
-    if (corrupted && active?.exit) await cleanup(() => writeFile(path.join(instance, 'profile/settings.json'), settingsBytes))
-    await cleanup(() => deadline(manifest.stopAgents(), 30000, 'Fixture shutdown deadline'))
-    if (feed) { await cleanup(async () => { result.feed = feed.evidence() }); await cleanup(() => deadline(feed.close(), 30000, 'Feed shutdown deadline')) }
-    if (sparkleFeed) await cleanup(() => deadline(sparkleFeed.close(), 30000, 'Sparkle feed shutdown deadline'))
-    if (cleanupErrors.length) { result.complete = false; failure = new AggregateError([...(failure ? [failure] : []), ...cleanupErrors], 'Smoke and cleanup failed') }
-    result.runs = runs.map(run => ({ name: run.name, instance: run.instance, launcherPid: run.child.pid, receipt: run.receipt, exit: run.exit }))
-    await cleanup(() => writeFile(path.join(output, 'launcher.log'), runs.map(run => `\n[${run.name}]\n${run.log}`).join(''), { mode: 0o600 }))
-    await cleanup(() => writeFile(path.join(output, 'result.json'), JSON.stringify(result, null, 2) + '\n', { mode: 0o600 }))
-    if (cleanupErrors.length) { result.complete = false; failure = new AggregateError([...(failure ? [failure] : []), ...cleanupErrors], 'Smoke evidence or cleanup failed') }
-    console.log(JSON.stringify({ complete: result.complete, evidence: output, errors: result.errors }))
-  }
-  if (failure) throw failure
-  return result
-}
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const options = {}
-  for (let index = 2; index < process.argv.length; index += 2) {
-    const key = process.argv[index], value = process.argv[index + 1]
-    assert(['--scenario', '--out', '--sparkle-phase'].includes(key) && value, 'Usage: smoke-renderer.mjs [--scenario NAME] [--out DIR] [--sparkle-phase available|no-update|error]')
-    options[key === '--out' ? 'output' : key === '--sparkle-phase' ? 'sparklePhase' : 'scenario'] = value
-  }
-  smoke(options).catch(error => { console.error(error); process.exitCode = 1 })
+  result.finishedAt = new Date().toISOString()
+  try { await log.close() } catch (error) { result.errors.push(message(error)); result.complete = false; process.exitCode = 1 }
+  await writeFile(path.join(output, 'result.json'), JSON.stringify(result, null, 2) + '\n', { flag: 'wx', mode: 0o600 })
+  console.log(JSON.stringify({ complete: result.complete, evidence: output, errors: result.errors }))
 }

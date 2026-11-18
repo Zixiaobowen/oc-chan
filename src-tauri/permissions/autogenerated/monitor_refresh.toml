@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-monitor-refresh"
+description = "Enables the monitor_refresh command without any pre-configured scope."
+commands.allow = ["monitor_refresh"]
+
+[[permission]]
+identifier = "deny-monitor-refresh"
+description = "Denies the monitor_refresh command without any pre-configured scope."
+commands.deny = ["monitor_refresh"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-settings-open-permission-settings"
+description = "Enables the settings_open_permission_settings command without any pre-configured scope."
+commands.allow = ["settings_open_permission_settings"]
+
+[[permission]]
+identifier = "deny-settings-open-permission-settings"
+description = "Denies the settings_open_permission_settings command without any pre-configured scope."
+commands.deny = ["settings_open_permission_settings"]

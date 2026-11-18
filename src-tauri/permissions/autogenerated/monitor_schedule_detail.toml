@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-monitor-schedule-detail"
+description = "Enables the monitor_schedule_detail command without any pre-configured scope."
+commands.allow = ["monitor_schedule_detail"]
+
+[[permission]]
+identifier = "deny-monitor-schedule-detail"
+description = "Denies the monitor_schedule_detail command without any pre-configured scope."
+commands.deny = ["monitor_schedule_detail"]

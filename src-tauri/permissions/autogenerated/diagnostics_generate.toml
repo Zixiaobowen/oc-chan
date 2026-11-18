@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-diagnostics-generate"
+description = "Enables the diagnostics_generate command without any pre-configured scope."
+commands.allow = ["diagnostics_generate"]
+
+[[permission]]
+identifier = "deny-diagnostics-generate"
+description = "Denies the diagnostics_generate command without any pre-configured scope."
+commands.deny = ["diagnostics_generate"]

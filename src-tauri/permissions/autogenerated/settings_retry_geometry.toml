@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-settings-retry-geometry"
+description = "Enables the settings_retry_geometry command without any pre-configured scope."
+commands.allow = ["settings_retry_geometry"]
+
+[[permission]]
+identifier = "deny-settings-retry-geometry"
+description = "Denies the settings_retry_geometry command without any pre-configured scope."
+commands.deny = ["settings_retry_geometry"]

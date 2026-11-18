@@ -1,0 +1,8 @@
+:root {
+  --font-scale: 1;
+  --ui-font: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
+  --code-font: ui-monospace, monospace;
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] { color-scheme: dark; }

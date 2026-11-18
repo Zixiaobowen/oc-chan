@@ -1,5 +1,3 @@
-import { constants } from 'node:fs'
-import { open } from 'node:fs/promises'
 import assert from 'node:assert/strict'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
@@ -186,21 +184,4 @@ try {
     if (failures.length) throw new AggregateError(failures, 'Fixture failed during startup')
     return Object.assign(manifest, { agentIds: ids, agentFiles: files, agentPids: children.map(state => state.pid), fixtureModel, stopAgents: stop })
   } catch (error) { try { await stop() } catch (cleanup) { throw new AggregateError([error, cleanup], 'Fixture startup and cleanup failed') } throw error }
-}
-
-export async function boundedFile(filename, maximum) {
-  const file = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW)
-  try {
-    const stat = await file.stat()
-    assert(stat.isFile() && stat.uid === process.getuid() && stat.nlink === 1 && stat.size <= maximum, `Unsafe bounded file: ${filename}`)
-    const bytes = Buffer.alloc(stat.size + 1)
-    let offset = 0
-    while (offset < bytes.length) {
-      const { bytesRead } = await file.read(bytes, offset, bytes.length - offset, offset)
-      if (!bytesRead) break
-      offset += bytesRead
-    }
-    assert.equal(offset, stat.size, 'File changed while reading')
-    return bytes.subarray(0, offset)
-  } finally { await file.close() }
 }

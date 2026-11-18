@@ -32,8 +32,8 @@ export function developmentEnvironment(instance, options, original = process.env
 }
 export async function loadDevelopmentBuild(instance, command = execute) {
   const record = await boundedJson(path.join(instance, 'build.json'))
-  assert(record.schema === 3 && record.renderer === 'gpui' && record.mode === 'development' && record.root === ROOT && record.arch === 'arm64'
-    && record.target === TARGET && record.sign === '-' && JSON.stringify(record.features) === JSON.stringify(['acceptance'])
+  assert(record.schema === 3 && record.renderer === 'react' && record.mode === 'development' && record.root === ROOT && record.arch === 'arm64'
+    && record.target === TARGET && record.sign === '-' && JSON.stringify(record.features) === JSON.stringify(['acceptance', 'custom-protocol'])
     && typeof record.targetDir === 'string' && path.isAbsolute(record.targetDir) && within(instance, record.targetDir), 'Invalid isolated development build receipt')
   const expected = developmentBundleLayout(instance, record.targetDir), bundle = record.developmentBundle
   assert(bundle && Object.entries(expected).every(([key, value]) => bundle[key] === value) && record.binary === expected.binary, 'Development receipt must name its real isolated application bundle')

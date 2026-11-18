@@ -4,7 +4,7 @@ import { constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readSy
 import path from 'node:path'
 
 export const RUST_TARGET = 'aarch64-apple-darwin'
-export const RUST_ROOTS = Object.freeze(['oc-desktop', 'oc-core', 'oc-installer', 'oc-system-monitor'])
+export const RUST_ROOTS = Object.freeze(['oc-chan', 'oc-core', 'oc-installer', 'oc-system-monitor'])
 export const RUST_LIMITS = Object.freeze({ metadata: 16 * 1024 * 1024, packages: 20000, edges: 200000, crateEntries: 40000, entries: 250000, depth: 24, licenseFiles: 8192, licenseBytes: 2 * 1024 * 1024, totalLicenseBytes: 32 * 1024 * 1024 })
 export const sha256 = value => createHash('sha256').update(value).digest('hex')
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value)

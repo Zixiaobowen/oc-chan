@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-marketplace-cancel"
+description = "Enables the marketplace_cancel command without any pre-configured scope."
+commands.allow = ["marketplace_cancel"]
+
+[[permission]]
+identifier = "deny-marketplace-cancel"
+description = "Denies the marketplace_cancel command without any pre-configured scope."
+commands.deny = ["marketplace_cancel"]

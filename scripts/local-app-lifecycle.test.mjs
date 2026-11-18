@@ -34,7 +34,7 @@ async function fixture(t) {
   const api = await import(pathToFileURL(path.join(root, 'scripts/local-app-lifecycle.mjs')).href)
   return { temporary, root, api, children }
 }
-async function application(root, relative = 'release/gpui/package/OC Chan.app', identifier = 'local.oc-chan.desktop') {
+async function application(root, relative = 'release/tauri/package/OC Chan.app', identifier = 'local.oc-chan.desktop') {
   const app = path.join(root, relative)
   await mkdir(path.join(app, 'Contents/MacOS'), { recursive: true })
   await writeFile(path.join(app, 'Contents/Info.plist'), `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>${identifier}</string><key>CFBundleExecutable</key><string>oc-chan</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>`)

@@ -6,6 +6,7 @@ release/
 .dev-instances/
 target/
 .build/
+/src-tauri/gen/
 
 /resources/tern-navigation/present-window
 /resources/liquid-glass/*.node

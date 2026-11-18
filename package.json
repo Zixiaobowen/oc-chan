@@ -9,9 +9,9 @@
   "scripts": {
     "dev": "node scripts/develop.mjs",
     "dev:window": "node scripts/develop.mjs --window",
-    "typecheck": "cargo check -p oc-desktop",
+    "typecheck": "tsc --noEmit",
     "build:app": "node scripts/build-app.mjs",
-    "build": "npm run build:app",
+    "build": "npm run typecheck && npm run build:app",
     "test": "node scripts/ci-tests.mjs",
     "test:ci": "node scripts/ci-tests.mjs",
     "smoke:renderer": "node scripts/smoke-renderer.mjs",
@@ -30,9 +30,26 @@
     "push:main": "node scripts/push-main.mjs",
     "closeout:task": "node scripts/closeout-task.mjs",
     "test:install": "cargo test -p oc-installer --lib -- --test-threads=1",
-    "test:desktop": "cargo test -p oc-desktop"
+    "build:frontend": "vite build",
+    "test:frontend": "tsx --test src/renderer/src/*.test.ts src/shared/*.test.ts"
   },
   "devDependencies": {
-    "unzipper": "0.12.5"
+    "@dagrejs/dagre": "^3.1.3",
+    "@tauri-apps/api": "^2.10.1",
+    "@tauri-apps/cli": "^2.10.1",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/three": "0.187.0",
+    "@vitejs/plugin-react": "^6.0.0",
+    "@xyflow/react": "^12.12.0",
+    "kubai-icons-react": "0.2.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "three": "0.187.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "unzipper": "0.12.5",
+    "vite": "^8.3.5"
   }
 }

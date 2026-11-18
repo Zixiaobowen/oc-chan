@@ -2,20 +2,20 @@
 
 [返回首页](../README.md)
 
-命令和路径均相对仓库根目录。后台、桌面宿主与界面均使用 Rust，`crates/oc-desktop` 使用 GPUI / Metal 和原生拓扑画布。Node 仅用于构建编排、开发与验收工具；没有前端打包步骤。
+命令和路径均相对仓库根目录。后台与桌面宿主使用 Rust，唯一宿主为 `src-tauri`；React / TypeScript 界面经 Vite 打包，在 macOS 系统 WKWebView 中运行。2D 拓扑使用 ReactFlow，3D 建筑使用 Three.js。Node 用于前端构建、开发与验收工具，不随生产应用分发。
 
 ## 运行
 
-需要 Apple Silicon Mac、Rust 1.99（`rust-toolchain.toml` 固定）、Node.js 22.12+（建议24）、npm，以及包含 macOS 26+ SDK 的 Xcode Command Line Tools。GPUI 必须启用 `font-kit` 才会在 macOS 使用真实文字系统；禁用它会选中无字形的 `NoopTextSystem`。同时启用 `runtime_shaders`，供只有 CLT 的构建环境使用，不要求独立 Metal 编译工具。原生玻璃和验收驱动的系统要求不等于较旧 macOS 已验收。
+需要 Apple Silicon Mac、Rust 1.99（`rust-toolchain.toml` 固定）、Node.js 22.12+（建议24）、npm，以及包含 macOS 26+ SDK 的 Xcode Command Line Tools。原生玻璃和验收驱动的系统要求不等于较旧 macOS 已验收；WKWebView 使用系统 WebKit，不打包 Chromium。
 
 ```sh
 npm ci
 npm run dev
 ```
 
-启动器构建真实 Rust worker、原生系统插件、Swift Tern helper 和 GPUI 宿主，生成并 ad-hoc 签名实例内 `.app`，直接运行 `Contents/MacOS/oc-chan`。每次启动创建独立 `.dev-instances/instance-*`，隔离 profile、Cargo 产物和资源；bundle ID 由实例路径派生，同路径恢复保持一致。开发 plist 设置 `LSUIElement=true`，默认隐藏原生窗口，不显示 Dock/托盘，不允许激活外部应用、修改登录项或申请通知权限；不使用正式应用的个人设置或数据库。通知权限只读查询使用真实应用身份。
+启动器构建真实 Rust worker、原生系统插件、Swift Tern helper、Vite 页面和 Tauri 宿主，生成并 ad-hoc 签名实例内 `.app`，直接运行 `Contents/MacOS/oc-chan`。每次启动创建独立 `.dev-instances/instance-*`，隔离 profile、Cargo 产物和资源；bundle ID 由实例路径派生，同路径恢复保持一致。开发 plist 设置 `LSUIElement=true`，默认隐藏原生窗口，不显示 Dock/托盘，不允许激活外部应用、修改登录项或申请通知权限；不使用正式应用的个人设置或数据库。通知权限只读查询使用真实应用身份。
 
-非默认 `acceptance` feature 提供认证 Unix socket，协议为 `OC_CHAN_GPUI_ACCEPTANCE_V1`，绑定实例、UID、令牌和有界请求。真实隐藏 GPUI 窗口的 Metal capture 也仅在验收构建可用。生产 feature 列表为空，不包含驱动、capture 或测试信任根。构建回执使用 schema 3、`renderer: "gpui"`；开发 feature 为 `["acceptance"]`。
+非默认 `acceptance` feature 提供认证驱动、真实 WKWebView 探针与截图，绑定实例、UID、令牌和有界请求。生产 features 为 `["custom-protocol"]`，不包含验收驱动、探针或测试信任根。构建回执使用 schema 3、`renderer: "react"`；开发 features 为 `["acceptance", "custom-protocol"]`，页面通过受控 custom protocol 加载。
 
 按 Ctrl+C 先撤销新工作，再等待本实例宿主、插件、worker及已确认后代退出，成功后回收临时目录。无法确认进程身份、排空或清理时明确失败并保留现场；不得凭进程名或 PID 批量终止。需要保留本轮隔离配置以检查重启行为时：
 
@@ -41,23 +41,23 @@ npm run smoke:renderer -- --scenario sidebar --out /tmp/oc-chan-sidebar-new
 npm run smoke:renderer -- --scenario schedules --out /tmp/oc-chan-schedules-new
 ```
 
-当前 `scripts/smoke-renderer.mjs` 复用真实开发启动器，检查隐藏且非 key 的 GPUI 窗口，按1280×860和880×640导航页面，通过 Metal capture 保存 PNG，并验证退出与实例清理。`--out` 指定证据目录；脚本会创建目录，建议每轮使用独立路径。`marketplace` 选择插件/设置页，`topology` 选择 Agent 页，`schedules` 选择定时任务页，其余场景选择全部主要页面；除 `schedules` 外还检查隐藏托盘及设置恢复。场景名称本身不证明原有专项行为已覆盖。报告保留 `visibleWindowAcceptance: false`，是否通过以实际运行证据为准。
+当前 `scripts/smoke-renderer.mjs` 复用真实开发启动器，驱动隐藏且非 key 的 WKWebView 窗口，操作实际 React 页面、保存截图，并验证退出与实例清理。`--out` 必须指向全新证据目录。`all` 覆盖完整场景，各专项按实际脚本选择行为；不能用场景名称代替行为证据。报告保留 `nativeVisibleWindowAcceptance: false`，是否通过以实际运行证据为准。
 
 `schedules` 只验收定时任务页及配置详情：读取隔离 Hermes 配置中的长正文、工作目录和模型，检查 1280×860 / 880×640 的正文宽度、配置与历史独立刷新、任务切换、关闭与离页释放。该场景不安装插件、不运行设置恢复流程，退出时核对本次实例已回收。
 
-验收 driver 使用真实 GPUI 状态和动作，不提供 DOM setter、JavaScript eval、React 提交或 WebKit 探针。请求20秒截止，启动等待最多1200秒，首个设置状态等待默认60秒，退出排空30秒；以当前脚本为准，不沿用旧 WebView runner 的分阶段预算或 `--fault` 参数。失败输出 `result.json`、`launcher.log` 和已捕获截图并返回非零。
+验收 driver 使用真实 WKWebView 的 DOM、JavaScript 与 React 提交探针，截图及输入仍走实际宿主。总截止20分钟、构建10分钟、启动5分钟、场景6分钟、重启1分钟；其他分阶段预算以当前脚本为准。`--fault fixture|ipc` 仅用于 `all` 的故障验收。失败保存 `result.json`、日志与已捕获截图并返回非零。
 
-原有功能验收范围必须继续保留：历史分页/取消/锁库恢复、事件筛选与分页、来源停用恢复、通知设置与权限、设置写入失败及回滚、脱敏诊断、窗口授权、2D/建筑视图交互、同 profile 重启、独立启动恢复、插件市场安装/升级/取消/摘要拒绝/失败恢复，以及侧栏布局持久化。当前基础截图遍历不能替代这些行为证据，尚未补齐的自动化应明确记录为缺口，不能删除产品要求。
+功能验收范围继续包括历史分页/取消/锁库恢复、事件筛选与分页、来源停用恢复、通知设置与权限、设置写入失败及回滚、脱敏诊断、窗口授权、ReactFlow 2D/Three.js 建筑视图交互、同 profile 重启、独立启动恢复、插件市场安装/升级/取消/摘要拒绝/失败恢复，以及侧栏布局持久化。脚本恢复不等于本次验证已通过，任何缺少的行为证据都应明确记录。
 
 真实输入夹具应使用独立存活进程、FD、JSONL、JSON、plist与SQLite，由生产 Rust 采集器读取，不能播种假快照或借用个人数据。性能夹具现位于 `scripts/performance/agent-fixtures.mjs`，通过 `stopAgents` 排空真实进程。市场签名夹具入口仍为 `OC_CHAN_ACCEPTANCE_MARKET_FIXTURES`，只允许 acceptance 无头开发实例；同 profile 重启须复用信任根，不能从可写安装目录建立信任。正式构建不读取该入口。
 
 资源断言应使用 Rust 资源池的 `history`、`events` 等固定标签；业务来源 `hermes-events` 与分页来源 `hermes` 不同。缺少资源记录必须失败。暂停显示只取消视图查询，后台事件采集继续；停用事件后才要求对应资源归零。诊断未知资源标签须脱敏并标明无效字段。
 
-设置持久性应回读完整磁盘字节，并与带明确运行时覆盖的状态区分。登录/无头模式临时关闭 Dock 与防休眠不能覆盖保存偏好。侧栏继续使用 `sidebarCollapsed`、`sidebarWidth`，保留单在途与最新待提交、失败回滚和重试；188px再向左64px收起、恢复原宽度、⌃⌘S、紧凑导航、三档文字和焦点要求仍需 GPUI 定向验收。
+设置持久性应回读完整磁盘字节，并与带明确运行时覆盖的状态区分。登录/无头模式临时关闭 Dock 与防休眠不能覆盖保存偏好。侧栏继续使用 `sidebarCollapsed`、`sidebarWidth`，保留单在途与最新待提交、失败回滚和重试；188px再向左64px收起、恢复原宽度、⌃⌘S、紧凑导航、三档文字和焦点要求仍需定向验收。
 
-原生鼠标、文本、按键与窗口坐标必须按 GPUI/AppKit 实际路径验收；逻辑像素、窗口边框、内容区和物理像素分开记录。880×640、1280×860、200%文字及长内容仍是要求。旧 WKPreferences [`tabFocusesLinks`](https://developer.apple.com/documentation/webkit/wkpreferences/tabfocuseslinks) 与 DOM 焦点测试仅为历史记录，不适用于 GPUI。隐藏截图和动作回执不能证明 VoiceOver、物理 Tab、可见缩放或60/120Hz呈现通过。
+鼠标、文本、按键与窗口坐标按 WKWebView/AppKit 实际路径验收；CSS像素、页面缩放、窗口边框、内容区和物理像素分开记录。880×640、1280×860、200%文字及长内容仍是要求。WKPreferences [`tabFocusesLinks`](https://developer.apple.com/documentation/webkit/wkpreferences/tabfocuseslinks) 与 DOM 焦点行为须按真实页面核验。隐藏截图和动作回执不能证明 VoiceOver、物理 Tab、可见缩放或60/120Hz呈现通过。
 
-拓扑菜单仍须覆盖右键、键盘、外部关闭、Escape及焦点归还；Tern导航必须走真实宿主动作，无头拒绝不等于前台切换验收成功。GPUI 绘制不使用 `requestAnimationFrame` 或 Three.js；按需更新、隐藏/暂停/离页取消及有界缓存要求保留，不能把驱动往返或捕获一帧当作可见帧率。
+拓扑菜单仍须覆盖右键、键盘、外部关闭、Escape及焦点归还；Tern导航必须走真实宿主命令，无头拒绝不等于前台切换验收成功。Three.js 按需绘制及 ReactFlow 动效须覆盖隐藏/暂停/离页取消、有界缓存和 WebGL 资源释放；`requestAnimationFrame`、WebGL draw 返回及驱动往返不能当作可见帧率或GPU完成证据。
 
 ## 定向检查
 
@@ -75,13 +75,13 @@ node --test scripts/performance/*.test.mjs
 npm run test:release
 ```
 
-需要实际 worker 或签名 fixture 的显式忽略测试必须单独配置环境执行，不能把默认忽略当通过。CI 根据变更路径映射 Rust 包和脚本行为测试，未映射代码或测试明确报错。查看计划：`npm run test:ci -- --plan crates/oc-desktop/src/views/mod.rs`。
+需要实际 worker 或签名 fixture 的显式忽略测试必须单独配置环境执行，不能把默认忽略当通过。CI 根据变更路径映射 Rust 包、前端与脚本行为测试，未映射代码或测试明确报错。查看计划：`npm run test:ci -- --plan src-tauri/src/host.rs`。
 
-宿主组先构建 release 系统 collector，并用原生市场构建器生成签名包，将独立资源目录通过 `OC_CHAN_RESOURCE_DIR` 传给 `oc-desktop --features acceptance`；不再构建 Vite 或传入 `TAURI_CONFIG`。直接 `cargo test -p oc-desktop` 时仍须满足实际构建资源要求，优先使用已有 CI 宿主组编排。
+宿主测试构建实际资源及 Vite 页面，并通过 Tauri 构建配置传入资源；优先使用已有 CI 宿主组编排。直接执行 Cargo 测试同样必须满足前端输出、系统 collector、签名市场夹具及资源配置要求，不能用空目录代替真实资源。
 
 应用更新使用独立场景 `npm run smoke:renderer -- --scenario updates`。开发与无头实例只执行更新探测，不启动 Sparkle 下载/安装界面；正常安装版的自动检查由 Sparkle 管理。场景通过不代表真实安装、重启或可见标准更新界面已通过，相关证据须分别记录。
 
-GPUI 入口、原生 capture、视图及构建变更按选择器映射到真实 renderer smoke。删除路径必须保留删除状态，重命名展开两侧路径，不能把未知删除当作全量测试；下面仅输出计划：
+React 页面、Tauri 入口、WKWebView 探针及构建变更按选择器映射到真实 renderer smoke。删除路径必须保留删除状态，重命名展开两侧路径，不能把未知删除当作全量测试；下面仅输出计划：
 
 ```sh
 node --input-type=module -e "import { execFileSync } from 'node:child_process'; import { changedFiles, selectTests } from './scripts/ci-tests.mjs'; const base = execFileSync('git', ['merge-base', 'origin/main', 'HEAD'], { encoding: 'utf8' }).trim(); const changes = changedFiles(base); console.log(JSON.stringify({ files: changes.files.length, removed: changes.removed.length, plan: selectTests(changes.files, undefined, changes.removed) }, null, 2))"
@@ -98,13 +98,13 @@ node scripts/performance/run.mjs --mode smoke --scenario soak
 node scripts/performance/run.mjs --mode baseline --scenario soak --out /tmp/oc-chan-rust-soak-new
 ```
 
-入口仅接受普通用户采样，不申请新系统权限。报告使用 schema 4、`renderer: "gpui"`，记录从启动器开始到观察设置的时间（包含构建等待）、驱动导航往返、宿主及开发进程的 RSS、单核口径 CPU、FD 与进程数；驱动往返不是 event-to-paint 时延。
+入口仅接受普通用户 `--sampler user`，不申请新系统权限，也不接受 root 采样。`run.mjs` 报告 schema 3，记录构建/启动阶段、实际核心发布、事件投递和 React commit、分通道消息与JSON字节、WebGL draw和原生rAF桶，以及RSS、单核CPU、FD和进程数；缺少文件事件专属watch时间与各采集分区span，不把JSON载荷字节当作传输封装字节。
 
-C/libproc 每秒采样出生身份已核验的宿主及可观察后代，启动器单独统计。新生、离场、读失败进程不计为完整 CPU 区间；缺失字段与覆盖缺口显式记录，不填零。不再关联 WebKit XPC 进程，当前也没有 GPU 内存、GPU完成、显示帧率或亚采样周期 helper 生命周期的完整证据。
+C/libproc 采样核验出生身份的宿主和可观察后代，并单独记录启动器。acceptance-only WebKit实例关联提供出生身份核对后的XPC记录，共享身份去重；不可用角色、关联租约到期、不完整CPU区间与亚采样周期生命周期缺口均显式保留，不填零。XPC可能共享，因此不能声称独占应用总内存或自动推导改善幅度。WebGL draw只证明原始方法返回；隐藏WK可能暂停rAF，均不证明GPU完成或物理显示帧率。
 
-daily 使用32会话×1Hz，stress 使用128会话×10Hz，soak 使用128会话×1Hz并在每小时首分钟10Hz突发。真实 session 文件写入、字节、轮转和每分钟 schedule mutation 都记录，GPUI inspect 核对全部夹具ID/PID。smoke 每场景8秒，不会自然覆盖每分钟轮转；baseline 的 soak 为24小时，daily为600秒，其余为60秒。源码变化、压力落后、采样停止或清理失败均失败。旧100并发刷新、200历史替换、锁库/取消与拓扑专项不是当前 runner 已覆盖项，仍须补充等价验收。
+startup baseline运行10轮；idle覆盖主窗、托盘及均隐藏；daily baseline运行5轮，每轮预热120秒、测量600秒，smoke预热2秒、测量8秒。真实夹具包含32会话，L2与soak使用128会话；stress覆盖资源边界，soak baseline为24小时。真实进程发现、文件写入、事件频率、历史查询、变更与交互计数写入workload证据；源码变化、采样失败、排空或清理失败均失败。具体负载与阈值以 `scenarios.mjs`、`soak-scenario.mjs` 和共享 workload 为准，不将所有场景概括为8秒。
 
-`scripts/performance/compare.mjs` 仅接受同 schema 4 GPUI 契约，并核对实际 workload。旧 Electron 与 Tauri 数字保留为[历史性能基准](performance-baseline.md)，不能改写数字或将旧结果当 GPUI 成绩；旧 Rust/Tauri 证据仍在本地 `docs/codex-handoffs/2026-11-10-rust-migration-integration.md`。当前缺少 GPUI 构建/视觉通过证据，短测也不证明24小时、睡眠/网络切换或16GiB硬件通过。
+`scripts/performance/compare.mjs` 对冻结基线与候选执行对照，生成schema 2比较报告，并断言共享夹具、实际负载、视口与计数一致；构建管线、驱动开销、watch及进程归属覆盖差异仍须说明，不自动宣称性能提升。[历史性能基准](performance-baseline.md)与本地 `docs/codex-handoffs/2026-11-10-rust-migration-integration.md` 仅证明当时实现，旧Electron、Tauri和GPUI证据均不能当作本次恢复成绩。当前实现尚未验证；短测不证明24小时、睡眠/网络切换或16GiB硬件通过。
 
 ## 构建与打包
 
@@ -114,7 +114,7 @@ npm run package
 npm run dist
 ```
 
-`build`执行 Rust/GPUI release 构建；`typecheck` 单独映射为 `cargo check -p oc-desktop`。`package`生成目录应用，`dist`生成DMG和ZIP，稳定发布另生成签名的 `appcast.xml`，不再生成 `latest.json`。产物位于`release/gpui/`，实际路径以schema 3的`build.json`和对应`distribution.json`为准；回执标记`renderer: "gpui"`，生产features为空。构建验证Rust依赖许可证及 Sparkle 2.10.1 官方归档 SHA-256/逐文件 pin，保留完整 framework 和上游签名 helpers（包括封印内的 Headers/Modules）；包内没有Node/Electron/WebView运行时。Sparkle 的生产体积增量须以实际产物测量，不能以历史预算证明已达标。
+`build`执行 Vite 前端打包和 Rust/Tauri release 构建；`typecheck` 检查前端类型。`package`生成目录应用，`dist`生成DMG和ZIP，稳定发布另生成签名的 `appcast.xml`，不再生成 `latest.json`。产物位于`release/tauri/`，实际路径以schema 3的`build.json`和对应`distribution.json`为准；回执标记`renderer: "react"`，生产features为`["custom-protocol"]`。构建验证Rust与renderer依赖许可及 Sparkle 2.10.1 官方归档 SHA-256/逐文件 pin，保留完整 framework 和上游签名 helpers（包括封印内的 Headers/Modules）；包内不分发Node/Electron/Chromium，WKWebView由系统提供。Sparkle 的生产体积增量须以实际产物测量，不能以历史预算证明已达标。
 
 本地默认ad-hoc签名，不代表Developer ID、公证或正式安装验收。打包不替换`/Applications/OC Chan.app`；安装、发布和推送的授权与回执分别处理。完整门禁和清理要求见[安装、构建与发布](distribution.md)。
 

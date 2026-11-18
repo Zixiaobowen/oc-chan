@@ -1,0 +1,27 @@
+.detail-source-reason {
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: max(12px, calc(12px * var(--font-scale)));
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.detail-source-reason p { margin: 0; }
+.detail-source-reason p + p { margin-top: 8px; }
+.detail-source-links { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 4px; }
+
+.text-button.detail-source-button {
+  min-height: 32px;
+  max-width: 100%;
+  color: var(--accent);
+  font-size: inherit;
+  line-height: 1.5;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.text-button.detail-source-button:hover { text-decoration-thickness: 2px; }
+.text-button.detail-source-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }

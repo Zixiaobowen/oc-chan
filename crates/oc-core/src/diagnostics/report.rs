@@ -12,7 +12,7 @@ pub struct ReportCoverage { pub sources: CoverageCount, pub diagnostics: Coverag
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all="camelCase")]
 pub struct ReportContent { pub generated_at:String, pub bytes:usize, pub json:String, pub coverage:ReportCoverage, pub limits:Vec<String> }
-pub struct ReportMetadata { pub version:String, pub gpui:String, pub platform:String, pub arch:String, pub os_release:String }
+pub struct ReportMetadata { pub version:String, pub tauri:String, pub platform:String, pub arch:String, pub os_release:String }
 const SOURCES:&[&str]=&["processes","omp-ownership","codex-sessions","tern-state","omp-socket","agent-activity","omp-cron","hermes-cron","hermes-runtime","hermes-metadata-errors","crontab","schedule-semantics","system","system-0","system-1","system-2","system-3","network-interface","collection-resources","schedule-limits","event-store","hermes-events","source-events"];
 const RESOURCES:&[&str]=&["agent-activity","agent-metadata","agent-processes","agent-ownership","agent-collab","agent-tern","schedule-files","schedule-plist","schedule-commands","schedule-metadata","hermes-processes","history","schedules","events","tern-navigation","diagnostic-export","plugin-host","plugin-market","http","settings","desktop-startup","installation-readiness"];
 struct Projection { limits:BTreeSet<String>, coverage:ReportCoverage, inspected_sources:usize, inspected_diagnostics:usize, remaining:usize }
@@ -109,7 +109,7 @@ pub fn build_report(snapshot:&MonitorSnapshot,resources:&ResourceBudgetSnapshot,
         let mut safe=p.statistics(&source.statistics)?;safe["source"]=json!(id);
         if p.admit(&safe){resource_sources.push(safe);p.coverage.resources.included+=1;}
     }
-    let metadata=json!({"version":p.version(&metadata.version),"gpui":p.version(&metadata.gpui),"platform":p.enumeration(&metadata.platform,&["darwin","linux","win32","aix","freebsd","openbsd","sunos","android"]),"arch":p.enumeration(&metadata.arch,&["arm","arm64","ia32","x64","loong64","mips","mipsel","ppc","ppc64","riscv64","s390","s390x"]),"osRelease":p.version(&metadata.os_release)});
+    let metadata=json!({"version":p.version(&metadata.version),"tauri":p.version(&metadata.tauri),"platform":p.enumeration(&metadata.platform,&["darwin","linux","win32","aix","freebsd","openbsd","sunos","android"]),"arch":p.enumeration(&metadata.arch,&["arm","arm64","ia32","x64","loong64","mips","mipsel","ppc","ppc64","riscv64","s390","s390x"]),"osRelease":p.version(&metadata.os_release)});
     let resource_limits=p.numeric(serde_json::to_value(&resources.limits).map_err(|_|Error::invalid("resource limits"))?);let global=p.statistics(&resources.global)?;
     let limits:Vec<String>=p.limits.into_iter().collect();
     let report=json!({"schemaVersion":1,"generatedAt":generated_at,"scope":{"included":["application-version-and-platform","source-capability-status-and-controlled-diagnostics","resource-budget-counts","collection-times-and-array-totals"],"excluded":["usernames","paths","uids","titles","content","commands","environment","stderr","raw-errors"],"collection":"existing-in-memory-snapshot-only; no-network-or-additional-collection","coverage":"included counts emitted records; total is null when unavailable or not fully inspected","resources":"reserved-io-capacity-and-counters; not-heap-or-rss"},"metadata":metadata,"sections":sections,"resources":{"limits":resource_limits,"global":global,"sources":resource_sources},"coverage":p.coverage,"limits":limits});
@@ -121,7 +121,7 @@ pub fn build_report(snapshot:&MonitorSnapshot,resources:&ResourceBudgetSnapshot,
     #[test] fn untrusted_metadata_and_source_text_never_leak(){
         let mut snapshot=MonitorSnapshot::default();snapshot.agents.error=Some("SECRET /Users/person/token".into());
         snapshot.agents.data=Some(AgentSnapshot{collected_at:"SECRET".into(),agents:Vec::new(),active_subagent_count:None,sources:vec![SourceStatus::new("launchagents:user","SECRET /Users/secret/Library/LaunchAgents",SourceState::Error,"SECRET")]});
-        let metadata=ReportMetadata{version:"1.0.0".into(),gpui:"0.2.2".into(),platform:"darwin".into(),arch:"arm64".into(),os_release:"SECRET".into()};
+        let metadata=ReportMetadata{version:"1.0.0".into(),tauri:"2.12.5".into(),platform:"darwin".into(),arch:"arm64".into(),os_release:"SECRET".into()};
         let mut resources=ResourceBudget::default().snapshot();
         resources.sources=vec![
             crate::resources::SourceStatistics{source:"history".into(),statistics:ResourceStatistics{admitted:3,completed:1,cancelled:2,..Default::default()}},
@@ -138,7 +138,7 @@ pub fn build_report(snapshot:&MonitorSnapshot,resources:&ResourceBudgetSnapshot,
         let mut source=SourceStatus::new("processes","PRIVATE",SourceState::Partial,"PRIVATE");
         source.diagnostics=Some(vec![SourceDiagnostic{source_id:"processes".into(),operation:SourceDiagnosticOperation::Services,stage:SourceDiagnosticStage::Limit,code:SourceDiagnosticCode::EntryLimit,retryable:true,observed_at:"2026-11-10T00:00:00.000Z".into(),exit_code:None};3]);
         let mut snapshot=MonitorSnapshot::default();snapshot.agents.data=Some(AgentSnapshot{collected_at:"2026-11-10T00:00:00.000Z".into(),agents:Vec::new(),active_subagent_count:None,sources:vec![source;66]});
-        let metadata=ReportMetadata{version:"1.0.0".into(),gpui:"0.2.2".into(),platform:"darwin".into(),arch:"arm64".into(),os_release:"27.2.0".into()};
+        let metadata=ReportMetadata{version:"1.0.0".into(),tauri:"2.12.5".into(),platform:"darwin".into(),arch:"arm64".into(),os_release:"27.2.0".into()};
         let mut resources=ResourceBudget::default().snapshot();resources.sources=vec![crate::resources::SourceStatistics{source:"PRIVATE".into(),statistics:Default::default()};34];
         let report=build_report(&snapshot,&resources,&metadata).unwrap();
         assert_eq!(report.coverage.sources.included,64);assert_eq!(report.coverage.diagnostics.included,128);assert_eq!(report.coverage.resources.included,32);assert_eq!(report.coverage.diagnostics.total,None);

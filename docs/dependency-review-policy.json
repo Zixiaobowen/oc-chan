@@ -1,7 +1,7 @@
 {
   "schema": 2,
-  "lockSha256": "6d9f0c586c977072bb8352f41cb6e6abcd19ea711b68f01cc74a0a192fd05e6e",
-  "cargoLockSha256": "b8259601ad8840a3b8b5e56139f641fd7ae063fbc3c97c4f266aa0cbd4b93e74",
+  "lockSha256": "a5cafd92e256576d2e02cd58afb848e0feb970b6aaa48733c54613a1e12bce70",
+  "cargoLockSha256": "08676e8686e83b396be68c3bf08eb3d87b3e7ef8cc2a0e12b11f4dfc70e77bf4",
   "allowedLicenses": [
     "Apache-2.0",
     "Apache-2.0 OR MIT",
@@ -50,5 +50,5 @@
   ],
   "advisories": [],
   "reviewedAt": "2026-11-17",
-  "dependencyChangeReason": "Sparkle 2.10.1替换自建在线更新器。Cargo.lock仅移除oc-core到oc-installer及oc-installer到plist两条本地依赖边，外部crate版本与checksum不变。oc-installer库只保留本地安装授权及readiness；不再打包旧在线安装helper。Sparkle由独立SDK归档SHA256和逐文件清单绑定，运行时含framework及上游签名helpers，携带上游LICENSE；开发头文件与工具不进应用包。npm依赖未变。既有Rust许可审查、上游许可补证与安全公告门禁保留；不以SDK加入或依赖边减少推断性能与体积，实际构建包另测。"
+  "dependencyChangeReason": "按用户确认恢复 React 19、React Flow、Three.js 与 Tauri/WKWebView，删除 GPUI 生产依赖；Rust核心、worker、原生插件和Sparkle 2.10.1保留。前端锁由历史完整React依赖恢复并以当前npm解析，Cargo重新解析Tauri宿主闭包；不宣称外部crate版本未变。前端实际打包清单与Rust许可闭包均重新校验，安全公告不设豁免。Sparkle仍由独立SDK归档SHA256与逐文件清单绑定，完整上游签名framework保留。新增WebView相关进程与包体积必须实测，不从技术替换推断性能改善。"
 }
