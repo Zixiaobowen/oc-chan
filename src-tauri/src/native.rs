@@ -25,6 +25,7 @@ fn operation(command:&CStr)->&'static str {
         b"accessibilityRead"=>"accessibilityRead", b"openPermissionSettings"=>"openPermissionSettings",
         b"permissionQuery"=>"permissionQuery", b"permissionRequest"=>"permissionRequest",
         b"updaterStart"=>"updaterStart", b"updaterRead"=>"updaterRead", b"updaterCheck"=>"updaterCheck",
+        b"updaterSetPolicy"=>"updaterSetPolicy",
         b"updaterSetAutomaticChecks"=>"updaterSetAutomaticChecks", b"updaterPrepareToQuit"=>"updaterPrepareToQuit",
         b"updaterResumeInstallation"=>"updaterResumeInstallation",
         b"notificationSend"=>"notificationSend", b"notificationState"=>"notificationState", b"savePanel"=>"savePanel",
@@ -167,7 +168,7 @@ impl NativeBridge {
         let (command,args)=input(command,json!({}))?;self.inner.sync(&command,&args)
     }
     pub async fn call(&self,command:&str,args:Value)->Result<Value>{
-        if !matches!(command,"systemRead"|"themeSet"|"dockSet"|"sleepSet"|"loginRead"|"loginSet"|"windowRead"|"glassSet"|"notificationRemove"|"accessibilityRead"|"openPermissionSettings"|"updaterStart"|"updaterRead"|"updaterCheck"|"updaterSetAutomaticChecks"|"updaterPrepareToQuit"|"updaterResumeInstallation"){return Err(Error::invalid("native command"));}
+        if !matches!(command,"systemRead"|"themeSet"|"dockSet"|"sleepSet"|"loginRead"|"loginSet"|"windowRead"|"glassSet"|"notificationRemove"|"accessibilityRead"|"openPermissionSettings"|"updaterStart"|"updaterRead"|"updaterCheck"|"updaterSetPolicy"|"updaterSetAutomaticChecks"|"updaterPrepareToQuit"|"updaterResumeInstallation"){return Err(Error::invalid("native command"));}
         let (command,args)=input(command,args)?;
         let permit=self.inner.permits.clone().try_acquire_owned().map_err(|_|failure("OC_NATIVE_BUSY"))?;
         self.inner.main(move|inner|{let _permit=permit;inner.sync(&command,&args)}).await

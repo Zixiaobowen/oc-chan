@@ -347,6 +347,7 @@ export async function initializeDesktop(onFailure: (error: Error) => void): Prom
         snapshot: async () => { await barrier(); return call('updates_snapshot') },
         check: () => call('updates_check'),
         setAutomaticChecks: enabled => call('updates_set_automatic_checks', { enabled }),
+        setPolicy: policy => call('updates_set_policy', { policy }),
         openReleaseNotes: () => call('updates_open_release_notes'), subscribe: listener => subscribe('updates', listener)
       })
     }

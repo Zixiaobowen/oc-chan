@@ -103,8 +103,8 @@ int oc_native_create(int acceptance_mode, oc_native_callback callback, void *use
  * URL and notification request/send. Normal readback never prompts or focuses.
  * savePanel is explicit UI; it never writes a file. Core creates a new destination
  * without replacement. The host must cancel/revoke its owner before window removal.
- * updaterStart {development:bool}, updaterRead {}, updaterCheck {}, and
- * updaterSetAutomaticChecks {enabled:bool} return a Sparkle snapshot. The controller
+ * updaterStart {development:bool}, updaterRead {}, updaterCheck {}, updaterSetPolicy
+ * {policy:"all"|"lts"} and updaterSetAutomaticChecks {enabled:bool} return a Sparkle snapshot. The controller
  * and delegate are owned on the main thread; KVO/delegate observations emit
  * updaterChanged. Development/acceptance uses information probes without windows,
  * disables automatic checks, and rejects enabling them. Production uses standard UI.

@@ -47,6 +47,8 @@ npm run install:local -- --delivery release/tauri/local-react-new
 
 React 设置显示状态和自动检查选项；显式检查经 Tauri 命令调用 Sparkle，下载、安装与重启使用 Sparkle 标准界面。自动检查由 Sparkle 管理，自动下载关闭，普通退出不自动安装。“发行说明与下载”打开 GitHub Releases。检查失败保留真实错误，不能显示为“已是最新版本”。
 
+「每个版本」默认接收普通和 LTS 的正式版本。「仅 LTS」只检查维护者明确指定的 LTS 版本。策略同时用于手动和自动检查，并跨重启保存。普通版发布会在签名清单中保留最近的 LTS 条目，已安装较高版本的用户切换到 LTS 后仍按版本顺序检查。
+
 不再以缺少 Developer ID 为由禁用应用更新，无需付费 Apple 开发者会员。ad-hoc 签名与 Ed25519 更新签名不等于 Apple 公证、Gatekeeper 认可或免除首次用户批准；不得关闭系统防护来代替验收。开发和无头实例只探测更新，不启动安装界面。
 
 旧版 0.2.0 没有 Sparkle，首次切换须手动安装新包。旧核心更新器和在线安装助手已删除；`oc-installer` 只保留本地安装就绪库，不再把本地安装的自定义回执/回滚事务描述为 Sparkle 更新协议。真实隐藏场景、标准更新界面、安装与重启需分别验收。完整规则见[更新事务契约](rust-migration/update-contract.md)。
@@ -60,6 +62,8 @@ React 设置显示状态和自动检查选项；显式检查经 Tauri 命令调�
 1. 在 `main` 运行 **Prepare release**（`release-prepare.yml`），选择 `patch`、`minor` 或 `major`，填写本次用户可见变化。工作流同步版本，保存 `releases/<版本>.md`，创建版本分支及目标为 `main` 的 PR，并显式启动该分支的 Build macOS 验证。PR 本身不发布正式版。
 2. 审阅版本、发布说明、中英文 README 和 CI 结果后合并 PR。发布准备不自动合并；main 的既有预览流程保持不变。
 3. 在 `main` 运行 **Release stable**（`release-stable.yml`），输入已合并的完整版本。工作流检查版本、发布说明和 Sparkle 签名配置，创建不可覆盖的 `vX.Y.Z` 标签，再显式启动该标签的 Build macOS；签名和产物验证通过后才公开正式 Release。默认 ad-hoc 发布不要求 Apple 公证凭据。
+
+发布时将 `channel` 选为 `regular`（默认）或 `lts`。渠道记录在版本标签中，重试沿用同一渠道。main 预览包继续通过 GitHub Releases 提供。
 
 准备入口与正式入口使用内置 `GITHUB_TOKEN`。仓库 Settings → Actions → General 必须允许 GitHub Actions 创建 Pull Request；组织策略也须允许该操作。工作流合入默认分支后，手动入口才可使用。内置令牌创建 PR 或标签不会触发普通 push/PR 工作流，因此入口显式 dispatch 后续构建；不能把“PR/标签已创建”当成构建或发布成功。无需添加额外 PAT。
 

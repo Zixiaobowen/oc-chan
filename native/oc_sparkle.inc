@@ -1,4 +1,8 @@
 // Included by oc_native.mm: all ownership, KVO and delegate calls stay on AppKit's thread.
+static NSString *const OCUpdatePolicyKey = @"OCUpdatePolicy";
+static bool ValidUpdatePolicy(id value) {
+  return [@"all" isEqual:value] || [@"lts" isEqual:value];
+}
 @interface OCUpdaterDelegate : NSObject <SPUUpdaterDelegate> {
 @public
   std::weak_ptr<State> owner;
@@ -7,6 +11,7 @@
 @property(nonatomic) BOOL started;
 @property(nonatomic) BOOL observing;
 @property(nonatomic) BOOL quitting;
+@property(nonatomic, copy) NSString *policy;
 @property(nonatomic, copy) NSString *phase;
 @property(nonatomic, copy) NSString *availableVersion;
 @property(nonatomic, copy) NSString *failure;
@@ -23,6 +28,7 @@
   NSDate *date = updater.lastUpdateCheckDate;
   return @{ @"currentVersion":[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"unknown",
     @"availableVersion":self.availableVersion ?: (id)NSNull.null,
+    @"policy":self.policy,
     @"phase":self.phase ?: @"idle", @"error":self.failure ?: (id)NSNull.null,
     @"canCheck":@(self.started && !self.quitting && updater.canCheckForUpdates && (!self.probeOnly || !updater.sessionInProgress)),
     @"automaticChecks":@(updater.automaticallyChecksForUpdates), @"probeOnly":@(self.probeOnly),
@@ -32,6 +38,9 @@
 - (void)publish { MainThread(); auto state = owner.lock(); if (state) Emit(state, @"updaterChanged", 0, [self snapshot]); }
 - (void)observeValueForKeyPath:(NSString *)key ofObject:(id)object change:(NSDictionary *)change context:(void *)context { [self publish]; }
 - (NSString *)feedURLStringForUpdater:(SPUUpdater *)updater { return self.feed; }
+- (NSSet<NSString *> *)allowedChannelsForUpdater:(SPUUpdater *)updater {
+  return [self.policy isEqualToString:@"lts"] ? [NSSet setWithObject:@"lts"] : [NSSet setWithObjects:@"regular", @"lts", nil];
+}
 - (BOOL)updaterShouldPromptForPermissionToCheckForUpdates:(SPUUpdater *)updater { return !self.probeOnly && !self.quitting; }
 - (BOOL)updater:(SPUUpdater *)updater mayPerformUpdateCheck:(SPUUpdateCheck)check error:(NSError **)error {
   if (self.quitting || (self.probeOnly && check != SPUUpdateCheckUpdateInformation)) {
@@ -78,6 +87,9 @@ static NSDictionary *UpdaterCall(std::shared_ptr<State> state, NSString *command
     bool development = BooleanArgument(args, @"development");
     delegate = [OCUpdaterDelegate new]; delegate->owner = state;
     delegate.probeOnly = development || state->acceptance; delegate.phase = @"idle";
+    id policy = [NSUserDefaults.standardUserDefaults objectForKey:OCUpdatePolicyKey] ?: @"all";
+    Require(ValidUpdatePolicy(policy), "Invalid persisted update policy");
+    delegate.policy = policy;
     NSString *feed = [NSBundle.mainBundle objectForInfoDictionaryKey:@"SUFeedURL"];
     NSURL *url = [feed isKindOfClass:NSString.class] ? [NSURL URLWithString:feed] : nil;
     bool productionFeed = [feed isEqualToString:@"https://github.com/Zixiaobowen/oc-chan/releases/latest/download/appcast.xml"];
@@ -109,6 +121,15 @@ static NSDictionary *UpdaterCall(std::shared_ptr<State> state, NSString *command
     Require([[delegate snapshot][@"canCheck"] boolValue], "Sparkle cannot check for updates now");
     if (delegate.probeOnly) [updater checkForUpdateInformation];
     else [state->updaterController checkForUpdates:nil];
+  } else if ([command isEqualToString:@"updaterSetPolicy"]) {
+    NSString *policy = args[@"policy"];
+    Require(ValidUpdatePolicy(policy), "Invalid update policy");
+    if (![policy isEqualToString:delegate.policy]) {
+      Require(delegate.started && !delegate.quitting && !updater.sessionInProgress && !delegate.installationContinuation, "Cannot change policy during a Sparkle session");
+      [NSUserDefaults.standardUserDefaults setObject:policy forKey:OCUpdatePolicyKey];
+      delegate.policy = policy; delegate.phase = @"idle"; delegate.failure = nil; delegate.availableVersion = nil;
+      [updater resetUpdateCycle]; [delegate publish];
+    }
   } else if ([command isEqualToString:@"updaterSetAutomaticChecks"]) {
     Require(delegate.started && !delegate.probeOnly && !delegate.quitting, "Sparkle automatic checks forbidden in acceptance or development");
     updater.automaticallyChecksForUpdates = BooleanArgument(args, @"enabled");

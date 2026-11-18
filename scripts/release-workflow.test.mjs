@@ -59,11 +59,13 @@ function workflowFixture({ tagCommit, releases = [], failRoute, ancestor = true 
   const releaseCommit = 'c'.repeat(40)
   const files = ['Cargo.toml', 'Cargo.lock', 'package.json', 'package-lock.json', 'docs/dependency-review-policy.json', 'releases/1.2.3.md']
   const input = { ...env, GH_TOKEN: ['workflow', 'fixture'].join('-'), RELEASE_BUMP: 'patch', RELEASE_VERSION: '1.2.3', RELEASE_NOTES: 'Fix $(echo unsafe) `literal`\nSecond line' }
+  input.RELEASE_CHANNEL = 'regular'
   const dependencies = {
     publicKey,
     git(...args) {
       events.push({ type: 'git', args })
       if (args[0] === 'rev-parse') return args[1] === 'HEAD' ? head : tagCommit
+      if (args[0] === 'for-each-ref') return 'tag:OC Chan channel: regular'
       if (args[0] === 'merge-base' && !ancestor) throw new Error('Commit is outside main')
       if (args.includes('commit')) head = releaseCommit
       return ''
@@ -85,6 +87,7 @@ function workflowFixture({ tagCommit, releases = [], failRoute, ancestor = true 
       if (route.startsWith('git/matching-refs/')) return Response.json(tagCommit ? [{ ref: 'refs/tags/v1.2.3' }] : [])
       if (route === 'pulls') return Response.json({ html_url: 'https://example.test/pull/42' })
       if (route.endsWith('/dispatches')) return new Response(null, { status: 204 })
+      if (route === 'git/tags') return Response.json({ sha: 'd'.repeat(40) })
       if (route === 'git/refs') return Response.json({})
       throw new Error(`Unexpected test request: ${route}`)
     },
@@ -124,9 +127,10 @@ test('stable creates a tag only after checking release history and binds dispatc
   const fixture = workflowFixture()
   await run('stable', fixture.input, fixture.dependencies)
   const requests = fixture.events.filter(event => event.type === 'api')
-  assert.deepEqual(requests.map(event => event.route), ['releases?per_page=100&page=1', 'git/matching-refs/tags/v1.2.3', 'git/refs', 'actions/workflows/build.yml/dispatches'])
-  assert.deepEqual(requests[2].body, { ref: 'refs/tags/v1.2.3', sha: env.GITHUB_SHA })
-  assert.deepEqual(requests[3].body, { ref: 'v1.2.3', inputs: { expected_sha: env.GITHUB_SHA } })
+  assert.deepEqual(requests.map(event => event.route), ['releases?per_page=100&page=1', 'git/matching-refs/tags/v1.2.3', 'git/tags', 'git/refs', 'actions/workflows/build.yml/dispatches'])
+  assert.deepEqual(requests[2].body, { tag: 'v1.2.3', message: 'OC Chan channel: regular', object: env.GITHUB_SHA, type: 'commit' })
+  assert.deepEqual(requests[3].body, { ref: 'refs/tags/v1.2.3', sha: 'd'.repeat(40) })
+  assert.deepEqual(requests[4].body, { ref: 'v1.2.3', inputs: { expected_sha: env.GITHUB_SHA } })
 })
 
 test('stable rejects both drafts and published releases before any writes', async () => {
@@ -141,6 +145,7 @@ test('stable retries same-commit tags but rejects conflicting tags without API w
   const matching = workflowFixture({ tagCommit: env.GITHUB_SHA })
   await run('stable', matching.input, matching.dependencies)
   assert.deepEqual(matching.events.filter(event => event.type === 'api' && event.method === 'POST').map(event => event.route), ['actions/workflows/build.yml/dispatches'])
+  await assert.rejects(run('stable', { ...matching.input, RELEASE_CHANNEL: 'lts' }, matching.dependencies), /tag channel/)
   const conflict = workflowFixture({ tagCommit: 'b'.repeat(40) })
   await assert.rejects(run('stable', conflict.input, conflict.dependencies), /cannot be overwritten/)
   assert.ok(conflict.events.filter(event => event.type === 'api').every(event => event.method === 'GET'))

@@ -7,6 +7,12 @@ on:
         description: Exact product version already merged into main (X.Y.Z)
         required: true
         type: string
+      channel:
+        description: Update channel recorded in the immutable version tag
+        required: true
+        type: choice
+        default: regular
+        options: [regular, lts]
 
 permissions:
   contents: write
@@ -37,5 +43,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: node scripts/release-workflow.mjs stable

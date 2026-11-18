@@ -1,11 +1,45 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { execFileSync } from 'node:child_process'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ROOT, assert, loadBuild, withBuildLock, buildEnvironment, bundleApplication, run } from './build-app.mjs'
 import { inspectPackage } from './check-package.mjs'
-import { generateAppcast } from './sparkle-appcast.mjs'
+import { generateAppcast, compareVersions, readUpdateArchive } from './sparkle-appcast.mjs'
+import { readBounded } from './rust-dependencies.mjs'
 import { releaseInfo, requireReleaseEnvironment } from './release-config.mjs'
 
+export function releaseChannels(version, records) {
+  let channel, previousLts
+  for (const line of records.trimEnd().split('\n')) {
+    const [tag, type, subject] = line.split('\t')
+    if (!/^v\d+\.\d+\.\d+$/.test(tag)) continue
+    const candidate = releaseInfo(tag.slice(1)).version
+    const order = compareVersions(candidate, version)
+    if (order > 0) throw new Error(`A newer version tag already exists: ${tag}`)
+    const marker = type === 'tag' && /^OC Chan channel: (regular|lts)$/.exec(subject)?.[1]
+    if (order === 0) channel = marker
+    if (order < 0 && marker === 'lts' && (!previousLts || compareVersions(candidate, previousLts) > 0)) previousLts = candidate
+  }
+  if (!channel) throw new Error('Expected a version tag with an explicit release channel')
+  return { channel, previousLts: channel === 'regular' ? previousLts : undefined }
+}
+
+function releaseHistory(version, directory) {
+  const records = execFileSync('git', ['for-each-ref', '--format=%(refname:strip=2)%09%(objecttype)%09%(contents:subject)', 'refs/tags/v*'], { encoding: 'utf8' })
+  const { channel, previousLts } = releaseChannels(version, records)
+  if (!previousLts) return { channel }
+  const prefix = `https://github.com/Zixiaobowen/oc-chan/releases/download/v${previousLts}/`
+  const download = (name, maxBytes) => {
+    const file = path.join(directory, name)
+    execFileSync('curl', ['--fail', '--silent', '--show-error', '--location', '--proto', '=https', '--proto-redir', '=https', '--max-time', '300', '--max-filesize', String(maxBytes), '--output', file, prefix + name])
+    return file
+  }
+  return { channel, previous: { version: previousLts,
+    feed: readBounded(download('appcast.xml', 256 * 1024), 256 * 1024),
+    archive: readUpdateArchive(download(`OC-Chan-${previousLts}-mac-arm64.zip`, 512 * 1024 * 1024)),
+  } }
+}
 export function parseDistributionOptions(args) {
   assert(new Set(args).size === args.length && args.every(arg => ['--arm64', '--dir'].includes(arg)), 'Usage: node scripts/dist.mjs [--arm64] [--dir]')
   return { directoryOnly: args.includes('--dir') }
@@ -32,7 +66,11 @@ export async function distribute({ directoryOnly = false, execute = run } = {}) 
     const artifacts = report.artifacts
     if (!directoryOnly && process.env.GITHUB_REF?.startsWith('refs/tags/')) {
       artifacts.metadata = path.join(destination, 'appcast.xml')
-      await generateAppcast({ archive: artifacts.zip.path, version: record.version, notesFile: path.join(ROOT, 'releases', `${record.version}.md`), output: artifacts.metadata })
+      const temporary = await mkdtemp(path.join(tmpdir(), 'oc-lts-history-'))
+      try {
+        const history = releaseHistory(record.version, temporary)
+        await generateAppcast({ ...history, archive: artifacts.zip.path, version: record.version, notesFile: path.join(ROOT, 'releases', `${record.version}.md`), output: artifacts.metadata })
+      } finally { await rm(temporary, { recursive: true, force: true }) }
     }
     const distribution = { schema: 2, buildId: record.buildId, version: record.version, arch: 'arm64', app, destination, artifacts, catalogSha256: record.catalogSha256,
       signature: report.signature, published: false }

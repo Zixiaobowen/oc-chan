@@ -148,6 +148,10 @@ impl Host {
             "settings_show_main_window" => { let input: ShowMain = decode(args)?; self.show_main(input.target).await?; reply(&()) },
             "updates_snapshot" => reply(&crate::updates::decode(self.native.call("updaterRead", json!({})).await?)?),
             "updates_check" => reply(&crate::updates::decode(self.native.call("updaterCheck", json!({})).await?)?),
+            "updates_set_policy" => {
+                let input: crate::updates::PolicyPreference = decode(args)?;
+                reply(&crate::updates::decode(self.native.call("updaterSetPolicy", json!({"policy": input.policy})).await?)?)
+            },
             "updates_set_automatic_checks" => {
                 let input: crate::updates::AutomaticChecks = decode(args)?;
                 reply(&crate::updates::decode(self.native.call("updaterSetAutomaticChecks", json!({"enabled": input.enabled})).await?)?)

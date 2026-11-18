@@ -78,6 +78,9 @@ static void VerifyInstalled(void) {
 @property(nonatomic) BOOL sawInstallation;
 @end
 @implementation AcceptanceDriver
+- (NSSet<NSString *> *)allowedChannelsForUpdater:(SPUUpdater *)updater {
+  return [NSSet setWithObjects:@"regular", @"lts", nil];
+}
 - (NSString *)feedURLStringForUpdater:(SPUUpdater *)updater { return Feed; }
 - (BOOL)updaterShouldPromptForPermissionToCheckForUpdates:(SPUUpdater *)updater { return NO; }
 - (BOOL)updaterShouldRelaunchApplication:(SPUUpdater *)updater { return NO; }

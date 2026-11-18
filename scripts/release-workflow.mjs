@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { releaseInfo, releaseRepository, requireReleaseEnvironment } from './release-config.mjs'
+import { compareVersions } from './sparkle-appcast.mjs'
 
 const commandOptions = { encoding: 'utf8', timeout: 120_000, maxBuffer: 2 * 1024 * 1024 }
 const git = (...args) => execFileSync('git', args, commandOptions).trim()
@@ -118,6 +119,12 @@ export async function run(command, env = process.env, dependencies = {}) {
   }
   if (command === 'stable') {
     const info = stableTarget(env.RELEASE_VERSION, runVersion('check', '--release'), env, dependencies.publicKey)
+    const channel = env.RELEASE_CHANNEL
+    if (!['regular', 'lts'].includes(channel)) throw new Error('Invalid stable release channel')
+    const message = `OC Chan channel: ${channel}`
+    for (const tag of runGit('tag', '--list', 'v*').split('\n')) {
+      if (/^v\d+\.\d+\.\d+$/.test(tag) && compareVersions(tag.slice(1), info.version) > 0) throw new Error(`A newer version tag already exists: ${tag}`)
+    }
     await requireUnpublished(api, info.tag)
     const refs = await api(`git/matching-refs/tags/${info.tag}`)
     const existing = refs.find(ref => ref.ref === `refs/tags/${info.tag}`)
@@ -125,8 +132,10 @@ export async function run(command, env = process.env, dependencies = {}) {
       // Peel annotated tags too, while requiring the exact selected main commit.
       runGit('fetch', 'origin', `refs/tags/${info.tag}`)
       requireMatchingTag(runGit('rev-parse', 'FETCH_HEAD^{commit}'), env.GITHUB_SHA)
+      if (runGit('for-each-ref', '--format=%(objecttype):%(contents)', `refs/tags/${info.tag}`) !== `tag:${message}`) throw new Error('Existing tag channel differs from the requested channel')
     } else {
-      await api('git/refs', 'POST', { ref: `refs/tags/${info.tag}`, sha: env.GITHUB_SHA })
+      const tag = await api('git/tags', 'POST', { tag: info.tag, message, object: env.GITHUB_SHA, type: 'commit' })
+      await api('git/refs', 'POST', { ref: `refs/tags/${info.tag}`, sha: tag.sha })
     }
     await dispatch(info.tag, env.GITHUB_SHA)
     return info

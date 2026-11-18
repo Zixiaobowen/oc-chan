@@ -1,14 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import type { UpdateSnapshot } from '../../shared/updates'
+import type { UpdatePolicy, UpdateSnapshot } from '../../shared/updates'
 
-type UpdateAction = 'check' | 'openReleaseNotes' | 'setAutomaticChecks'
+type UpdateRequest = ['check'] | ['openReleaseNotes'] | ['setAutomaticChecks', boolean] | ['setPolicy', UpdatePolicy]
+type UpdateAction = UpdateRequest[0]
 type PendingAction = UpdateAction | 'snapshot'
 interface UpdateFailure { action: PendingAction; details: string }
 interface UpdatesContextValue {
   snapshot: UpdateSnapshot | null
   pending: PendingAction | null
   failure: UpdateFailure | null
-  run: (action: UpdateAction, enabled?: boolean) => Promise<void>
+  run: (...request: UpdateRequest) => Promise<void>
   reconnect: () => void
 }
 const UpdatesContext = createContext<UpdatesContextValue | null>(null)
@@ -60,7 +61,7 @@ export default function UpdatesProvider({ children }: { children: ReactNode }) {
     return () => { generation.current++; unsubscribe?.() }
   }, [accept, attempt])
 
-  const run = useCallback(async (action: UpdateAction, enabled?: boolean) => {
+  const run = useCallback(async (...[action, argument]: UpdateRequest) => {
     if (pendingRef.current) return
     if (action === 'check' && !latest.current?.canCheck) return
     const connection = generation.current
@@ -74,8 +75,10 @@ export default function UpdatesProvider({ children }: { children: ReactNode }) {
       if (!api) throw new Error('未连接应用更新接口，请重新打开桌面应用。 / App update connection is unavailable. Reopen the desktop app.')
       if (action === 'openReleaseNotes') await api.openReleaseNotes()
       else {
-        if (action === 'setAutomaticChecks' && typeof enabled !== 'boolean') throw new Error('自动检查设置必须为布尔值 / Automatic checks requires a boolean')
-        const value = action === 'setAutomaticChecks' ? await api.setAutomaticChecks(enabled!) : await api.check()
+        let value: UpdateSnapshot
+        if (action === 'setPolicy') value = await api.setPolicy(argument)
+        else if (action === 'setAutomaticChecks') value = await api.setAutomaticChecks(argument)
+        else value = await api.check()
         if (generation.current === connection && observations.current === observed) accept(value)
       }
     } catch (cause) {

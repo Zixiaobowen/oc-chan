@@ -14,6 +14,7 @@ pub const COMMANDS: &[(&str, u8)] = &[
     ("settings_request_notification_permission", 1), ("settings_show_main_window", 3),
     ("settings_accessibility_state", 1), ("settings_open_permission_settings", 1),
     ("updates_snapshot", 1), ("updates_check", 1), ("updates_set_automatic_checks", 1),
+    ("updates_set_policy", 1),
     ("updates_open_release_notes", 1),
     ("marketplace_snapshot", 3), ("marketplace_check", 1), ("marketplace_install", 1),
     ("marketplace_update", 1), ("marketplace_uninstall", 1), ("marketplace_cancel", 1),

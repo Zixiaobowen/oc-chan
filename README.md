@@ -78,7 +78,7 @@ OC Chan 只读观察上游 Agent 和任务，不执行定时任务、不终止 A
 
 产品版本采用 `X.Y.Z`，以根 `Cargo.toml` 为准。GitHub Actions 的 **Prepare release** 入口选择 `patch`（修复）、`minor`（功能）或 `major`（重大版本），填写发布说明后自动创建版本 PR；PR 合并后，在 **Release stable** 输入相同版本，自动创建标签并触发正式构建。CI 校验 Cargo、npm 和锁文件版本一致，发布说明随版本保存，已有 Release 不覆盖。本地可用 `npm run version:check` 和 `npm run version:bump -- patch --notes-file /path/to/notes.md`。首次启用条件、失败处理及命令见[版本管理](docs/distribution.md#版本管理)。
 
-设置的“应用更新”显示更新状态和自动检查选项，下载、安装与重启由 Sparkle 标准界面负责；普通退出不会自动安装更新。“发行说明与下载”打开 GitHub Releases。开发与无头实例只探测更新，不启动安装界面。旧版 0.2.0 未内置 Sparkle，首次切换须手动安装新包。
+设置的「应用更新」提供「每个版本」（默认）和「仅 LTS」两种策略。手动检查与自动检查都遵循所选策略。「每个版本」包含普通版和 LTS 版的 `vX.Y.Z` 发布，main 的预览构建仍通过 GitHub Releases 下载。「仅 LTS」只接收维护者明确标记的长期支持版本。下载、安装与重启由 Sparkle 标准界面负责。开发与无头实例只探测更新。
 
 ## 开发
 

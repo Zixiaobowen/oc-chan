@@ -10,6 +10,9 @@ pub enum UpdatePhase {
     Idle, Checking, NoUpdate, Available, Downloading, Downloaded, Extracting,
     ReadyToInstall, Installing, AwaitingQuit, Cancelled, Error,
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UpdatePolicy { All, Lts }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct UpdateSnapshot {
@@ -17,6 +20,7 @@ pub struct UpdateSnapshot {
     pub available_version: Option<String>,
     pub phase: UpdatePhase,
     pub error: Option<String>,
+    pub policy: UpdatePolicy,
     pub can_check: bool,
     pub automatic_checks: bool,
     pub probe_only: bool,
@@ -26,6 +30,9 @@ pub struct UpdateSnapshot {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AutomaticChecks { pub enabled: bool }
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PolicyPreference { pub policy: UpdatePolicy }
 
 pub fn decode(value: Value) -> Result<UpdateSnapshot> {
     let state: UpdateSnapshot = serde_json::from_value(value).map_err(|_| Error::invalid("Sparkle snapshot schema"))?;
@@ -45,6 +52,7 @@ mod tests {
     use super::*;
     use serde_json::json;
     fn snapshot() -> Value { json!({"currentVersion":"0.1.0", "availableVersion":null,
+        "policy":"all",
         "phase":"idle", "error":null, "canCheck":true, "automaticChecks":false,
         "probeOnly":true, "sessionInProgress":false, "checkedAt":null}) }
     #[test]
@@ -70,6 +78,19 @@ mod tests {
         let mut production = snapshot(); production["probeOnly"] = json!(false);
         production["automaticChecks"] = json!(true); production["sessionInProgress"] = json!(true);
         assert!(decode(production).is_ok()); // Sparkle may resume a standard UI session.
+    }
+    #[test]
+    fn policy_contract_accepts_only_explicit_release_choices() {
+        for policy in ["all", "lts"] {
+            let mut state = snapshot(); state["policy"] = json!(policy);
+            let request: PolicyPreference = serde_json::from_value(json!({"policy":policy})).unwrap();
+            assert_eq!(decode(state).unwrap().policy, request.policy);
+        }
+        for args in [json!({}), json!({"policy":"regular"}), json!({"policy":null}), json!({"policy":"lts","feed":"other"})] {
+            assert!(serde_json::from_value::<PolicyPreference>(args).is_err());
+        }
+        let mut state = snapshot(); state["policy"] = json!("preview");
+        assert!(decode(state).is_err());
     }
     #[test]
     fn automatic_checks_accepts_only_explicit_boolean_preference() {

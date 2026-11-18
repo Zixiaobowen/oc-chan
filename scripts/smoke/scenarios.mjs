@@ -307,6 +307,13 @@ export async function exerciseSmoke({ main, renderer, manifest, record, capture,
       } else assert.equal(snapshot.error, null)
       return { snapshot, nativeClicks: 1 }
     })
+    if (sparkle.ltsVersion) await ui.stage('sparkle-lts-policy', async () => {
+      await ui.evaluate(`(() => { const select = document.getElementById('update-policy'); select.value = 'lts'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`)
+      await ui.dom('LTS preference reaches the native updater', `window.appUpdates.snapshot().then(s => s.policy === 'lts' && s.canCheck)`)
+      await ui.click('Array.from(document.querySelectorAll(".update-actions button")).find(button => ["检查更新", "Check for updates"].includes(button.textContent))')
+      await ui.dom('Sparkle selects the LTS item despite the newer regular item', `window.appUpdates.snapshot().then(s => s.phase === 'available' && s.availableVersion === ${JSON.stringify(sparkle.ltsVersion)} && !s.sessionInProgress)`, 60000)
+      return { snapshot: await ui.evaluate('window.appUpdates.snapshot()') }
+    })
     return {}
   }
   if (['all', 'schedules'].includes(scenario)) await exerciseScheduleDetails({ ui, renderer, manifest, capture })

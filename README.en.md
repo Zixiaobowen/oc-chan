@@ -78,7 +78,7 @@ In-app updates now use Sparkle 2.10.1 with Ed25519 verification of the stable fe
 
 Product versions follow `X.Y.Z`, with the root `Cargo.toml` as the source of truth. In GitHub Actions, run **Prepare release**, choose `patch` (fixes), `minor` (features), or `major` (a major release), and supply release notes to create a version PR automatically. After merging it, run **Release stable** with the same version to create the tag and start the signed build. CI checks Cargo, npm, and lockfile versions; notes are retained per version, and existing Releases are never overwritten. Local commands are `npm run version:check` and `npm run version:bump -- patch --notes-file /path/to/notes.md`. See [version management (Chinese)](docs/distribution.md#版本管理) for setup requirements, failure handling, and commands.
 
-Settings → App updates shows update status and the automatic-check option. Sparkle's standard interface handles downloads, installation, and relaunch; ordinary quit does not install updates automatically. **Release notes and downloads** opens GitHub Releases. Development and headless instances only probe for updates without opening the installation interface. Version 0.2.0 does not include Sparkle, so the first transition requires manually installing a new package.
+Settings → App updates offers **Every release** (default) and **LTS only**. Both manual and automatic checks use the selected policy. Every release includes regular and LTS `vX.Y.Z` releases. Main preview builds remain available for download on GitHub Releases. LTS only selects releases explicitly designated for long-term support. Sparkle's standard interface handles download, installation, and relaunch. Development and headless instances only probe for updates.
 
 ## Development
 
