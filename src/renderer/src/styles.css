@@ -61,8 +61,15 @@ h3 { font-size: calc(14px * var(--font-scale)); font-weight: 600; }
 .sidebar[hidden] { display: none; }
 .app-shell[data-sidebar-collapsed='true'] { grid-template-columns: minmax(0, 1fr); }
 .app-shell[data-sidebar-collapsed='true'] .sidebar-resize-handle { display: none; }
-.app-shell[data-sidebar-collapsed='true'] .topbar { justify-content: flex-start; gap: 12px; padding-left: 208px; container-type: inline-size; }
-.topbar-tabs { display: flex; align-items: center; gap: 2px; min-width: 0; overflow-x: auto; -webkit-app-region: no-drag; }
+.app-shell[data-sidebar-collapsed='true'] .topbar {
+  /* 32pt native titlebar content plus the workspace divider. */
+  height: 33px;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 0 12px 0 208px;
+  container: collapsed-toolbar / inline-size;
+}
+.topbar-tabs { display: flex; align-items: center; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; -webkit-app-region: no-drag; }
 .topbar-tabs button { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 9px; border: none; border-radius: 7px; background: none; color: var(--muted); font-size: max(12px, calc(12px * var(--font-scale))); white-space: nowrap; }
 .topbar-tabs button:hover:not(.selected) { background: var(--hover); color: var(--ink); }
 .topbar-tabs button.selected, .topbar-icon.selected { background: var(--surface); color: var(--accent); box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 12%, transparent); }
@@ -73,11 +80,14 @@ h3 { font-size: calc(14px * var(--font-scale)); font-weight: 600; }
 .topbar-end .live-state { margin-right: 10px; }
 .topbar-icon { display: inline-flex; align-items: center; justify-content: center; gap: 3px; min-width: 30px; height: 28px; padding: 0 7px; border: none; border-radius: 7px; background: none; color: var(--muted); }
 .topbar-icon:hover { background: var(--hover); color: var(--ink); }
-@container (max-width: 860px) {
+@container collapsed-toolbar (max-width: 860px) {
   .topbar-tabs button:not(.selected) > span, .live-state-label { display: none; }
   .topbar-end .live-state { margin-right: 4px; }
 }
-@container (max-width: 640px) { .topbar-tabs button > span { display: none; } }
+@container collapsed-toolbar (max-width: 680px) {
+  .topbar-tabs button { padding-inline: 6px; }
+  .topbar-tabs button > span { display: none; }
+}
 /* Real elements remain interactive throughout; no snapshot overlay can swallow a reverse click. */
 @media (prefers-reduced-motion: no-preference) {
   .topbar-tabs { animation: sidebar-navigation-in 200ms ease-out; }

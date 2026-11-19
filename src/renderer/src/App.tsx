@@ -9,6 +9,7 @@ import LayoutDashboard from 'kubai-icons-react/icons/layout-dashboard'
 import List from 'kubai-icons-react/icons/list'
 import MenuIcon from 'kubai-icons-react/icons/menu'
 import Pause from 'kubai-icons-react/icons/pause'
+import Pin from 'kubai-icons-react/icons/pin'
 import Play from 'kubai-icons-react/icons/play'
 import Sync from 'kubai-icons-react/icons/sync'
 import Server from 'kubai-icons-react/icons/server'
@@ -128,6 +129,34 @@ export default function App() {
   const [pausedAt, setPausedAt] = useState<number | null>(null)
   const paused = pausedAt !== null
   const [bridgeError, setBridgeError] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const [pinned, setPinned] = useState<boolean | null>(null)
+  const [pinBusy, setPinBusy] = useState(true)
+  const [pinError, setPinError] = useState<string | null>(null)
+  useEffect(() => {
+    let active = true
+    async function readPin() {
+      try {
+        if (!window.desktopSettings) throw new Error('未连接桌面窗口接口 / Window connection unavailable')
+        const value = await window.desktopSettings.windowPin()
+        if (active) setPinned(value)
+      } catch (error) { if (active) setPinError(String(error)) }
+      finally { if (active) setPinBusy(false) }
+    }
+    void readPin()
+    return () => { active = false }
+  }, [])
+  async function togglePin() {
+    if (pinBusy) return
+    setPinBusy(true)
+    try {
+      if (!window.desktopSettings) throw new Error('未连接桌面窗口接口 / Window connection unavailable')
+      const current = pinned ?? await window.desktopSettings.windowPin()
+      setPinned(await window.desktopSettings.windowPin(!current))
+      setPinError(null)
+    } catch (error) { setPinned(null); setPinError(String(error)) }
+    finally { setPinBusy(false) }
+  }
   const [hiddenAt, setHiddenAt] = useState<number | null>(() => isDesktopDocumentVisible() ? null : Date.now())
   const visible = hiddenAt === null
   const frozenAt = pausedAt ?? hiddenAt
@@ -252,12 +281,18 @@ export default function App() {
   }, [page, sourceTarget, snapshot, plugins, renderer.contributions, renderer.errors])
 
   async function refresh() {
-    if (!window.monitor) return
+    if (refreshing) return
+    setRefreshing(true)
     if (page === 'schedules' && document.activeElement?.closest('.error-notice')) {
       content.current?.querySelector<HTMLInputElement>('.schedule-toolbar input')?.focus()
     }
-    try { await window.monitor.refresh(); setBridgeError(null) }
+    try {
+      if (!window.monitor) throw new Error('未连接桌面数据接口 / Desktop data connection unavailable')
+      await window.monitor.refresh()
+      setBridgeError(null)
+    }
     catch (error) { setBridgeError(String(error)) }
+    finally { setRefreshing(false) }
   }
   const agents = snapshot.agents.data
   const schedules = snapshot.schedules.data
@@ -316,6 +351,8 @@ export default function App() {
       {sidebarHidden ? <nav ref={topbarTabs} className="topbar-tabs" aria-label={t('主导航', 'Main navigation')}>{mainPages.map(item => <button key={item.id} type="button" className={page === item.id ? 'selected' : undefined} onClick={() => navigate(item.id)} aria-current={page === item.id ? 'page' : undefined} aria-label={pageCounts[item.id] === undefined ? item.label : `${item.label} (${pageCounts[item.id]})`} title={item.label}><item.icon trigger="none" size={16} aria-hidden="true" /><span>{item.label}</span>{pageCounts[item.id] !== undefined && <small aria-hidden="true">{pageCounts[item.id]}</small>}</button>)}</nav>
         : <div className="breadcrumb">{t('工作台', 'Workspace')}<ChevronRight trigger="none" size={14} />{selectedPlugin && <><span>{t('插件', 'Plugins')}</span><ChevronRight trigger="none" size={14} /></>}<span>{currentPage.label}</span></div>}
       <div className="topbar-end"><div className={`live-state ${paused || samplingError || collectionDisabled || partiallyDisabled ? 'paused' : ''}`} aria-label={liveLabel} title={liveLabel}><span className="status-dot" /><span className="live-state-label">{liveLabel}</span></div>
+        <button type="button" className="topbar-icon" onClick={() => void refresh()} disabled={refreshing} aria-busy={refreshing} aria-label={t('全局刷新', 'Refresh all')} title={t('全局刷新', 'Refresh all')}><Sync trigger="none" size={16} aria-hidden="true" className={refreshing ? 'spinning' : ''} /></button>
+        <button type="button" className={`topbar-icon${pinned ? ' selected' : ''}`} onClick={() => void togglePin()} disabled={pinBusy} aria-busy={pinBusy} aria-pressed={pinned ?? undefined} aria-label={t('窗口置顶', 'Always on top')} title={pinned ? t('取消窗口置顶', 'Turn off always on top') : t('窗口置顶', 'Always on top')}><Pin trigger="none" size={16} aria-hidden="true" /></button>
         {sidebarHidden && <>
           <button type="button" className={`topbar-icon${page === 'sources' ? ' selected' : ''}`} onClick={() => navigate('sources')} aria-current={page === 'sources' ? 'page' : undefined} aria-label={issues > 0 ? t(`数据来源，${issues} 个问题`, `Data sources, ${issues} issues`) : t('数据来源', 'Data sources')} title={t('数据来源', 'Data sources')}><Database trigger="none" size={16} aria-hidden="true" />{issues > 0 && <small className="warning-count" aria-hidden="true">{issues}</small>}</button>
           <button type="button" className={`topbar-icon${page === 'settings' ? ' selected' : ''}`} onClick={() => navigate('settings')} aria-current={page === 'settings' ? 'page' : undefined} aria-label={t('设置', 'Settings')} title={t('设置', 'Settings')}><Settings trigger="none" size={16} aria-hidden="true" /></button>
@@ -333,6 +370,8 @@ export default function App() {
         </div>
         <button className="button secondary" onClick={() => setPausedAt(value => value === null ? Date.now() : null)} aria-pressed={paused}>{paused ? <Play trigger="none" size={15} /> : <Pause trigger="none" size={15} />}{paused ? t('继续显示', 'Resume display') : t('暂停显示', 'Pause display')}</button>
       </div>}</div>
+      {pinError && <p className="error-notice" role="alert">{t('无法确认窗口置顶状态', 'Could not confirm window level')} · {pinError}</p>}
+      <CollectorError error={bridgeError} onRetry={() => void refresh()} />
       <GeometrySaveErrors />
       {page === 'plugins' ? <MarketplaceView view={marketView} onViewChange={setMarketView} /> : page === 'settings' ? <SettingsView onOpenMarketplace={() => navigate('plugins')} sources={sourceGroups.flatMap<SourceStatus>(group => group.id === 'events'
         ? group.sources.filter(source => source.id === 'hermes-events')
@@ -342,7 +381,6 @@ export default function App() {
       <UpdateNotice onOpen={() => { focusUpdates.current = true; navigate('settings') }} />
       {paused && <div className="pause-note"><Pause trigger="none" size={14} />{t('当前显示已冻结；已开启的来源继续采集。点击“继续”查看最新状态。', 'The display is frozen; enabled sources keep collecting. Resume to see the latest state.')}</div>}
       {(section || page === 'overview') && sourceGroups.filter(group => (!section || group.id === section) && (plugins[group.id] || group.contribution)).map(group => <CollectionStatus key={group.id} enabled={plugins[group.id]} collectedAt={group.state.data?.collectedAt} label={group.title} />)}
-      <CollectorError error={bridgeError} onRetry={() => void refresh()} />
       {(page === 'overview' || page === 'agents') && <CollectorError error={agentError} onRetry={() => void refresh()} />}
       {sourceGroups.filter(group => group.id !== 'agents' && (page === 'overview' || section === group.id) && plugins[group.id]).map(group => <CollectorError key={group.id} error={group.state.error} onRetry={() => void refresh()} />)}
       {Object.entries(renderer.errors).map(([id, error]) => <CollectorError key={id} error={error} onRetry={renderer.retry} />)}

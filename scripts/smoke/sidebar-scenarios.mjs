@@ -60,6 +60,13 @@ export async function exerciseSidebar({ ui, renderer }) {
         const delta = geometry.obscuredContentInsets.top + center * geometry.pageZoom - geometry.windowButtons.close.centerYFromWebview
         assert.ok(Number.isFinite(delta) && Math.abs(delta) <= 0.5, `Sidebar toggle must align with native traffic lights: ${textSize}, collapsed=${sidebarCollapsed}, delta=${delta}`)
         const logoBounds = await assertTitlebarLogo(ui, geometry)
+        if (sidebarCollapsed) {
+          const centers = await ui.evaluate(`Array.from(document.querySelectorAll('.topbar button'))
+            .map(button => button.getBoundingClientRect()).filter(rect => rect.height > 0)
+            .map(rect => rect.y + rect.height / 2)`)
+          assert.ok(centers.length > 0 && centers.every(value => Math.abs(value - center) <= 0.5),
+            `Collapsed toolbar buttons must align with the sidebar toggle: ${centers}, expected ${center}`)
+        }
         const brand = await ui.evaluate(`(() => {
           const r = document.querySelector('.titlebar-brand').getBoundingClientRect();
           const button = ${toggle}.getBoundingClientRect();
@@ -108,9 +115,17 @@ export async function exerciseSidebar({ ui, renderer }) {
       await ui.click(`document.querySelectorAll('.topbar-tabs button')[${index}]`)
       await ui.dom('topbar navigation selects its page', `document.querySelectorAll('.topbar-tabs button')[${index}]?.getAttribute('aria-current') === 'page'`)
     }
-    for (let index = 0; index < 2; index++) {
-      await ui.click(`document.querySelectorAll('.topbar-icon')[${index}]`)
-      await ui.dom('right-side destination opens', `document.querySelectorAll('.topbar-icon')[${index}]?.getAttribute('aria-current') === 'page'`)
+    const pin = `document.querySelector('.topbar-icon[aria-pressed]')`
+    for (const expected of [true, false]) {
+      await ui.click(pin)
+      await ui.dom('pin state acknowledged', `${pin}?.getAttribute('aria-pressed') === '${expected}'`)
+      assert.equal(await ui.evaluate('window.desktopSettings.windowPin()'), expected)
+    }
+    await ui.click(`document.querySelector('.topbar-icon[aria-busy]:not([aria-pressed])')`)
+    for (const index of [0, 1]) {
+      const destination = `document.querySelectorAll('.topbar-icon:not([aria-busy])')[${index}]`
+      await ui.click(destination)
+      await ui.dom('right-side destination opens', `${destination}?.getAttribute('aria-current') === 'page'`)
     }
     // Synchronous clicks deliberately overlap the single-flight settings queue.
     await ui.evaluate(`(() => { for(let i=0;i<7;i++) ${toggle}.click(); return true; })()`)

@@ -17,6 +17,7 @@ use crate::{documents::{Document, Interest}, ipc::{decode, empty, reply}};
 #[derive(Deserialize)] #[serde(deny_unknown_fields)] struct Patch { patch: SettingsPatch }
 #[derive(Deserialize)] #[serde(deny_unknown_fields)] struct Preview { #[serde(deserialize_with="nullable")] intensity: Option<f64> }
 #[derive(Deserialize)] #[serde(deny_unknown_fields)] struct Enabled { enabled: bool }
+#[derive(Deserialize)] #[serde(deny_unknown_fields)] struct WindowPin { #[serde(default, deserialize_with="present")] enabled: Option<bool> }
 #[derive(Deserialize)] #[serde(deny_unknown_fields)] struct ShowMain { #[serde(default, deserialize_with="present")] target: Option<NavigationTarget> }
 #[derive(Deserialize)] #[serde(rename_all="lowercase")] enum PermissionTarget { Accessibility, Notifications }
 #[derive(Deserialize)] #[serde(deny_unknown_fields)] struct PermissionSettings { target: PermissionTarget }
@@ -146,6 +147,10 @@ impl Host {
                 self.native.call("openPermissionSettings", json!({"target":target})).await?; reply(&())
             },
             "settings_show_main_window" => { let input: ShowMain = decode(args)?; self.show_main(input.target).await?; reply(&()) },
+            "settings_window_pin" => {
+                let input: WindowPin = decode(args)?;
+                reply(&self.window_manager()?.window_pin(input.enabled).await?)
+            },
             "updates_snapshot" => reply(&crate::updates::decode(self.native.call("updaterRead", json!({})).await?)?),
             "updates_check" => reply(&crate::updates::decode(self.native.call("updaterCheck", json!({})).await?)?),
             "updates_set_policy" => {

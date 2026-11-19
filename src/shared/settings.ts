@@ -101,4 +101,5 @@ export interface SettingsApi {
   openPermissionSettings(target: PermissionSettingsTarget): Promise<void>
   subscribe(listener: (snapshot: SettingsSnapshot) => void): () => void
   showMainWindow(target?: NavigationTarget): Promise<void>
+  windowPin(enabled?: boolean): Promise<boolean>
 }

@@ -12,6 +12,7 @@ pub const COMMANDS: &[(&str, u8)] = &[
     ("settings_snapshot", 3), ("settings_update", 1), ("settings_retry_geometry", 1),
     ("settings_preview_glass", 1), ("settings_update_login_item", 1),
     ("settings_request_notification_permission", 1), ("settings_show_main_window", 3),
+    ("settings_window_pin", 1),
     ("settings_accessibility_state", 1), ("settings_open_permission_settings", 1),
     ("updates_snapshot", 1), ("updates_check", 1), ("updates_set_automatic_checks", 1),
     ("updates_set_policy", 1),

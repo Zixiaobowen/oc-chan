@@ -52,6 +52,8 @@ The interface supports Chinese and English, light and dark modes, and six themes
 
 Use the top **Navigation** button or **⌃⌘S** to hide the sidebar. Main navigation and installed plugins move to the top bar, with Data sources and Settings on the right. Drag the divider to resize it, or pull farther inward to collapse it; reopening restores the saved width. Narrow windows use compact navigation, and detail panels respect the system's Reduce Motion setting.
 
+Use Refresh in the top bar to refresh collected data from any page. Click the pin to keep the main window above other normal windows. Click it again to unpin.
+
 The top of the window contains a 14px monochrome OC vector mark, wordmark, and navigation button; macOS manages the native window controls. Data sources and Settings remain at the bottom of the expanded sidebar. Page content and detail panels scroll independently.
 
 ## Supported sources

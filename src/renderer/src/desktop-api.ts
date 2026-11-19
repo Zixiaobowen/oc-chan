@@ -334,6 +334,7 @@ export async function initializeDesktop(onFailure: (error: Error) => void): Prom
       accessibilityState: () => call('settings_accessibility_state'),
       openPermissionSettings: target => call('settings_open_permission_settings', { target }),
       showMainWindow: target => call('settings_show_main_window', target === undefined ? {} : { target }),
+      windowPin: enabled => call('settings_window_pin', enabled === undefined ? {} : { enabled }),
       subscribe: listener => subscribe('settings', listener)
     })
     window.pluginMarketplace = Object.freeze<MarketplaceApi>({

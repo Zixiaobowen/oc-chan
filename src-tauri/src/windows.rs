@@ -113,6 +113,20 @@ async fn settle_destroy(waiter: Option<watch::Receiver<bool>>) -> Result<()> {
     Ok(())
 }
 
+impl Windows {
+    pub async fn window_pin(&self, enabled: Option<bool>) -> Result<bool> {
+        use objc2_app_kit::{NSFloatingWindowLevel, NSNormalWindowLevel};
+        self.inner.main(move |inner| {
+            let window = inner.window(View::Main)?;
+            let native = native_window(&window)?;
+            if let Some(enabled) = enabled {
+                native.setLevel(if enabled { NSFloatingWindowLevel } else { NSNormalWindowLevel });
+            }
+            Ok(native.level() == NSFloatingWindowLevel)
+        }).await
+    }
+}
+
 impl Inner {
     fn state(&self) -> Result<MutexGuard<'_, State>> { self.state.lock().map_err(|_| failure("OC_WINDOW_STATE", "state lock")) }
     fn open(&self) -> Result<()> {
