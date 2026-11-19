@@ -8,7 +8,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import type { TopologyGraph, TopologyNode } from './agent-topology'
 import { buildOfficeLayout, officeStreetGrid, placeOfficeBuildings, STREET_SETBACK, STREET_WIDTH, MAX_3D_EDGES, MAX_3D_NODES, type OfficeBuilding, type OfficeFloor, type Point3D } from './agent-topology-3d-layout'
 import { createEmployeeGeometry, createWorkstationGeometry } from './agent-office-employee'
-import { createEntranceGeometry, createFacadeGeometry, createFloorFrameGeometry, createMainOfficeGeometry, createRoofGeometry } from './agent-office-building'
+import { createEntranceGeometry, createFacadeGeometry, createFloorFrameGeometry, createMainOfficeGeometry, createRoofGeometry, LANDMARK_ROOF_HEIGHT } from './agent-office-building'
 import { OfficeDistrict } from './agent-office-district'
 import { isDesktopDocumentVisible, isHeadlessDesktop, scheduleDesktopUpdate, type DesktopUpdate } from './desktop-visibility'
 
@@ -33,6 +33,8 @@ const LABEL_LIMIT = 32
 const FLOOR_LABEL_LIMIT = 16
 const PIXEL_BUDGET = 4_000_000
 const NODE_RADIUS = 32
+// Parcel order gives the first neighbouring projects different silhouettes.
+const BUILDING_TINTS = ['#afcbdc', '#a6cbbf', '#e2d9cb', '#94b8d4', '#d6c4a7', '#aabbd8'].map(color => new Color(color))
 
 function mutedMesh(source: InstancedMesh): InstancedMesh {
   const material = (source.material as MeshLambertMaterial).clone()
@@ -54,7 +56,7 @@ export class TopologyScene {
   private readonly decks = new InstancedMesh(new BoxGeometry(1, 1, 1), new MeshLambertMaterial(), MAX_3D_NODES)
   private readonly frames = new InstancedMesh(new BufferGeometry(), new MeshLambertMaterial({ vertexColors: true }), MAX_3D_NODES)
   private readonly facades = new InstancedMesh(new BufferGeometry(), new MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.65, depthWrite: false, side: DoubleSide }), MAX_3D_NODES)
-  private readonly roof = new InstancedMesh(new BufferGeometry(), new MeshLambertMaterial({ vertexColors: true, transparent: true }), MAX_3D_NODES)
+  private readonly roofs = BUILDING_TINTS.map(() => new InstancedMesh(new BufferGeometry(), new MeshLambertMaterial({ vertexColors: true, transparent: true }), MAX_3D_NODES))
   private readonly entrance = new InstancedMesh(new BufferGeometry(), new MeshLambertMaterial({ vertexColors: true, transparent: true, side: DoubleSide }), MAX_3D_NODES)
   private readonly offices = new InstancedMesh(createMainOfficeGeometry(), new MeshLambertMaterial({ vertexColors: true, transparent: true, side: DoubleSide, depthWrite: false }), MAX_3D_NODES)
   private buildingWidth = 0
@@ -69,11 +71,11 @@ export class TopologyScene {
   private readonly mutedFrames = mutedMesh(this.frames)
   private readonly mutedFacades = mutedMesh(this.facades)
   private readonly mutedOffices = mutedMesh(this.offices)
-  private readonly mutedRoofs = mutedMesh(this.roof)
+  private readonly mutedRoofs = this.roofs.map(mutedMesh)
   private readonly mutedEntrances = mutedMesh(this.entrance)
   private readonly mutedArrows = mutedMesh(this.arrows)
   private readonly district = new OfficeDistrict()
-  private readonly meshes = [this.nodes, this.markers, this.desks, this.decks, this.frames, this.facades, this.roof, this.entrance, this.offices, this.arrows, this.mutedNodes, this.mutedMarkers, this.mutedDesks, this.mutedDecks, this.mutedFrames, this.mutedFacades, this.mutedRoofs, this.mutedEntrances, this.mutedOffices, this.mutedArrows, ...this.district.meshes]
+  private readonly meshes = [this.nodes, this.markers, this.desks, this.decks, this.frames, this.facades, ...this.roofs, this.entrance, this.offices, this.arrows, this.mutedNodes, this.mutedMarkers, this.mutedDesks, this.mutedDecks, this.mutedFrames, this.mutedFacades, ...this.mutedRoofs, this.mutedEntrances, this.mutedOffices, this.mutedArrows, ...this.district.meshes]
   private readonly nodeSlots: string[] = []
   private readonly mutedNodeSlots: string[] = []
   private readonly floorSlots: string[] = []
@@ -348,7 +350,8 @@ export class TopologyScene {
     const replacements: [InstancedMesh, InstancedMesh | null, BufferGeometry][] = [
       [this.frames, this.mutedFrames, createFloorFrameGeometry(width, depth)],
       [this.facades, this.mutedFacades, createFacadeGeometry(width, depth)],
-      [this.roof, this.mutedRoofs, createRoofGeometry(width, depth)],
+      ...this.roofs.map((roof, style): [InstancedMesh, InstancedMesh, BufferGeometry] =>
+        [roof, this.mutedRoofs[style], createRoofGeometry(width, depth, style)]),
       [this.entrance, this.mutedEntrances, createEntranceGeometry(width, depth)],
     ]
     for (const [mesh, muted, geometry] of replacements) {
@@ -358,6 +361,10 @@ export class TopologyScene {
     }
     this.buildingWidth = width
     this.buildingDepth = depth
+  }
+
+  private buildingStyle(id: string): number {
+    return this.session.buildingSlots!.get(id)! % BUILDING_TINTS.length
   }
 
   private syncGeometry(): void {
@@ -389,8 +396,11 @@ export class TopologyScene {
       this.transform.position.set(floor.x, floor.y, floor.z)
       this.transform.scale.setScalar(1)
       this.transform.updateMatrix()
+      const tint = BUILDING_TINTS[this.buildingStyle(floor.buildingId)]
       for (const part of muted ? [this.mutedFrames, this.mutedFacades] : [this.frames, this.facades]) {
-        part.setMatrixAt(part.count++, this.transform.matrix)
+        const index = part.count++
+        part.setMatrixAt(index, this.transform.matrix)
+        part.setColorAt(index, tint)
       }
       if (floor.mainAgentId !== null) {
         const offices = muted ? this.mutedOffices : this.offices
@@ -399,18 +409,23 @@ export class TopologyScene {
         offices.setMatrixAt(offices.count++, this.transform.matrix)
       }
     }
-    this.roof.material.opacity = this.session.floorId === null ? 1 : 0.05
-    this.roof.material.depthWrite = this.session.floorId === null
+    for (const roof of this.roofs) {
+      roof.material.opacity = this.session.floorId === null ? 1 : 0.05
+      roof.material.depthWrite = this.session.floorId === null
+    }
     const streetGrid = officeStreetGrid(this.buildingWidth, this.buildingDepth)
     for (const building of this.buildings) {
       const muted = this.session.floorId !== null && !building.floors.some(floor => floor.id === this.session.floorId)
-      const roof = muted ? this.mutedRoofs : this.roof
+      const style = this.buildingStyle(building.id)
+      const roof = (muted ? this.mutedRoofs : this.roofs)[style]
       const entrance = muted ? this.mutedEntrances : this.entrance
       this.transform.rotation.set(0, 0, 0)
       this.transform.position.set(building.x, building.floors.length * 240, building.z)
       this.transform.scale.setScalar(1)
       this.transform.updateMatrix()
-      roof.setMatrixAt(roof.count++, this.transform.matrix)
+      const roofIndex = roof.count++
+      roof.setMatrixAt(roofIndex, this.transform.matrix)
+      roof.setColorAt(roofIndex, BUILDING_TINTS[style])
       this.transform.rotation.y = Math.round(building.z / streetGrid.pitchZ) % 2 === 0 ? 0 : Math.PI
       this.transform.position.set(building.x, 0, building.z)
       this.transform.updateMatrix()
@@ -629,7 +644,7 @@ export class TopologyScene {
     }
     for (const label of this.floorLabels) if (!usedFloors.has(label)) label.hidden = true
     const buildingCandidates = this.buildings.map(building => {
-      this.point.set(building.x, building.floors.length * 240 + 90, building.z).project(this.camera)
+      this.point.set(building.x, building.floors.length * 240 + LANDMARK_ROOF_HEIGHT + 28, building.z).project(this.camera)
       return { building, x: (this.point.x + 1) * this.width / 2 - fw / 2, y: (1 - this.point.y) * this.height / 2 - fh, depth: this.point.z }
     }).filter(item => item.depth > -1 && item.depth < 1 && item.x > -fw && item.x < this.width && item.y > -fh && item.y < this.height)
     buildingCandidates.sort((a, b) => a.depth - b.depth)
@@ -660,7 +675,7 @@ export class TopologyScene {
       if (ids && !floor.nodeIds.some(id => ids.has(id))) continue
       const margin = ids ? 20 : STREET_SETBACK + STREET_WIDTH + 50
       bounds.expandByPoint(this.point.set(floor.x - floor.width / 2 - margin, ids ? floor.y - 8 : -48, floor.z - floor.depth / 2 - margin))
-      bounds.expandByPoint(this.point.set(floor.x + floor.width / 2 + margin, floor.y + (ids ? 160 : 330), floor.z + floor.depth / 2 + margin))
+      bounds.expandByPoint(this.point.set(floor.x + floor.width / 2 + margin, floor.y + (ids ? 160 : 240 + LANDMARK_ROOF_HEIGHT + 28), floor.z + floor.depth / 2 + margin))
     }
     if (bounds.isEmpty()) return
     bounds.getCenter(this.controls.target)
@@ -721,7 +736,7 @@ export class TopologyScene {
     this.updateRay(event)
     const hit = this.raycaster.intersectObjects([this.nodes, this.markers, this.desks, this.mutedNodes, this.mutedMarkers, this.mutedDesks], false)[0]
     if (hit?.instanceId === undefined) return null
-    const blockers = this.raycaster.intersectObjects([this.decks, this.frames, this.roof, this.entrance], false)
+    const blockers = this.raycaster.intersectObjects([this.decks, this.frames, ...this.roofs, this.entrance], false)
     if (blockers.some(blocker => blocker.distance < hit.distance &&
       (blocker.object as InstancedMesh<BufferGeometry, MeshLambertMaterial>).material.opacity === 1)) return null
     return (hit.object === this.nodes || hit.object === this.markers || hit.object === this.desks ? this.nodeSlots : this.mutedNodeSlots)[hit.instanceId] ?? null

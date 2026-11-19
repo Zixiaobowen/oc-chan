@@ -1,4 +1,4 @@
-import { BoxGeometry, BufferAttribute, BufferGeometry, Color, CylinderGeometry, PlaneGeometry } from 'three'
+import { BoxGeometry, BufferAttribute, BufferGeometry, Color, CylinderGeometry, ExtrudeGeometry, LatheGeometry, Path, PlaneGeometry, Shape, Vector2, Vector3 } from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 
 const palette = {
@@ -110,8 +110,10 @@ export function createFacadeGeometry(width: number, depth: number): BufferGeomet
   return merge(parts)
 }
 
-/** Place at the top floor's base + 240. The complete roof stays within y=0..58. */
-export function createRoofGeometry(width: number, depth: number): BufferGeometry {
+export const LANDMARK_ROOF_HEIGHT = 160
+
+/** Place above the top task floor. The crown is architectural decoration. */
+export function createRoofGeometry(width: number, depth: number, style: number): BufferGeometry {
   const parts: BufferGeometry[] = []
   box(parts, width + 26, 6, depth + 26, 0, 3, 0, palette.roof)
   for (const x of [-width / 2 - 7, width / 2 + 7]) {
@@ -121,25 +123,98 @@ export function createRoofGeometry(width: number, depth: number): BufferGeometry
     box(parts, width + 4, 17, 10, 0, 14.5, z, palette.limestone)
   }
 
-  const roomWidth = Math.min(112, width * 0.25)
-  const roomDepth = Math.min(88, depth * 0.28)
-  const roomX = -width * 0.24
-  const roomZ = -depth * 0.23
-  box(parts, roomWidth, 46, roomDepth, roomX, 29, roomZ, palette.concrete)
-  box(parts, roomWidth + 8, 6, roomDepth + 8, roomX, 55, roomZ, palette.limestone)
-  box(parts, 22, 31, 2, roomX + roomWidth * 0.2, 21.5, roomZ + roomDepth / 2 + 1, palette.metal)
-  box(parts, 29, 9, 2, roomX - roomWidth * 0.22, 39, roomZ + roomDepth / 2 + 1, palette.trim)
-
-  const unitWidth = Math.min(42, width * 0.09)
-  const unitDepth = Math.min(62, depth * 0.18)
-  for (const x of [width * 0.08, width * 0.23]) {
-    box(parts, unitWidth + 6, 4, unitDepth + 6, x, 8, -depth * 0.2, palette.metal)
-    box(parts, unitWidth, 20, unitDepth, x, 20, -depth * 0.2, palette.equipment)
-    const vent = new CylinderGeometry(unitWidth * 0.32, unitWidth * 0.32, 2, 12)
-    vent.translate(x, 31, -depth * 0.2)
-    parts.push(paint(vent, palette.metal))
-    for (const y of [14, 19, 24]) {
-      box(parts, unitWidth - 6, 2, 1, x, y, -depth * 0.2 + unitDepth / 2 + 0.5, palette.trim)
+  const crownWidth = Math.min(width * 0.82, 440)
+  const crownDepth = Math.min(depth * 0.78, 330)
+  if (style === 0) {
+    // Shanghai World Financial Center: tapered shoulders and an open portal.
+    const half = crownWidth / 2
+    const outline = new Shape()
+    outline.moveTo(-half, 6)
+    outline.lineTo(half, 6)
+    outline.lineTo(half * 0.74, 146)
+    outline.lineTo(-half * 0.74, 146)
+    outline.closePath()
+    const opening = new Path()
+    opening.moveTo(-half * 0.60, 51)
+    opening.lineTo(-half * 0.46, 126)
+    opening.lineTo(half * 0.46, 126)
+    opening.lineTo(half * 0.60, 51)
+    opening.closePath()
+    outline.holes.push(opening)
+    const thickness = crownDepth * 0.22
+    const portal = new ExtrudeGeometry(outline, { depth: thickness, bevelEnabled: false }).translate(0, 0, -thickness / 2)
+    // ExtrudeGeometry emits non-indexed vertices. Match the shared roof boxes.
+    portal.setIndex(Array.from({ length: portal.getAttribute('position').count }, (_, index) => index))
+    parts.push(paint(portal, palette.glassShade))
+  } else if (style === 1) {
+    // Taipei 101: repeated flared sections, edged in pale stone.
+    for (const [tier, size] of [1, 0.86, 0.72, 0.58].entries()) {
+      const y = 6 + tier * 30
+      const stack = new CylinderGeometry(Math.SQRT1_2, Math.SQRT1_2 * 0.76, 25, 4)
+        .rotateY(Math.PI / 4).scale(crownWidth * size, 1, crownDepth * size).translate(0, y + 12.5, 0)
+      parts.push(paint(stack, palette.glassShade))
+      box(parts, crownWidth * size, 5, crownDepth * size, 0, y + 27.5, 0, palette.limestone)
+    }
+    box(parts, crownWidth * 0.23, 17, crownDepth * 0.25, 0, 134.5, 0, palette.glass)
+    box(parts, 6, 17, 6, 0, 151.5, 0, palette.limestone)
+  } else if (style === 2) {
+    // Chrysler Building: overlapping curved silver tiers and a needle spire.
+    const profile = [[0, 6], [1, 6], [1, 19], [0.88, 38], [0.71, 51], [0.79, 51],
+      [0.70, 68], [0.53, 80], [0.61, 80], [0.51, 96], [0.36, 108], [0.42, 108],
+      [0.32, 120], [0.15, 135], [0.04, 135], [0, LANDMARK_ROOF_HEIGHT]]
+    const crown = new LatheGeometry(profile.map(([radius, y]) => new Vector2(radius, y)), 16)
+      .scale(crownWidth / 2, 1, crownDepth / 2)
+    parts.push(paint(crown, palette.equipment))
+  } else if (style === 3) {
+    // The Shard: offset glass planes converge toward two uneven tips.
+    for (const [side, height, shift] of [[-1, 160, 0.30], [1, 127, -0.12]]) {
+      const shard = new CylinderGeometry(0.045, Math.SQRT1_2, height - 6, 4).rotateY(Math.PI / 4)
+      const positions = shard.getAttribute('position')
+      for (let i = 0; i < positions.count; i++) {
+        const rise = positions.getY(i) / (height - 6) + 0.5
+        positions.setX(i, positions.getX(i) * 0.48 + side * 0.24 + rise * shift)
+        positions.setZ(i, positions.getZ(i) * 0.88 + rise * side * 0.15)
+      }
+      shard.computeVertexNormals()
+      shard.scale(crownWidth, 1, crownDepth).translate(0, (height + 6) / 2, 0)
+      parts.push(paint(shard, side < 0 ? palette.glass : palette.glassShade))
+    }
+  } else if (style === 4) {
+    // Burj Khalifa: three wings drop away in staggered setbacks around a slender core.
+    const span = Math.min(crownWidth, crownDepth)
+    for (const [tier, radius] of [0.27, 0.22, 0.17, 0.12, 0.075].entries()) {
+      const core = new CylinderGeometry(span * radius, span * radius, 26, 12).translate(0, 19 + tier * 26, 0)
+      parts.push(paint(core, palette.equipment))
+      if (tier >= 3) continue
+      for (let wing = 0; wing < 3; wing++) {
+        const angle = wing * Math.PI * 2 / 3
+        const height = 12 + wing * 5
+        const wingGeometry = new BoxGeometry(span * (0.22 - tier * 0.035), height, span * (0.43 - tier * 0.08))
+          .translate(0, 6 + tier * 26 + height / 2, span * radius * 0.65).rotateY(angle)
+        parts.push(paint(wingGeometry, palette.glassShade))
+      }
+    }
+    box(parts, 5, 24, 5, 0, 148, 0, palette.limestone)
+  } else {
+    // Bank of China Tower: staggered triangular shafts with exposed diagonal bracing.
+    const span = Math.min(crownWidth, crownDepth)
+    for (const [height, offset] of [[145, -0.17], [106, 0.20]]) {
+      const shaft = new CylinderGeometry(span * 0.30, span * 0.30, height - 6, 3)
+      const positions = shaft.getAttribute('position')
+      for (let i = 0; i < positions.count; i++) {
+        if (positions.getY(i) > 0) positions.setY(i, positions.getY(i) - 18 + positions.getX(i) / span * 54)
+      }
+      shaft.computeVertexNormals()
+      shaft.translate(offset * span, (height + 6) / 2, 0)
+      parts.push(paint(shaft, palette.glassShade))
+    }
+    const start = new Vector3(-span * 0.43, 9, span * 0.196)
+    const end = new Vector3(span * 0.46, 78, span * 0.196)
+    for (const [from, to] of [[start, end], [end, new Vector3(-span * 0.43, 130, span * 0.196)]]) {
+      const brace = new BoxGeometry(from.distanceTo(to), 6, 6)
+        .rotateZ(Math.atan2(to.y - from.y, to.x - from.x))
+        .translate((from.x + to.x) / 2, (from.y + to.y) / 2, from.z)
+      parts.push(paint(brace, palette.limestone))
     }
   }
   return merge(parts)

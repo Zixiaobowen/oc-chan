@@ -30,6 +30,8 @@ When you run several agents and background tasks at once, OC Chan gives you one 
 
 In the default 3D view, each project occupies a building, and each main session task and its subagents occupy a floor. Main agents have private offices; subagents share open desks. Select a task floor to look inside and click an employee for details. You can also switch to a 2D relationship graph to search, collapse branches, and adjust the layout. Parent–child relationships come from collected evidence; branches with missing parents or cycles are marked as unassigned.
 
+Six landmark-inspired silhouettes rotate by parcel, making projects easier to distinguish across the district.
+
 ### Return to an agent's session
 
 Right-click a linked OMP node to jump to its Tern tab. For subagents, OC Chan follows the confirmed parent chain to the main session. It verifies the destination again before navigating and reports sessions that have closed or changed. First-time setup requires Tern integration and macOS Accessibility permission. See the [navigation guide (Chinese)](docs/features.md#协作拓扑画布).
