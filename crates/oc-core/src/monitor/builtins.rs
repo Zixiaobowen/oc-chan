@@ -3,17 +3,16 @@ use super::*;
 pub(super) fn definitions(io: BoundedIo, worker: DataWorker, agents: AgentPaths, schedules: SchedulePaths, service: EventService, shared: &Arc<Shared>) -> Result<[PluginDefinition; 3]> {
     // Validate schedule paths before any registration or lifecycle is admitted.
     ScheduleCollector::with_paths(io.clone(), worker.clone(), schedules.clone())?;
-    let weak = Arc::downgrade(shared); let agent_definition = PluginDefinition {
+    let agent_definition = PluginDefinition {
         id: "agents".into(), section: MonitorSection::Agents, capabilities: vec!["agent-discovery".into(), "session-activity".into()], dependencies: Vec::new(), retry_sources: Vec::new(),
         interval: Duration::from_millis(AGENT_DISCOVERY_INTERVAL_MS), timeout: Duration::from_secs(30),
         create: Arc::new(move |context| {
-            let shared = weak.upgrade().ok_or_else(Error::cancelled)?; let publisher = context.publisher.clone();
+            let publisher = context.publisher.clone();
             let collector = Arc::new(AgentCollector::with_paths(context.io.clone(), agents.clone(), Arc::new(move |result| match result {
                 Ok(snapshot) => { if let Err(error) = publisher.publish(SnapshotData::Agents(snapshot), None, true) { publisher.report_error(error); } }
                 Err(error) => { if !error.is_cancelled() { publisher.report_error(error); } }
             })));
-            let generation = context.publisher.generation(); *shared.agent.lock().expect("agent instance poisoned") = Some((generation, Arc::downgrade(&collector)));
-            Ok(Arc::new(AgentPlugin { collector, life: context.cancel, shared: Arc::downgrade(&shared), generation }))
+            Ok(Arc::new(AgentPlugin { collector, life: context.cancel }))
         }),
     };
     let weak = Arc::downgrade(shared); let retry_sources = shared.retry_sources.clone();
@@ -30,18 +29,14 @@ pub(super) fn definitions(io: BoundedIo, worker: DataWorker, agents: AgentPaths,
     };
     Ok([agent_definition, schedule_definition, event_definition])
 }
-struct AgentPlugin { collector: Arc<AgentCollector>, life: CancellationToken, shared: Weak<Shared>, generation: u64 }
+struct AgentPlugin { collector: Arc<AgentCollector>, life: CancellationToken }
 impl CollectionPlugin for AgentPlugin {
     fn start(&self, cancel: CancellationToken) -> BoxFuture<'_, Result<()>> { Box::pin(async move { check_cancel(&self.life)?; self.collector.start(cancel).await }) }
     fn collect(&self, cancel: CancellationToken, source: Option<String>) -> BoxFuture<'_, Result<Option<SnapshotData>>> {
         Box::pin(async move { check_cancel(&self.life)?; if source.is_some() { return Err(Error::new("OC_PLUGIN_CAPABILITY", "Agent collection has no source retry")); } self.collector.collect(&cancel).await.map(|data| Some(SnapshotData::Agents(data))) })
     }
     fn stop(&self) -> BoxFuture<'_, Result<()>> {
-        Box::pin(async move {
-            self.life.cancel(); let result = self.collector.stop().await;
-            if result.is_ok() { if let Some(shared) = self.shared.upgrade() { let mut slot = shared.agent.lock().expect("agent instance poisoned"); if slot.as_ref().is_some_and(|(generation,_)| *generation == self.generation) { slot.take(); } } }
-            result
-        })
+        Box::pin(async move { self.life.cancel(); self.collector.stop().await })
     }
 }
 struct SchedulePlugin { collector: ScheduleCollector, life: CancellationToken, gate: AsyncMutex<()>, shared: Weak<Shared> }

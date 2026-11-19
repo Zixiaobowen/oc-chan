@@ -36,8 +36,6 @@
 .topology-3d-floor-status { padding-top: 8px; border-bottom: 1px solid var(--border); }
 .topology-3d-message { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; overflow: auto; padding: 20px; background: var(--ground); text-align: center; }
 .topology-3d-message p { max-width: 55ch; margin: 0; overflow-wrap: anywhere; }
-.topology-3d-navigation-error { display: flex; align-items: start; gap: 12px; padding: 12px; border-top: 1px solid var(--error-border); color: var(--error); background: var(--error-surface); max-height: 140px; overflow: auto; }
-.topology-3d-navigation-error span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .topology-stage:has(.topology-3d) { display: flex; flex-direction: column; container-type: inline-size; }
 @container (max-width: 440px) {
   .topology-3d-hint { width: 100%; }

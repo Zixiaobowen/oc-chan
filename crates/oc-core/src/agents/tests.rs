@@ -152,7 +152,7 @@ impl LiveFixture {
     async fn new(io: BoundedIo) -> Self {
         let (events_tx, events) = mpsc::channel(1024); let (sender, receiver) = mpsc::channel(1); let (ready_tx, ready_rx) = oneshot::channel(); let cancel = CancellationToken::new();
         let publish = Arc::new(move |result| { events_tx.try_send(result).expect("bounded test observations"); });
-        let task = tokio::spawn(live::run(io.clone(), publish, receiver, cancel.clone(), io.cancellation(), Arc::new(std::sync::Mutex::new(super::Published::default())), ready_tx)); ready_rx.await.unwrap().unwrap();
+        let task = tokio::spawn(live::run(io.clone(), publish, receiver, cancel.clone(), io.cancellation(), ready_tx)); ready_rx.await.unwrap().unwrap();
         Self { io, cancel, sender, events, task }
     }
     async fn reconcile(&self, discovery: Discovery) -> AgentSnapshot { let (reply,result)=oneshot::channel(); self.sender.send(live::Reconcile { discovery,cancel:self.cancel.child_token(),reply }).await.unwrap(); result.await.unwrap().unwrap() }
@@ -165,7 +165,11 @@ fn discovery(paths: &[PathBuf]) -> Discovery {
     let identity=ProcessIdentity::read(std::process::id()).unwrap();
     let mut agents=Vec::new(); let mut sessions=Vec::new();
     for (index,path) in paths.iter().enumerate() { let id=format!("session-{index}"); let mut agent=process(identity.pid,"OMP"); agent.id=format!("omp:{id}"); agent.session_id=Some(id.clone()); agent.started_at=Some(identity.started_at().unwrap()); agents.push(agent); sessions.push(session(path,&id)); }
-    Discovery { snapshot:AgentSnapshot { collected_at:timestamp(),active_subagent_count:if agents.is_empty(){Some(0)}else{None},agents,sources:Vec::new() },sessions,identities:BTreeMap::from([(identity.pid,identity)]) }
+    let snapshot = AgentSnapshot {
+        collected_at: timestamp(), active_subagent_count: if agents.is_empty() { Some(0) } else { None },
+        agents, sources: Vec::new(), process_identities: Some(Arc::new(BTreeMap::from([(identity.pid, identity)]))),
+    };
+    Discovery { snapshot, sessions }
 }
 #[tokio::test]
 async fn real_watch_publishes_start_terminal_expiry_and_deletion() {
@@ -194,7 +198,9 @@ async fn removed_session_cancels_queued_read_and_never_publishes_late_result() {
 async fn process_birth_reuse_revokes_session_and_old_activity() {
     let directory=tempfile::tempdir().unwrap();let path=directory.path().join("identity.jsonl");std::fs::write(&path,tool("old",&timestamp())).unwrap();let mut live=LiveFixture::new(io()).await;
     live.reconcile(discovery(std::slice::from_ref(&path))).await;live.next(|s|s.agents.iter().any(|a|a.activity.is_some())).await;
-    let mut reused=discovery(std::slice::from_ref(&path)); reused.identities.values_mut().next().unwrap().start_seconds+=1;
+    let mut reused = discovery(std::slice::from_ref(&path));
+    let identities = Arc::get_mut(reused.snapshot.process_identities.as_mut().unwrap()).unwrap();
+    identities.values_mut().next().unwrap().start_seconds += 1;
     let snapshot=live.reconcile(reused).await;assert!(snapshot.agents.is_empty());live.next(|s|s.agents.is_empty()).await;live.close().await;
 }
 #[tokio::test]
@@ -231,17 +237,19 @@ async fn one_hundred_twenty_eight_long_sessions_keep_io_bounded() {
 }
 
 #[tokio::test]
-async fn navigation_identity_only_comes_from_published_birth_identity() {
-    let directory=tempfile::tempdir().unwrap();let path=directory.path().join("identity.jsonl");std::fs::write(&path,b"").unwrap();
-    let (events_tx,mut events)=mpsc::channel(16);let io=io();
-    let collector=AgentCollector::new(io.clone(),directory.path().into(),Arc::new(move|snapshot|{events_tx.try_send(snapshot).unwrap();}));
-    collector.start(CancellationToken::new()).await.unwrap();assert_eq!(collector.process_identity("omp:session-0").await.unwrap_err().code,"OC_AGENT_IDENTITY");
-    let mut sample=discovery(std::slice::from_ref(&path));sample.snapshot.agents[0].started_at=Some("2000-01-01T00:00:00Z".into());
-    let tx=collector.run.lock().await.as_ref().unwrap().tx.clone();let(reply,result)=oneshot::channel();tx.send(live::Reconcile{discovery:sample,cancel:CancellationToken::new(),reply}).await.unwrap();result.await.unwrap().unwrap();
-    let published=tokio::time::timeout(Duration::from_secs(3),events.recv()).await.unwrap().unwrap().unwrap();assert_eq!(published.agents[0].started_at.as_deref(),Some("2000-01-01T00:00:00Z"));
-    assert_eq!(collector.process_identity("omp:session-0").await.unwrap(),ProcessIdentity::read(std::process::id()).unwrap());
-    collector.published.lock().unwrap().invalidate();assert!(collector.process_identity("omp:session-0").await.is_err());
-    collector.stop().await.unwrap();assert!(collector.process_identity("omp:session-0").await.is_err());io.shutdown().await.unwrap();
+async fn discovery_and_activity_snapshots_carry_the_same_process_birth_identity() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("identity.jsonl");
+    std::fs::write(&path, b"").unwrap();
+    let mut live = LiveFixture::new(io()).await;
+    let birth = ProcessIdentity::read(std::process::id()).unwrap();
+    let collected = live.reconcile(discovery(std::slice::from_ref(&path))).await;
+    assert_eq!(collected.process_identity(collected.agents[0].pid), Some(&birth));
+
+    append(&path, &tool("read", &timestamp()));
+    let observed = live.next(|snapshot| snapshot.agents.iter().any(|agent| agent.activity.is_some())).await;
+    assert_eq!(observed.process_identity(observed.agents[0].pid), Some(&birth));
+    live.close().await;
 }
 
 #[test]

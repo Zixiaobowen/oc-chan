@@ -8,10 +8,10 @@ mod watch;
 #[cfg(test)]
 mod tests;
 
-use std::{collections::BTreeMap, path::PathBuf, sync::{Arc, Mutex as StdMutex}};
+use std::{path::PathBuf, sync::{Arc, Mutex as StdMutex}};
 use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
-use crate::{error::{Error, Result, check_cancel, validate_text}, io::BoundedIo, model::AgentSnapshot, process::ProcessIdentity};
+use crate::{error::{Error, Result, check_cancel}, io::BoundedIo, model::AgentSnapshot};
 
 pub const MAX_SESSIONS: usize = 128;
 #[derive(Clone, Debug)]
@@ -32,11 +32,6 @@ impl AgentPaths {
         Ok(())
     }
 }
-pub(super) struct Published { pending: bool, identities: BTreeMap<String, ProcessIdentity> }
-impl Default for Published { fn default() -> Self { Self { pending: true, identities: BTreeMap::new() } } }
-impl Published {
-    fn invalidate(&mut self) { self.pending = true; self.identities.clear(); }
-}
 struct Run {
     cancel: CancellationToken, tx: mpsc::Sender<live::Reconcile>, tasks: TaskTracker,
     task: tokio::task::JoinHandle<Result<()>>, gate: Arc<Mutex<()>>,
@@ -45,14 +40,13 @@ struct Run {
 pub struct AgentCollector {
     io: BoundedIo, paths: AgentPaths, publish: Arc<dyn Fn(Result<AgentSnapshot>) + Send + Sync>,
     run: Mutex<Option<Run>>, stopped: StdMutex<Option<Result<()>>>,
-    published: Arc<StdMutex<Published>>,
 }
 impl AgentCollector {
     pub fn new(io: BoundedIo, home: PathBuf, publish: Arc<dyn Fn(Result<AgentSnapshot>) + Send + Sync>) -> Self {
         Self::with_paths(io, AgentPaths::for_home(home), publish)
     }
     pub fn with_paths(io: BoundedIo, paths: AgentPaths, publish: Arc<dyn Fn(Result<AgentSnapshot>) + Send + Sync>) -> Self {
-        Self { io, paths, publish, run: Mutex::new(None), stopped: StdMutex::new(None), published: Arc::new(StdMutex::new(Published::default())) }
+        Self { io, paths, publish, run: Mutex::new(None), stopped: StdMutex::new(None) }
     }
     pub async fn start(&self, cancel: CancellationToken) -> Result<()> {
         self.paths.validate()?; check_cancel(&cancel)?;
@@ -63,8 +57,7 @@ impl AgentCollector {
         let (tx, receiver) = mpsc::channel(1);
         let (ready_tx, ready_rx) = oneshot::channel();
         let io = self.io.clone(); let publish = self.publish.clone(); let actor_cancel = token.clone();
-        let published = self.published.clone(); published.lock().expect("published identity lock").invalidate();
-        let task = tokio::spawn(async move { live::run(io, publish, receiver, actor_cancel, io_cancel, published, ready_tx).await });
+        let task = tokio::spawn(async move { live::run(io, publish, receiver, actor_cancel, io_cancel, ready_tx).await });
         *slot = Some(Run { cancel: token.clone(), tx, tasks: TaskTracker::new(), task, gate: Arc::new(Mutex::new(())), cleanup: Arc::new(StdMutex::new(Vec::new())) });
         let ready = ready_rx.await.map_err(|_| Error::new("OC_AGENT_TASK", "Agent 监听任务未启动")).and_then(|result| result);
         if let Err(error) = ready {
@@ -84,7 +77,6 @@ impl AgentCollector {
         let io = self.io.clone(); let paths = self.paths.clone(); let tx = run.tx.clone();
         let stopped = run.cancel.clone(); let caller = cancel.clone();
         let permit = run.gate.clone().try_lock_owned().map_err(|_| Error::new("OC_AGENT_BUSY", "前次Agent采集尚未完成 / Agent discovery is already in flight"))?;
-        self.published.lock().expect("published identity lock").invalidate();
         let cleanup = run.cleanup.clone();
         let operation = stopped.child_token(); let guard = operation.clone().drop_guard();
         let (sender, receiver) = oneshot::channel();
@@ -111,16 +103,8 @@ impl AgentCollector {
         let result = receiver.await.map_err(|_| Error::new("OC_AGENT_TASK", "Agent采集任务异常退出"))?;
         guard.disarm(); result
     }
-    pub async fn process_identity(&self, agent_id: &str) -> Result<ProcessIdentity> {
-        validate_text(agent_id, 512, 2048, "agent id")?;
-        let published = self.published.lock().expect("published identity lock");
-        let identity = published.identities.get(agent_id).filter(|identity| !published.pending && identity.matches_live())
-            .ok_or_else(|| Error::new("OC_AGENT_IDENTITY", "目标未发布、已退出或进程身份已变化 / Agent identity is not currently published"))?;
-        Ok(identity.clone())
-    }
     pub async fn stop(&self) -> Result<()> {
         let mut slot = self.run.lock().await;
-        self.published.lock().expect("published identity lock").invalidate();
         let Some(run) = slot.as_mut() else { return self.stopped.lock().expect("stop result lock").clone().unwrap_or(Ok(())); };
         run.cancel.cancel(); run.tasks.close();
         // The actor drains its readers and watcher; discovery supervisors retain their IO leases until settled.

@@ -157,22 +157,37 @@ impl TernNavigation {
         if current != identity || new_owner.id!=owner_id || new_target!=target || new_owner.session_id.as_deref()!=Some(session_id)
             || (self.options.process_identity)(owner_id.clone()).await? != birth || ProcessIdentity::read(birth.pid)?!=birth || ProcessIdentity::read(identity.pid)?!=tern_birth
             || self.options.io.metadata(SOURCE,&identity.executable,true,cancel).await?.identity!=executable_identity { return Err(failure("OC_TERN_IDENTITY")); }
-        let session_now=self.options.io.metadata(SOURCE,Path::new(&target.session_file),true,cancel).await?;
-        if !session_now.is_file || !session_now.identity.same_file(&session.identity) { return Err(failure("OC_TERN_TARGET")); }
+        let session_now = self.options.io.read_range(SOURCE, Path::new(&target.session_file), 0, 65536, cancel).await?;
+        validate_session_header(&session_now.bytes, session_id)?;
+        if !session_now.identity.same_file(&session.identity) { return Err(failure("OC_TERN_TARGET")); }
         pane(&self.command(&identity.executable,&inspect,2*1024*1024,false,deadline,cancel).await?,&target)?;
+        self.revalidate(&resources,cancel).await?;
+        let pid = identity.pid.to_string();
+        let executable = identity.executable.to_str().ok_or_else(|| failure("OC_TERN_IDENTITY"))?;
+        let presented = self.command(&helper, &["present", &pid, executable, &target.window_key], 65536, true, deadline, cancel).await?;
+        verify_window(&presented, identity.pid, &target.window_key)?;
+        pane(&self.command(&identity.executable, &inspect, 2*1024*1024, false, deadline, cancel).await?, &target)?;
         check_cancel(cancel)?;
         let session_current=self.options.io.read_range(SOURCE,Path::new(&target.session_file),0,65536,cancel).await?;
         validate_session_header(&session_current.bytes, session_id)?;
-        if !session_current.identity.same_file(&session.identity)||ProcessIdentity::read(birth.pid)?!=birth||ProcessIdentity::read(identity.pid)?!=tern_birth{return Err(failure("OC_TERN_IDENTITY"));}
+        if !session_current.identity.same_file(&session.identity) { return Err(failure("OC_TERN_TARGET")); }
+        if (self.options.process_identity)(owner_id).await? != birth || ProcessIdentity::read(birth.pid)? != birth
+            || ProcessIdentity::read(identity.pid)? != tern_birth
+            || self.options.io.metadata(SOURCE,&identity.executable,true,cancel).await?.identity != executable_identity {
+            return Err(failure("OC_TERN_IDENTITY"));
+        }
         let pane_id=target.pane_id.to_string();
         let focused=self.command(&identity.executable,&["focus",&pane_id,"--json","--window",&target.window_key],65536,false,deadline,cancel).await?;
         if focused["block"].as_u64()!=Some(target.pane_id) { return Err(failure("OC_TERN_TARGET")); }
-        if ProcessIdentity::read(identity.pid)?!=tern_birth { return Err(failure("OC_TERN_IDENTITY")); }
-        self.revalidate(&resources,cancel).await?;
-        let pid=identity.pid.to_string(); let executable=identity.executable.to_str().ok_or_else(|| failure("OC_TERN_IDENTITY"))?;
-        let presented=self.command(&helper,&["present",&pid,executable,&target.window_key],65536,true,deadline,cancel).await?;
-        let prefix=format!("[Tern {}] ",serde_json::to_string(&target.window_key).map_err(|_| failure("OC_TERN_TARGET"))?);
-        if presented["pid"].as_u64()!=Some(identity.pid as u64) || presented["main"]!=true || !presented["windowTitle"].as_str().is_some_and(|s| s.len()<=4096 && !s.chars().any(|c| c.is_control()) && s.starts_with(&prefix)) { return Err(failure("OC_TERN_WINDOW")); } Ok(())
+        let selection = self.command(&identity.executable, &inspect, 2*1024*1024, false, deadline, cancel).await?;
+        selected_pane(&selection, &target)?;
+        self.revalidate(&resources, cancel).await?;
+        let verified = self.command(&helper, &["verify", &pid, executable, &target.window_key], 65536, true, deadline, cancel).await?;
+        verify_window(&verified, identity.pid, &target.window_key)?;
+        if ProcessIdentity::read(birth.pid)? != birth || ProcessIdentity::read(identity.pid)? != tern_birth {
+            return Err(failure("OC_TERN_IDENTITY"));
+        }
+        Ok(())
     }
 }
 fn identity(value:Value)->Result<TernIdentity>{identity_from(value)}
@@ -207,6 +222,31 @@ fn pane(value:&Value,target:&TernTarget)->Result<()> {
         if id==target.pane_id { if !pane["exited"].is_null() || pane["omp_session_file"]!=target.session_file { return Err(failure("OC_TERN_TARGET")); } matches+=1; }
     }
     if matches!=1 { return Err(failure("OC_TERN_TARGET")); } Ok(())
+}
+fn selected_item<'a>(items: &'a Value, flag: &str) -> Result<&'a Value> {
+    let items = items.as_array().ok_or_else(|| failure("OC_TERN_PROTOCOL"))?;
+    let mut selected = items.iter().filter(|item| item[flag] == true);
+    let item = selected.next().ok_or_else(|| failure("OC_TERN_FOCUS"))?;
+    if selected.next().is_some() { return Err(failure("OC_TERN_PROTOCOL")); }
+    Ok(item)
+}
+fn selected_pane(value: &Value, target: &TernTarget) -> Result<()> {
+    pane(value, target)?;
+    let session = selected_item(&value["sessions"], "shown")?;
+    let tab = selected_item(&session["tabs"], "shown")?;
+    let block = selected_item(&tab["blocks"], "focused")?;
+    if block["id"].as_u64() != Some(target.pane_id) || block["live"] != true || !block["exited"].is_null() {
+        return Err(failure("OC_TERN_FOCUS"));
+    }
+    Ok(())
+}
+fn verify_window(value: &Value, pid: u32, key: &str) -> Result<()> {
+    let prefix = format!("[Tern \"{key}\"] ");
+    if value["pid"].as_u64() != Some(pid as u64) || value["focused"] != true
+        || !value["windowTitle"].as_str().is_some_and(|title| title.len() <= 4096 && !title.chars().any(char::is_control) && title.starts_with(&prefix)) {
+        return Err(failure("OC_TERN_WINDOW"));
+    }
+    Ok(())
 }
 fn plugin_ready(value:&Value)->Result<bool>{
     let plugins=value["plugins"].as_array().filter(|a|a.len()<=256).ok_or_else(|| failure("OC_TERN_PROTOCOL"))?; let mut ids=HashSet::new(); let mut ready=false;
@@ -246,6 +286,46 @@ async fn wait(mut rx:watch::Receiver<Option<Result<()>>>)->Result<()> {
         let item=json!({"pane":1,"omp_session_file":"/tmp/session"});
         assert!(pane(&json!({"panes":[item.clone(),item]}),&target).is_err());
         assert!(pane(&json!({"panes":[{"pane":1,"omp_session_file":"/tmp/replaced"}]}),&target).is_err());
+    }
+    #[test]
+    fn selected_pane_must_be_live_and_focused_in_the_shown_session_and_tab() {
+        let target = TernTarget { window_key: "9".into(), pane_id: 3427212103516169, session_file: "/tmp/session".into() };
+        let mut inspect = json!({
+            "panes": [{"pane": target.pane_id, "omp_session_file": target.session_file}],
+            "sessions": [{"shown": true, "tabs": [
+                {"shown": false, "blocks": [{"id": target.pane_id, "focused": true, "live": true}]},
+                {"shown": true, "blocks": [{"id": 2, "focused": true, "live": true}]}
+            ]}]
+        });
+        assert_eq!(selected_pane(&inspect, &target).unwrap_err().code, "OC_TERN_FOCUS");
+
+        inspect["sessions"][0]["tabs"][0]["shown"] = json!(true);
+        inspect["sessions"][0]["tabs"][1]["shown"] = json!(false);
+        assert!(selected_pane(&inspect, &target).is_ok());
+
+        inspect["sessions"][0]["shown"] = json!(false);
+        assert_eq!(selected_pane(&inspect, &target).unwrap_err().code, "OC_TERN_FOCUS");
+        inspect["sessions"][0]["shown"] = json!(true);
+        let blocks = inspect["sessions"][0]["tabs"][0]["blocks"].as_array_mut().unwrap();
+        blocks[0]["focused"] = json!(false);
+        blocks.push(json!({"id": 3, "focused": true, "live": true}));
+        assert_eq!(selected_pane(&inspect, &target).unwrap_err().code, "OC_TERN_FOCUS");
+
+        let blocks = inspect["sessions"][0]["tabs"][0]["blocks"].as_array_mut().unwrap();
+        blocks[0]["focused"] = json!(true);
+        blocks[0]["live"] = json!(false);
+        blocks[1]["focused"] = json!(false);
+        assert_eq!(selected_pane(&inspect, &target).unwrap_err().code, "OC_TERN_FOCUS");
+    }
+    #[test]
+    fn window_receipt_requires_the_exact_focused_window() {
+        let mut receipt = json!({"pid": 42, "windowTitle": "[Tern \"9\"] Default", "focused": true});
+        assert!(verify_window(&receipt, 42, "9").is_ok());
+        assert_eq!(verify_window(&receipt, 42, "").unwrap_err().code, "OC_TERN_WINDOW");
+        assert_eq!(verify_window(&receipt, 43, "9").unwrap_err().code, "OC_TERN_WINDOW");
+        receipt["focused"] = json!(false);
+        receipt["main"] = json!(true);
+        assert_eq!(verify_window(&receipt, 42, "9").unwrap_err().code, "OC_TERN_WINDOW");
     }
     #[test] fn refuses_untrusted_executable_and_duplicate_plugin() {
         assert!(identity(json!({"pid":1,"bundle":"/Applications/Tern.app","executable":"/bin/sh","bundleId":"so.stencil.tern","teamId":"VTLHGQC72S"})).is_err());

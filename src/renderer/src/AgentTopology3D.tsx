@@ -1,6 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import CircleAlert from 'kubai-icons-react/icons/circle-alert'
-import ArrowUpRight from 'kubai-icons-react/icons/arrow-up-right'
 import ChevronDown from 'kubai-icons-react/icons/chevron-down'
 import Focus from 'kubai-icons-react/icons/focus'
 import Maximize from 'kubai-icons-react/icons/maximize'
@@ -11,7 +10,6 @@ import type { TopologyGraph } from './agent-topology'
 import type { Topology3DSession, TopologyScene } from './agent-topology-scene'
 import { buildOfficeLayout, MAX_3D_EDGES, MAX_3D_NODES } from './agent-topology-3d-layout'
 import { NativeSelect } from './components'
-import AgentContextMenu, { type AgentMenuAnchor } from './AgentContextMenu'
 import { useI18n } from './i18n'
 import { useSettings } from './settings'
 import './agent-topology-3d.css'
@@ -38,9 +36,6 @@ export default memo(function AgentTopology3D({ graph, selectedId, onSelect, onTo
   const [attempt, setAttempt] = useState(0)
   const [loading, setLoading] = useState(true)
   const [failure, setFailure] = useState<string | null>(null)
-  const [menu, setMenu] = useState<AgentMenuAnchor | null>(null)
-  const [navigating, setNavigating] = useState(false)
-  const [navigationError, setNavigationError] = useState<string | null>(null)
   const [picked, setPicked] = useState('')
   const [selectedFloorId, setSelectedFloorId] = useState<string | null>(session.floorId)
   const overBudget = graph.nodes.length > MAX_3D_NODES || graph.edges.length > MAX_3D_EDGES
@@ -69,7 +64,6 @@ export default memo(function AgentTopology3D({ graph, selectedId, onSelect, onTo
       owned = new TopologyScene(host.current!, session, {
         select: id => selectEmployee(id, false),
         floor: id => selectFloor(id),
-        menu: (agentId, x, y, trigger) => setMenu({ agentId, x, y, trigger }),
         error: message => setFailure(message),
         ready: () => latest.current.onNodesReady(),
       })
@@ -126,24 +120,6 @@ export default memo(function AgentTopology3D({ graph, selectedId, onSelect, onTo
     }
   }
 
-  function closeMenu(restoreFocus: boolean) {
-    if (restoreFocus) menu?.trigger?.focus({ preventScroll: true })
-    setMenu(null)
-  }
-
-  async function navigate(id: string) {
-    if (navigating) return
-    closeMenu(true)
-    setNavigating(true)
-    setNavigationError(null)
-    try {
-      if (!window.monitor) throw new Error(t('桌面连接不可用，请重新打开应用。', 'Desktop connection unavailable. Reopen the app.'))
-      const result = await window.monitor.focusAgentInTern(id)
-      if (result.error) setNavigationError(result.error)
-    } catch (error) { setNavigationError(error instanceof Error ? error.message : String(error)) }
-    finally { setNavigating(false) }
-  }
-
   return <div className="topology-3d" role="region" aria-label={t('3D 协作拓扑', '3D collaboration topology')}>
     <div className="topology-3d-toolbar">
       <label className="topology-3d-picker">{t('任务楼层', 'Task floor')}
@@ -170,7 +146,7 @@ export default memo(function AgentTopology3D({ graph, selectedId, onSelect, onTo
     </div>
     {missingFloor && <p className="topology-3d-note topology-3d-floor-status" role="status">{t('所选任务楼层不在当前筛选或折叠后的数据中，已保留选择；可调整筛选、展开分支，或显示全部楼层。', 'The selected task floor is absent from the current filtered or collapsed data. Its selection is preserved. Adjust filters, expand branches, or show all floors.')}</p>}
     <div className="topology-3d-viewport">
-      <div ref={host} className="topology-3d-scene" />
+      <div ref={host} className="topology-3d-scene" onContextMenu={event => event.preventDefault()} />
       {(overBudget || displayError || loading) && <div className="topology-3d-message" role={displayError || overBudget ? 'alert' : 'status'}>
         {overBudget ? <><CircleAlert trigger="none" size={22} /><strong>{t('当前关系图超出 3D 显示预算', 'This graph exceeds the 3D display budget')}</strong><p>{t(`当前 ${graph.nodes.length} 位员工、${graph.edges.length} 条关系；上限 ${MAX_3D_NODES} / ${MAX_3D_EDGES}。请用上方搜索或筛选缩小范围，数据未被截断。`, `Current: ${graph.nodes.length} employees, ${graph.edges.length} relationships; limits: ${MAX_3D_NODES} / ${MAX_3D_EDGES}. Narrow the search or filters above. No data was truncated.`)}</p></>
           : displayError ? <><CircleAlert trigger="none" size={22} /><strong>{t('3D 视图不可用', '3D view unavailable')}</strong><p>{displayError}</p><button className="button secondary" onClick={() => setAttempt(value => value + 1)}>{t('重试 3D', 'Retry 3D')}</button></>
@@ -192,11 +168,8 @@ export default memo(function AgentTopology3D({ graph, selectedId, onSelect, onTo
       {selected && <>
         <button type="button" disabled={sceneUnavailable} onClick={() => selectEmployee(selected.agent.id, true)}><Focus trigger="none" size={15} />{t('聚焦选中员工', 'Focus selected employee')}</button>
         {selected.descendantCount > 0 && <button type="button" disabled={filtering} aria-expanded={!selected.collapsed} title={filtering ? t('筛选期间保持展开', 'Branches stay expanded while filtering') : undefined} onClick={() => onToggleCollapse(selected.agent.id)}><ChevronDown trigger="none" size={15} />{selected.collapsed ? t('展开分支', 'Expand branch') : t('收起分支', 'Collapse branch')} ({selected.descendantCount})</button>}
-        {selected.agent.runtime === 'OMP' && <button type="button" disabled={navigating} onClick={() => { void navigate(selected.agent.id) }}><ArrowUpRight trigger="none" size={15} />{navigating ? t('正在跳转…', 'Navigating…') : t('前往 Tern', 'Go to Tern')}</button>}
       </>}
     </div>
     <p className="topology-3d-note">{t('一栋楼对应一个项目，一层对应一个主会话任务。主 Agent 使用独立办公室，子 Agent 使用开放工位；父链缺失或异常时标为待归属。选层淡化其他任务；拖动员工调整本层工位，箭头指向子 Agent。完整项目路径可在楼层菜单提示中查看。', 'Each building is a project; each floor is a main-session task. Main agents have private offices and subagents use shared desks. Missing or invalid parent chains are marked unassigned. Selecting a floor dims other tasks; drag employees within their floor. Arrows point to subagents. Floor menu tooltips show full project paths.')}</p>
-    {navigationError && <div className="topology-3d-navigation-error" role="alert"><span>{navigationError}</span><button className="button secondary" onClick={() => setNavigationError(null)}>{t('关闭提示', 'Dismiss')}</button></div>}
-    {menu && <AgentContextMenu anchor={menu} busy={navigating} onClose={closeMenu} onNavigate={navigate} />}
   </div>
 })

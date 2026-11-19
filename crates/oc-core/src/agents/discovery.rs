@@ -1,11 +1,11 @@
-use std::{collections::{BTreeMap, BTreeSet}, path::Path, time::Duration};
+use std::{collections::{BTreeMap, BTreeSet}, path::Path, sync::Arc, time::Duration};
 use serde::Deserialize;
 use futures_util::{stream, StreamExt};
 use tokio_util::sync::CancellationToken;
 use crate::{error::{Error, Result, check_cancel, timestamp}, io::{BoundedIo, CommandSpec}, model::{AgentInfo, AgentKind, AgentSnapshot, AgentState, SourceState, SourceStatus, TernTarget}, process::ProcessIdentity};
 use super::{AgentPaths, MAX_SESSIONS, runtime::{self, ProcessRow}, sessions::{self, Session}};
 
-pub(super) struct Discovery { pub snapshot: AgentSnapshot, pub sessions: Vec<Session>, pub identities: BTreeMap<u32, ProcessIdentity> }
+pub(super) struct Discovery { pub snapshot: AgentSnapshot, pub sessions: Vec<Session> }
 pub(super) fn failure_source(id: &str, label: &str, operation: &str, error: &Error) -> SourceStatus {
     let state = if error.code == "ENOENT" { SourceState::Empty } else if error.code == "OC_COLLECTION_LIMIT" { SourceState::Partial } else { SourceState::Error };
     SourceStatus::new(id, label, state, format!("{operation}（{}）；没有推测缺失数据。", error.code))
@@ -191,5 +191,9 @@ pub(super) async fn discover(io: &BoundedIo, paths: &AgentPaths, cancel: &Cancel
     metadata.retain(|s| ids.contains(s.id.as_str()));
     identities.retain(|pid, _| agents.iter().any(|a| a.pid == *pid));
     let active_subagent_count = if agents.is_empty() { Some(0) } else { None };
-    Ok(Discovery { snapshot: AgentSnapshot { collected_at: timestamp(), agents, active_subagent_count, sources }, sessions: metadata, identities })
+    let snapshot = AgentSnapshot {
+        collected_at: timestamp(), agents, active_subagent_count, sources,
+        process_identities: Some(Arc::new(identities)),
+    };
+    Ok(Discovery { snapshot, sessions: metadata })
 }

@@ -71,6 +71,7 @@ const codes = {
   OC_TERN_ACCESSIBILITY: '请在系统设置 → 隐私与安全性 → 辅助功能中允许 OC Chan，然后重试 / Allow OC Chan in System Settings → Privacy & Security → Accessibility, then retry',
   OC_TERN_ACTIVATION: '未能将已核验的 Tern 应用切到前台 / Could not activate the verified Tern application',
   OC_TERN_WINDOW: '未确认对应的 Tern 窗口显示并获得焦点 / Could not confirm the target Tern window is visible and focused',
+  OC_TERN_FOCUS: '目标 Tern 标签页或分屏未获得焦点 / The target Tern tab or pane did not receive focus',
   OC_DIAGNOSTIC_BUSY: '诊断操作尚未结束 / A diagnostic operation is still in progress',
   OC_DIAGNOSTIC_EXPIRED: '诊断预览已释放或过期，请重新生成 / Preview released or expired; generate it again',
   OC_DIAGNOSTIC_UNAVAILABLE: '诊断操作当前不可用 / Diagnostic operation is unavailable',

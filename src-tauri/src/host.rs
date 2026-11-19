@@ -266,10 +266,10 @@ impl Host {
                 if let Some(document) = self.documents.get(view)? { document.visible.store(visible, Ordering::Release); }
                 if !visible {
                     if let Some(document) = self.documents.get(view)? { document.history.cancel().await?; document.schedule_detail.cancel().await?; document.events.cancel().await?; if let Some(diagnostics) = &document.diagnostics { diagnostics.cancel().await?; } }
-                    self.blur(view).await?;
+                    self.blur(view, true).await?;
                 } Ok(())
             },
-            WindowSignal::Blur(view) => self.blur(view).await,
+            WindowSignal::Blur(view) => self.blur(view, false).await,
             WindowSignal::Geometry(bounds) => {
                 let settings = self.components.lock().map_err(|_| Error::invalid("host components"))?.settings.clone();
                 if let Some(settings) = settings { if !self.shutting.load(Ordering::Acquire) { settings.on_geometry(bounds).await?; } } Ok(())
@@ -279,12 +279,15 @@ impl Host {
             WindowSignal::Failed(error) => Err(error),
         }
     }
-    async fn blur(&self, view: View) -> Result<()> {
+    async fn blur(&self, view: View, hidden: bool) -> Result<()> {
         if view != View::Main || self.shutting.load(Ordering::Acquire) { return Ok(()); }
         if let Some(document) = self.documents.get(view)? {
             let services = self.services()?;
             services.settings.preview_glass(document.id, None).await?;
-            services.tern.cancel().await?;
+            // Presenting Tern moves focus away from this window during navigation.
+            if hidden {
+                services.tern.cancel().await?;
+            }
         }
         Ok(())
     }

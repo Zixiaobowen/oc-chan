@@ -120,7 +120,7 @@ pub fn build_report(snapshot:&MonitorSnapshot,resources:&ResourceBudgetSnapshot,
     use super::*;use crate::resources::ResourceBudget;
     #[test] fn untrusted_metadata_and_source_text_never_leak(){
         let mut snapshot=MonitorSnapshot::default();snapshot.agents.error=Some("SECRET /Users/person/token".into());
-        snapshot.agents.data=Some(AgentSnapshot{collected_at:"SECRET".into(),agents:Vec::new(),active_subagent_count:None,sources:vec![SourceStatus::new("launchagents:user","SECRET /Users/secret/Library/LaunchAgents",SourceState::Error,"SECRET")]});
+        snapshot.agents.data=Some(AgentSnapshot{collected_at:"SECRET".into(),agents:Vec::new(),active_subagent_count:None,sources:vec![SourceStatus::new("launchagents:user","SECRET /Users/secret/Library/LaunchAgents",SourceState::Error,"SECRET")],process_identities:None});
         let metadata=ReportMetadata{version:"1.0.0".into(),tauri:"2.12.5".into(),platform:"darwin".into(),arch:"arm64".into(),os_release:"SECRET".into()};
         let mut resources=ResourceBudget::default().snapshot();
         resources.sources=vec![
@@ -137,7 +137,7 @@ pub fn build_report(snapshot:&MonitorSnapshot,resources:&ResourceBudgetSnapshot,
     #[test]fn report_caps_records_globally_and_marks_incomplete_coverage(){
         let mut source=SourceStatus::new("processes","PRIVATE",SourceState::Partial,"PRIVATE");
         source.diagnostics=Some(vec![SourceDiagnostic{source_id:"processes".into(),operation:SourceDiagnosticOperation::Services,stage:SourceDiagnosticStage::Limit,code:SourceDiagnosticCode::EntryLimit,retryable:true,observed_at:"2026-11-10T00:00:00.000Z".into(),exit_code:None};3]);
-        let mut snapshot=MonitorSnapshot::default();snapshot.agents.data=Some(AgentSnapshot{collected_at:"2026-11-10T00:00:00.000Z".into(),agents:Vec::new(),active_subagent_count:None,sources:vec![source;66]});
+        let mut snapshot=MonitorSnapshot::default();snapshot.agents.data=Some(AgentSnapshot{collected_at:"2026-11-10T00:00:00.000Z".into(),agents:Vec::new(),active_subagent_count:None,sources:vec![source;66],process_identities:None});
         let metadata=ReportMetadata{version:"1.0.0".into(),tauri:"2.12.5".into(),platform:"darwin".into(),arch:"arm64".into(),os_release:"27.2.0".into()};
         let mut resources=ResourceBudget::default().snapshot();resources.sources=vec![crate::resources::SourceStatistics{source:"PRIVATE".into(),statistics:Default::default()};34];
         let report=build_report(&snapshot,&resources,&metadata).unwrap();

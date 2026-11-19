@@ -126,7 +126,6 @@ impl Monitor {
                     if let Err(error) = events { errors.push(error); }
                     this.tasks.wait().await;
                     errors.extend(std::mem::take(&mut *this.abandoned.lock().expect("monitor error log poisoned")));
-                    this.shared.agent.lock().expect("agent instance poisoned").take();
                     let result = if errors.is_empty() { Ok(()) } else { Err(Error::aggregate(errors)) }; let _completed = send.send(result);
                 }); completion
             }
@@ -162,13 +161,19 @@ impl Monitor {
     }
     pub async fn process_identity(&self, agent_id: &str) -> Result<ProcessIdentity> {
         self.ready()?; validate_text(agent_id, MAX_AGENT_ID_LENGTH, 2048, "agent id")?;
-        let generation = {
+        let identity = {
             let state = self.shared.state.lock().expect("monitor state poisoned");
-            let owner = state.owners[index(MonitorSection::Agents)].as_ref().filter(|owner| owner.enabled).ok_or_else(|| Error::new("OC_PLUGIN_DISABLED", "Agent collection is disabled"))?;
-            if !state.snapshot.agents.data.as_ref().is_some_and(|data| data.agents.iter().any(|agent| agent.id == agent_id)) { return Err(Error::new("OC_AGENT_IDENTITY", "Agent is absent from the current snapshot")); } owner.generation
+            if !state.owners[index(MonitorSection::Agents)].as_ref().is_some_and(|owner| owner.enabled) {
+                return Err(Error::new("OC_PLUGIN_DISABLED", "Agent collection is disabled"));
+            }
+            state.snapshot.agents.data.as_ref().and_then(|snapshot| {
+                let agent = snapshot.agents.iter().find(|agent| agent.id == agent_id)?;
+                snapshot.process_identity(agent.pid).cloned()
+            })
         };
-        let collector = self.shared.agent.lock().expect("agent instance poisoned").as_ref().filter(|(current,_)| *current == generation).and_then(|(_,collector)| collector.upgrade()).ok_or_else(|| Error::new("OC_AGENT_IDENTITY", "Agent lifecycle is no longer current"))?;
-        collector.process_identity(agent_id).await
+        identity.filter(ProcessIdentity::matches_live).ok_or_else(|| {
+            Error::new("OC_AGENT_IDENTITY", "目标未发布、已退出或进程身份已变化 / Agent identity is not currently published")
+        })
     }
     pub async fn history(self: &Arc<Self>, job_id: &str, offset: usize, cancel: CancellationToken) -> Result<ScheduleHistory> {
         self.ready()?; check_cancel(&cancel)?; validate_text(job_id, MAX_SCHEDULE_ID_LENGTH, 1024, "schedule job id")?;

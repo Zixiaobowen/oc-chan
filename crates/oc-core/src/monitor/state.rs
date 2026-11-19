@@ -9,14 +9,14 @@ pub(super) struct State {
 }
 pub(super) struct Shared {
     pub state: Mutex<State>, pub streams: [Streams; 4], pub closed: AtomicBool,
-    pub agent: Mutex<Option<(u64, Weak<AgentCollector>)>>, pub retry_sources: Vec<String>,
+    pub retry_sources: Vec<String>,
 }
 pub(super) fn index(section: MonitorSection) -> usize { match section { MonitorSection::Agents => 0, MonitorSection::Schedules => 1, MonitorSection::System => 2, MonitorSection::Events => 3 } }
 impl Shared {
     pub fn new(retry_sources: Vec<String>) -> Arc<Self> {
         Arc::new(Self { state: Mutex::new(State { snapshot: MonitorSnapshot::default(), owners: std::array::from_fn(|_| None), enabled: PluginSettings::default(), collection_errors: std::array::from_fn(|_| None), pending: BTreeSet::new() }),
             streams: std::array::from_fn(|i| Streams { updates: watch::channel(match i { 0 => MonitorUpdate::Agents(CollectorState::default()), 1 => MonitorUpdate::Schedules(CollectorState::default()), 2 => MonitorUpdate::System(CollectorState::default()), _ => MonitorUpdate::Events(CollectorState::default()) }).0, sources: watch::channel(None).0 }),
-            closed: AtomicBool::new(false), agent: Mutex::new(None), retry_sources })
+            closed: AtomicBool::new(false), retry_sources })
     }
     pub fn observe(&self, event: RegistryEvent) {
         if self.closed.load(Ordering::Acquire) { return; }
@@ -27,6 +27,9 @@ impl Shared {
                 let section = status.section; let slot = index(section);
                 if state.owners[slot].as_ref().is_some_and(|owner| owner.id != status.id) { return; }
                 let disabled = !status.enabled; let clear = status.phase == PluginPhase::Disabled;
+                if section == MonitorSection::Agents && (disabled || state.owners[slot].as_ref().is_some_and(|owner| owner.generation != status.generation)) {
+                    if let Some(data) = &mut state.snapshot.agents.data { data.process_identities = None; }
+                }
                 state.owners[slot] = Some(status);
                 if disabled {
                     if clear { state.collection_errors[slot] = None; }

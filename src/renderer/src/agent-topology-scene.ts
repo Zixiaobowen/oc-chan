@@ -24,7 +24,6 @@ export interface Topology3DSession {
 interface Callbacks {
   select(id: string): void
   floor(id: string): void
-  menu(id: string, x: number, y: number, trigger: HTMLElement): void
   error(message: string): void
   ready(): void
 }
@@ -159,19 +158,6 @@ export class TopologyScene {
       label.addEventListener('click', () => {
         if (label.dataset.id) this.selectAgent(label.dataset.id)
       })
-      label.addEventListener('contextmenu', event => {
-        if (!label.dataset.id || this.byId.get(label.dataset.id)?.agent.runtime !== 'OMP') return
-        event.preventDefault()
-        label.focus({ preventScroll: true })
-        this.callbacks.menu(label.dataset.id, event.clientX, event.clientY, label)
-      })
-      label.addEventListener('keydown', event => {
-        if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return
-        if (!label.dataset.id || this.byId.get(label.dataset.id)?.agent.runtime !== 'OMP') return
-        event.preventDefault()
-        const box = label.getBoundingClientRect()
-        this.callbacks.menu(label.dataset.id, box.left, box.bottom, label)
-      })
       host.append(label)
       this.labels.push(label)
     }
@@ -202,7 +188,6 @@ export class TopologyScene {
     canvas.addEventListener('pointerup', this.pointerUp)
     canvas.addEventListener('pointercancel', this.pointerCancel)
     canvas.addEventListener('lostpointercapture', this.pointerCancel)
-    canvas.addEventListener('contextmenu', this.contextMenu)
     canvas.addEventListener('keydown', this.keyDown)
     canvas.addEventListener('webglcontextlost', this.contextLost)
     document.addEventListener('visibilitychange', this.visibilityChange)
@@ -726,13 +711,13 @@ export class TopologyScene {
     this.fit()
   }
 
-  private updateRay(event: PointerEvent | MouseEvent): void {
+  private updateRay(event: PointerEvent): void {
     const bounds = this.renderer.domElement.getBoundingClientRect()
     this.pointer.set((event.clientX - bounds.left) / bounds.width * 2 - 1, -(event.clientY - bounds.top) / bounds.height * 2 + 1)
     this.raycaster.setFromCamera(this.pointer, this.camera)
   }
 
-  private hit(event: PointerEvent | MouseEvent): string | null {
+  private hit(event: PointerEvent): string | null {
     this.updateRay(event)
     const hit = this.raycaster.intersectObjects([this.nodes, this.markers, this.desks, this.mutedNodes, this.mutedMarkers, this.mutedDesks], false)[0]
     if (hit?.instanceId === undefined) return null
@@ -801,14 +786,6 @@ export class TopologyScene {
     }
   }
   private readonly pointerCancel = (): void => { this.pointerStart = null; this.controls.enabled = true }
-  private readonly contextMenu = (event: MouseEvent): void => {
-    const id = this.hit(event)
-    if (id && this.byId.get(id)?.agent.runtime === 'OMP') {
-      event.preventDefault()
-      this.renderer.domElement.focus({ preventScroll: true })
-      this.callbacks.menu(id, event.clientX, event.clientY, this.renderer.domElement)
-    }
-  }
   private readonly keyDown = (event: KeyboardEvent): void => {
     if (event.key.toLowerCase() === 'f') { event.preventDefault(); this.fit() }
     if (event.key === '+' || event.key === '=') { event.preventDefault(); this.zoom(0.8) }
@@ -837,7 +814,6 @@ export class TopologyScene {
     canvas.removeEventListener('pointerup', this.pointerUp)
     canvas.removeEventListener('pointercancel', this.pointerCancel)
     canvas.removeEventListener('lostpointercapture', this.pointerCancel)
-    canvas.removeEventListener('contextmenu', this.contextMenu)
     canvas.removeEventListener('keydown', this.keyDown)
     canvas.removeEventListener('webglcontextlost', this.contextLost)
     this.controls.removeEventListener('change', this.invalidate)

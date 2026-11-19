@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, path::PathBuf, sync::{Arc, Mutex as StdMutex}, time::Duration};
+use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
 use futures_util::{stream::FuturesUnordered, StreamExt, future::BoxFuture};
 use tokio::{sync::{mpsc, oneshot}, time::Instant};
 use tokio_util::sync::CancellationToken;
@@ -20,7 +20,6 @@ struct Actor {
     watcher: Option<FileWatcher>, watch_peak: usize,
     reads: FuturesUnordered<BoxFuture<'static, Completed>>, revision: u64, publish_due: Option<Instant>,
     cleanup: Vec<Error>,
-    published: Arc<StdMutex<super::Published>>,
     base_cancel: CancellationToken,
 }
 impl Actor {
@@ -86,13 +85,12 @@ impl Actor {
         }
     }
     async fn reconcile(&mut self, discovery: Discovery, operation: &CancellationToken) -> Result<AgentSnapshot> {
-        self.published.lock().expect("published identity lock").invalidate();
         check_cancel(operation)?; check_cancel(&self.cancel)?;
         if self.watcher.is_none() { self.watcher = Some(FileWatcher::new()?); }
         let desired: BTreeMap<_, _> = discovery.sessions.iter().take(MAX_SESSIONS).map(|s| (s.file.clone(), s)).collect();
         let removed: Vec<_> = self.entries.iter().filter(|(path, entry)| {
             desired.get(*path).is_none_or(|new| new.id != entry.session.id || !new.identity.same_file(&entry.session.identity)) ||
-                self.base.as_ref().is_some_and(|old| old.snapshot.agents.iter().filter(|a| a.session_id.as_ref() == Some(&entry.session.id)).any(|a| old.identities.get(&a.pid) != discovery.identities.get(&a.pid)))
+                self.base.as_ref().is_some_and(|old| old.snapshot.agents.iter().filter(|a| a.session_id.as_ref() == Some(&entry.session.id)).any(|a| old.snapshot.process_identity(a.pid) != discovery.snapshot.process_identity(a.pid)))
         }).map(|(path, _)| path.clone()).collect();
         for path in &removed { self.detach(path); if let Some(entry) = self.entries.get_mut(path) { entry.revision = entry.revision.wrapping_add(1); entry.result = None; } }
         // Never admit replacement watch/read lanes before retired readers have actually settled.
@@ -109,13 +107,12 @@ impl Actor {
         check_cancel(operation)?; check_cancel(&self.cancel)?;
         self.base_cancel = operation.clone();
         self.base = Some(discovery);
-        self.published.lock().expect("published identity lock").pending = false;
         self.project().ok_or_else(|| Error::new("OC_AGENT_STATE", "缺少已确认发现快照"))
     }
     fn project(&self) -> Option<AgentSnapshot> {
         let discovery = self.base.as_ref()?; let mut snapshot = discovery.snapshot.clone();
         let now = chrono::Utc::now().timestamp_millis();
-        snapshot.agents.retain(|agent| discovery.identities.get(&agent.pid).is_some_and(|identity| identity.matches_live()));
+        snapshot.agents.retain(|agent| discovery.snapshot.process_identity(agent.pid).is_some_and(|identity| identity.matches_live()));
         let mut observed = 0; let mut unsupported = 0; let mut incomplete = 0; let mut errors = 0; let mut watching = 0;
         let mut issues = std::collections::BTreeSet::new();
         for agent in &mut snapshot.agents {
@@ -142,17 +139,11 @@ impl Actor {
     }
     fn emit(&mut self) {
         self.publish_due = None;
-        if self.cancel.is_cancelled() { return; }
+        if self.cancel.is_cancelled() || self.base_cancel.is_cancelled() { return; }
         if let Some(snapshot) = self.project() {
-            let mut published = self.published.lock().expect("published identity lock");
-            if !published.pending {
-                published.identities.clear();
-                if let Some(base) = &self.base {
-                    for agent in &snapshot.agents { if let Some(identity) = base.identities.get(&agent.pid) { published.identities.insert(agent.id.clone(), identity.clone()); } }
-                }
+            if !self.cancel.is_cancelled() && !self.base_cancel.is_cancelled() {
+                (self.publish)(Ok(snapshot));
             }
-            drop(published);
-            (self.publish)(Ok(snapshot));
         }
         let now = chrono::Utc::now().timestamp_millis();
         for entry in self.entries.values_mut() {
@@ -165,7 +156,6 @@ impl Actor {
         self.entries.values().filter_map(|entry| if self.reads.len() < MAX_READS { entry.due } else { None }).chain(self.publish_due).chain(expiry).min().unwrap_or(now + Duration::from_secs(86400))
     }
     async fn clear_snapshot(&mut self) {
-        self.published.lock().expect("published identity lock").invalidate();
         let paths: Vec<_> = self.entries.keys().cloned().collect();
         for path in paths { self.detach(&path); }
         while let Some(completed) = self.reads.next().await { self.complete(completed); }
@@ -180,10 +170,10 @@ impl Actor {
     }
 }
 
-pub(super) async fn run(io: BoundedIo, publish: Arc<dyn Fn(Result<AgentSnapshot>) + Send + Sync>, mut receiver: mpsc::Receiver<Reconcile>, cancel: CancellationToken, io_cancel: CancellationToken, published: Arc<StdMutex<super::Published>>, ready: oneshot::Sender<Result<()>>) -> Result<()> {
+pub(super) async fn run(io: BoundedIo, publish: Arc<dyn Fn(Result<AgentSnapshot>) + Send + Sync>, mut receiver: mpsc::Receiver<Reconcile>, cancel: CancellationToken, io_cancel: CancellationToken, ready: oneshot::Sender<Result<()>>) -> Result<()> {
     let watcher = match FileWatcher::new() { Ok(watcher) => watcher, Err(error) => { let _ = ready.send(Err(error.clone())); return Err(error); } };
     let mut actor = Actor { io, publish, cancel: cancel.clone(), entries: BTreeMap::new(), base: None, watcher: Some(watcher), watch_peak: 0,
-        reads: FuturesUnordered::new(), revision: 0, publish_due: None, cleanup: Vec::new(), published, base_cancel: CancellationToken::new() };
+        reads: FuturesUnordered::new(), revision: 0, publish_due: None, cleanup: Vec::new(), base_cancel: CancellationToken::new() };
     let _ = ready.send(Ok(()));
     loop {
         let deadline = actor.deadline();

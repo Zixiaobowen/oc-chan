@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+use std::{collections::BTreeMap, sync::Arc};
+use crate::process::ProcessIdentity;
 use super::SourceStatus;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -62,4 +64,12 @@ pub struct AgentSnapshot {
     pub agents: Vec<AgentInfo>,
     pub active_subagent_count: Option<usize>,
     pub sources: Vec<SourceStatus>,
+    /// Local process evidence for this snapshot. IPC cannot supply or receive it.
+    #[serde(skip)]
+    pub(crate) process_identities: Option<Arc<BTreeMap<u32, ProcessIdentity>>>,
+}
+impl AgentSnapshot {
+    pub(crate) fn process_identity(&self, pid: u32) -> Option<&ProcessIdentity> {
+        self.process_identities.as_ref()?.get(&pid)
+    }
 }

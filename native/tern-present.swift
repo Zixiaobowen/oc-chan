@@ -22,6 +22,7 @@ let maximumTitleLength = 4096
 enum Command {
     case probe
     case present(pid_t, String, String)
+    case verify(pid_t, String, String)
 }
 
 // This phase is lexical only: invalid commands cannot enumerate apps, use AX, or activate.
@@ -33,7 +34,7 @@ func normalizedAbsolutePath(_ path: String) -> Bool {
 
 func parseCommand(_ arguments: [String]) throws -> Command {
     if arguments.count == 2, arguments[1] == "probe" { return .probe }
-    guard arguments.count == 5, arguments[1] == "present" else {
+    guard arguments.count == 5, arguments[1] == "present" || arguments[1] == "verify" else {
         throw NavigationError.target
     }
     let pidText = arguments[2]
@@ -47,7 +48,7 @@ func parseCommand(_ arguments: [String]) throws -> Command {
               (48...57).contains($0) || $0 == 46 || $0 == 95 || $0 == 45 }) else {
         throw NavigationError.target
     }
-    return .present(pid, arguments[3], key)
+    return arguments[1] == "present" ? .present(pid, arguments[3], key) : .verify(pid, arguments[3], key)
 }
 
 struct ProcessStartTime: Equatable {
@@ -269,14 +270,39 @@ func waitForFocusTick() {
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 }
 
+func focusedWindowTitle(_ application: AXUIElement, context: AccessibilityContext, pid: pid_t,
+                        prefix: String) throws -> String? {
+    guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
+          let focused = try context.attribute(application, kAXFocusedWindowAttribute) else { return nil }
+    guard CFGetTypeID(focused) == AXUIElementGetTypeID() else { throw NavigationError.window }
+    let window = focused as! AXUIElement
+    guard let title = try context.string(window, kAXTitleAttribute), title.hasPrefix(prefix),
+          try context.attribute(window, kAXMinimizedAttribute) as? Bool == false,
+          NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return nil }
+    return title
+}
+
+func windowReceipt(_ identity: TernIdentity, title: String) -> [String: Any] {
+    ["pid": identity.pid, "windowTitle": title, "focused": true]
+}
+
+func verifyWindow(_ identity: TernIdentity, key: String) throws -> [String: Any] {
+    guard AXIsProcessTrusted() else { throw NavigationError.accessibility }
+    let context = AccessibilityContext()
+    let application = AXUIElementCreateApplication(identity.pid)
+    guard let title = try focusedWindowTitle(application, context: context, pid: identity.pid,
+        prefix: "[Tern \"\(key)\"] ") else { throw NavigationError.window }
+    try sameRunningApplication(identity)
+    return windowReceipt(identity, title: title)
+}
+
 func presentWindow(_ identity: TernIdentity, key: String) throws -> [String: Any] {
     guard AXIsProcessTrusted() else { throw NavigationError.accessibility }
-    try sameRunningApplication(identity)
+    let pid = identity.pid
     guard identity.application.activate(options: [.activateIgnoringOtherApps]) else {
         throw NavigationError.activation
     }
-    let pid = identity.pid
-    let activationDeadline = ProcessInfo.processInfo.systemUptime + 1
+    let activationDeadline = ProcessInfo.processInfo.systemUptime + 1.5
     while NSWorkspace.shared.frontmostApplication?.processIdentifier != pid {
         guard ProcessInfo.processInfo.systemUptime < activationDeadline else {
             throw NavigationError.activation
@@ -295,8 +321,7 @@ func presentWindow(_ identity: TernIdentity, key: String) throws -> [String: Any
     } while ProcessInfo.processInfo.systemUptime < menuDeadline
     guard items.count == 1 else { throw NavigationError.window }
     let item = items[0]
-    guard try context.attribute(item, kAXEnabledAttribute) as? Bool == true,
-          let title = try context.string(item, kAXTitleAttribute), title.hasPrefix(prefix) else {
+    guard try context.string(item, kAXTitleAttribute)?.hasPrefix(prefix) == true else {
         throw NavigationError.window
     }
     try sameRunningApplication(identity)
@@ -307,22 +332,11 @@ func presentWindow(_ identity: TernIdentity, key: String) throws -> [String: Any
     let focusDeadline = ProcessInfo.processInfo.systemUptime + 2
     var focusedSince: TimeInterval?
     repeat {
-        try context.beginScan()
-        let windows = try context.elements(application, kAXWindowsAttribute)
-        var focusedCount = 0
-        for window in windows {
-            if try context.string(window, kAXTitleAttribute) == title,
-               try context.attribute(window, kAXMainAttribute) as? Bool == true,
-               NSWorkspace.shared.frontmostApplication?.processIdentifier == pid {
-                focusedCount += 1
-            }
-        }
-        guard focusedCount <= 1 else { throw NavigationError.window }
-        if focusedCount == 1 {
-            let now = ProcessInfo.processInfo.systemUptime
+        let now = ProcessInfo.processInfo.systemUptime
+        if let title = try focusedWindowTitle(application, context: context, pid: pid, prefix: prefix) {
             if let since = focusedSince, now - since >= 0.3 {
                 try sameRunningApplication(identity)
-                return ["pid": pid, "windowTitle": title, "main": true]
+                return windowReceipt(identity, title: title)
             }
             if focusedSince == nil { focusedSince = now }
         } else {
@@ -345,6 +359,9 @@ do {
     case let .present(pid, executable, key):
         guard pid == identity.pid, executable == identity.executable else { throw NavigationError.identity }
         result = try presentWindow(identity, key: key)
+    case let .verify(pid, executable, key):
+        guard pid == identity.pid, executable == identity.executable else { throw NavigationError.identity }
+        result = try verifyWindow(identity, key: key)
     }
     let data = try JSONSerialization.data(withJSONObject: result)
     FileHandle.standardOutput.write(data)

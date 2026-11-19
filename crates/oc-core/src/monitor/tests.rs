@@ -5,7 +5,7 @@ use tokio::sync::Notify;
 
 const T1: &str = "2026-11-10T10:00:00.000Z";
 const T2: &str = "2026-11-10T10:00:02.000Z";
-fn agents(at: &str) -> AgentSnapshot { AgentSnapshot { collected_at: at.into(), agents: Vec::new(), active_subagent_count: Some(0), sources: vec![SourceStatus::new("ps", "Processes", SourceState::Ok, "observed")] } }
+fn agents(at: &str) -> AgentSnapshot { AgentSnapshot { collected_at: at.into(), agents: Vec::new(), active_subagent_count: Some(0), sources: vec![SourceStatus::new("ps", "Processes", SourceState::Ok, "observed")], process_identities: None } }
 fn owner(shared: &Shared, section: MonitorSection, generation: u64) { shared.observe(RegistryEvent::State(PluginStatus { id: section.as_str().into(), section, enabled: true, phase: PluginPhase::Running, generation, error: None })); }
 fn publish(shared: &Shared, snapshot: SnapshotData, generation: u64, incremental: bool, source: Option<&str>) {
     let section = snapshot.section(); shared.observe(RegistryEvent::Snapshot(crate::plugins::Publication { id: section.as_str().into(), section, generation, snapshot, source_id: source.map(str::to_owned), incremental }));
@@ -146,6 +146,53 @@ async fn refresh_coalesces_and_dropped_waiter_does_not_clear_the_running_operati
     first.abort(); assert!(monitor.snapshot().agents.refreshing); assert_eq!(plugin.collected.load(Ordering::SeqCst), 2);
     plugin.release.notify_one(); second.await.unwrap().unwrap(); assert!(!monitor.snapshot().agents.refreshing); monitor.stop().await.unwrap();
 }
+#[tokio::test]
+async fn navigation_identity_survives_refresh_until_the_published_target_changes() {
+    let profile = profile();
+    let monitor = Monitor::new(options(profile.path())).unwrap();
+    monitor.start(&disabled()).await.unwrap();
+    let plugin = Controlled::new();
+    let publishers = Arc::new(Mutex::new(Vec::new()));
+    controlled(&monitor, plugin.clone(), publishers.clone()).await;
+    let publisher = publishers.lock().unwrap()[0].clone();
+
+    let agent_id = "omp:session-0";
+    let birth = ProcessIdentity::read(std::process::id()).unwrap();
+    let mut snapshot = agents(T1);
+    snapshot.agents.push(serde_json::from_value(serde_json::json!({
+        "id": agent_id, "name": "OMP", "runtime": "OMP", "kind": "main", "state": "idle",
+        "pid": birth.pid, "startedAt": "2000-01-01T00:00:00Z", "source": "fixture"
+    })).unwrap());
+    snapshot.active_subagent_count = None;
+    snapshot.process_identities = Some(Arc::new(BTreeMap::from([(birth.pid, birth.clone())])));
+    publisher.publish(SnapshotData::Agents(snapshot.clone()), None, false).unwrap();
+
+    let refresh = tokio::spawn({
+        let monitor = monitor.clone();
+        async move { monitor.refresh(Some(MonitorSection::Agents)).await }
+    });
+    tokio::time::timeout(Duration::from_secs(3), plugin.entered.notified()).await.unwrap();
+    assert!(monitor.snapshot().agents.refreshing);
+    assert_eq!(monitor.process_identity(agent_id).await.unwrap(), birth);
+
+    plugin.release.notify_one();
+    refresh.await.unwrap().unwrap();
+    assert_eq!(monitor.process_identity(agent_id).await.unwrap_err().code, "OC_AGENT_IDENTITY");
+
+    let mut replaced = snapshot.clone();
+    let stale_birth = ProcessIdentity { start_seconds: birth.start_seconds + 1, ..birth };
+    replaced.process_identities = Some(Arc::new(BTreeMap::from([(stale_birth.pid, stale_birth)])));
+    publisher.publish(SnapshotData::Agents(replaced), None, false).unwrap();
+    assert_eq!(monitor.process_identity(agent_id).await.unwrap_err().code, "OC_AGENT_IDENTITY");
+
+    publisher.publish(SnapshotData::Agents(snapshot), None, false).unwrap();
+    monitor.registry.set_enabled("agents", false).await.unwrap();
+    assert_eq!(monitor.process_identity(agent_id).await.unwrap_err().code, "OC_PLUGIN_DISABLED");
+    owner(&monitor.shared, MonitorSection::Agents, publisher.generation() + 1);
+    assert_eq!(monitor.process_identity(agent_id).await.unwrap_err().code, "OC_AGENT_IDENTITY");
+    monitor.stop().await.unwrap();
+}
+
 #[tokio::test]
 async fn shutdown_waits_for_true_collection_cleanup_and_revokes_error_callbacks() {
     let profile = profile(); let monitor = Monitor::new(options(profile.path())).unwrap(); monitor.start(&disabled()).await.unwrap();

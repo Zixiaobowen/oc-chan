@@ -34,7 +34,7 @@ Six landmark-inspired silhouettes rotate by parcel, making projects easier to di
 
 ### Return to an agent's session
 
-Right-click a linked OMP node to jump to its Tern tab. For subagents, OC Chan follows the confirmed parent chain to the main session. It verifies the destination again before navigating and reports sessions that have closed or changed. First-time setup requires Tern integration and macOS Accessibility permission. See the [navigation guide (Chinese)](docs/features.md#协作拓扑画布).
+Switch to 2D and right-click a linked OMP node to jump to its Tern tab. For subagents, OC Chan follows the confirmed parent chain to the main session. It verifies the destination again before navigating and reports sessions that have closed or changed. First-time setup requires Tern integration and macOS Accessibility permission. See the [navigation guide (Chinese)](docs/features.md#协作拓扑画布).
 
 ### Inspect scheduled tasks and their results
 
