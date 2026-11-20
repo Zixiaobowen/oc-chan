@@ -1,8 +1,8 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
 import CalendarClock from 'kubai-icons-react/icons/calendar-clock'
 import Search from 'kubai-icons-react/icons/search'
 import CircleX from 'kubai-icons-react/icons/circle-x'
-import type { ScheduledJob, ScheduleSnapshot } from '../../shared/types'
+import type { ScheduledJob, ScheduleMutation, ScheduleMutationReceipt, ScheduleSnapshot } from '../../shared/types'
 import { Badge, CollectionStatus, Empty, NativeSelect, Sources, time } from './components'
 import { useI18n } from './i18n'
 import type { ResolvedLanguage } from '../../shared/settings'
@@ -138,6 +138,138 @@ function ScheduleSourceReason({ job, sources, onSource }: {
   </div>
 }
 
+type WriteSchedule = (change: ScheduleMutation) => Promise<boolean>
+type ScheduleAction = ScheduleMutation['action']
+
+const writeMessages: Record<ScheduleAction, [string, string]> = {
+  create: ['已创建 Hermes 任务。', 'Hermes task created.'],
+  pause: ['已暂停 Hermes 任务。', 'Hermes task paused.'],
+  resume: ['已恢复 Hermes 任务。', 'Hermes task resumed.'],
+  delete: ['已删除 Hermes 任务。', 'Hermes task deleted.']
+}
+
+function ScheduleCreateForm({ busy, blocked, write, onClose }: {
+  busy: boolean; blocked: string | null; write: WriteSchedule; onClose: () => void
+}) {
+  const { t } = useI18n()
+  const nameRef = useRef<HTMLInputElement>(null)
+  const submitRef = useRef<HTMLButtonElement>(null)
+  const [failure, setFailure] = useState<string | null>(null)
+  useLayoutEffect(() => { nameRef.current?.focus() }, [])
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (busy || blocked) return
+    const form = event.currentTarget
+    const values = new FormData(form)
+    const name = String(values.get('name') ?? '').trim()
+    const schedule = String(values.get('schedule') ?? '').trim()
+    const prompt = String(values.get('prompt') ?? '').trim()
+    if (!name || !schedule || !prompt) {
+      setFailure(t('请填写任务名称、执行计划和任务指令。', 'Enter a task name, schedule, and instructions.'))
+      const missing = !name ? 'name' : !schedule ? 'schedule' : 'prompt'
+      form.querySelector<HTMLElement>(`[name="${missing}"]`)?.focus()
+      return
+    }
+    setFailure(null)
+    submitRef.current?.focus({ preventScroll: true })
+    try {
+      const written = await write({ action: 'create', name, schedule, prompt, paused: values.has('paused') })
+      if (written && form.isConnected) onClose()
+    } catch (cause) {
+      if (form.isConnected) setFailure(cause instanceof Error ? cause.message : String(cause))
+    }
+  }
+
+  return <form id="schedule-create-form" className="schedule-create-form" data-schedule-create-form aria-labelledby="schedule-create-title" onSubmit={submit} onKeyDown={event => {
+    if (event.key !== 'Escape') return
+    event.preventDefault()
+    if (!busy) onClose()
+  }}>
+    <h2 id="schedule-create-title">{t('新增 Hermes 任务', 'New Hermes task')}</h2>
+    <p className="footnote">{t('任务由本机 Hermes 调度。列表继续使用当前筛选条件。', 'Local Hermes schedules the task. The list keeps its current filters.')}</p>
+    <fieldset disabled={busy}>
+      <label>{t('任务名称', 'Task name')}<input ref={nameRef} name="name" type="text" maxLength={160} required /></label>
+      <div className="schedule-create-plan">
+        <label>{t('执行计划', 'Schedule')}<input name="schedule" type="text" maxLength={256} required aria-describedby="schedule-create-examples" /></label>
+        <p id="schedule-create-examples" className="footnote">{t('例如', 'Examples')} <code>every 2h</code> / <code>0 9 * * *</code> / <code>in 30m</code></p>
+      </div>
+      <label>{t('任务指令', 'Task instructions')}<textarea name="prompt" rows={3} maxLength={4000} required /></label>
+      <label className="schedule-create-paused"><input name="paused" type="checkbox" defaultChecked />{t('创建为暂停', 'Create paused')}</label>
+    </fieldset>
+    {blocked && <p className="footnote" role="status">{blocked}</p>}
+    {failure && <p className="schedule-write-error" role="alert">{failure}</p>}
+    <div className="schedule-write-actions">
+      <button ref={submitRef} className="button primary" type="submit" data-schedule-action="submit-create" aria-disabled={busy || Boolean(blocked)}>{busy ? t('正在创建…', 'Creating…') : t('创建任务', 'Create task')}</button>
+      <button className="button secondary" type="button" aria-disabled={busy} onClick={() => { if (!busy) onClose() }}>{t('取消', 'Cancel')}</button>
+    </div>
+  </form>
+}
+
+function ScheduleJobControls({ job, identity, busy, blocked, write, onWritten }: {
+  job: ScheduledJob; identity: string; busy: ScheduleAction | null; blocked: string | null; write: WriteSchedule;
+  onWritten: () => void
+}) {
+  const { t } = useI18n()
+  const controlsRef = useRef<HTMLElement>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
+  const deleteRef = useRef<HTMLButtonElement>(null)
+  const cancelRef = useRef<HTMLButtonElement>(null)
+  const returnFocus = useRef(false)
+  useLayoutEffect(() => {
+    if (confirming) cancelRef.current?.focus()
+    else if (returnFocus.current) deleteRef.current?.focus()
+    returnFocus.current = false
+  }, [confirming])
+
+  function cancelDelete() {
+    returnFocus.current = true
+    setConfirming(false)
+    setFailure(null)
+  }
+
+  async function act(action: 'pause' | 'resume' | 'delete', trigger: HTMLButtonElement) {
+    if (busy || blocked) return
+    setFailure(null)
+    try {
+      const written = await write({ action, jobId: job.id, identity })
+      if (written && controlsRef.current && (document.activeElement === trigger || document.activeElement === document.body)) onWritten()
+    } catch (cause) {
+      if (controlsRef.current) setFailure(cause instanceof Error ? cause.message : String(cause))
+    }
+  }
+
+  const control = job.hermesControl
+  const disabled = Boolean(busy || blocked)
+  return <section ref={controlsRef} className="schedule-job-controls" aria-labelledby="schedule-job-controls-title" onKeyDown={event => {
+    if (event.key !== 'Escape' || !confirming) return
+    event.preventDefault()
+    if (!busy) cancelDelete()
+  }}>
+    <h3 id="schedule-job-controls-title">{t('任务管理', 'Task management')}</h3>
+    {!control ? <p className="footnote">{t('此任务来源在 OC Chan 中为只读。', 'This task source is read-only in OC Chan.')}</p> : <>
+      {blocked && <p className="footnote" role="status">{blocked}</p>}
+      {confirming ? <div role="group" aria-labelledby="schedule-delete-question" aria-describedby="schedule-delete-impact">
+        <p id="schedule-delete-question"><strong>{t('确认删除此任务？', 'Delete this task?')}</strong></p>
+        <p id="schedule-delete-impact" className="footnote">{t('Hermes 可能取消正在运行的一次执行，并会移除该任务已保存的输出。', 'Hermes may cancel a run in progress and will remove the task’s saved output.')}</p>
+        <div className="schedule-write-actions">
+          <button ref={cancelRef} className="button secondary" type="button" data-schedule-action="cancel-delete" aria-disabled={Boolean(busy)} onClick={() => { if (!busy) cancelDelete() }}>{t('取消删除', 'Cancel deletion')}</button>
+          <button className="button secondary schedule-delete-button" type="button" data-schedule-action="confirm-delete" aria-disabled={disabled} onClick={event => void act('delete', event.currentTarget)}>{busy === 'delete' ? t('正在删除…', 'Deleting…') : t('确认删除', 'Confirm deletion')}</button>
+        </div>
+      </div> : <>
+        <div className="schedule-write-actions">
+          {control === 'active' && <button className="button secondary" type="button" data-schedule-action="pause" aria-disabled={disabled} aria-describedby="schedule-pause-impact" onClick={event => void act('pause', event.currentTarget)}>{busy === 'pause' ? t('正在暂停…', 'Pausing…') : t('暂停', 'Pause')}</button>}
+          {control === 'paused' && <button className="button secondary" type="button" data-schedule-action="resume" aria-disabled={disabled} onClick={event => void act('resume', event.currentTarget)}>{busy === 'resume' ? t('正在恢复…', 'Resuming…') : t('恢复', 'Resume')}</button>}
+          <button ref={deleteRef} className="button secondary" type="button" data-schedule-action="delete" aria-disabled={disabled} onClick={() => { if (!disabled) { setFailure(null); setConfirming(true) } }}>{t('删除', 'Delete')}</button>
+        </div>
+        {control === 'active' && <p id="schedule-pause-impact" className="footnote">{t('暂停会停止后续调度，并保留正在执行的一次运行。', 'Pausing stops future scheduling and lets a run in progress continue.')}</p>}
+      </>}
+      {failure && <p className="schedule-write-error" role="alert">{failure}</p>}
+    </>}
+  </section>
+}
+
 export default memo(function SchedulesView({ data, enabled, active, error, intent, onConsumed, view, onViewChange, memory, onSource }: {
   data: ScheduleSnapshot | null
   enabled: boolean
@@ -164,6 +296,60 @@ export default memo(function SchedulesView({ data, enabled, active, error, inten
   const closeRef = useRef<HTMLButtonElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const drawerRef = useRef<HTMLElement>(null)
+  const createRef = useRef<HTMLButtonElement>(null)
+  const writing = useRef(false)
+  const [creating, setCreating] = useState(false)
+  const [busy, setBusy] = useState<ScheduleAction | null>(null)
+  const [writeResult, setWriteResult] = useState<{ action: ScheduleAction; receipt: ScheduleMutationReceipt; collectedAt?: string } | null>(null)
+  const hermesState = data?.sources.find(source => source.id === 'hermes-cron')?.state
+  const awaitingSnapshot = writeResult?.collectedAt === data?.collectedAt ? writeResult : null
+  const awaitingMessage = t('等待采集更新任务状态。', 'Waiting for collection to update the task state.')
+  const blocked = !enabled ? t('采集已停用，暂不能管理任务。', 'Enable schedule collection to manage tasks.')
+    : !active ? t('采集已暂停，恢复后可管理任务。', 'Resume collection to manage tasks.')
+      : !data || error || !window.monitor?.manageSchedule || (hermesState !== 'ok' && hermesState !== 'empty')
+        ? t('Hermes 任务采集暂不可用，恢复后可管理任务。', 'Task management is available when Hermes collection recovers.')
+        : awaitingSnapshot?.receipt.refreshError ? awaitingMessage : null
+  // A receipt can arrive before the corresponding snapshot is delivered to the view.
+  const detailBlocked = blocked ?? (awaitingSnapshot?.receipt.jobId === selectedId ? awaitingMessage : null)
+
+  async function writeSchedule(change: ScheduleMutation): Promise<boolean> {
+    const monitor = window.monitor
+    if (writing.current || !monitor?.manageSchedule || blocked || (change.action !== 'create' && detailBlocked)) return false
+    writing.current = true
+    setBusy(change.action)
+    setWriteResult(null)
+    try {
+      const receipt = await monitor.manageSchedule(change)
+      const drawer = drawerRef.current
+      if (drawer) {
+        setWriteResult({ action: change.action, receipt, collectedAt: data?.collectedAt })
+        if (change.action === 'delete' && drawer.dataset.open === 'true' && drawer.dataset.jobId === change.jobId && drawer.dataset.jobIdentity === change.identity) {
+          void window.monitor?.cancelScheduleHistory().catch(reportDesktopFailure)
+          updateView({ open: false })
+          if (drawer.contains(document.activeElement) || document.activeElement === document.body) searchRef.current?.focus({ preventScroll: true })
+        }
+      }
+      return true
+    } finally {
+      writing.current = false
+      if (drawerRef.current) setBusy(null)
+    }
+  }
+
+  function openCreate() {
+    if (busy || blocked || creating) return
+    if (open) {
+      void window.monitor?.cancelScheduleHistory().catch(reportDesktopFailure)
+      updateView({ open: false })
+    }
+    setCreating(true)
+  }
+
+  function closeCreate() {
+    setCreating(false)
+    const form = document.getElementById('schedule-create-form')
+    if (form?.contains(document.activeElement) || document.activeElement === document.body) createRef.current?.focus({ preventScroll: true })
+  }
   const filtering = kind !== 'scheduled' || scope !== 'all' || status !== 'all' || Boolean(query.trim())
   const filtered = useMemo(() => {
     const search = query.trim().toLowerCase()
@@ -208,6 +394,7 @@ export default memo(function SchedulesView({ data, enabled, active, error, inten
     else searchRef.current?.focus({ preventScroll: true })
   }, [selectedVisible, selectedId, updateView])
   function selectJob(job: ScheduledJob) {
+    setCreating(false)
     revealPending.current = null
     if (open && !unavailable && selectedId === job.id && identity === scheduleTarget(job).identity) {
       closeRef.current?.focus({ preventScroll: true })
@@ -223,6 +410,7 @@ export default memo(function SchedulesView({ data, enabled, active, error, inten
   useLayoutEffect(() => {
     if (!intent || intent.target.kind !== 'schedule' || consumed.current === intent.sequence) return
     consumed.current = intent.sequence
+    setCreating(false)
     revealPending.current = { id: intent.target.id, identity: intent.target.identity }
     if (!open || unavailable || selectedId !== intent.target.id || identity !== intent.target.identity) {
       void window.monitor?.cancelScheduleHistory().catch(reportDesktopFailure)
@@ -346,6 +534,17 @@ export default memo(function SchedulesView({ data, enabled, active, error, inten
         <label className="search-field"><Search trigger="none" size={16} aria-hidden="true" /><input ref={searchRef} aria-label={t('搜索定时任务', 'Search scheduled tasks')} maxLength={MAX_VIEW_QUERY_LENGTH} value={query} onChange={event => updateView({ query: event.target.value })} placeholder={t('搜索任务或执行计划', 'Search tasks or schedules')} /></label>
       </div>
     </div>
+    <div className="schedule-write-toolbar">
+      <button ref={createRef} className="button primary" type="button" data-schedule-action="create" aria-expanded={creating} aria-controls={creating ? 'schedule-create-form' : undefined} aria-describedby={!creating && blocked ? 'schedule-create-availability' : undefined} aria-disabled={Boolean(blocked || busy || creating)} onClick={openCreate}>{t('新增任务', 'New task')}</button>
+      {!creating && blocked && <p id="schedule-create-availability" className="footnote">{blocked}</p>}
+      <div className="schedule-write-status" role="status" aria-live="polite" aria-atomic="true">
+        {writeResult && <p data-schedule-write-status={writeResult.receipt.refreshError ? 'refresh-error' : 'success'}>
+          {t(...writeMessages[writeResult.action])}
+          {writeResult.receipt.refreshError ? <> {t('任务已写入，但刷新采集失败。', 'The write completed, but collection failed to refresh.')} {writeResult.receipt.refreshError}</> : writeResult.action === 'create' && data?.jobs.some(job => job.id === writeResult.receipt.jobId) && !filtered.some(job => job.id === writeResult.receipt.jobId) ? <> {t('新任务不在当前筛选结果中。', 'The new task is outside the current filters.')}</> : null}
+        </p>}
+      </div>
+    </div>
+    {creating && <ScheduleCreateForm busy={Boolean(busy)} blocked={blocked} write={writeSchedule} onClose={closeCreate} />}
     {scope === 'personal' && <p id="schedule-personal-help" className="footnote">{t('按任务元数据、个人命名及主目录脚本识别个人配置，排除苹果任务、应用更新器和调度器自身。无法确认归属的任务可在“所有范围”查看。', 'Personal configuration is identified from task metadata, personal naming and scripts in your home directory. Apple tasks, app updaters and schedulers themselves are excluded. Tasks with uncertain ownership remain under All scopes.')}</p>}
     <section ref={listRef} className="panel schedule-panel" aria-label={t('任务列表', 'Task list')}>
       <div className="list-caption schedule-caption">
@@ -357,7 +556,7 @@ export default memo(function SchedulesView({ data, enabled, active, error, inten
       </div>
       {!data ? <Empty title={!enabled ? t('任务采集已停用', 'Schedule collection disabled') : error ? t('尚未取得调度数据', 'Schedule data unavailable') : t('正在读取调度配置', 'Reading schedule configuration')}>{!enabled ? t('尚无快照。可在数据来源中开启采集；真实任务继续运行。', 'No snapshot yet. Enable collection in Data sources; actual tasks keep running.') : error ? t('请查看上方错误信息并重试。', 'Review the error above and retry.') : t('首次查询需要读取系统与用户任务。', 'The first query reads system and user tasks.')}</Empty> : filtered.length ? <ScheduleTable jobs={filtered} selectedId={open && selected ? selectedId : null} onSelect={selectJob} memory={memory.list} /> : <Empty title={t('没有匹配的任务', 'No matching tasks')}>{t('调整任务类型、范围、状态或搜索词。', 'Adjust the task type, scope, status or search.')}</Empty>}
     </section>
-    <aside ref={drawerRef} id="schedule-task-details" data-job-id={selectedId} className="schedule-drawer" data-open={open} data-motion-paused={documentHidden || isHeadlessDesktop()} inert={!open} aria-hidden={!open} aria-labelledby="schedule-drawer-title" role="dialog" aria-modal="false">
+    <aside ref={drawerRef} id="schedule-task-details" data-job-id={selectedId} data-job-identity={identity} className="schedule-drawer" data-open={open} data-motion-paused={documentHidden || isHeadlessDesktop()} inert={!open} aria-hidden={!open} aria-labelledby="schedule-drawer-title" role="dialog" aria-modal="false">
       <header className="schedule-drawer-header">
         <h2 id="schedule-drawer-title">{t('任务详情', 'Task details')}</h2>
         <button ref={closeRef} className="icon-button" aria-label={t('关闭任务详情', 'Close task details')} title={t('关闭任务详情 (Esc)', 'Close task details (Esc)')} onClick={closeDetails}><CircleX trigger="none" size={18} aria-hidden="true" /></button>
@@ -371,6 +570,7 @@ export default memo(function SchedulesView({ data, enabled, active, error, inten
         {displayed && !selectedVisible && <p className="footnote">{t('该任务不在当前筛选结果中，详情保留当前快照。', 'This task is outside the current filters. Its details remain available from the current snapshot.')} <button className="text-button" onClick={() => { updateView({ kind: 'all', scope: 'all', status: 'all', query: '' }); revealPending.current = selectedId && identity ? { id: selectedId, identity } : null; closeRef.current?.focus({ preventScroll: true }) }}>{t('清除筛选并定位', 'Clear filters and locate')}</button></p>}
         {!displayed && <p className="footnote">{t('最新采集中该任务已不存在或身份已变化。关闭详情后可搜索其他任务。', 'This task is missing from the latest collection or its identity has changed. Close the details to search for another task.')}</p>}
         {displayed && <>
+          {open && selected && identity && <ScheduleJobControls key={JSON.stringify([selected.id, identity])} job={selected} identity={identity} busy={busy} blocked={detailBlocked} write={writeSchedule} onWritten={() => closeRef.current?.focus({ preventScroll: true })} />}
           <dl className="schedule-drawer-metadata">
             <div><dt>{t('当前状态', 'Current status')}</dt><dd><Badge state={displayed.state} /></dd></div>
             {displayed.id.startsWith('hermes-job:') ? <>
@@ -393,6 +593,6 @@ export default memo(function SchedulesView({ data, enabled, active, error, inten
       </div>
     </aside>
     {data && <Sources sources={data.sources} compact enabled={enabled} />}
-    <p className="footnote">{t('定时任务数包括已识别的周期与日历调度配置（含停用项）。登录启动项与常驻服务单独列出；这里仅查看，不会执行或修改任务。', 'Scheduled task counts include recognized interval and calendar schedules, including disabled entries. Login items and persistent services are listed separately. This view does not run or modify tasks.')}</p>
+    <p className="footnote">{t('定时任务数包括已识别的周期与日历调度配置（含停用项）。登录启动项与常驻服务单独列出。OC Chan 支持管理具备 Hermes 管理状态的任务。', 'Scheduled task counts include recognized interval and calendar schedules, including disabled entries. Login items and persistent services are listed separately. OC Chan can manage tasks with an available Hermes control state.')}</p>
   </>
 })

@@ -17,6 +17,9 @@ pub enum JobState { Running, Waiting, Disabled, Unloaded, Unknown }
 #[serde(rename_all = "kebab-case")]
 pub enum JobStateReason { HermesReadFailed, HermesDispatching, HermesUnconfirmed, HermesStateUnsupported }
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum HermesScheduleControl { Active, Paused, Inactive }
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum RunResult { Succeeded, Failed, DeliveryFailed, Blocked, Unknown }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -36,6 +39,8 @@ pub struct ScheduledJob {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub state_reason: Option<JobStateReason>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub hermes_control: Option<HermesScheduleControl>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub last_run: Option<LastRun>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pid: Option<u32>,
@@ -52,6 +57,32 @@ pub struct ScheduledJob {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ScheduleSnapshot { pub collected_at: String, pub jobs: Vec<ScheduledJob>, pub sources: Vec<SourceStatus> }
+
+#[derive(Deserialize)]
+#[serde(tag = "action", rename_all = "lowercase", rename_all_fields = "camelCase", deny_unknown_fields)]
+pub enum ScheduleMutation {
+    Create { name: String, schedule: String, prompt: String, paused: bool },
+    Pause { job_id: String, identity: String },
+    Resume { job_id: String, identity: String },
+    Delete { job_id: String, identity: String },
+}
+
+impl ScheduleMutation {
+    pub(crate) fn selection(&self) -> Option<(&str, &str)> {
+        match self {
+            Self::Create { .. } => None,
+            Self::Pause { job_id, identity } | Self::Resume { job_id, identity } | Self::Delete { job_id, identity } => Some((job_id, identity)),
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduleMutationReceipt {
+    pub job_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub refresh_error: Option<String>,
+}
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]

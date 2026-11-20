@@ -28,6 +28,7 @@ pub(super) struct MetadataJob {
     pub id: String,
     pub name: Option<String>, pub label: Option<String>,
     pub enabled: Option<bool>, pub state: Option<String>,
+    pub paused_at: Option<String>,
     pub schedule: Option<MetadataSchedule>, pub calendar: Option<Value>,
     pub next_run_at: Option<String>, pub not_before: Option<String>,
     #[serde(default)] pub fire_claim: Claim,
@@ -54,7 +55,7 @@ pub(super) fn parse_metadata(bytes: &[u8]) -> Result<Vec<MetadataJob>> {
     if document.jobs.len()>MAX_JOBS { return Err(Error::limit("metadata jobs",MAX_JOBS,document.jobs.len())); }
     for job in &document.jobs {
         validate_text(&job.id,MAX_HERMES_JOB_ID_LENGTH,FIELD_BYTES,"metadata job ID")?;
-        for value in [job.name.as_deref(),job.label.as_deref(),job.state.as_deref(),job.next_run_at.as_deref(),job.not_before.as_deref(),job.last_run_at.as_deref(),job.last_status.as_deref()] {
+        for value in [job.name.as_deref(),job.label.as_deref(),job.state.as_deref(),job.paused_at.as_deref(),job.next_run_at.as_deref(),job.not_before.as_deref(),job.last_run_at.as_deref(),job.last_status.as_deref()] {
             if let Some(value)=value { if value.len()>FIELD_BYTES { return Err(Error::limit("metadata field bytes",FIELD_BYTES,value.len())); } }
         }
         if let Claim::Present(Some(at))=&job.fire_claim { if at.len()>FIELD_BYTES { return Err(Error::limit("claim bytes",FIELD_BYTES,at.len())); } }
@@ -159,7 +160,7 @@ pub(super) fn launch_job(raw: Value, file: &Path, home: &Path, scope: JobScope) 
     let (kind,schedule,warnings)=describe_launch_schedule(plist)?;
     let scheduler=["ai.hermes.cron-tick","ai.hermes.gateway"].contains(&label.as_str());
     let program=bounded_text(plist.get("Program"))?.or(bounded_text(plist.get("ProgramArguments").and_then(Value::as_array).and_then(|args|args.first()))?);
-    let job=ScheduledJob{id:format!("launchd:{}:{label}",if scope==JobScope::System{"system"}else{"user"}),name:if scheduler{format!("{label}（调度器 / 服务）")}else{label},source:if scheduler{"launchd · Hermes 调度器"}else{"launchd"}.into(),scope,origin:launch_origin(plist,file,home),kind,schedule,state:JobState::Unknown,state_reason:None,last_run:None,pid:None,last_exit_code:None,file:Some(file.to_string_lossy().into_owned()),executable:program.as_deref().and_then(|p|Path::new(p).file_name()).map(|p|p.to_string_lossy().into_owned()),next_run:None};
+    let job=ScheduledJob{id:format!("launchd:{}:{label}",if scope==JobScope::System{"system"}else{"user"}),name:if scheduler{format!("{label}（调度器 / 服务）")}else{label},source:if scheduler{"launchd · Hermes 调度器"}else{"launchd"}.into(),scope,origin:launch_origin(plist,file,home),kind,schedule,state:JobState::Unknown,state_reason:None,hermes_control:None,last_run:None,pid:None,last_exit_code:None,file:Some(file.to_string_lossy().into_owned()),executable:program.as_deref().and_then(|p|Path::new(p).file_name()).map(|p|p.to_string_lossy().into_owned()),next_run:None};
     job_bytes(&job)?;
     Ok(Some((job,plist.get("Disabled")==Some(&Value::Bool(true)),warnings)))
 }
@@ -190,7 +191,7 @@ pub fn parse_crontab(output: &str) -> Result<(Vec<ScheduledJob>,usize)> {
         let macro_schedule=match *first{"@yearly"|"@annually"=>Some("每年 1 月 1 日 00:00"),"@monthly"=>Some("每月 1 日 00:00"),"@weekly"=>Some("每周日 00:00"),"@daily"|"@midnight"=>Some("每日 00:00"),"@hourly"=>Some("每小时 00 分"),"@reboot"=>Some("cron 守护进程启动时运行（非定时任务）"),_=>None};
         let schedule=if first.starts_with('@'){if words.len()<2||macro_schedule.is_none(){invalid+=1;continue;}macro_schedule.unwrap().to_owned()}else{if words.len()<6{invalid+=1;continue;}match describe_cron(&words[..5].join(" ")){Ok(value)=>value,Err(_)=>{invalid+=1;continue;}}};
         let hash=Sha256::digest(format!("{index}:{line}").as_bytes()); let id=hash[..8].iter().map(|byte|format!("{byte:02x}")).collect::<String>();
-        jobs.push(ScheduledJob{id:format!("crontab:{id}"),name:format!("crontab 第 {} 行",index+1),source:"crontab · 当前用户".into(),scope:JobScope::User,origin:JobOrigin::Personal,kind:if *first=="@reboot"{JobKind::Startup}else{JobKind::Calendar},schedule:format!("{schedule}（{timezone}）"),state:JobState::Unknown,state_reason:None,last_run:None,pid:None,last_exit_code:None,file:None,executable:None,next_run:None});
+        jobs.push(ScheduledJob{id:format!("crontab:{id}"),name:format!("crontab 第 {} 行",index+1),source:"crontab · 当前用户".into(),scope:JobScope::User,origin:JobOrigin::Personal,kind:if *first=="@reboot"{JobKind::Startup}else{JobKind::Calendar},schedule:format!("{schedule}（{timezone}）"),state:JobState::Unknown,state_reason:None,hermes_control:None,last_run:None,pid:None,last_exit_code:None,file:None,executable:None,next_run:None});
         if jobs.len()>MAX_JOBS{return Err(Error::limit("crontab jobs",MAX_JOBS,jobs.len()));}
     }
     check_jobs(&jobs)?; Ok((jobs,invalid))
@@ -227,7 +228,7 @@ pub(super) fn merge_omp(jobs: &mut Vec<ScheduledJob>,metadata: &[MetadataJob],fi
             if let Some(at)=item.not_before.as_ref().filter(|v|!v.is_empty()){schedule.push_str(&format!("；首次执行不早于 {at}"));}
             if jobs.len()>=MAX_JOBS{return Err(Error::limit("schedule jobs",MAX_JOBS,jobs.len()+1));}
             indexed.insert(id.clone(),jobs.len());
-            jobs.push(ScheduledJob{id,name:item.name.as_ref().filter(|v|!v.is_empty()).cloned().unwrap_or(label),source:"OMP 任务 · 未发现 launchd 配置".into(),scope:JobScope::User,origin:JobOrigin::Personal,kind,schedule,state:if item.enabled==Some(false){JobState::Disabled}else{JobState::Unloaded},state_reason:None,last_run:None,pid:None,last_exit_code:None,file:Some(file.to_string_lossy().into_owned()),executable:None,next_run:None});
+            jobs.push(ScheduledJob{id,name:item.name.as_ref().filter(|v|!v.is_empty()).cloned().unwrap_or(label),source:"OMP 任务 · 未发现 launchd 配置".into(),scope:JobScope::User,origin:JobOrigin::Personal,kind,schedule,state:if item.enabled==Some(false){JobState::Disabled}else{JobState::Unloaded},state_reason:None,hermes_control:None,last_run:None,pid:None,last_exit_code:None,file:Some(file.to_string_lossy().into_owned()),executable:None,next_run:None});
             bytes+=job_bytes(jobs.last().expect("inserted job"))?;
         }
         if bytes>JOB_BYTES{return Err(Error::limit("schedule projection bytes",JOB_BYTES,bytes));}

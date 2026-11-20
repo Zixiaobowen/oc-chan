@@ -89,6 +89,7 @@ pub trait CollectionPlugin: Send + Sync {
     fn stop(&self) -> BoxFuture<'_, Result<()>>;
     fn history(&self, _job: ScheduledJob, _offset: usize, _cancel: CancellationToken) -> BoxFuture<'_, Result<ScheduleHistory>> { Box::pin(async { Err(Error::new("OC_PLUGIN_CAPABILITY", "Execution history unavailable")) }) }
     fn schedule_detail(&self, _job: ScheduledJob, _cancel: CancellationToken) -> BoxFuture<'_, Result<ScheduleDetail>> { Box::pin(async { Err(Error::new("OC_PLUGIN_CAPABILITY", "Schedule details unavailable")) }) }
+    fn manage_schedule(&self, _change: ScheduleMutation, _job: Option<ScheduledJob>, _cancel: CancellationToken) -> BoxFuture<'_, Result<String>> { Box::pin(async { Err(Error::new("OC_PLUGIN_CAPABILITY", "Schedule management unavailable")) }) }
     fn events(&self, _query: EventQuery, _cancel: CancellationToken) -> BoxFuture<'_, Result<EventPage>> { Box::pin(async { Err(Error::new("OC_PLUGIN_CAPABILITY", "Event queries unavailable")) }) }
 }
 pub type PluginFactory = Arc<dyn Fn(PluginContext) -> Result<Arc<dyn CollectionPlugin>> + Send + Sync>;
@@ -331,6 +332,26 @@ impl Registry {
             let job_id = job.id.clone();
             let work = instance.schedule_detail(job, cancel.clone()); tokio::pin!(work);
             tokio::select! { result = &mut work => { check_cancel(&lifecycle)?; let detail = result?; detail.validate(&job_id)?; Ok(detail) }, _ = lifecycle.cancelled() => { cancel.cancel(); let result = work.await; match result { Err(e) if e.is_cleanup() => Err(e), _ => Err(Error::cancelled()) } } }
+        }).await
+    }
+    pub(crate) async fn manage_schedule(self: &Arc<Self>, id: &str, change: ScheduleMutation, job: Option<ScheduledJob>, cancel: CancellationToken) -> Result<String> {
+        let entry = self.entry(id)?;
+        let (instance, lifecycle) = self.query_instance(&entry)?;
+        self.supervise(async move {
+            let _query = entry.queries.read().await;
+            let _sample = tokio::select! {
+                biased;
+                _ = cancel.cancelled() => return Err(Error::cancelled()),
+                _ = lifecycle.cancelled() => return Err(Error::cancelled()),
+                lock = entry.sample.lock() => lock,
+            };
+            let work = instance.manage_schedule(change, job, cancel.clone());
+            tokio::pin!(work);
+            tokio::select! {
+                biased;
+                result = &mut work => result,
+                _ = lifecycle.cancelled() => { cancel.cancel(); work.await },
+            }
         }).await
     }
     pub async fn events(self: &Arc<Self>, id: &str, query: EventQuery, cancel: CancellationToken) -> Result<EventPage> {

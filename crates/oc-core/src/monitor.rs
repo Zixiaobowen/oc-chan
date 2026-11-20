@@ -26,6 +26,7 @@ pub struct Monitor {
     initialized: AtomicBool, started: AtomicBool, admission: Mutex<bool>, tasks: TaskTracker,
     flights: Mutex<BTreeMap<RequestKey, Completion>>, stopping: Mutex<Option<Completion>>, abandoned: Mutex<Vec<Error>>,
     notification_preferences: Mutex<NotificationSettings>,
+    schedule_write: AsyncMutex<()>,
 }
 impl Monitor {
     pub fn new(options: MonitorOptions) -> Result<Arc<Self>> {
@@ -40,7 +41,8 @@ impl Monitor {
         let definitions = builtins::definitions(options.io, worker, options.agent_paths, options.schedule_paths, events.clone(), &shared)?;
         Ok(Arc::new(Self { shared, registry, events, definitions, language: Mutex::new(Languages { system: options.language, preference: Language::System }),
             initialized: AtomicBool::new(false), started: AtomicBool::new(false), admission: Mutex::new(true), tasks: TaskTracker::new(),
-            flights: Mutex::new(BTreeMap::new()), stopping: Mutex::new(None), abandoned: Mutex::new(Vec::new()), notification_preferences: Mutex::new(NotificationSettings::default()) }))
+            flights: Mutex::new(BTreeMap::new()), stopping: Mutex::new(None), abandoned: Mutex::new(Vec::new()), notification_preferences: Mutex::new(NotificationSettings::default()),
+            schedule_write: AsyncMutex::new(()) }))
     }
     pub fn registry(&self) -> Arc<Registry> { self.registry.clone() }
     pub fn snapshot(&self) -> MonitorSnapshot { self.shared.state.lock().expect("monitor state poisoned").snapshot.clone() }
@@ -196,6 +198,44 @@ impl Monitor {
         };
         let result = self.registry.schedule_detail(&id, job.clone(), cancel).await?;
         self.shared.require_job(&job)?; self.open()?; Ok(result)
+    }
+    pub async fn manage_schedule(self: &Arc<Self>, change: ScheduleMutation, cancel: CancellationToken) -> Result<ScheduleMutationReceipt> {
+        self.ready()?;
+        check_cancel(&cancel)?;
+        let _write = self.schedule_write.try_lock().map_err(|_| Error::new("OC_SCHEDULE_BUSY", "另一项任务修改正在保存 / Another schedule change is in progress"))?;
+        let (id, job) = {
+            let state = self.shared.state.lock().expect("monitor state poisoned");
+            let owner = state.owners[index(MonitorSection::Schedules)].as_ref().filter(|owner| owner.enabled)
+                .ok_or_else(|| Error::new("OC_PLUGIN_DISABLED", "Schedule collection is disabled"))?;
+            let job = match change.selection() {
+                Some((job_id, identity)) => {
+                    let target = NavigationTarget::Schedule { id: job_id.into(), identity: identity.into() };
+                    target.validate()?;
+                    let job = state.snapshot.schedules.data.as_ref().and_then(|data| data.jobs.iter().find(|job| job.id == job_id))
+                        .ok_or_else(|| Error::new("OC_SCHEDULE_IDENTITY", "任务已不存在，请刷新 / Task is no longer present; refresh to check"))?;
+                    if target != NavigationTarget::schedule(job) {
+                        return Err(Error::new("OC_SCHEDULE_IDENTITY", "所选任务配置已变化，请重新选择 / Selected schedule identity changed; select the task again"));
+                    }
+                    if job.hermes_control.is_none() {
+                        return Err(Error::new("OC_SCHEDULE_READ_ONLY", "该任务来源只读 / This task source is read-only"));
+                    }
+                    Some(job.clone())
+                }
+                None => None,
+            };
+            (owner.id.clone(), job)
+        };
+        let result = self.registry.manage_schedule(&id, change, job, cancel).await;
+        let refresh = || self.refresh(Some(MonitorSection::Schedules));
+        match result {
+            Ok(job_id) => Ok(ScheduleMutationReceipt { job_id, refresh_error: refresh().await.err().map(|error| error.to_string()) }),
+            Err(mut error) => {
+                if matches!(error.code.as_str(), "OC_HERMES_WRITE_UNCONFIRMED" | "OC_SCHEDULE_IDENTITY") {
+                    if let Err(refresh_error) = refresh().await { error.causes.push(refresh_error); }
+                }
+                Err(error)
+            }
+        }
     }
     pub async fn query_events(self: &Arc<Self>, query: EventQuery, cancel: CancellationToken) -> Result<EventPage> {
         self.ready()?; check_cancel(&cancel)?; query.validate()?;

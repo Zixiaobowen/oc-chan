@@ -20,13 +20,13 @@ The workstation owner checking local agent activity, scheduled tasks and machine
 
 ## Product Purpose
 
-Query and display running agents and subagents, local scheduled tasks, and live system monitoring in a desktop application.
+Inspect running agents and subagents, local schedules, and live system monitoring in a desktop application. Manage scheduled tasks in the default Hermes profile.
 
 ## Capabilities and Constraints
 
 - Use real local data. Display unavailable sources and limits explicitly.
 - Distinguish live processes from active model work, and recurring schedules from services.
-- Read-only inspection; task execution, process termination, cloud accounts and remote machines are outside this request.
+- Schedule management uses the installed Hermes CLI to create, pause, resume, and delete tasks in its default profile. launchd, crontab, and OMP are read-only sources. Hermes owns task execution.
 - Data sources exposes persistent switches for agent, schedule/history, system and local event collection. All are enabled by default; disabling collection leaves upstream agents and jobs untouched. Retained snapshots are marked with their timestamps, current counts become unknown, and re-enabling starts fresh collection baselines or restores the durable event cursor. Display pause remains independent.
 - Local events retain only confirmed Hermes execution/delivery failures and sustained source outage/recovery metadata. Initial history is baselined; retention, deduplication and query queues are bounded, and excluded coverage is explicit. No task bodies are stored. Local notifications are off by default; explicit source/task subscriptions and type filters control delivery, with local quiet hours, a rolling limit of three notifications per minute and durable non-replay claims. Task names require opt-in. Notification permission is requested only by an explicit user action; denied or unavailable notifications do not stop event collection. Native permission and click acceptance remain separate from headless checks.
 - macOS is the initial implementation target based on the current workstation. Other OS support is undecided.

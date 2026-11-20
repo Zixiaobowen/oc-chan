@@ -312,6 +312,7 @@ export async function initializeDesktop(onFailure: (error: Error) => void): Prom
       cancelScheduleHistory: () => cancelQuery('history', 'monitor_cancel_schedule_history'),
       scheduleDetail: (jobId, identity) => query('detail', 'monitor_schedule_detail', { jobId, identity }),
       cancelScheduleDetail: () => cancelQuery('detail', 'monitor_cancel_schedule_detail'),
+      manageSchedule: change => call('monitor_manage_schedule', change),
       events: request => query('events', 'monitor_events', { query: request ?? {} }),
       cancelEvents: () => cancelQuery('events', 'monitor_cancel_events'),
       generateDiagnostics: () => call('diagnostics_generate'),

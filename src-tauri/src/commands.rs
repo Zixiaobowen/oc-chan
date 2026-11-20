@@ -6,6 +6,7 @@ pub const COMMANDS: &[(&str, u8)] = &[
     ("monitor_snapshot", 3), ("monitor_refresh", 3), ("monitor_retry_source", 1),
     ("monitor_focus_agent_in_tern", 1), ("monitor_schedule_history", 1), ("monitor_cancel_schedule_history", 1),
     ("monitor_schedule_detail", 1), ("monitor_cancel_schedule_detail", 1),
+    ("monitor_manage_schedule", 1),
     ("monitor_events", 1), ("monitor_cancel_events", 1), ("monitor_navigation", 1),
     ("monitor_acknowledge_navigation", 1),
     ("diagnostics_generate", 1), ("diagnostics_copy", 1), ("diagnostics_save", 1), ("diagnostics_cancel", 1),

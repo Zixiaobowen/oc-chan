@@ -3,7 +3,7 @@ use crate::resources::ResourceBudget;
 use serde_json::json;
 
 fn job(id:&str)->ScheduledJob{
-    ScheduledJob{id:id.into(),name:id.into(),source:"launchd".into(),scope:JobScope::User,origin:JobOrigin::Unknown,kind:JobKind::Calendar,schedule:"每日 08:00".into(),state:JobState::Waiting,state_reason:None,last_run:None,pid:None,last_exit_code:None,file:None,executable:None,next_run:None}
+    ScheduledJob{id:id.into(),name:id.into(),source:"launchd".into(),scope:JobScope::User,origin:JobOrigin::Unknown,kind:JobKind::Calendar,schedule:"每日 08:00".into(),state:JobState::Waiting,state_reason:None,hermes_control:None,last_run:None,pid:None,last_exit_code:None,file:None,executable:None,next_run:None}
 }
 fn collector(home:&Path)->ScheduleCollector{
     let io=BoundedIo::new(ResourceBudget::default());let worker=DataWorker::new(io.clone(),home.join("oc-data-worker"));

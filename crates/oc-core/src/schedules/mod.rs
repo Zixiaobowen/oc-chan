@@ -1,8 +1,9 @@
-//! Read-only scheduling metadata; task bodies are read only by explicit detail queries.
+//! Bounded scheduling collection and explicit Hermes task management.
 mod parse;
 mod launchd;
 mod runtime;
 mod detail;
+mod management;
 #[cfg(test)] mod tests;
 pub use parse::{describe_calendar,describe_cron,describe_launch_schedule,launch_origin,parse_crontab};
 pub use launchd::{LaunchRuntime,launch_state,parse_launch_disabled,parse_launch_services};
@@ -245,7 +246,7 @@ impl ScheduleCollector{
                 let (kind,schedule)=parse::metadata_schedule(item)?;
                 let disabled=item.enabled==Some(false)||matches!(item.state.as_deref(),Some("paused"|"completed"));
                 let next_run=if disabled{None}else{item.next_run_at.as_deref().and_then(runtime::time).filter(|at|*at>now).map(|at|at.to_rfc3339_opts(SecondsFormat::Millis,true))};
-                other_jobs.push(ScheduledJob{id:format!("hermes-job:{}",item.id),name:item.name.as_ref().filter(|value|!value.is_empty()).cloned().unwrap_or_else(||item.id.clone()),source:"Hermes 任务（由调度器执行）".into(),scope:JobScope::User,origin:JobOrigin::Personal,kind,schedule,state:status.state,state_reason:status.reason,last_run:status.last_run,pid:status.pid,last_exit_code:None,file:Some(self.paths.hermes_metadata.to_string_lossy().into_owned()),executable:None,next_run});
+                other_jobs.push(ScheduledJob{id:format!("hermes-job:{}",item.id),name:management::job_name(item).to_owned(),source:"Hermes 任务（由调度器执行）".into(),scope:JobScope::User,origin:JobOrigin::Personal,kind,schedule,state:status.state,state_reason:status.reason,hermes_control:management::control(item),last_run:status.last_run,pid:status.pid,last_exit_code:None,file:Some(self.paths.hermes_metadata.to_string_lossy().into_owned()),executable:None,next_run});
             }
         }
         sources.push(SourceStatus::new("schedule-semantics","调度边界",SourceState::Ok,"LaunchAgents 状态仅对应当前用户；LaunchDaemons 对应 system。启动 / 常驻服务与定时任务分列。Hermes 调度器与内部任务分别列出。launchd / cron 不提供可靠下次执行时间，不做推算；Hermes 仅显示元数据中带时区且未过期的计划时间，不保证实际执行。"));
@@ -270,7 +271,7 @@ impl ScheduleCollector{
                 let id=format!("launchd:{}:{label}",if scope==JobScope::System{"system"}else{"user"});
                 if jobs.get(&id).is_some_and(|job|job.file.is_some()||job.state!=JobState::Unknown){continue;}
                 let runtime=if domain.loaded_known{Some(entry)}else{None};
-                jobs.insert(id.clone(),ScheduledJob{id,name:label.clone(),source:"launchd · 运行时服务".into(),scope,origin:if label.starts_with("com.apple."){JobOrigin::System}else{JobOrigin::Unknown},kind:JobKind::Service,schedule:"标准目录中未发现对应 plist，触发方式未知".into(),state:launch_state(runtime,domain.disabled.get(label).copied(),false,domain.loaded_known,domain.disabled_known),state_reason:None,last_run:None,pid:runtime.and_then(|runtime|runtime.pid),last_exit_code:runtime.and_then(|runtime|runtime.last_exit_code),file:None,executable:None,next_run:None});
+                jobs.insert(id.clone(),ScheduledJob{id,name:label.clone(),source:"launchd · 运行时服务".into(),scope,origin:if label.starts_with("com.apple."){JobOrigin::System}else{JobOrigin::Unknown},kind:JobKind::Service,schedule:"标准目录中未发现对应 plist，触发方式未知".into(),state:launch_state(runtime,domain.disabled.get(label).copied(),false,domain.loaded_known,domain.disabled_known),state_reason:None,hermes_control:None,last_run:None,pid:runtime.and_then(|runtime|runtime.pid),last_exit_code:runtime.and_then(|runtime|runtime.last_exit_code),file:None,executable:None,next_run:None});
                 if jobs.len()>MAX_JOBS{return Err(Error::limit("schedule jobs",MAX_JOBS,jobs.len()));}
             }
         }

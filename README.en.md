@@ -12,7 +12,7 @@
   <strong>See your Mac's agents, scheduled tasks, and system status.</strong>
 </p>
 
-<p align="center">macOS · Apple Silicon · Rust / Tauri / React · Local, read-only observation</p>
+<p align="center">macOS · Apple Silicon · Rust / Tauri / React · Local monitoring and task management</p>
 
 <p align="center">
   <a href="#features">Features</a> ·
@@ -34,9 +34,11 @@ In the default 3D view, each project has a galaxy, and each main-session task an
 
 Switch to 2D and right-click a linked OMP node to jump to its Tern tab. For subagents, OC Chan follows the confirmed parent chain to the main session. It verifies the destination again before navigating and reports sessions that have closed or changed. First-time setup requires Tern integration and macOS Accessibility permission. See the [navigation guide (Chinese)](docs/features.md#协作拓扑画布).
 
-### Inspect scheduled tasks and their results
+### Manage scheduled tasks and inspect their results
 
 View launchd, cron, OMP, and Hermes tasks together, filtering by type, scope, status, or name. Hermes tasks include per-run history, duration, and delivery results. Confirmed execution and delivery failures, sustained data-source outages, and recoveries appear in the local event list. Notifications are off by default; you can subscribe by source or task.
+
+In Scheduled tasks, choose New task and enter its name, schedule, and instructions. New tasks start paused by default. Open a task to pause, resume, or confirm deletion. Changes use the installed Hermes CLI and its default profile. launchd, crontab, and OMP tasks are available for read-only inspection.
 
 Open a task to read its instructions, script or command, arguments, working directory, model, and raw schedule configuration, where supplied by its source. Configuration and execution history refresh independently. Task bodies are read locally on demand, excluded from periodic snapshots, events, and redacted diagnostics, and never executed.
 
@@ -65,10 +67,10 @@ Each source provides different evidence. A running process, active work, and rec
 | OMP / Tern | Sessions, parent–child relationships, main-session activity, recent calls, and navigation to Tern | The exact number of actively executing subagents is not yet available |
 | Codex CLI / desktop | Current sessions, working directories, and relationships that can be confirmed | No precise activity status, recent calls, or navigation to external windows |
 | Claude Code / OpenCode CLI | Running processes and readable metadata | Process evidence alone does not imply active work |
-| Hermes | Scheduled tasks, execution status, per-run history, and confirmed exception events | Status depends on database and process evidence; insufficient evidence remains unknown |
+| Hermes | Scheduled tasks, execution status, per-run history, and confirmed exception events | Tasks in the default profile can be managed. Runtime status depends on database and process evidence. |
 | launchd / cron | Task configuration, schedules, and readable status | No unified per-run history or prediction of the next run time |
 
-OC Chan observes upstream agents and tasks without modifying them. It does not run scheduled tasks, terminate agents, or change parent–child relationships. Collected data stays on your Mac; session bodies are not uploaded. App and plugin updates connect to their respective release sources. See [coverage and privacy boundaries (Chinese)](docs/features.md#已知可见性边界).
+Hermes executes tasks on schedule. Collected data and task configuration stay on your Mac. App and plugin updates connect to their respective release sources. See [coverage and privacy boundaries (Chinese)](docs/features.md#已知可见性边界).
 
 ## Installation
 

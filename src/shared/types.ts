@@ -86,12 +86,22 @@ export interface ScheduledJob {
   schedule: string
   state: 'running' | 'waiting' | 'disabled' | 'unloaded' | 'unknown'
   stateReason?: 'hermes-read-failed' | 'hermes-dispatching' | 'hermes-unconfirmed' | 'hermes-state-unsupported'
+  hermesControl?: 'active' | 'paused' | 'inactive'
   lastRun?: { at?: string; result: 'succeeded' | 'failed' | 'delivery-failed' | 'blocked' | 'unknown' }
   pid?: number
   lastExitCode?: number
   file?: string
   executable?: string
   nextRun?: string
+}
+
+export type ScheduleMutation =
+  | { action: 'create'; name: string; schedule: string; prompt: string; paused: boolean }
+  | { action: 'pause' | 'resume' | 'delete'; jobId: string; identity: string }
+
+export interface ScheduleMutationReceipt {
+  jobId: string
+  refreshError?: string
 }
 
 export interface ScheduleSnapshot {
@@ -172,6 +182,7 @@ export interface MonitorApi {
   cancelScheduleHistory(): Promise<void>
   scheduleDetail(jobId: string, identity: string): Promise<ScheduleDetail>
   cancelScheduleDetail(): Promise<void>
+  manageSchedule(change: ScheduleMutation): Promise<ScheduleMutationReceipt>
   events(query?: EventQuery): Promise<EventPage>
   cancelEvents(): Promise<void>
   generateDiagnostics(): Promise<DiagnosticGenerateResult>

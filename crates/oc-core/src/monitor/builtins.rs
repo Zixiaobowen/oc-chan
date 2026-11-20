@@ -17,7 +17,7 @@ pub(super) fn definitions(io: BoundedIo, worker: DataWorker, agents: AgentPaths,
     };
     let weak = Arc::downgrade(shared); let retry_sources = shared.retry_sources.clone();
     let schedule_definition = PluginDefinition {
-        id: "schedules".into(), section: MonitorSection::Schedules, capabilities: vec!["scheduled-jobs".into(), "schedule-history".into()], dependencies: Vec::new(), retry_sources,
+        id: "schedules".into(), section: MonitorSection::Schedules, capabilities: vec!["scheduled-jobs".into(), "schedule-history".into(), "schedule-management".into()], dependencies: Vec::new(), retry_sources,
         interval: Duration::from_secs(30), timeout: Duration::from_secs(30),
         create: Arc::new(move |context| Ok(Arc::new(SchedulePlugin { collector: ScheduleCollector::with_paths(context.io, worker.clone(), schedules.clone())?, life: context.cancel, gate: AsyncMutex::new(()), shared: weak.clone() }))),
     };
@@ -61,6 +61,19 @@ impl CollectionPlugin for SchedulePlugin {
             let shared = self.shared.upgrade().ok_or_else(Error::cancelled)?; shared.require_job(&job)?;
             let detail = self.collector.schedule_detail(&job, &cancel).await?;
             check_cancel(&self.life)?; shared.require_job(&job)?; Ok(detail)
+        })
+    }
+    fn manage_schedule(&self, change: ScheduleMutation, job: Option<ScheduledJob>, cancel: CancellationToken) -> BoxFuture<'_, Result<String>> {
+        Box::pin(async move {
+            let _gate = tokio::select! {
+                biased;
+                _ = cancel.cancelled() => return Err(Error::cancelled()),
+                _ = self.life.cancelled() => return Err(Error::cancelled()),
+                lock = self.gate.lock() => lock,
+            };
+            let shared = self.shared.upgrade().ok_or_else(Error::cancelled)?;
+            if let Some(job) = &job { shared.require_job(job)?; }
+            self.collector.manage_schedule(change, job, &cancel).await
         })
     }
     fn stop(&self) -> BoxFuture<'_, Result<()>> { Box::pin(async move { self.life.cancel(); let _drained = self.gate.lock().await; Ok(()) }) }

@@ -43,7 +43,7 @@ npm run smoke:renderer -- --scenario schedules --out /tmp/oc-chan-schedules-new
 
 当前 `scripts/smoke-renderer.mjs` 复用真实开发启动器，驱动隐藏且非 key 的 WKWebView 窗口，操作实际 React 页面、保存截图，并验证退出与实例清理。`--out` 必须指向全新证据目录。`all` 覆盖完整场景，各专项按实际脚本选择行为；不能用场景名称代替行为证据。报告保留 `nativeVisibleWindowAcceptance: false`，是否通过以实际运行证据为准。
 
-`schedules` 只验收定时任务页及配置详情：读取隔离 Hermes 配置中的长正文、工作目录和模型，检查 1280×860 / 880×640 的正文宽度、配置与历史独立刷新、任务切换、关闭与离页释放。该场景不安装插件、不运行设置恢复流程，退出时核对本次实例已回收。
+`schedules` 验收定时任务页及配置详情：读取隔离 Hermes 配置中的长正文、工作目录和模型，检查 1280×860 / 880×640 的正文宽度、配置与历史独立刷新、任务切换、关闭与离页释放。传入 `--hermes-cli <启动器绝对路径>` 时，也通过真实界面新增、恢复、暂停并删除任务，同时读取隔离任务库核对结果。提供能在独立 `HOME` 和 `HERMES_HOME` 中运行的 Hermes CLI。验收不启动该任务库的调度器。退出时核对本次实例已回收。
 
 验收 driver 使用真实 WKWebView 的 DOM、JavaScript 与 React 提交探针，截图及输入仍走实际宿主。总截止20分钟、构建10分钟、启动5分钟、场景6分钟、重启1分钟；其他分阶段预算以当前脚本为准。`--fault fixture|ipc` 仅用于 `all` 的故障验收。失败保存 `result.json`、日志与已捕获截图并返回非零。
 

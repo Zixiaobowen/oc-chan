@@ -12,6 +12,7 @@ import { exerciseSmoke, verifyRestart, exerciseRecovery } from './smoke/scenario
 import { cleanupDevelopmentInstance } from './local-app-lifecycle.mjs'
 import { createMarketFeed } from './smoke/marketplace-feed.mjs'
 import { createSparkleFeed } from './smoke/sparkle-feed.mjs'
+import { prepareScheduleManagement } from './smoke/schedule-management.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url)), exec = promisify(execFile)
 const limits = Object.freeze({ totalMs: 1200000, buildMs: 600000, startupMs: 300000, scenarioMs: 360000, restartMs: 60000,
@@ -19,12 +20,14 @@ const limits = Object.freeze({ totalMs: 1200000, buildMs: 600000, startupMs: 300
 const options = {}
 for (let index = 2; index < process.argv.length; index += 2) {
   const key = process.argv[index]
-  if (!['--fault', '--out', '--scenario', '--sparkle-phase'].includes(key) || !process.argv[index + 1] || Object.hasOwn(options, key)) throw new Error('Usage: node scripts/smoke-renderer.mjs [--scenario all|notifications|topology|marketplace|collectors|sidebar|updates|schedules] [--sparkle-phase available|no-update|error] [--fault fixture|ipc] [--out NEW_DIRECTORY]')
+  if (!['--fault', '--out', '--scenario', '--sparkle-phase', '--hermes-cli'].includes(key) || !process.argv[index + 1] || Object.hasOwn(options, key)) throw new Error('Usage: node scripts/smoke-renderer.mjs [--scenario all|notifications|topology|marketplace|collectors|sidebar|updates|schedules] [--hermes-cli ABSOLUTE_PATH] [--sparkle-phase available|no-update|error] [--fault fixture|ipc] [--out NEW_DIRECTORY]')
   options[key] = process.argv[index + 1]
 }
 const scenario = options['--scenario'] ?? 'all', fault = options['--fault'] ?? null
 assert(['all', 'notifications', 'topology', 'marketplace', 'collectors', 'sidebar', 'updates', 'schedules'].includes(scenario), 'Unknown smoke scenario')
 assert(fault === null || scenario === 'all' && ['fixture', 'ipc'].includes(fault), 'Unknown or incompatible fault')
+const hermesCli = options['--hermes-cli']
+assert(!hermesCli || scenario === 'schedules' && path.isAbsolute(hermesCli), '--hermes-cli requires the schedules scenario and an absolute launcher path')
 assert(process.platform === 'darwin' && process.arch === 'arm64', 'WK smoke requires macOS arm64')
 const output = options['--out'] ? path.resolve(options['--out']) : await mkdtemp(path.join(os.tmpdir(), 'oc-chan-smoke-evidence-'))
 if (options['--out']) await mkdir(output, { mode: 0o700 })
@@ -213,6 +216,7 @@ try {
   work = await realpath(work)
   const fixtures = path.join(work, 'fixtures'); await mkdir(fixtures, { mode: 0o700 })
   manifest = await stage('prepare-real-fixtures', 60000, () => prepareSmokeFixtures(fixtures))
+  const scheduleStores = hermesCli ? await prepareScheduleManagement(manifest.home, await realpath(hermesCli)) : null
   record('fixture-identities', { home: manifest.home, agents: manifest.agentIds, pids: manifest.agentPids, historyRows: manifest.historyRows })
   if (['all','marketplace'].includes(scenario)) feed = await stage('build-signed-market-fixtures', 300000, () => createMarketFeed(path.join(work, 'market-fixtures'), { signal: abort.signal, record }))
   if (scenario === 'updates') sparkleFeed = await createSparkleFeed({ phase: options['--sparkle-phase'] ?? 'available' })
@@ -220,7 +224,7 @@ try {
   await stage('first-build', limits.buildMs, () => current.build())
   await stage('first-startup', limits.startupMs - (performance.now() - current.buildCompletedAt), () => current.start())
   await capture('startup')
-  const exercised = await stage('real-wk-scenarios', limits.scenarioMs, () => exerciseSmoke({ main: current.driver, renderer: current.renderer, manifest, record, capture, fault, scenario, feed, sparkle: sparkleFeed?.expectation }))
+  const exercised = await stage('real-wk-scenarios', limits.scenarioMs, () => exerciseSmoke({ main: current.driver, renderer: current.renderer, manifest, record, capture, fault, scenario, feed, sparkle: sparkleFeed?.expectation, scheduleStores }))
   assert(!fault, `Injected ${fault} fault did not fail its mandatory assertion`)
   if (!['collectors', 'updates', 'schedules'].includes(scenario)) {
     assert(exercised?.settings && Object.keys(exercised.settings).length, 'Scenario omitted expected persisted settings')

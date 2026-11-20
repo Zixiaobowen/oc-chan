@@ -217,7 +217,7 @@ impl ScheduleCollector {
 mod tests {
     use super::*;
     fn job(id: &str) -> ScheduledJob {
-        ScheduledJob { id:id.into(),name:"fixture".into(),source:"Hermes 任务（由调度器执行）".into(),scope:JobScope::User,origin:JobOrigin::Personal,kind:JobKind::Calendar,schedule:"fixture".into(),state:JobState::Waiting,state_reason:None,last_run:None,pid:None,last_exit_code:None,file:None,executable:None,next_run:None }
+        ScheduledJob { id:id.into(),name:"fixture".into(),source:"Hermes 任务（由调度器执行）".into(),scope:JobScope::User,origin:JobOrigin::Personal,kind:JobKind::Calendar,schedule:"fixture".into(),state:JobState::Waiting,state_reason:None,hermes_control:None,last_run:None,pid:None,last_exit_code:None,file:None,executable:None,next_run:None }
     }
     fn value<'a>(fields: &'a Fields, key: &str) -> Option<&'a str> { fields.values.iter().find(|f| f.key == key).map(|f| f.value.as_str()) }
     #[test]

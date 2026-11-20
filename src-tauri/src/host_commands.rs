@@ -77,7 +77,7 @@ impl Host {
         let Frame { owner, args } = decode(body)?;
         let document = self.documents.current(view, owner, key)?;
         let owner_bound = matches!(command, "monitor_schedule_detail" | "monitor_cancel_schedule_detail" | "monitor_schedule_history" | "monitor_cancel_schedule_history" | "monitor_events" | "monitor_cancel_events"
-            | "monitor_focus_agent_in_tern" | "settings_preview_glass" | "diagnostics_generate" | "diagnostics_copy" | "diagnostics_save" | "diagnostics_cancel");
+            | "monitor_manage_schedule" | "monitor_focus_agent_in_tern" | "settings_preview_glass" | "diagnostics_generate" | "diagnostics_copy" | "diagnostics_save" | "diagnostics_cancel");
         let _owner_task = owner_bound.then(|| document.tasks.token());
         check_cancel(&document.cancel)?;
         if matches!(command, "monitor_cancel_schedule_detail" | "desktop_committed" | "monitor_snapshot" | "monitor_cancel_schedule_history" | "monitor_cancel_events" | "monitor_navigation"
@@ -116,6 +116,10 @@ impl Host {
             "monitor_schedule_detail" => { let input: ScheduleDetailInput = decode(args)?;
                 let result = document.schedule_detail.run(&document.cancel, |cancel| services.monitor.schedule_detail(&input.job_id, &input.identity, cancel)).await?; reply(&result) },
             "monitor_cancel_schedule_detail" => { document.schedule_detail.cancel().await?; reply(&()) },
+            "monitor_manage_schedule" => {
+                let change: ScheduleMutation = decode(args)?;
+                reply(&services.monitor.manage_schedule(change, document.cancel.child_token()).await?)
+            },
             "monitor_events" => { let input: Events = decode(args)?;
                 #[cfg(feature="acceptance")]
                 let observation = self.acceptance.begin_query(&input.query)?;

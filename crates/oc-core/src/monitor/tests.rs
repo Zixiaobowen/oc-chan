@@ -224,7 +224,7 @@ async fn settings_failure_is_returned_and_rollback_drains_a_failed_startup() {
 #[test]
 fn schedule_identity_is_checked_beyond_the_displayed_job_id() {
     let shared = Shared::new(Vec::new());
-    let job = ScheduledJob { id: "hermes-job:job".into(), name: "Job".into(), source: "hermes".into(), scope: JobScope::User, origin: JobOrigin::Personal, kind: JobKind::Interval, schedule: "hourly".into(), state: JobState::Waiting, state_reason: None, last_run: None, pid: None, last_exit_code: None, file: Some("/private/first.json".into()), executable: None, next_run: None };
+    let job = ScheduledJob { id: "hermes-job:job".into(), name: "Job".into(), source: "hermes".into(), scope: JobScope::User, origin: JobOrigin::Personal, kind: JobKind::Interval, schedule: "hourly".into(), state: JobState::Waiting, state_reason: None, hermes_control: None, last_run: None, pid: None, last_exit_code: None, file: Some("/private/first.json".into()), executable: None, next_run: None };
     owner(&shared, MonitorSection::Schedules, 1); publish(&shared, SnapshotData::Schedules(ScheduleSnapshot { collected_at: T1.into(), jobs: vec![job.clone()], sources: Vec::new() }), 1, false, None);
     shared.require_job(&job).unwrap(); let mut replaced = job; replaced.file = Some("/private/replaced.json".into()); assert_eq!(shared.require_job(&replaced).unwrap_err().code, "OC_SCHEDULE_IDENTITY");
 }
@@ -278,7 +278,7 @@ impl CollectionPlugin for ScheduleDetailIdentityProbe {
 async fn schedule_detail_rejects_stale_selection_before_querying_replacement() {
     let profile = profile(); let monitor = Monitor::new(options(profile.path())).unwrap(); monitor.start(&disabled()).await.unwrap();
     monitor.registry.unregister("schedules").await.unwrap();
-    let first = ScheduledJob { id:"hermes-job:same".into(),name:"Job".into(),source:"hermes".into(),scope:JobScope::User,origin:JobOrigin::Personal,kind:JobKind::Interval,schedule:"hourly".into(),state:JobState::Waiting,state_reason:None,last_run:None,pid:None,last_exit_code:None,file:Some("/first/jobs.json".into()),executable:None,next_run:None };
+    let first = ScheduledJob { id:"hermes-job:same".into(),name:"Job".into(),source:"hermes".into(),scope:JobScope::User,origin:JobOrigin::Personal,kind:JobKind::Interval,schedule:"hourly".into(),state:JobState::Waiting,state_reason:None,hermes_control:None,last_run:None,pid:None,last_exit_code:None,file:Some("/first/jobs.json".into()),executable:None,next_run:None };
     let plugin = Arc::new(ScheduleDetailIdentityProbe { job:Mutex::new(first),queried:AtomicUsize::new(0) }); let factory = plugin.clone();
     monitor.registry.register(PluginDefinition { id:"schedules".into(),section:MonitorSection::Schedules,capabilities:Vec::new(),dependencies:Vec::new(),retry_sources:Vec::new(),interval:Duration::from_secs(60),timeout:Duration::from_secs(1),create:Arc::new(move |_| Ok(factory.clone())) },true).await.unwrap();
     for replacement in 0..3 {

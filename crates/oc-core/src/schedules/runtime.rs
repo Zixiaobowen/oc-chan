@@ -6,6 +6,7 @@ use serde_json::json;
 use tokio_util::sync::CancellationToken;
 use crate::{error::{Error,Result,check_cancel,validate_text},io::{BoundedIo,CommandSpec},model::*,worker::DataWorker};
 use super::parse::{Claim,MetadataJob};
+pub(super) const MAX_HERMES_JOBS: usize = 256;
 const CLAIM_TTL_MS:i64=300_000;
 static PROCESS_ROW:LazyLock<Regex>=LazyLock::new(||Regex::new(r"^\s*(\d+)\s+(\w{3}\s+\w{3}\s+\d+\s+\d\d:\d\d:\d\d\s+\d{4})\s+(\S+)\s*$").expect("process row"));
 #[derive(Clone,Debug,Deserialize)]
@@ -67,7 +68,7 @@ fn parse_processes(output:&str,allowed:&BTreeSet<u32>)->Result<BTreeMap<u32,i64>
 }
 async fn read_runtime(io:&BoundedIo,worker:&DataWorker,jobs:&[MetadataJob],database:&Path,cancel:&CancellationToken)->Result<Runtime>{
     let ids:BTreeSet<_>=jobs.iter().map(|job|job.id.clone()).collect();
-    if ids.len()>256{return Err(Error::limit("Hermes jobs",256,ids.len()));}
+    if ids.len()>MAX_HERMES_JOBS{return Err(Error::limit("Hermes jobs",MAX_HERMES_JOBS,ids.len()));}
     let response=worker.request("hermes-runtime",database,json!({"jobIds":ids}),cancel).await?;
     let response:Response=serde_json::from_value(response).map_err(|_|Error::invalid("Hermes runtime response"))?;
     if response.entries.len()>ids.len(){return Err(Error::invalid("Hermes runtime response count"));}

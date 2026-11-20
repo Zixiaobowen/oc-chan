@@ -11,6 +11,7 @@ import { exerciseTopology } from './topology-scenarios.mjs'
 import { exerciseMarketplace, verifyMarketplaceRestart } from './marketplace-scenarios.mjs'
 import { boundedFile } from './main-probe.mjs'
 import { exerciseSidebar, verifySidebarRestart } from './sidebar-scenarios.mjs'
+import { exerciseScheduleManagement } from './schedule-management.mjs'
 
 const WAIT_MS = 8_000
 const RPC_MS = 5_000
@@ -280,7 +281,7 @@ async function exerciseScheduleDetails({ ui, renderer, manifest, capture }) {
   })
 }
 
-export async function exerciseSmoke({ main, renderer, manifest, record, capture, fault, scenario = 'all', feed, sparkle }) {
+export async function exerciseSmoke({ main, renderer, manifest, record, capture, fault, scenario = 'all', feed, sparkle, scheduleStores }) {
   assert.ok(fault == null || fault === 'fixture' || fault === 'ipc', 'unknown smoke fault')
   const ui = controls({ main, renderer, record, capture })
   if (scenario === 'updates') {
@@ -317,7 +318,10 @@ export async function exerciseSmoke({ main, renderer, manifest, record, capture,
     return {}
   }
   if (['all', 'schedules'].includes(scenario)) await exerciseScheduleDetails({ ui, renderer, manifest, capture })
-  if (scenario === 'schedules') return {}
+  if (scenario === 'schedules') {
+    if (scheduleStores) await exerciseScheduleManagement({ ui, renderer, stores: scheduleStores, capture })
+    return {}
+  }
   if (scenario === 'all') await exerciseBoundaries({ ui, main, renderer, record })
   const market = await exerciseMarketplace({ ui, main, renderer, feed, thorough: scenario === 'marketplace' || scenario === 'all' })
   if (scenario === 'marketplace') return market
