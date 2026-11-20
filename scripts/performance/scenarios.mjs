@@ -139,11 +139,16 @@ export async function runStress(instance, context) {
   }
   const restored = await instance.operation(`window.desktopSettings.update({plugins:${JSON.stringify(original)}}).then(value=>{if(!value.ok)throw new Error(JSON.stringify(value.error));return value.snapshot.settings.plugins})`)
   assert.deepEqual(restored, original, 'Original plugin preferences must be restored')
+  await runTopology(instance, context)
+  instance.phase = 'recovery'; await instance.duration(full ? 60 : 2)
+}
+
+export async function runTopology(instance, { full, abort, record }) {
   instance.phase = 'topology'; await instance.interact(0)
   // Pause incoming display updates while rendering a bounded expansion of real nodes.
   // This is explicitly renderer load, separate from the 128 real session denominator.
   await instance.main.evaluate(`(()=>{const b=[...document.querySelectorAll('button')].find(item=>/暂停显示|Pause display/.test(item.textContent));if(!b)throw new Error('Pause display control missing');b.click();return true})()`)
-  for (const count of [128,500,2000]) {
+  for (const count of [128,500,1200,2000]) {
     for (const mode of ['2D','3D']) {
       instance.phase = `topology-${count}-${mode}`
       await instance.drain()
@@ -163,20 +168,20 @@ export async function runStress(instance, context) {
           const alert=document.querySelector('.topology-3d-message[role="alert"]');
           return {mode:document.querySelector('.topology-mode button[aria-pressed="true"]')?.textContent,
             caption,pageSummary,pageNodes:page?Number(page[1]):null,totalExpandedNodes:page?Number(page[2]):null,
-            employeeNodes:picker?[...picker.options].filter(option=>option.value).length:null,
+            agentNodes:picker?[...picker.options].filter(option=>option.value).length:null,
             mounted2DNodes:document.querySelectorAll('.react-flow__node').length,
             canvas:Boolean(document.querySelector('.topology-3d-scene canvas')),
             alert:alert?{title:alert.querySelector('strong')?.textContent,detail:alert.querySelector('p')?.textContent}:null,
             probe:window.__ocPerf.status()};
         })()`)
         if (value.mode !== mode || !new RegExp(`^${count} (?:个 Agent|agents)$`).test(value.caption)) return null
-        if (mode === '3D') return value.alert || (value.canvas && value.employeeNodes === count && instance.draws.byView.main.calls > drawsBefore.calls) ? value : null
+        if (mode === '3D') return value.alert || (value.canvas && value.agentNodes === count && instance.draws.byView.main.calls > drawsBefore.calls) ? value : null
         return value.mounted2DNodes > 0 ? value : null
       }, { signal: abort.signal })
       let outcome = 'rendered', actualGraphNodes
       if (mode === '3D' && count === 2000) {
         assert.match(observed.alert?.title ?? '', /^(?:当前关系图超出 3D 显示预算|This graph exceeds the 3D display budget)$/)
-        const budget = /^(?:当前 |Current: )(\d+)(?: 位员工、| employees, )(\d+)(?: 条关系；上限 | relationships; limits: )(\d+) \/ (\d+)/.exec(observed.alert.detail)
+        const budget = /^(?:当前有 |The graph has )(\d+)(?: 个 Agent 和 | agents and )(\d+)(?: 条关系，3D 上限为 | relationships\. The 3D limits are )(\d+)(?: 个 Agent 和 | agents and )(\d+)(?: 条关系。| relationships\.)/.exec(observed.alert.detail)
         assert(budget, '3D budget rejection lacks graph counts and limits')
         assert.equal(Number(budget[1]), count); assert.equal(Number(budget[3]), 1200); assert.equal(Number(budget[4]), 2400)
         assert(Number(budget[1]) > Number(budget[3]) || Number(budget[2]) > Number(budget[4]))
@@ -184,7 +189,7 @@ export async function runStress(instance, context) {
         actualGraphNodes = Number(budget[1]); outcome = 'budget-rejected'
       } else if (mode === '3D') {
         assert.equal(observed.alert, null, `3D rendering failed: ${JSON.stringify(observed.alert)}`)
-        actualGraphNodes = observed.employeeNodes
+        actualGraphNodes = observed.agentNodes
         assert.equal(actualGraphNodes, count)
         assert(instance.draws.byView.main.calls > drawsBefore.calls, 'Real WebGL did not submit draws')
       } else {
@@ -220,5 +225,4 @@ export async function runStress(instance, context) {
     drawBatches: instance.draws.byView.main.batches - recoveryDraws.batches, drawCalls: instance.draws.byView.main.calls - recoveryDraws.calls }])
   await instance.main.evaluate(`(()=>{const b=[...document.querySelectorAll('button')].find(item=>/继续显示|Resume display/.test(item.textContent));if(!b)throw new Error('Resume display control missing');b.click();return true})()`)
   await instance.operation('window.monitor.refresh()')
-  instance.phase = 'recovery'; await instance.duration(full ? 60 : 2)
 }

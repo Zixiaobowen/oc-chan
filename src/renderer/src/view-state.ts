@@ -15,7 +15,7 @@ export interface TopologyMemory {
   viewport: CanvasViewport | null
   filterKey: string | null
   pageIndex: number | null
-  office: Topology3DSession
+  galaxy: Topology3DSession
 }
 export interface ScheduleViewMemory { list: ScrollPosition; detail: ScrollPosition }
 export interface AgentViewState {
@@ -52,7 +52,7 @@ export function initialScheduleView(): ScheduleViewState {
 }
 export function createTopologyMemory(): TopologyMemory {
   return { positions: new Map(), manualPositions: new Map(), dimensions: new Map(), viewport: null, filterKey: null, pageIndex: null,
-    office: { positions: new Map(), floorByAgent: new Map(), floorId: null } }
+    galaxy: { positions: new Map(), taskByAgent: new Map(), taskId: null } }
 }
 export function createScheduleMemory(): ScheduleViewMemory {
   return { list: { top: 0, left: 0 }, detail: { top: 0, left: 0 } }
@@ -81,9 +81,10 @@ export function reconcileScheduleView(view: ScheduleViewState, data: ScheduleSna
 }
 
 export function pruneTopologyMemory(memory: TopologyMemory, agents: readonly AgentInfo[]): void {
-  if (!memory.positions.size && !memory.manualPositions.size && !memory.dimensions.size && !memory.office.positions.size && !memory.office.floorByAgent.size) return
+  const { galaxy } = memory
+  if (!memory.positions.size && !memory.manualPositions.size && !memory.dimensions.size && !galaxy.positions.size && !galaxy.taskByAgent.size) return
   const alive = new Set(agents.map(agent => agent.id))
-  for (const positions of [memory.positions, memory.manualPositions, memory.dimensions, memory.office.positions, memory.office.floorByAgent]) {
+  for (const positions of [memory.positions, memory.manualPositions, memory.dimensions, galaxy.positions, galaxy.taskByAgent]) {
     for (const id of positions.keys()) if (!alive.has(id)) positions.delete(id)
   }
 }

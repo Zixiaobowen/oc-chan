@@ -28,9 +28,7 @@ When you run several agents and background tasks at once, OC Chan gives you one 
 
 ### See how agents work together
 
-In the default 3D view, each project occupies a building, and each main session task and its subagents occupy a floor. Main agents have private offices; subagents share open desks. Select a task floor to look inside and click an employee for details. You can also switch to a 2D relationship graph to search, collapse branches, and adjust the layout. Parent–child relationships come from collected evidence; branches with missing parents or cycles are marked as unassigned.
-
-Six landmark-inspired silhouettes rotate by parcel, making projects easier to distinguish across the district.
+In the default 3D view, each project has a galaxy, and each main-session task and its subagents form a task system. Main agents are stars, and subagents are planets. Select a project, task, or agent to locate it and inspect details. You can also switch to a 2D relationship graph to search, collapse branches, and adjust the layout. Parent–child relationships come from collected evidence. Branches with missing parents or cycles are marked as unassigned. Background stars are decorative.
 
 ### Return to an agent's session
 

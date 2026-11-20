@@ -2,7 +2,7 @@
 
 [返回首页](../README.md)
 
-命令和路径均相对仓库根目录。后台与桌面宿主使用 Rust，唯一宿主为 `src-tauri`；React / TypeScript 界面经 Vite 打包，在 macOS 系统 WKWebView 中运行。2D 拓扑使用 ReactFlow，3D 建筑使用 Three.js。Node 用于前端构建、开发与验收工具，不随生产应用分发。
+命令和路径均相对仓库根目录。后台与桌面宿主使用 Rust，唯一宿主为 `src-tauri`。React / TypeScript 界面经 Vite 打包，在 macOS 系统 WKWebView 中运行。2D 拓扑使用 ReactFlow，3D 星系使用 Three.js。Node 用于前端构建、开发与验收工具，生产应用无需 Node。
 
 ## 运行
 
@@ -47,7 +47,7 @@ npm run smoke:renderer -- --scenario schedules --out /tmp/oc-chan-schedules-new
 
 验收 driver 使用真实 WKWebView 的 DOM、JavaScript 与 React 提交探针，截图及输入仍走实际宿主。总截止20分钟、构建10分钟、启动5分钟、场景6分钟、重启1分钟；其他分阶段预算以当前脚本为准。`--fault fixture|ipc` 仅用于 `all` 的故障验收。失败保存 `result.json`、日志与已捕获截图并返回非零。
 
-功能验收范围继续包括历史分页/取消/锁库恢复、事件筛选与分页、来源停用恢复、通知设置与权限、设置写入失败及回滚、脱敏诊断、窗口授权、ReactFlow 2D/Three.js 建筑视图交互、同 profile 重启、独立启动恢复、插件市场安装/升级/取消/摘要拒绝/失败恢复，以及侧栏布局持久化。脚本恢复不等于本次验证已通过，任何缺少的行为证据都应明确记录。
+功能验收范围继续包括历史分页/取消/锁库恢复、事件筛选与分页、来源停用恢复、通知设置与权限、设置写入失败及回滚、脱敏诊断、窗口授权、ReactFlow 2D/Three.js 星系视图交互、同 profile 重启、独立启动恢复、插件市场安装/升级/取消/摘要拒绝/失败恢复，以及侧栏布局持久化。脚本恢复不等于本次验证已通过，任何缺少的行为证据都应明确记录。
 
 真实输入夹具应使用独立存活进程、FD、JSONL、JSON、plist与SQLite，由生产 Rust 采集器读取，不能播种假快照或借用个人数据。性能夹具现位于 `scripts/performance/agent-fixtures.mjs`，通过 `stopAgents` 排空真实进程。市场签名夹具入口仍为 `OC_CHAN_ACCEPTANCE_MARKET_FIXTURES`，只允许 acceptance 无头开发实例；同 profile 重启须复用信任根，不能从可写安装目录建立信任。正式构建不读取该入口。
 
@@ -93,6 +93,7 @@ node --input-type=module -e "import { execFileSync } from 'node:child_process'; 
 node scripts/performance/run.mjs --mode smoke --scenario startup
 node scripts/performance/run.mjs --mode smoke --scenario daily
 node scripts/performance/run.mjs --mode smoke --scenario stress
+node scripts/performance/run.mjs --mode smoke --scenario topology
 node scripts/performance/run.mjs --mode smoke --scenario soak
 # 单独安排的24小时常驻测量：
 node scripts/performance/run.mjs --mode baseline --scenario soak --out /tmp/oc-chan-rust-soak-new
@@ -103,6 +104,8 @@ node scripts/performance/run.mjs --mode baseline --scenario soak --out /tmp/oc-c
 C/libproc 采样核验出生身份的宿主和可观察后代，并单独记录启动器。acceptance-only WebKit实例关联提供出生身份核对后的XPC记录，共享身份去重；不可用角色、关联租约到期、不完整CPU区间与亚采样周期生命周期缺口均显式保留，不填零。XPC可能共享，因此不能声称独占应用总内存或自动推导改善幅度。WebGL draw只证明原始方法返回；隐藏WK可能暂停rAF，均不证明GPU完成或物理显示帧率。
 
 startup baseline运行10轮；idle覆盖主窗、托盘及均隐藏；daily baseline运行5轮，每轮预热120秒、测量600秒，smoke预热2秒、测量8秒。真实夹具包含32会话，L2与soak使用128会话；stress覆盖资源边界，soak baseline为24小时。真实进程发现、文件写入、事件频率、历史查询、变更与交互计数写入workload证据；源码变化、采样失败、排空或清理失败均失败。具体负载与阈值以 `scenarios.mjs`、`soak-scenario.mjs` 和共享 workload 为准，不将所有场景概括为8秒。
+
+`topology` 只运行拓扑渲染压力场景。脚本从实际采集的会话扩展出 128、500、1200、2000 个渲染节点，检查绘制、超限拒绝及恢复。
 
 `scripts/performance/compare.mjs` 对冻结基线与候选执行对照，生成schema 2比较报告，并断言共享夹具、实际负载、视口与计数一致；构建管线、驱动开销、watch及进程归属覆盖差异仍须说明，不自动宣称性能提升。[历史性能基准](performance-baseline.md)与本地 `docs/codex-handoffs/2026-11-10-rust-migration-integration.md` 仅证明当时实现，旧Electron、Tauri和GPUI证据均不能当作本次恢复成绩。当前实现尚未验证；短测不证明24小时、睡眠/网络切换或16GiB硬件通过。
 

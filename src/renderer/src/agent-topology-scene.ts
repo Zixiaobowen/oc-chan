@@ -1,88 +1,96 @@
 import {
-  Box3, BoxGeometry, BufferAttribute, BufferGeometry, Color, ConeGeometry, DirectionalLight, DoubleSide,
-  HemisphereLight, InstancedMesh, LineBasicMaterial, LineSegments, MeshLambertMaterial,
-  Object3D, PerspectiveCamera, Plane, Raycaster, Scene, TorusGeometry, Vector2, Vector3,
+  Box3, BufferAttribute, BufferGeometry, Color, ConeGeometry, DirectionalLight, DynamicDrawUsage,
+  HemisphereLight, InstancedMesh, LineBasicMaterial, LineSegments, MeshBasicMaterial, MeshPhongMaterial,
+  Object3D, PerspectiveCamera, Plane, Raycaster, Scene, SphereGeometry, TorusGeometry, Vector2, Vector3,
   WebGLRenderer,
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import type { TopologyGraph, TopologyNode } from './agent-topology'
-import { buildOfficeLayout, officeStreetGrid, placeOfficeBuildings, STREET_SETBACK, STREET_WIDTH, MAX_3D_EDGES, MAX_3D_NODES, type OfficeBuilding, type OfficeFloor, type Point3D } from './agent-topology-3d-layout'
-import { createEmployeeGeometry, createWorkstationGeometry } from './agent-office-employee'
-import { createEntranceGeometry, createFacadeGeometry, createFloorFrameGeometry, createMainOfficeGeometry, createRoofGeometry, LANDMARK_ROOF_HEIGHT } from './agent-office-building'
-import { OfficeDistrict } from './agent-office-district'
+import {
+  agentOrbitLimits, agentPositionsOverlap, MAX_3D_EDGES, MAX_3D_NODES, pickAgentOnRay,
+  PLANET_RADIUS, planGalaxyPlacement, restoreTaskPositions, saveManualGalaxyPosition, STAR_RADIUS,
+  type Galaxy, type GalaxyLayout, type GalaxyPlacement, type Point3D, type TaskOrbit,
+} from './agent-topology-3d-layout'
+import { AgentGlows, GalaxyBackdrop, galaxyColor } from './agent-galaxy-geometry'
 import { isDesktopDocumentVisible, isHeadlessDesktop, scheduleDesktopUpdate, type DesktopUpdate } from './desktop-visibility'
 
 export interface Topology3DSession {
-  // x/z stay relative to the office centre, so project repacking preserves manual seats.
+  // Manual positions are relative to the task center, so project repacking preserves them.
   positions: Map<string, Point3D>
-  floorByAgent: Map<string, string>
-  floorId: string | null
-  buildingSlots?: Map<string, number>
-  projectByAgent?: Map<string, string>
+  taskByAgent: Map<string, string>
+  taskId: string | null
+  placements?: Map<string, GalaxyPlacement>
   camera?: { position: [number, number, number]; target: [number, number, number] }
+  cameraGalaxyId?: string
 }
 interface Callbacks {
   select(id: string): void
-  floor(id: string): void
+  task(id: string): void
   error(message: string): void
+  placementConflict(message: string | null): void
+  notice(message: string | null): void
   ready(): void
 }
 type Translate = (zh: string, en: string) => string
-const LABEL_LIMIT = 32
-const FLOOR_LABEL_LIMIT = 16
-const PIXEL_BUDGET = 4_000_000
-const NODE_RADIUS = 32
-// Parcel order gives the first neighbouring projects different silhouettes.
-const BUILDING_TINTS = ['#afcbdc', '#a6cbbf', '#e2d9cb', '#94b8d4', '#d6c4a7', '#aabbd8'].map(color => new Color(color))
-
-function mutedMesh(source: InstancedMesh): InstancedMesh {
-  const material = (source.material as MeshLambertMaterial).clone()
-  material.transparent = true
-  material.opacity *= 0.12
-  material.depthWrite = false
-  return new InstancedMesh(source.geometry, material, source.instanceMatrix.count)
+type LabelBox = { x: number; y: number; w: number; h: number }
+type LabelPoint = { x: number; y: number; depth: number; pixelsPerUnit: number }
+interface LineBuffer {
+  mesh: LineSegments<BufferGeometry, LineBasicMaterial>
+  positions: BufferAttribute
+  colors: BufferAttribute
 }
 
-/** One bounded GPU scene; no simulation, interval or perpetual animation loop. */
+const LABEL_LIMIT = 32
+const GROUP_LABEL_LIMIT = 16
+const PIXEL_BUDGET = 4_000_000
+const SYSTEM_Y = 28
+const ORBIT_SEGMENTS = 48
+const EDGE_SEGMENTS = 8
+const TAU = Math.PI * 2
+const NIGHT = new Color('#040712')
+const WARM = new Color('#fff1d6')
+const ACTIVE = new Color('#a3fff0')
+const UNKNOWN = new Color('#f6a878')
+const SELECTED = new Color('#ffffff')
+const RING_POINTS = Array.from({ length: ORBIT_SEGMENTS + 1 }, (_, index) => {
+  const angle = index / ORBIT_SEGMENTS * TAU
+  return [Math.cos(angle), Math.sin(angle)] as const
+})
+
+function lineBuffer(vertices: number, opacity: number): LineBuffer {
+  const geometry = new BufferGeometry()
+  const positions = new BufferAttribute(new Float32Array(vertices * 3), 3).setUsage(DynamicDrawUsage)
+  const colors = new BufferAttribute(new Float32Array(vertices * 3), 3).setUsage(DynamicDrawUsage)
+  geometry.setAttribute('position', positions)
+  geometry.setAttribute('color', colors)
+  geometry.setDrawRange(0, 0)
+  const mesh = new LineSegments(geometry, new LineBasicMaterial({ vertexColors: true, transparent: true, opacity, depthWrite: false }))
+  mesh.frustumCulled = false
+  return { mesh, positions, colors }
+}
+
+function syncLines(lines: LineBuffer, count: number): void {
+  lines.mesh.geometry.setDrawRange(0, count)
+  lines.positions.needsUpdate = true
+  lines.colors.needsUpdate = true
+}
+
+/** One bounded GPU scene. Camera, labels and geometry redraw only on demand. */
 export class TopologyScene {
   private readonly renderer: WebGLRenderer
   private readonly scene = new Scene()
   private readonly camera = new PerspectiveCamera(45, 1, 1, 1_000_000)
   private readonly controls: OrbitControls
-  private readonly nodes = new InstancedMesh(createEmployeeGeometry(), new MeshLambertMaterial({ vertexColors: true }), MAX_3D_NODES)
-  private readonly markers = new InstancedMesh(new TorusGeometry(29, 2, 4, 20), new MeshLambertMaterial(), MAX_3D_NODES)
-  private readonly desks = new InstancedMesh(createWorkstationGeometry(), new MeshLambertMaterial({ vertexColors: true }), MAX_3D_NODES)
-  private readonly decks = new InstancedMesh(new BoxGeometry(1, 1, 1), new MeshLambertMaterial(), MAX_3D_NODES)
-  private readonly frames = new InstancedMesh(new BufferGeometry(), new MeshLambertMaterial({ vertexColors: true }), MAX_3D_NODES)
-  private readonly facades = new InstancedMesh(new BufferGeometry(), new MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.65, depthWrite: false, side: DoubleSide }), MAX_3D_NODES)
-  private readonly roofs = BUILDING_TINTS.map(() => new InstancedMesh(new BufferGeometry(), new MeshLambertMaterial({ vertexColors: true, transparent: true }), MAX_3D_NODES))
-  private readonly entrance = new InstancedMesh(new BufferGeometry(), new MeshLambertMaterial({ vertexColors: true, transparent: true, side: DoubleSide }), MAX_3D_NODES)
-  private readonly offices = new InstancedMesh(createMainOfficeGeometry(), new MeshLambertMaterial({ vertexColors: true, transparent: true, side: DoubleSide, depthWrite: false }), MAX_3D_NODES)
-  private buildingWidth = 0
-  private buildingDepth = 0
-  private readonly floorPaint = new Color('#d9d6cc')
-  private readonly white = new Color(0xffffff)
-  private readonly arrows = new InstancedMesh(new ConeGeometry(7, 20, 8), new MeshLambertMaterial(), MAX_3D_EDGES)
-  private readonly mutedNodes = mutedMesh(this.nodes)
-  private readonly mutedMarkers = mutedMesh(this.markers)
-  private readonly mutedDesks = mutedMesh(this.desks)
-  private readonly mutedDecks = mutedMesh(this.decks)
-  private readonly mutedFrames = mutedMesh(this.frames)
-  private readonly mutedFacades = mutedMesh(this.facades)
-  private readonly mutedOffices = mutedMesh(this.offices)
-  private readonly mutedRoofs = this.roofs.map(mutedMesh)
-  private readonly mutedEntrances = mutedMesh(this.entrance)
-  private readonly mutedArrows = mutedMesh(this.arrows)
-  private readonly district = new OfficeDistrict()
-  private readonly meshes = [this.nodes, this.markers, this.desks, this.decks, this.frames, this.facades, ...this.roofs, this.entrance, this.offices, this.arrows, this.mutedNodes, this.mutedMarkers, this.mutedDesks, this.mutedDecks, this.mutedFrames, this.mutedFacades, ...this.mutedRoofs, this.mutedEntrances, this.mutedOffices, this.mutedArrows, ...this.district.meshes]
-  private readonly nodeSlots: string[] = []
-  private readonly mutedNodeSlots: string[] = []
-  private readonly floorSlots: string[] = []
-  private readonly mutedFloorSlots: string[] = []
-  private readonly edgePositions = new BufferAttribute(new Float32Array(MAX_3D_EDGES * 12 * 6), 3)
-  private readonly edgeColors = new BufferAttribute(new Float32Array(MAX_3D_EDGES * 12 * 6), 3)
-  private readonly lines = new LineSegments(new BufferGeometry(), new LineBasicMaterial({ vertexColors: true }))
-  private readonly mutedLines = new LineSegments(new BufferGeometry(), new LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.12, depthWrite: false }))
+  private readonly backdrop: GalaxyBackdrop
+  private readonly glows: AgentGlows
+  private readonly sphere = new SphereGeometry(1, 16, 10)
+  private readonly stars = new InstancedMesh(this.sphere, new MeshPhongMaterial({ emissive: '#ff913c', emissiveIntensity: 0.55, shininess: 8 }), MAX_3D_NODES)
+  private readonly planets = new InstancedMesh(this.sphere, new MeshPhongMaterial({ shininess: 12, specular: '#435472' }), MAX_3D_NODES)
+  private readonly arrows = new InstancedMesh(new ConeGeometry(5.5, 18, 7), new MeshBasicMaterial(), MAX_3D_EDGES)
+  private readonly markers = new InstancedMesh(new TorusGeometry(1, 0.022, 5, 32).rotateX(Math.PI / 2), new MeshBasicMaterial(), 2)
+  private readonly meshes = [this.stars, this.planets, this.arrows, this.markers]
+  private readonly lines = lineBuffer(MAX_3D_EDGES * EDGE_SEGMENTS * 2, 0.84)
+  private readonly orbits = lineBuffer(MAX_3D_NODES * ORBIT_SEGMENTS * 2, 0.58)
   private readonly transform = new Object3D()
   private readonly raycaster = new Raycaster()
   private readonly pointer = new Vector2()
@@ -92,18 +100,23 @@ export class TopologyScene {
   private readonly direction = new Vector3()
   private readonly up = new Vector3(0, 1, 0)
   private readonly dragPlane = new Plane()
+  private readonly orbitPlane = new Plane(this.up, -1)
   private readonly dragOffset = new Vector3()
-  private readonly labels: HTMLButtonElement[] = []
-  private readonly floorLabels: HTMLButtonElement[] = []
-  private readonly buildingLabels: HTMLButtonElement[] = []
-  private buildings: OfficeBuilding[] = []
-  private floorById = new Map<string, OfficeFloor>()
-  private floors: OfficeFloor[] = []
   private readonly tint = new Color()
+  private readonly labels: HTMLButtonElement[] = []
+  private readonly groupLabels: HTMLButtonElement[] = []
+  private galaxies: Galaxy[] = []
+  private galaxyById = new Map<string, Galaxy>()
+  private taskById = new Map<string, TaskOrbit>()
+  private taskForNode = new Map<string, TaskOrbit>()
+  private positions = new Map<string, Point3D>()
+  private tasks: TaskOrbit[] = []
   private readonly observer: ResizeObserver
   private readonly intersection: IntersectionObserver
   private graph: TopologyGraph | null = null
   private byId = new Map<string, TopologyNode>()
+  private lastUpdate?: Parameters<TopologyScene['update']>
+  private collisionTasks = new Map<string, TaskOrbit>()
   private selected: string | null = null
   private hovered: string | null = null
   private evidenceCurrent = true
@@ -115,27 +128,32 @@ export class TopologyScene {
   private width = 1
   private height = 1
   private pixelRatio = 0
-  private pointerStart: { x: number; y: number; id: string | null; floorId: string | null; pointerId: number } | null = null
+  private pointerStart: { x: number; y: number; id: string | null; taskId: string | null; pointerId: number } | null = null
   private dragged = false
-  private colors = { node: new Color(), active: new Color(), edge: new Color(), warning: new Color(), context: new Color(), ground: new Color(), surface: new Color() }
 
   constructor(private readonly host: HTMLElement, private readonly session: Topology3DSession, private readonly callbacks: Callbacks) {
     this.renderer = new WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'low-power' })
+    this.renderer.setClearColor(NIGHT)
+    this.renderer.debug.onShaderError = (context, program, vertex, fragment) => {
+      const detail = [context.getProgramInfoLog(program), context.getShaderInfoLog(vertex), context.getShaderInfoLog(fragment)].filter(Boolean).join('\n')
+      throw new Error(this.t('无法初始化 3D 星系。', 'Could not initialize the 3D galaxies.') + (detail ? `\n${detail}` : ''))
+    }
     const canvas = this.renderer.domElement
     canvas.className = 'topology-3d-webgl'
     canvas.tabIndex = 0
     canvas.setAttribute('role', 'group')
     host.append(canvas)
-    for (const mesh of this.meshes) { mesh.count = 0; mesh.frustumCulled = false; this.scene.add(mesh) }
-    for (const lines of [this.lines, this.mutedLines]) {
-      lines.frustumCulled = false
-      lines.geometry.setAttribute('position', this.edgePositions)
-      lines.geometry.setAttribute('color', this.edgeColors)
-      lines.geometry.setDrawRange(0, 0)
+    this.backdrop = new GalaxyBackdrop(this.scene)
+    this.glows = new AgentGlows(this.scene)
+    for (const mesh of this.meshes) {
+      mesh.count = 0
+      mesh.frustumCulled = false
+      mesh.instanceMatrix.setUsage(DynamicDrawUsage)
+      this.scene.add(mesh)
     }
-    const light = new DirectionalLight(0xfff2d9, 1.35)
-    light.position.set(-1, 3, 2)
-    this.scene.add(this.lines, this.mutedLines, light, new HemisphereLight(0xf3f5ee, 0x737763, 1.65))
+    const light = new DirectionalLight(0xf5edff, 2.2)
+    light.position.set(-2, 4, 3)
+    this.scene.add(this.lines.mesh, this.orbits.mesh, light, new HemisphereLight(0xb6d8ff, 0x523967, 1.15))
     this.controls = new OrbitControls(this.camera, canvas)
     this.controls.enableDamping = false
     this.controls.minDistance = 60
@@ -147,47 +165,40 @@ export class TopologyScene {
     if (session.camera) {
       this.camera.position.fromArray(session.camera.position)
       this.controls.target.fromArray(session.camera.target)
-      this.controls.update()
+    } else {
+      this.camera.position.set(280, 560, 460)
     }
-    for (let i = 0; i < LABEL_LIMIT; i++) {
+    this.controls.update()
+    for (let index = 0; index < LABEL_LIMIT; index++) {
       const label = document.createElement('button')
       label.type = 'button'
       label.className = 'topology-3d-label'
       label.hidden = true
       label.append(document.createElement('strong'), document.createElement('small'))
-      label.addEventListener('click', () => {
-        if (label.dataset.id) this.selectAgent(label.dataset.id)
-      })
+      label.addEventListener('click', () => { if (label.dataset.id) this.selectAgent(label.dataset.id) })
       host.append(label)
       this.labels.push(label)
     }
-    for (let i = 0; i < FLOOR_LABEL_LIMIT; i++) {
+    for (let index = 0; index < GROUP_LABEL_LIMIT; index++) {
       const label = document.createElement('button')
       label.type = 'button'
-      label.className = 'topology-3d-floor-label'
-      label.hidden = true
-      label.addEventListener('click', () => { if (label.dataset.floorId) this.callbacks.floor(label.dataset.floorId) })
-      host.append(label)
-      this.floorLabels.push(label)
-    }
-    for (let i = 0; i < FLOOR_LABEL_LIMIT; i++) {
-      const label = document.createElement('button')
-      label.type = 'button'
-      label.className = 'topology-3d-floor-label topology-3d-building-label'
+      label.className = 'topology-3d-task-label'
       label.hidden = true
       label.addEventListener('click', () => {
-        const building = this.buildings.find(item => item.id === label.dataset.buildingId)
-        if (building) this.fit(false, new Set(building.floors.flatMap(floor => floor.nodeIds)))
+        const galaxy = this.galaxyById.get(label.dataset.galaxyId ?? '')
+        if (galaxy) this.fitBounds(this.galaxyBounds(galaxy), false, galaxy.id)
+        else if (label.dataset.taskId) this.callbacks.task(label.dataset.taskId)
       })
       host.append(label)
-      this.buildingLabels.push(label)
+      this.groupLabels.push(label)
     }
-    // Capture runs before OrbitControls: dragging a node must not also orbit the camera.
+    // Capture runs before OrbitControls so dragging an agent cannot orbit the camera.
     canvas.addEventListener('pointerdown', this.pointerDown, true)
     canvas.addEventListener('pointermove', this.pointerMove)
     canvas.addEventListener('pointerup', this.pointerUp)
     canvas.addEventListener('pointercancel', this.pointerCancel)
     canvas.addEventListener('lostpointercapture', this.pointerCancel)
+    canvas.addEventListener('pointerleave', this.pointerLeave)
     canvas.addEventListener('keydown', this.keyDown)
     canvas.addEventListener('webglcontextlost', this.contextLost)
     document.addEventListener('visibilitychange', this.visibilityChange)
@@ -203,296 +214,271 @@ export class TopologyScene {
     this.resize()
   }
 
-  update(graph: TopologyGraph, selected: string | null, liveIds: ReadonlySet<string>, t: Translate, evidenceCurrent: boolean): void {
-    const layout = buildOfficeLayout(graph)
+  update(graph: TopologyGraph, selected: string | null, liveIds: ReadonlySet<string>, t: Translate, evidenceCurrent: boolean,
+    layout: GalaxyLayout, full: GalaxyLayout | null): boolean {
+    this.lastUpdate = [graph, selected, liveIds, t, evidenceCurrent, layout, full]
+    const priorPlacements = this.session.placements
+    const plan = planGalaxyPlacement(layout.galaxies, full?.galaxies ?? null, priorPlacements ?? new Map())
+    if ('conflict' in plan) {
+      this.pointerCancel()
+      this.callbacks.placementConflict(t(`项目「${plan.conflict.name}」需要的空间与已保留的位置重叠。请缩小筛选范围或重新布局。`,
+        `Project “${plan.conflict.name}” needs space reserved by another project. Narrow the filters or reset the layout.`))
+      return false
+    }
+    this.callbacks.placementConflict(null)
+    this.session.placements = plan.placements
+    if (plan.evicted) this.callbacks.notice(t('项目位置缓存已满，最久未显示的项目将在下次显示时重新排列。',
+      'The project position cache is full. The least recently shown projects will be placed again when displayed.'))
+    if (plan.relocated) {
+      this.callbacks.notice(t('需要更多任务空间的星系已调整位置。', 'Galaxies that need more room for tasks have moved.'))
+      const id = this.session.cameraGalaxyId
+      const before = id && priorPlacements?.get(id)
+      const after = id && plan.placements.get(id)
+      if (before && after && (before.x !== after.x || before.z !== after.z)) {
+        this.point.set(after.x - before.x, 0, after.z - before.z)
+        this.camera.position.add(this.point)
+        this.controls.target.add(this.point)
+        this.controls.update()
+        this.session.camera = { position: this.camera.position.toArray(), target: this.controls.target.toArray() }
+      }
+    }
+    const grabbedId = this.pointerStart?.id
+    const previousTask = grabbedId ? this.taskForNode.get(grabbedId) : undefined
     this.graph = graph
     this.byId = new Map(graph.nodes.map(node => [node.agent.id, node]))
-    if (this.pointerStart?.id && !this.byId.has(this.pointerStart.id)) this.pointerCancel()
-    this.floors = layout.floors
-    this.buildings = layout.buildings
-    this.floorById = new Map(this.floors.map(floor => [floor.id, floor]))
+    this.galaxies = layout.galaxies.map(galaxy => {
+      const { x, z } = plan.placements.get(galaxy.id)!
+      return { ...galaxy, x, z }
+    })
+    this.galaxyById = new Map(this.galaxies.map(galaxy => [galaxy.id, galaxy]))
+    this.tasks = layout.tasks
+    this.taskById = new Map(this.tasks.map(task => [task.id, task]))
+    this.taskForNode = new Map([...layout.taskByAgent].map(([id, taskId]) => [id, this.taskById.get(taskId)!]))
+    const source = full ?? layout
+    this.collisionTasks = new Map(source.tasks.map(task => [task.id, task]))
+    this.positions = new Map(source.positions)
+    if (grabbedId && previousTask) {
+      const currentTask = this.taskForNode.get(grabbedId)
+      const before = priorPlacements?.get(previousTask.galaxyId)
+      const after = currentTask && plan.placements.get(currentTask.galaxyId)
+      if (currentTask?.id !== previousTask.id || !before || !after ||
+        before.x + previousTask.x !== after.x + currentTask.x || before.z + previousTask.z !== after.z + currentTask.z) this.pointerCancel()
+    }
+    if (this.hovered && !this.byId.has(this.hovered)) {
+      this.hovered = null
+      this.renderer.domElement.style.cursor = ''
+    }
     this.selected = selected
     this.t = t
     this.evidenceCurrent = evidenceCurrent
-    for (const id of this.session.positions.keys()) {
-      const node = this.byId.get(id)
-      if (!liveIds.has(id) || (node && this.session.floorByAgent.get(id) !== layout.floorByAgent.get(id))) {
-        this.session.positions.delete(id)
-        this.session.floorByAgent.delete(id)
-      }
-    }
-    for (const floor of this.floors) for (const id of floor.nodeIds) {
-      const p = this.session.positions.get(id)
-      if (p && (id === floor.mainAgentId ? Math.abs(p.x) > 50 || Math.abs(p.z) > 70 : p.x < 230)) {
+
+    for (const [id, priorTask] of this.session.taskByAgent) {
+      const taskId = source.taskByAgent.get(id)
+      if (!liveIds.has(id) || (full && taskId !== undefined && taskId !== priorTask)) {
+        this.session.taskByAgent.delete(id)
         this.session.positions.delete(id)
       }
     }
-    const occupied = new Set<string>()
-    const cell = (id: string, p: Point3D) => `${id}:${Math.round(p.x / 140)}:${Math.round(p.z / 140)}`
-    for (const [id, p] of this.session.positions) {
-      const floorId = this.session.floorByAgent.get(id)
-      if (floorId !== undefined) occupied.add(cell(floorId, p))
+    if (this.session.positions.size) {
+      for (const task of source.tasks) restoreTaskPositions(task, this.positions, this.session.positions, this.session.taskByAgent)
     }
-    for (const floor of this.floors) for (const id of floor.nodeIds) {
-      const p = this.session.positions.get(id)
-      if (p) p.y = floor.y + 40
-    }
-    for (const floor of this.floors) for (const id of floor.nodeIds) {
-      if (this.session.positions.has(id)) continue
-      if (this.session.positions.size >= MAX_3D_NODES) {
-        for (const cached of this.session.positions.keys()) if (!this.byId.has(cached)) {
-          this.session.positions.delete(cached)
-          this.session.floorByAgent.delete(cached)
-          break
-        }
-      }
-      const p = layout.positions.get(id)!
-      p.x += floor.width / 2 - 160
-      while (occupied.has(cell(floor.id, p))) p.x += 140
-      occupied.add(cell(floor.id, p))
-      this.session.positions.set(id, p)
-      this.session.floorByAgent.set(id, floor.id)
-    }
-    // Preserve seats relative to the office while buildings repack around them.
-    const baseWidth = this.floors[0]?.width ?? 0
-    const baseDepth = this.floors[0]?.depth ?? 0
-    let width = baseWidth, depth = baseDepth
-    for (const [id, p] of this.session.positions) {
-      if (!this.floorById.has(this.session.floorByAgent.get(id)!)) continue
-      width = Math.max(width, p.x + 270)
-      depth = Math.max(depth, (Math.abs(p.z) + 90) * 2)
-    }
-    const projects = this.session.projectByAgent ??= new Map<string, string>()
-    for (const id of projects.keys()) if (!liveIds.has(id)) projects.delete(id)
-    // Visible evidence wins when retained hidden agents fill the session budget.
-    const additions = graph.nodes.reduce((count, node) => count + Number(!projects.has(node.agent.id)), 0)
-    let excess = projects.size + additions - MAX_3D_NODES
-    for (const id of projects.keys()) {
-      if (excess <= 0) break
-      if (!this.byId.has(id)) { projects.delete(id); excess-- }
-    }
-    for (const floor of this.floors) for (const id of floor.nodeIds) projects.set(id, floor.buildingId)
-    const slots = this.session.buildingSlots ??= new Map<string, number>()
-    const retainedProjects = new Set(projects.values())
-    for (const id of slots.keys()) if (!retainedProjects.has(id)) slots.delete(id)
-    const usedSlots = new Set(slots.values())
-    let nextSlot = 0
-    for (const building of this.buildings) {
-      if (slots.has(building.id)) continue
-      while (usedSlots.has(nextSlot)) nextSlot++
-      if (nextSlot >= MAX_3D_NODES) throw new RangeError('Office parcel budget exceeded')
-      slots.set(building.id, nextSlot)
-      usedSlots.add(nextSlot)
-    }
-    placeOfficeBuildings(this.buildings, width, depth, slots)
-    const style = getComputedStyle(this.host)
-    this.colors.ground.set(style.getPropertyValue('--ground').trim())
-    this.colors.surface.set(style.getPropertyValue('--surface').trim())
-    this.renderer.setClearColor(this.colors.ground)
-    this.colors.node.set(style.getPropertyValue('--blue').trim())
-    this.colors.active.set(style.getPropertyValue('--accent').trim())
-    this.colors.edge.set(style.getPropertyValue('--edge').trim())
-    this.colors.warning.set(style.getPropertyValue('--warning').trim())
-    this.colors.context.set(style.getPropertyValue('--muted').trim())
-    this.renderer.domElement.setAttribute('aria-label', t('项目建筑群，每层一个任务，主 Agent 独立办公室、子 Agent 共享工位。方向键平移，Shift 加方向键旋转，F 显示全部项目。', 'Project buildings, one task per floor, main agents in private offices and subagents at shared desks. Arrow keys pan, Shift plus arrows orbit, F fits all projects.'))
+    const slots = new Map(this.galaxies.map(galaxy => [galaxy.id, plan.placements.get(galaxy.id)!.slot]))
+    this.backdrop.update(this.galaxies, slots)
+    this.backdrop.select(this.activeTask()?.galaxyId)
+    this.renderer.domElement.setAttribute('aria-label', t(
+      '项目星系图。星系包含任务系统，恒星代表主 Agent，行星代表其他 Agent。方向键平移，Shift 加方向键旋转，F 显示全部项目，加号或减号缩放。',
+      'Project galaxies contain task systems. A sun represents a main agent and planets represent other agents. Arrow keys pan, Shift plus arrows orbits, F fits all projects, and plus or minus zooms.'
+    ))
     this.syncGeometry()
-    this.district.update(this.buildings, this.colors.ground)
+    this.syncOrbits()
     if (!this.session.camera && graph.nodes.length) this.fit()
     this.invalidate()
+    return true
+  }
+
+  private taskPosition(task: TaskOrbit, target: Vector3): Vector3 {
+    const galaxy = this.galaxyById.get(task.galaxyId)!
+    return target.set(galaxy.x + task.x, SYSTEM_Y, galaxy.z + task.z)
+  }
+
+  private positionOverlaps(id: string, task: TaskOrbit, point: Point3D): boolean {
+    for (const neighbor of this.collisionTasks.get(task.id)!.nodeIds) {
+      if (neighbor !== id && agentPositionsOverlap(task, id, point, neighbor, this.positions.get(neighbor)!)) return true
+    }
+    // An oversized source supplies only this projection. Preserve hidden agents' known manual seats too.
+    for (const [neighbor, other] of this.session.positions) {
+      if (!this.positions.has(neighbor) && this.session.taskByAgent.get(neighbor) === task.id
+        && agentPositionsOverlap(task, id, point, neighbor, other)) return true
+    }
+    return false
   }
 
   private worldPosition(id: string, target: Vector3): Vector3 {
-    const p = this.session.positions.get(id)!
-    const floor = this.floorById.get(this.session.floorByAgent.get(id)!)!
-    return target.set(floor.x - floor.width / 2 + 160 + p.x, p.y, floor.z + p.z)
+    const task = this.taskForNode.get(id)!
+    const p = this.positions.get(id)!
+    this.taskPosition(task, target)
+    return target.set(target.x + p.x, target.y + p.y, target.z + p.z)
   }
 
-  private isMuted(floorId: string): boolean {
-    return this.session.floorId !== null && this.session.floorId !== floorId
+  private activeTask(): TaskOrbit | undefined {
+    return this.taskById.get(this.session.taskId ?? '')
   }
 
-  selectFloor(id: string | null): void {
-    if (this.session.floorId === id) return
-    this.session.floorId = id
+  selectTask(id: string | null): void {
+    if (this.session.taskId === id) return
+    this.session.taskId = id
+    this.backdrop.select(this.activeTask()?.galaxyId)
     this.syncGeometry()
+    this.syncOrbits()
     this.invalidate()
   }
 
-  focusFloor(id: string): void {
-    const floor = this.floors.find(floor => floor.id === id)
-    if (floor) this.fit(false, new Set(floor.nodeIds))
+  focusTask(id: string): void {
+    const task = this.taskById.get(id)
+    if (task) this.fitBounds(this.taskBounds(task), false, task.galaxyId)
   }
 
   private selectAgent(id: string): void {
-    const node = this.byId.get(id)
-    if (!node) return
-    this.callbacks.floor(this.session.floorByAgent.get(id)!)
+    const task = this.taskForNode.get(id)
+    if (!task) return
+    this.callbacks.task(task.id)
     this.callbacks.select(id)
   }
 
-  private updateBuildingGeometry(width: number, depth: number): void {
-    if (width === this.buildingWidth && depth === this.buildingDepth) return
-    const replacements: [InstancedMesh, InstancedMesh | null, BufferGeometry][] = [
-      [this.frames, this.mutedFrames, createFloorFrameGeometry(width, depth)],
-      [this.facades, this.mutedFacades, createFacadeGeometry(width, depth)],
-      ...this.roofs.map((roof, style): [InstancedMesh, InstancedMesh, BufferGeometry] =>
-        [roof, this.mutedRoofs[style], createRoofGeometry(width, depth, style)]),
-      [this.entrance, this.mutedEntrances, createEntranceGeometry(width, depth)],
-    ]
-    for (const [mesh, muted, geometry] of replacements) {
-      mesh.geometry.dispose()
-      mesh.geometry = geometry
-      if (muted) muted.geometry = geometry
-    }
-    this.buildingWidth = width
-    this.buildingDepth = depth
+  private agentRadius(id: string): number {
+    return this.taskForNode.get(id)?.mainAgentId === id ? STAR_RADIUS : PLANET_RADIUS
   }
 
-  private buildingStyle(id: string): number {
-    return this.session.buildingSlots!.get(id)! % BUILDING_TINTS.length
+  private taskColor(task: TaskOrbit, target: Color): Color {
+    return task.unresolved ? target.copy(UNKNOWN) : galaxyColor(this.session.placements!.get(task.galaxyId)!.slot, target)
   }
 
   private syncGeometry(): void {
     if (!this.graph) return
-    for (const mesh of this.meshes) {
-      if (mesh !== this.district.paving && mesh !== this.district.crowns) mesh.count = 0
-    }
-    this.nodeSlots.length = this.mutedNodeSlots.length = this.floorSlots.length = this.mutedFloorSlots.length = 0
-    this.transform.quaternion.identity()
-    if (this.floors.length) this.updateBuildingGeometry(this.floors[0].width, this.floors[0].depth)
-    this.facades.material.opacity = this.session.floorId === null ? 0.65 : 0.08
-    const selectedFloor = this.session.floorId === null ? undefined : this.floorById.get(this.session.floorId)
-    for (const floor of this.floors) {
-      const muted = this.isMuted(floor.id)
-      const mesh = muted ? this.mutedDecks : this.decks
-      const slots = muted ? this.mutedFloorSlots : this.floorSlots
-      // A selected task is a cutaway of its building. Stacked translucent
-      // upper decks still accumulate into a solid-looking surface over desks.
-      const overhead = selectedFloor !== undefined && floor.buildingId === selectedFloor.buildingId && floor.y > selectedFloor.y
-      if (!overhead) {
-        const index = mesh.count++
-        slots.push(floor.id)
-        this.transform.position.set(floor.x, floor.y - 4, floor.z)
-        this.transform.scale.set(floor.width, 8, floor.depth)
-        this.transform.updateMatrix()
-        mesh.setMatrixAt(index, this.transform.matrix)
-        mesh.setColorAt(index, this.session.floorId === floor.id ? this.tint.copy(this.floorPaint).lerp(this.colors.active, 0.1) : this.floorPaint)
-      }
-      this.transform.position.set(floor.x, floor.y, floor.z)
-      this.transform.scale.setScalar(1)
-      this.transform.updateMatrix()
-      const tint = BUILDING_TINTS[this.buildingStyle(floor.buildingId)]
-      for (const part of muted ? [this.mutedFrames, this.mutedFacades] : [this.frames, this.facades]) {
-        const index = part.count++
-        part.setMatrixAt(index, this.transform.matrix)
-        part.setColorAt(index, tint)
-      }
-      if (floor.mainAgentId !== null) {
-        const offices = muted ? this.mutedOffices : this.offices
-        this.transform.position.set(floor.x - floor.width / 2 + 160, floor.y, floor.z)
-        this.transform.updateMatrix()
-        offices.setMatrixAt(offices.count++, this.transform.matrix)
-      }
-    }
-    for (const roof of this.roofs) {
-      roof.material.opacity = this.session.floorId === null ? 1 : 0.05
-      roof.material.depthWrite = this.session.floorId === null
-    }
-    const streetGrid = officeStreetGrid(this.buildingWidth, this.buildingDepth)
-    for (const building of this.buildings) {
-      const muted = this.session.floorId !== null && !building.floors.some(floor => floor.id === this.session.floorId)
-      const style = this.buildingStyle(building.id)
-      const roof = (muted ? this.mutedRoofs : this.roofs)[style]
-      const entrance = muted ? this.mutedEntrances : this.entrance
-      this.transform.rotation.set(0, 0, 0)
-      this.transform.position.set(building.x, building.floors.length * 240, building.z)
-      this.transform.scale.setScalar(1)
-      this.transform.updateMatrix()
-      const roofIndex = roof.count++
-      roof.setMatrixAt(roofIndex, this.transform.matrix)
-      roof.setColorAt(roofIndex, BUILDING_TINTS[style])
-      this.transform.rotation.y = Math.round(building.z / streetGrid.pitchZ) % 2 === 0 ? 0 : Math.PI
-      this.transform.position.set(building.x, 0, building.z)
-      this.transform.updateMatrix()
-      entrance.setMatrixAt(entrance.count++, this.transform.matrix)
-    }
+    const active = this.activeTask()
+    let starCount = 0, planetCount = 0, glowCount = 0
     for (const node of this.graph.nodes) {
-      const muted = this.isMuted(this.session.floorByAgent.get(node.agent.id)!)
-      const body = muted ? this.mutedNodes : this.nodes
-      const markers = muted ? this.mutedMarkers : this.markers
-      const desks = muted ? this.mutedDesks : this.desks
-      const slots = muted ? this.mutedNodeSlots : this.nodeSlots
-      const index = body.count++
-      markers.count = desks.count = body.count
-      slots.push(node.agent.id)
-      const p = this.worldPosition(node.agent.id, this.point)
-      const size = node.agent.id === this.selected ? 1.08 : 1
-      const color = node.agent.id === this.selected ? this.colors.active : node.issue ? this.colors.warning
-        : node.contextOnly ? this.colors.context : this.evidenceCurrent && (node.agent.state === 'working' || node.agent.activity) ? this.colors.active : this.colors.node
-      this.transform.rotation.set(0, 0, 0)
-      this.transform.position.set(p.x, p.y + 40 * (size - 1), p.z)
-      this.transform.scale.setScalar(size)
+      const id = node.agent.id
+      const task = this.taskForNode.get(id)!
+      const main = task.mainAgentId === id
+      const muted = !!active && active !== task
+      const selected = id === this.selected
+      const radius = this.agentRadius(id)
+      const color = this.taskColor(task, this.tint)
+      if (main) color.lerp(WARM, 0.77)
+      if (this.evidenceCurrent && node.agent.state === 'working') color.lerp(ACTIVE, main ? 0.16 : 0.28)
+      if (selected) color.lerp(SELECTED, 0.6)
+      if (muted || node.contextOnly || !this.evidenceCurrent) color.multiplyScalar(muted ? 0.22 : 0.58)
+      const mesh = main ? this.stars : this.planets
+      const instance = main ? starCount++ : planetCount++
+      const p = this.worldPosition(id, this.point)
+      this.transform.position.copy(p)
+      this.transform.scale.setScalar(radius)
+      this.transform.quaternion.identity()
       this.transform.updateMatrix()
-      body.setMatrixAt(index, this.transform.matrix)
-      body.setColorAt(index, this.white)
-      this.transform.position.set(p.x, p.y, p.z)
-      this.transform.scale.setScalar(1)
-      this.transform.updateMatrix()
-      desks.setMatrixAt(index, this.transform.matrix)
-      desks.setColorAt(index, this.white)
-      this.transform.rotation.set(-Math.PI / 2, 0, 0)
-      this.transform.position.set(p.x, p.y - 38, p.z)
-      this.transform.scale.setScalar(size)
-      this.transform.updateMatrix()
-      markers.setMatrixAt(index, this.transform.matrix)
-      markers.setColorAt(index, color)
+      mesh.setMatrixAt(instance, this.transform.matrix)
+      mesh.setColorAt(instance, color)
+      if (main || selected) this.glows.write(glowCount++, p, color, radius * (main ? 4.8 : 4.4), muted ? 0.19 : 0.86)
     }
-    let vertex = 0
-    // Partition shared edge buffers; relationships touching the selected floor stay legible.
-    for (const muted of [false, true]) {
-      const startVertex = vertex
-      const arrows = muted ? this.mutedArrows : this.arrows
-      for (const edge of this.graph.edges) {
-        const edgeMuted = this.isMuted(this.session.floorByAgent.get(edge.source)!) && this.isMuted(this.session.floorByAgent.get(edge.target)!)
-        if (edgeMuted !== muted) continue
-        const start = this.worldPosition(edge.source, this.edgeStart)
-        const end = this.worldPosition(edge.target, this.edgeEnd)
-        this.direction.set(end.x - start.x, end.y - start.y, end.z - start.z)
-        const length = this.direction.length()
-        this.direction.normalize()
-        const color = edge.source === this.selected || edge.target === this.selected || this.session.floorId !== null && !muted ? this.colors.active : this.colors.edge
-        if (edge.source === edge.target) {
-          for (let segment = 0; segment < 12; segment++) {
-            for (const angle of [segment * Math.PI / 6, (segment + 1) * Math.PI / 6]) {
-              this.edgePositions.setXYZ(vertex, start.x + 46 + Math.cos(angle) * 46, start.y + Math.sin(angle) * 46, start.z)
-              this.edgeColors.setXYZ(vertex++, color.r, color.g, color.b)
-            }
-          }
-          this.transform.position.set(start.x + 46, start.y + 46, start.z)
-          this.direction.set(-1, 0, 0)
-        } else {
-          const offset = Math.min(length / 2, NODE_RADIUS + 8)
-          this.transform.position.set(end.x, end.y, end.z).addScaledVector(this.direction, -offset)
-          this.edgePositions.setXYZ(vertex, start.x, start.y, start.z)
-          this.edgeColors.setXYZ(vertex++, color.r, color.g, color.b)
-          this.edgePositions.setXYZ(vertex, end.x, end.y, end.z)
-          this.edgeColors.setXYZ(vertex++, color.r, color.g, color.b)
-        }
-        this.transform.quaternion.setFromUnitVectors(this.up, this.direction.lengthSq() ? this.direction : this.up)
-        this.transform.scale.setScalar(1)
-        this.transform.updateMatrix()
-        arrows.setMatrixAt(arrows.count, this.transform.matrix)
-        arrows.setColorAt(arrows.count++, color)
-      }
-      ;(muted ? this.mutedLines : this.lines).geometry.setDrawRange(startVertex, vertex - startVertex)
-    }
-    for (const mesh of this.meshes) {
-      if (mesh === this.district.paving || mesh === this.district.crowns) continue
+    this.stars.count = starCount
+    this.planets.count = planetCount
+    this.syncMarkers()
+    this.glows.finish(glowCount)
+    this.syncEdges(active)
+    for (const mesh of [this.stars, this.planets, this.arrows]) {
       mesh.instanceMatrix.needsUpdate = true
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-      mesh.computeBoundingSphere()
     }
-    this.edgePositions.needsUpdate = this.edgeColors.needsUpdate = true
+  }
+
+  private syncMarkers(): void {
+    let count = 0
+    for (const id of [this.selected, this.hovered]) {
+      if (!id || (count > 0 && id === this.selected)) continue
+      const task = this.taskForNode.get(id)
+      if (!task) continue
+      this.worldPosition(id, this.transform.position)
+      this.transform.scale.setScalar(this.agentRadius(id) * 1.44)
+      this.transform.quaternion.identity()
+      this.transform.updateMatrix()
+      this.markers.setMatrixAt(count, this.transform.matrix)
+      this.markers.setColorAt(count++, id === this.selected ? SELECTED : this.taskColor(task, this.tint))
+    }
+    this.markers.count = count
+    this.markers.instanceMatrix.needsUpdate = true
+    if (this.markers.instanceColor) this.markers.instanceColor.needsUpdate = true
+  }
+
+  private syncEdges(active: TaskOrbit | undefined): void {
+    let vertex = 0, arrow = 0
+    const { positions, colors } = this.lines
+    for (const { source, target } of this.graph!.edges) {
+      const task = this.taskForNode.get(source)!
+      const muted = !!active && active !== task
+      const highlighted = this.selected === source || this.selected === target
+      const color = this.taskColor(task, this.tint).lerp(SELECTED, highlighted ? 0.5 : 0.02)
+      color.multiplyScalar(muted ? 0.12 : this.evidenceCurrent ? 0.66 : 0.29)
+      const start = this.worldPosition(source, this.edgeStart)
+      const end = this.worldPosition(target, this.edgeEnd)
+      const unit = this.direction.subVectors(end, start)
+      const length = unit.length()
+      const loop = source === target
+      const loopRadius = this.agentRadius(source) + 25
+      if (!loop) {
+        unit.divideScalar(length)
+        const sourceInset = this.agentRadius(source) + 3
+        const targetInset = this.agentRadius(target) + 7
+        const scale = Math.min(1, length / (sourceInset + targetInset + 14))
+        start.addScaledVector(unit, sourceInset * scale)
+        end.addScaledVector(unit, -targetInset * scale)
+      }
+      const height = Math.min(72, length * 0.24)
+      let x = 0, y = 0, z = 0
+      for (let index = 0; index <= EDGE_SEGMENTS; index++) {
+        const progress = index / EDGE_SEGMENTS
+        const angle = 0.48 + progress * (TAU - 0.96)
+        const nextX = loop ? start.x + loopRadius * (Math.cos(angle) - 1) : start.x + (end.x - start.x) * progress
+        const nextY = loop ? start.y + loopRadius * Math.sin(angle) : start.y + (end.y - start.y) * progress + height * Math.sin(Math.PI * progress)
+        const nextZ = loop ? start.z + (end.z - start.z) * progress + loopRadius * 0.4 : start.z + (end.z - start.z) * progress
+        if (index > 0) {
+          positions.setXYZ(vertex, x, y, z)
+          colors.setXYZ(vertex++, color.r, color.g, color.b)
+          positions.setXYZ(vertex, nextX, nextY, nextZ)
+          colors.setXYZ(vertex++, color.r, color.g, color.b)
+        }
+        if (index === EDGE_SEGMENTS) unit.set(nextX - x, nextY - y, nextZ - z).normalize()
+        x = nextX
+        y = nextY
+        z = nextZ
+      }
+      this.transform.position.set(x, y, z).addScaledVector(unit, -9)
+      this.transform.scale.setScalar(1)
+      this.transform.quaternion.setFromUnitVectors(this.up, unit)
+      this.transform.updateMatrix()
+      this.arrows.setMatrixAt(arrow, this.transform.matrix)
+      this.arrows.setColorAt(arrow++, color)
+    }
+    this.arrows.count = arrow
+    syncLines(this.lines, vertex)
+  }
+
+  private syncOrbits(): void {
+    const active = this.activeTask()
+    const { positions, colors } = this.orbits
+    let vertex = 0
+    for (const task of this.tasks) {
+      const center = this.taskPosition(task, this.point)
+      const color = this.taskColor(task, this.tint).multiplyScalar(active === task ? 0.83 : active ? 0.08 : 0.28)
+      for (let index = 0; index < ORBIT_SEGMENTS; index++) {
+        if (task.unresolved && index % 2 === 1) continue
+        for (let endpoint = index; endpoint <= index + 1; endpoint++) {
+          const [x, z] = RING_POINTS[endpoint]
+          positions.setXYZ(vertex, center.x + x * task.radius, 1, center.z + z * task.radius)
+          colors.setXYZ(vertex++, color.r, color.g, color.b)
+        }
+      }
+    }
+    syncLines(this.orbits, vertex)
   }
 
   private readonly resize = (): void => {
@@ -512,11 +498,10 @@ export class TopologyScene {
     if (width === this.width && height === this.height && ratio === this.pixelRatio) return
     this.width = width
     this.height = height
-    if (ratio !== this.pixelRatio) {
-      this.pixelRatio = ratio
-      this.renderer.setPixelRatio(ratio)
-    }
-    this.renderer.setSize(width, height)
+    this.pixelRatio = ratio
+    this.renderer.setDrawingBufferSize(width, height, ratio)
+    this.backdrop.resize(ratio, height)
+    this.glows.resize(ratio, height)
     this.camera.aspect = width / height
     this.camera.updateProjectionMatrix()
   }
@@ -545,135 +530,194 @@ export class TopologyScene {
     })
   }
 
-  private projectLabels(): void {
-    if (!this.graph) return
-    const scale = Number(getComputedStyle(this.host).getPropertyValue('--font-scale')) || 1
-    const boxes: { x: number; y: number; w: number; h: number }[] = []
-    const intersects = (x: number, y: number, w: number, h: number) => boxes.some(b => x < b.x + b.w + 6 && x + w + 6 > b.x && y < b.y + b.h + 5 && y + h + 5 > b.y)
-    const candidates = this.graph.nodes.map(node => {
-      const p = this.worldPosition(node.agent.id, this.edgeStart)
-      this.point.set(p.x, p.y - 40, p.z).project(this.camera)
-      const footY = this.point.y
-      this.point.set(p.x, p.y + 70, p.z).project(this.camera)
-      return { node, x: (this.point.x + 1) * this.width / 2, y: (1 - this.point.y) * this.height / 2, depth: this.point.z, size: Math.abs(this.point.y - footY) * this.height / 2 }
-    }).filter(p => p.depth > -1 && p.depth < 1 && p.x > 0 && p.x < this.width && p.y > 0 && p.y < this.height
-      && (p.size >= 42 || p.node.agent.id === this.selected || p.node.agent.id === this.hovered))
-    const priority = (node: TopologyNode) => (this.isMuted(this.session.floorByAgent.get(node.agent.id)!) ? 10 : 0) + (node.agent.id === this.selected ? 0 : node.agent.id === this.hovered ? 1 : node.agent.kind === 'main' ? 2 : 3)
-    candidates.sort((a, b) => priority(a.node) - priority(b.node) || a.depth - b.depth)
-    const w = Math.min(200, this.width - 8), h = 34.5 * scale + 14
-    const placed: { item: typeof candidates[number]; x: number; y: number }[] = []
-    for (const item of candidates) {
-      if (placed.length === LABEL_LIMIT) break
-      const x = Math.max(4, Math.min(this.width - w - 4, item.x - w / 2))
-      const y = Math.max(4, Math.min(this.height - h - 4, item.y - h - 6))
-      if (intersects(x, y, w, h)) continue
-      placed.push({ item, x, y })
-      boxes.push({ x, y, w, h })
+  private labelPoint(point: Vector3): LabelPoint {
+    const viewDepth = -this.direction.copy(point).applyMatrix4(this.camera.matrixWorldInverse).z
+    point.project(this.camera)
+    return {
+      x: (point.x + 1) * this.width / 2,
+      y: (1 - point.y) * this.height / 2,
+      depth: point.z,
+      pixelsPerUnit: this.height * this.camera.projectionMatrix.elements[5] / (2 * Math.max(1, viewDepth)),
     }
-    const wanted = new Set(placed.map(({ item }) => item.node.agent.id))
-    const used = new Set<HTMLButtonElement>()
-    for (const { item, x, y } of placed) {
-      const label = this.labels.find(label => label.dataset.id === item.node.agent.id)
-        ?? this.labels.find(label => !used.has(label) && !wanted.has(label.dataset.id ?? ''))!
-      used.add(label)
-      const title = (item.node.agent.summary || item.node.agent.name).slice(0, 240)
-      label.hidden = false
-      if (label.firstElementChild!.textContent !== title) label.firstElementChild!.textContent = title
-      const state = item.node.agent.state === 'working' ? this.t('工作中', 'Working') : item.node.agent.state === 'idle' ? this.t('空闲', 'Idle') : item.node.agent.state === 'running' ? this.t('进程存活', 'Process alive') : this.t('状态未知', 'Unknown')
-      const floor = this.floorById.get(this.session.floorByAgent.get(item.node.agent.id)!)!
-      const role = floor.mainAgentId === item.node.agent.id ? this.t('主 Agent · 独立办公室', 'Main · Private office') : this.t('共享工位', 'Shared desk')
-      const subtitle = `${role} · ${state}${item.node.contextOnly ? this.t(' · 关联', ' · Context') : ''}${item.node.issue ? this.t(' · 关系待确认', ' · Unconfirmed relation') : ''}`
-      if (label.lastElementChild!.textContent !== subtitle) label.lastElementChild!.textContent = subtitle
-      label.dataset.id = item.node.agent.id
-      label.classList.toggle('is-selected', item.node.agent.id === this.selected)
-      label.classList.toggle('is-dimmed', this.isMuted(floor.id))
-      label.title = `${title}\n${item.node.agent.cwd ?? ''}`.slice(0, 4096)
-      label.setAttribute('aria-label', `${title}, ${role}, ${state}, PID ${item.node.agent.pid}`)
-      label.style.transform = `translate(${x}px, ${y}px)`
+  }
+
+  private labelBox(boxes: LabelBox[], anchor: LabelPoint, w: number, h: number, offset: number): LabelBox | undefined {
+    if (this.width < 60 || this.height < h + 8) return undefined
+    const clamp = (value: number, limit: number) => Math.max(4, Math.min(limit - 4, value))
+    const x = clamp(anchor.x - w / 2, this.width - w)
+    for (const candidateY of [anchor.y - offset - h, anchor.y + offset]) {
+      const y = clamp(candidateY, this.height - h)
+      const overlaps = boxes.some(box => x < box.x + box.w + 6 && x + w + 6 > box.x && y < box.y + box.h + 5 && y + h + 5 > box.y)
+      if (!overlaps) return { x, y, w, h }
     }
-    for (const label of this.labels) if (!used.has(label)) {
+    return undefined
+  }
+
+  private hideLabels(pool: HTMLButtonElement[], used: ReadonlySet<HTMLButtonElement>): void {
+    for (const label of pool) {
+      if (used.has(label)) continue
       if (document.activeElement === label) this.renderer.domElement.focus({ preventScroll: true })
       label.hidden = true
     }
-    const floorCandidates = this.floors.filter(floor => floor.id === this.session.floorId).map(floor => {
-      this.point.set(floor.x - floor.width / 2, floor.y, floor.z + floor.depth / 2).project(this.camera)
-      return { floor, x: (this.point.x + 1) * this.width / 2, y: (1 - this.point.y) * this.height / 2, depth: this.point.z }
-    }).filter(p => p.depth > -1 && p.depth < 1 && p.x > -100 && p.x < this.width && p.y > 0 && p.y < this.height)
-    floorCandidates.sort((a, b) => Number(b.floor.id === this.session.floorId) - Number(a.floor.id === this.session.floorId) || b.floor.level - a.floor.level)
-    const visibleFloors: typeof floorCandidates = []
-    const fw = Math.min(210, this.width - 8), fh = 30 * scale + 8
-    for (const item of floorCandidates) {
-      if (visibleFloors.length === FLOOR_LABEL_LIMIT) break
-      item.x = Math.max(4, Math.min(this.width - fw - 4, item.x - fw - 10))
-      item.y = Math.max(4, Math.min(this.height - fh - 4, item.y))
-      if (intersects(item.x, item.y, fw, fh)) continue
-      visibleFloors.push(item)
-      boxes.push({ x: item.x, y: item.y, w: fw, h: fh })
+  }
+
+  private projectLabels(): void {
+    if (!this.graph) return
+    const scale = Number(getComputedStyle(this.host).getPropertyValue('--font-scale')) || 1
+    const active = this.activeTask()
+    const boxes: LabelBox[] = []
+    const candidates: { node: TopologyNode; task: TaskOrbit; anchor: LabelPoint; radius: number; priority: number }[] = []
+    for (const node of this.graph.nodes) {
+      const id = node.agent.id
+      const task = this.taskForNode.get(id)!
+      const anchor = this.labelPoint(this.worldPosition(id, this.point))
+      if (anchor.depth <= -1 || anchor.depth >= 1 || anchor.x < 0 || anchor.x > this.width || anchor.y < 0 || anchor.y > this.height) continue
+      const radius = this.agentRadius(id) * anchor.pixelsPerUnit
+      const main = task.mainAgentId === id
+      const selected = id === this.selected
+      const hovered = id === this.hovered
+      if (!selected && !hovered && radius < (main ? 17 : 12)) continue
+      const priority = (active && active !== task ? 10 : 0) + (selected ? 0 : hovered ? 1 : main ? 2 : 3)
+      candidates.push({ node, task, anchor, radius, priority })
     }
-    const wantedFloors = new Set(visibleFloors.map(item => item.floor.id))
-    const usedFloors = new Set<HTMLButtonElement>()
-    for (const { floor, x, y } of visibleFloors) {
-      const label = this.floorLabels.find(label => label.dataset.floorId === floor.id)
-        ?? this.floorLabels.find(label => !usedFloors.has(label) && !wantedFloors.has(label.dataset.floorId ?? ''))!
-      usedFloors.add(label)
-      const name = floor.name
-      const text = `${floor.level}F · ${name}${floor.unresolved ? this.t(' · 待归属', ' · Unassigned') : ''}`
-      if (label.textContent !== text) label.textContent = text
-      label.dataset.floorId = floor.id
-      label.title = `${name}\n${floor.cwd ?? this.t('没有工作目录证据', 'No working-directory evidence')}`.slice(0, 4096)
-      label.setAttribute('aria-pressed', String(floor.id === this.session.floorId))
-      label.classList.toggle('is-selected', floor.id === this.session.floorId)
-      label.classList.toggle('is-dimmed', this.isMuted(floor.id))
-      label.style.transform = `translate(${x}px, ${y}px)`
+    candidates.sort((left, right) => left.priority - right.priority || left.anchor.depth - right.anchor.depth)
+    const placed: { candidate: typeof candidates[number]; box: LabelBox }[] = []
+    for (const candidate of candidates) {
+      if (placed.length >= LABEL_LIMIT) break
+      const box = this.labelBox(boxes, candidate.anchor, Math.min(200, this.width - 8), 34.5 * scale + 14, candidate.radius + 8)
+      if (!box) continue
+      boxes.push(box)
+      placed.push({ candidate, box })
+    }
+    const wanted = new Set(placed.map(({ candidate }) => candidate.node.agent.id))
+    const used = new Set<HTMLButtonElement>()
+    for (const { candidate: { node, task }, box } of placed) {
+      const id = node.agent.id
+      const label = this.labels.find(item => item.dataset.id === id)
+        ?? this.labels.find(item => !used.has(item) && !wanted.has(item.dataset.id ?? ''))!
+      if (document.activeElement === label && label.dataset.id !== id) this.renderer.domElement.focus({ preventScroll: true })
+      used.add(label)
+      const title = (node.agent.summary || node.agent.name).slice(0, 240)
+      const role = task.mainAgentId === id ? this.t('恒星 · 主 Agent', 'Sun · Main agent')
+        : task.unresolved ? this.t('行星 · 待归属', 'Planet · Unassigned') : this.t('行星 · 子 Agent', 'Planet · Subagent')
+      const state = node.agent.state === 'working' ? this.t('工作中', 'Working') : node.agent.state === 'idle' ? this.t('空闲', 'Idle')
+        : node.agent.state === 'running' ? this.t('进程存活', 'Process alive') : this.t('状态未知', 'Unknown')
+      const subtitle = `${role} · ${state}${node.contextOnly ? this.t(' · 关联', ' · Context') : ''}${node.issue ? this.t(' · 关系待确认', ' · Unconfirmed relation') : ''}`
+      if (label.firstElementChild!.textContent !== title) label.firstElementChild!.textContent = title
+      if (label.lastElementChild!.textContent !== subtitle) label.lastElementChild!.textContent = subtitle
+      label.dataset.id = id
+      label.classList.toggle('is-selected', id === this.selected)
+      label.classList.toggle('is-dimmed', !!active && active !== task)
+      label.title = `${title}\n${node.agent.cwd ?? ''}`.slice(0, 4096)
+      label.setAttribute('aria-label', `${title}, ${subtitle}, PID ${node.agent.pid}`)
+      label.setAttribute('aria-pressed', String(id === this.selected))
+      label.style.transform = `translate(${box.x}px, ${box.y}px)`
       label.hidden = false
     }
-    for (const label of this.floorLabels) if (!usedFloors.has(label)) label.hidden = true
-    const buildingCandidates = this.buildings.map(building => {
-      this.point.set(building.x, building.floors.length * 240 + LANDMARK_ROOF_HEIGHT + 28, building.z).project(this.camera)
-      return { building, x: (this.point.x + 1) * this.width / 2 - fw / 2, y: (1 - this.point.y) * this.height / 2 - fh, depth: this.point.z }
-    }).filter(item => item.depth > -1 && item.depth < 1 && item.x > -fw && item.x < this.width && item.y > -fh && item.y < this.height)
-    buildingCandidates.sort((a, b) => a.depth - b.depth)
-    let buildingLabelCount = 0
-    for (const item of buildingCandidates) {
-      if (buildingLabelCount === this.buildingLabels.length) break
-      const x = Math.max(4, Math.min(this.width - fw - 4, item.x))
-      const y = Math.max(4, Math.min(this.height - fh - 4, item.y))
-      if (intersects(x, y, fw, fh)) continue
-      const label = this.buildingLabels[buildingLabelCount++]
-      const name = item.building.cwd ? item.building.name : this.t('项目未识别', 'Unidentified project')
-      label.textContent = `${name} · ${this.t(`${item.building.floors.length} 个任务`, `${item.building.floors.length} tasks`)}`
-      label.title = item.building.cwd ?? this.t('没有工作目录证据', 'No working-directory evidence')
-      label.dataset.buildingId = item.building.id
-      label.setAttribute('aria-label', this.t(`聚焦项目：${label.textContent}`, `Focus project: ${label.textContent}`))
-      label.classList.toggle('is-dimmed', this.session.floorId !== null && !item.building.floors.some(floor => floor.id === this.session.floorId))
-      label.style.transform = `translate(${x}px, ${y}px)`
-      label.hidden = false
-      boxes.push({ x, y, w: fw, h: fh })
+    this.hideLabels(this.labels, used)
+    this.projectGroupLabels(boxes, scale, active)
+  }
+
+  private projectGroupLabels(boxes: LabelBox[], scale: number, active: TaskOrbit | undefined): void {
+    const candidates: { group: Galaxy | TaskOrbit; anchor: LabelPoint; offset: number; priority: number }[] = []
+    for (const galaxy of this.galaxies) {
+      const anchor = this.labelPoint(this.point.set(galaxy.x, SYSTEM_Y, galaxy.z))
+      candidates.push({ group: galaxy, anchor, offset: Math.min(galaxy.radius * anchor.pixelsPerUnit * 0.52, this.height * 0.18), priority: galaxy.id === 'unresolved' ? 1 : 2 })
     }
-    for (let index = buildingLabelCount; index < this.buildingLabels.length; index++) this.buildingLabels[index].hidden = true
+    for (const task of this.tasks) {
+      const anchor = this.labelPoint(this.taskPosition(task, this.point))
+      const radius = task.radius * anchor.pixelsPerUnit
+      if (task !== active && radius < (task.unresolved ? 100 : 144)) continue
+      candidates.push({ group: task, anchor, offset: Math.min(radius * 0.52, this.height * 0.19), priority: task === active ? 0 : 3 })
+    }
+    candidates.sort((left, right) => left.priority - right.priority || left.anchor.depth - right.anchor.depth)
+    const placed: { group: Galaxy | TaskOrbit; box: LabelBox }[] = []
+    for (const { group, anchor, offset } of candidates) {
+      if (placed.length >= GROUP_LABEL_LIMIT) break
+      if (anchor.depth <= -1 || anchor.depth >= 1 || anchor.x < -30 || anchor.x > this.width + 30 || anchor.y < -40 || anchor.y > this.height + 40) continue
+      const box = this.labelBox(boxes, anchor, Math.min(210, this.width - 8), 30 * scale + 8, offset)
+      if (!box) continue
+      boxes.push(box)
+      placed.push({ group, box })
+    }
+    const wanted = new Set(placed.map(({ group }) => group.id))
+    const used = new Set<HTMLButtonElement>()
+    for (const { group, box } of placed) {
+      const label = this.groupLabels.find(item => (item.dataset.galaxyId ?? item.dataset.taskId) === group.id)
+        ?? this.groupLabels.find(item => !used.has(item) && !wanted.has(item.dataset.galaxyId ?? item.dataset.taskId ?? ''))!
+      if (document.activeElement === label && (label.dataset.galaxyId ?? label.dataset.taskId) !== group.id) {
+        this.renderer.domElement.focus({ preventScroll: true })
+      }
+      used.add(label)
+      const selected = active === group
+      if ('tasks' in group) {
+        const name = group.id === 'unresolved' ? this.t('待归属星系', 'Unassigned galaxy')
+          : group.cwd ? group.name : this.t('未识别项目星系', 'Unidentified project galaxy')
+        const count = this.t(`${group.tasks.length} 个任务`, `${group.tasks.length} ${group.tasks.length === 1 ? 'task' : 'tasks'}`)
+        const text = `${name} · ${count}`
+        if (label.textContent !== text) label.textContent = text
+        label.title = group.cwd ?? this.t('没有工作目录证据', 'No working-directory evidence')
+        label.setAttribute('aria-label', this.t(`聚焦星系 ${text}`, `Focus galaxy ${text}`))
+        label.removeAttribute('aria-pressed')
+        label.classList.add('topology-3d-galaxy-label')
+        label.classList.toggle('is-dimmed', !!active && active.galaxyId !== group.id)
+        delete label.dataset.taskId
+        label.dataset.galaxyId = group.id
+      } else {
+        const text = group.unresolved ? `${this.t('待归属', 'Unassigned')} · ${group.name}` : group.name
+        if (label.textContent !== text) label.textContent = text
+        label.title = `${text}\n${group.cwd ?? this.t('没有工作目录证据', 'No working-directory evidence')}`.slice(0, 4096)
+        label.setAttribute('aria-label', this.t(`选择任务系统 ${text}`, `Select task system ${text}`))
+        label.setAttribute('aria-pressed', String(selected))
+        label.classList.remove('topology-3d-galaxy-label')
+        label.classList.toggle('is-dimmed', !!active && !selected)
+        delete label.dataset.galaxyId
+        label.dataset.taskId = group.id
+      }
+      label.classList.toggle('is-selected', selected)
+      label.style.transform = `translate(${box.x}px, ${box.y}px)`
+      label.hidden = false
+    }
+    this.hideLabels(this.groupLabels, used)
+  }
+
+  private galaxyBounds(galaxy: Galaxy): Box3 {
+    const radius = galaxy.radius * 1.09
+    const height = Math.max(108, radius * 0.15)
+    return new Box3(new Vector3(galaxy.x - radius, -height, galaxy.z - radius), new Vector3(galaxy.x + radius, height, galaxy.z + radius))
+  }
+
+  private taskBounds(task: TaskOrbit): Box3 {
+    const center = this.taskPosition(task, this.point)
+    const radius = task.radius + 16
+    return new Box3(new Vector3(center.x - radius, -26, center.z - radius), new Vector3(center.x + radius, 110, center.z + radius))
   }
 
   fit(front = false, ids?: ReadonlySet<string>): void {
     if (!this.graph?.nodes.length) return
     const bounds = new Box3()
-    for (const floor of this.floors) {
-      if (ids && !floor.nodeIds.some(id => ids.has(id))) continue
-      const margin = ids ? 20 : STREET_SETBACK + STREET_WIDTH + 50
-      bounds.expandByPoint(this.point.set(floor.x - floor.width / 2 - margin, ids ? floor.y - 8 : -48, floor.z - floor.depth / 2 - margin))
-      bounds.expandByPoint(this.point.set(floor.x + floor.width / 2 + margin, floor.y + (ids ? 160 : 240 + LANDMARK_ROOF_HEIGHT + 28), floor.z + floor.depth / 2 + margin))
+    if (ids) {
+      for (const task of this.tasks) if (task.nodeIds.some(id => ids.has(id))) bounds.union(this.taskBounds(task))
+    } else {
+      for (const galaxy of this.galaxies) bounds.union(this.galaxyBounds(galaxy))
     }
+    this.fitBounds(bounds, front)
+  }
+
+  private fitBounds(bounds: Box3, front: boolean, galaxyId?: string): void {
     if (bounds.isEmpty()) return
+    this.session.cameraGalaxyId = galaxyId
     bounds.getCenter(this.controls.target)
-    this.direction.set(front ? 0 : 0.65, front ? 0 : 0.85, 1).normalize()
+    this.direction.set(front ? 0 : 0.32, front ? 0.12 : 1.2, 1).normalize()
     const right = new Vector3().crossVectors(this.up, this.direction).normalize()
     const viewUp = new Vector3().crossVectors(this.direction, right)
-    const vertical = Math.tan(this.camera.fov * Math.PI / 360) * 0.94
+    const vertical = Math.tan(this.camera.fov * Math.PI / 360) * 0.92
     const horizontal = vertical * this.camera.aspect
-    let distance = 520
+    let distance = 240
     for (const x of [bounds.min.x, bounds.max.x]) for (const y of [bounds.min.y, bounds.max.y]) for (const z of [bounds.min.z, bounds.max.z]) {
       this.point.set(x, y, z).sub(this.controls.target)
       const depth = this.point.dot(this.direction)
-      distance = Math.max(distance, depth + (Math.abs(this.point.dot(right)) + 60) / horizontal, depth + (Math.abs(this.point.dot(viewUp)) + 30) / vertical)
+      distance = Math.max(distance, depth + (Math.abs(this.point.dot(right)) + 32) / horizontal, depth + (Math.abs(this.point.dot(viewUp)) + 25) / vertical)
     }
     this.camera.position.copy(this.controls.target).addScaledVector(this.direction, distance)
     this.controls.update()
@@ -681,13 +725,14 @@ export class TopologyScene {
   }
 
   focus(id: string): void {
-    if (!this.session.positions.has(id) || !this.byId.has(id)) return
-    const floor = this.floorById.get(this.session.floorByAgent.get(id)!)!
-    this.selectFloor(floor.id)
-    const p = this.worldPosition(id, this.point)
+    const task = this.taskForNode.get(id)
+    if (!task) return
+    this.session.cameraGalaxyId = task.galaxyId
+    this.selectTask(task.id)
+    const point = this.worldPosition(id, this.point)
     this.direction.subVectors(this.camera.position, this.controls.target).normalize()
-    this.controls.target.set(p.x, p.y + 10, p.z)
-    this.camera.position.copy(this.controls.target).addScaledVector(this.direction, 340)
+    this.controls.target.copy(point)
+    this.camera.position.copy(point).addScaledVector(this.direction, 330)
     this.controls.update()
     this.invalidate()
   }
@@ -701,91 +746,125 @@ export class TopologyScene {
   }
 
   reset(): void {
-    if (!this.graph) return
-    const graph = this.graph
+    if (!this.lastUpdate) return
     this.session.positions.clear()
-    this.session.floorByAgent.clear()
-    this.session.buildingSlots?.clear()
-    this.session.projectByAgent?.clear()
-    this.update(graph, this.selected, new Set(this.byId.keys()), this.t, this.evidenceCurrent)
-    this.fit()
+    this.session.taskByAgent.clear()
+    this.session.placements?.clear()
+    this.callbacks.notice(null)
+    if (this.update(...this.lastUpdate)) this.fit()
   }
 
   private updateRay(event: PointerEvent): void {
     const bounds = this.renderer.domElement.getBoundingClientRect()
     this.pointer.set((event.clientX - bounds.left) / bounds.width * 2 - 1, -(event.clientY - bounds.top) / bounds.height * 2 + 1)
+    this.camera.updateMatrixWorld()
     this.raycaster.setFromCamera(this.pointer, this.camera)
   }
 
-  private hit(event: PointerEvent): string | null {
-    this.updateRay(event)
-    const hit = this.raycaster.intersectObjects([this.nodes, this.markers, this.desks, this.mutedNodes, this.mutedMarkers, this.mutedDesks], false)[0]
-    if (hit?.instanceId === undefined) return null
-    const blockers = this.raycaster.intersectObjects([this.decks, this.frames, ...this.roofs, this.entrance], false)
-    if (blockers.some(blocker => blocker.distance < hit.distance &&
-      (blocker.object as InstancedMesh<BufferGeometry, MeshLambertMaterial>).material.opacity === 1)) return null
-    return (hit.object === this.nodes || hit.object === this.markers || hit.object === this.desks ? this.nodeSlots : this.mutedNodeSlots)[hit.instanceId] ?? null
+  private hitAgent(): string | null {
+    return pickAgentOnRay(this.raycaster.ray, this.byId.keys(), id => this.worldPosition(id, this.point),
+      id => this.agentRadius(id), 8 / (this.height * this.camera.projectionMatrix.elements[5]))
+  }
+
+  private hitTask(): string | null {
+    const hit = this.raycaster.ray.intersectPlane(this.orbitPlane, this.point)
+    if (!hit) return null
+    for (const task of this.tasks) {
+      const center = this.taskPosition(task, this.edgeStart)
+      if (Math.hypot(hit.x - center.x, hit.z - center.z) <= task.radius) return task.id
+    }
+    return null
   }
 
   private readonly pointerDown = (event: PointerEvent): void => {
-    if (event.button !== 0 || !event.isPrimary) return
-    const id = this.hit(event)
-    const floorHit = id ? undefined : this.raycaster.intersectObjects([this.decks, this.mutedDecks], false)[0]
-    const floorId = floorHit?.instanceId === undefined ? null : (floorHit.object === this.decks ? this.floorSlots : this.mutedFloorSlots)[floorHit.instanceId]
-    this.pointerStart = { x: event.clientX, y: event.clientY, id, floorId, pointerId: event.pointerId }
+    if (event.button !== 0 || !event.isPrimary || event.shiftKey || event.ctrlKey || event.metaKey) return
+    this.updateRay(event)
+    const id = this.hitAgent()
+    this.pointerStart = { x: event.clientX, y: event.clientY, id, taskId: id ? null : this.hitTask(), pointerId: event.pointerId }
     this.dragged = false
-    if (!id || event.shiftKey || event.ctrlKey || event.metaKey) { this.pointerStart.id = null; return }
-    const p = this.worldPosition(id, this.edgeStart)
+    if (!id) return
+    const point = this.worldPosition(id, this.edgeStart)
     this.camera.getWorldDirection(this.direction)
-    // A nearly level camera needs a vertical drag plane; project movement back onto the floor.
+    // A horizontal drag plane becomes unstable near the edge of the disk.
     if (Math.abs(this.direction.y) < 0.25) this.direction.set(this.direction.x, 0, this.direction.z).normalize()
     else this.direction.copy(this.up)
-    this.dragPlane.setFromNormalAndCoplanarPoint(this.direction, this.point.set(p.x, p.y, p.z))
+    this.dragPlane.setFromNormalAndCoplanarPoint(this.direction, point)
     const intersect = this.raycaster.ray.intersectPlane(this.dragPlane, this.point)
-    if (!intersect) { this.pointerStart.id = null; return }
-    this.dragOffset.set(p.x, p.y, p.z).sub(intersect)
+    if (!intersect) return
+    this.dragOffset.copy(point).sub(intersect)
     this.controls.enabled = false
     this.renderer.domElement.setPointerCapture(event.pointerId)
     this.renderer.domElement.focus({ preventScroll: true })
   }
 
   private readonly pointerMove = (event: PointerEvent): void => {
-    if (this.pointerStart) {
-      if (Math.hypot(event.clientX - this.pointerStart.x, event.clientY - this.pointerStart.y) > 4) this.dragged = true
-      if (this.pointerStart.id && this.dragged) {
-        this.updateRay(event)
-        if (this.raycaster.ray.intersectPlane(this.dragPlane, this.point)) {
-          const floorId = this.session.floorByAgent.get(this.pointerStart.id)
-          const floor = this.floorById.get(floorId!)!
-          const main = this.pointerStart.id === floor.mainAgentId
-          this.point.add(this.dragOffset)
-          const x = this.point.x - floor.x + floor.width / 2 - 160
-          const z = this.point.z - floor.z
-          this.session.positions.set(this.pointerStart.id, {
-            x: main ? Math.max(-50, Math.min(50, x)) : Math.max(230, Math.min(floor.width - 260, x)),
-            y: floor.y + 40,
-            z: main ? Math.max(-60, Math.min(70, z)) : Math.max(-floor.depth / 2 + 80, Math.min(floor.depth / 2 - 80, z)),
-          })
-          this.syncGeometry()
-          this.invalidate()
-        }
-      }
+    const start = this.pointerStart
+    if (start) {
+      if (start.pointerId !== event.pointerId) return
+      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) this.dragged = true
+      if (start.id && this.dragged && !this.controls.enabled) this.dragAgent(start.id, event)
       return
     }
-    const id = this.hit(event)
-    if (id !== this.hovered) { this.hovered = id; this.renderer.domElement.style.cursor = id ? 'grab' : ''; this.invalidate() }
+    this.updateRay(event)
+    this.setHovered(this.hitAgent())
   }
+
+  private dragAgent(id: string, event: PointerEvent): void {
+    this.updateRay(event)
+    if (!this.raycaster.ray.intersectPlane(this.dragPlane, this.point)) return
+    const task = this.taskForNode.get(id)!
+    const center = this.taskPosition(task, this.edgeStart)
+    this.point.add(this.dragOffset).sub(center)
+    const { inner, outer } = agentOrbitLimits(id, task)
+    let { x, z } = this.point
+    const length = Math.hypot(x, z)
+    if (length > 0) {
+      const scale = Math.max(inner, Math.min(outer, length)) / length
+      x *= scale
+      z *= scale
+    } else if (inner > 0) {
+      return
+    }
+    const position = { x, y: this.positions.get(id)!.y, z }
+    if (this.positionOverlaps(id, task, position)) return
+    if (!saveManualGalaxyPosition(this.session.positions, this.session.taskByAgent, id, task.id, position)) {
+      this.callbacks.notice(this.t('已保存 1200 个手动位置。重新布局后可重新移动 Agent。',
+        'All 1200 manual positions are in use. Reset the layout to move another agent.'))
+      return
+    }
+    this.positions.set(id, position)
+    this.syncGeometry()
+    this.invalidate()
+  }
+
+  private setHovered(id: string | null): void {
+    if (id === this.hovered) return
+    this.hovered = id
+    this.renderer.domElement.style.cursor = id ? 'grab' : ''
+    this.syncMarkers()
+    this.invalidate()
+  }
+
   private readonly pointerUp = (event: PointerEvent): void => {
     const start = this.pointerStart
     if (!start || start.pointerId !== event.pointerId) return
+    this.pointerCancel()
+    if (this.dragged) return
+    if (start.id) this.selectAgent(start.id)
+    else if (start.taskId) this.callbacks.task(start.taskId)
+  }
+
+  private readonly pointerCancel = (): void => {
+    const start = this.pointerStart
     this.pointerStart = null
     this.controls.enabled = true
-    if (!this.dragged) {
-      if (start.id) this.selectAgent(start.id)
-      else if (start.floorId) this.callbacks.floor(start.floorId)
-    }
+    const canvas = this.renderer.domElement
+    if (start && canvas.hasPointerCapture(start.pointerId)) canvas.releasePointerCapture(start.pointerId)
   }
-  private readonly pointerCancel = (): void => { this.pointerStart = null; this.controls.enabled = true }
+
+  private readonly pointerLeave = (): void => {
+    if (!this.pointerStart) this.setHovered(null)
+  }
   private readonly keyDown = (event: KeyboardEvent): void => {
     if (event.key.toLowerCase() === 'f') { event.preventDefault(); this.fit() }
     if (event.key === '+' || event.key === '=') { event.preventDefault(); this.zoom(0.8) }
@@ -809,11 +888,13 @@ export class TopologyScene {
     document.removeEventListener('visibilitychange', this.visibilityChange)
     window.removeEventListener('resize', this.resize)
     const canvas = this.renderer.domElement
+    this.pointerCancel()
     canvas.removeEventListener('pointerdown', this.pointerDown, true)
     canvas.removeEventListener('pointermove', this.pointerMove)
     canvas.removeEventListener('pointerup', this.pointerUp)
     canvas.removeEventListener('pointercancel', this.pointerCancel)
     canvas.removeEventListener('lostpointercapture', this.pointerCancel)
+    canvas.removeEventListener('pointerleave', this.pointerLeave)
     canvas.removeEventListener('keydown', this.keyDown)
     canvas.removeEventListener('webglcontextlost', this.contextLost)
     this.controls.removeEventListener('change', this.invalidate)
@@ -821,19 +902,29 @@ export class TopologyScene {
     const geometries = new Set(this.meshes.map(mesh => mesh.geometry))
     for (const mesh of this.meshes) {
       mesh.dispose()
-      for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) material.dispose()
+      mesh.material.dispose()
     }
     for (const geometry of geometries) geometry.dispose()
-    for (const lines of [this.lines, this.mutedLines]) { lines.geometry.dispose(); lines.material.dispose() }
+    for (const { mesh } of [this.lines, this.orbits]) {
+      mesh.geometry.dispose()
+      mesh.material.dispose()
+    }
+    this.backdrop.dispose()
+    this.glows.dispose()
+    this.scene.clear()
     this.renderer.dispose()
     this.renderer.forceContextLoss()
     canvas.remove()
     for (const label of this.labels) label.remove()
-    for (const label of this.floorLabels) label.remove()
-    for (const label of this.buildingLabels) label.remove()
-    this.buildings = []
-    this.floorById.clear()
-    this.floors = []
+    for (const label of this.groupLabels) label.remove()
+    this.galaxies = []
+    this.tasks = []
+    this.galaxyById.clear()
+    this.taskById.clear()
+    this.taskForNode.clear()
+    this.positions.clear()
+    this.collisionTasks.clear()
+    this.lastUpdate = undefined
     this.byId.clear()
     this.graph = null
   }

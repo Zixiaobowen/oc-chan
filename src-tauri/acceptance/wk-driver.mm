@@ -140,7 +140,7 @@ extern "C" void oc_wk_request(void *pointer, const char *operation, const char *
       [webview callAsyncJavaScript:source arguments:@{} inFrame:nil inContentWorld:WKContentWorld.pageWorld completionHandler:^(id result, NSError *error) {
         WKWebView *current = bound;
         if (!current || current.window != window) { finish(cb, ctx, nil, @"window lifecycle cancelled"); return; }
-        if (window.visible || window.keyWindow || NSApp.active || NSApp.activationPolicy != NSApplicationActivationPolicyProhibited) { finish(cb, ctx, nil, @"hidden/prohibited invariant violated during eval"); return; }
+        if (window.visible || window.keyWindow || NSApp.active || NSApp.activationPolicy != NSApplicationActivationPolicyProhibited) { finish(cb, ctx, nil, [NSString stringWithFormat:@"hidden/prohibited invariant violated during eval: visible=%d key=%d active=%d activationPolicy=%ld", window.visible, window.keyWindow, NSApp.active, (long)NSApp.activationPolicy]); return; }
         // eval scripts return JSON strings; undefined and unsupported objects are errors.
         BOOL documentChanged = ![current.URL isEqual:documentURL];
         if (error) { finish(cb, ctx, nil, [NSString stringWithFormat:@"%@; loading=%d; documentURLChanged=%d", javascriptError(error), current.loading, documentChanged]); return; }

@@ -11,7 +11,7 @@ import { Measurement } from './measurement.mjs'
 import { prepareSmokeFixtures, Driver, absent } from '../smoke/main-probe.mjs'
 import { SessionLoad } from './session-load.mjs'
 import { runSoak } from './soak-scenario.mjs'
-import { runStress, plugins, assertBudget } from './scenarios.mjs'
+import { runStress, runTopology, plugins, assertBudget } from './scenarios.mjs'
 import { startSampler } from './sampler.mjs'
 import { AssociatedProcesses } from './xpc.mjs'
 import { comparisonWorkload, comparisonSettings, observedSettings, alignViewport } from './comparison-workload.mjs'
@@ -23,7 +23,7 @@ for (let index = 2; index < process.argv.length; index += 2) {
   if (!['mode','seed','scenario','sampler','out'].includes(key) || process.argv[index + 1] === undefined) throw new Error('Invalid performance arguments')
   options[key] = process.argv[index + 1]
 }
-assert(['baseline','smoke'].includes(options.mode) && ['all','startup','idle','daily','stress','soak'].includes(options.scenario))
+assert(['baseline','smoke'].includes(options.mode) && ['all','startup','idle','daily','stress','soak','topology'].includes(options.scenario))
 assert.equal(options.sampler, 'user', 'Performance never requests additional system permissions')
 assert(process.platform === 'darwin' && process.getuid() !== 0 && options.seed.length <= 128)
 const full = options.mode === 'baseline', abort = new AbortController()
@@ -92,7 +92,9 @@ class Run {
       this.fixture = { home:path.join(fixtures,'home') }; await mkdir(this.fixture.home, { mode:0o700 })
     } else {
       this.fixture = await prepareSmokeFixtures(fixtures, options.seed, this.level === 'L2' || options.scenario === 'soak' ? 128 : 32)
-      this.load = new SessionLoad(this.fixture); await this.load.initialize()
+      if (options.scenario !== 'topology') {
+        this.load = new SessionLoad(this.fixture); await this.load.initialize()
+      }
     }
     this.workload = await comparisonWorkload({ ...options, level:this.level })
     const settingsSeed = path.join(this.directory,'settings.json')
@@ -391,6 +393,7 @@ try {
     assert(instance.measurement.counters.committed > 0, 'No real React event commit observed')
   })
   if (selected('stress')) await run('L2-boundaries','L2', instance => runStress(instance, { full, abort, record }))
+  if (options.scenario === 'topology') await run('L2-topology','L2', instance => runTopology(instance, { full, abort, record }))
   assert.equal((await fingerprint()).digest, result.source.digest, 'Source changed during measurement')
   abort.signal.throwIfAborted(); result.complete = true
 } catch (error) {

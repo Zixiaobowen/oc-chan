@@ -20,6 +20,9 @@ export async function prepareSmokeFixtures(directory, seed = 20261104, sessionCo
   const hosts = path.join(manifest.home, '.omp/run/collab-hosts')
   const entry = path.join(manifest.root, '@oh-my-pi/pi-coding-agent/dist/cli.js')
   for (const item of [sessions, owners, hosts, path.dirname(entry)]) await mkdir(item, { recursive: true, mode: 0o700 })
+  const projectDirectories = ['aurora', 'orion'].map(name => path.join(manifest.root, 'projects', name))
+  const sharedDirectory = path.join(manifest.root, 'projects', 'shared-tools')
+  for (const directory of [...projectDirectories, sharedDirectory]) await mkdir(directory, { recursive: true, mode: 0o700 })
   await writeFile(path.join(path.dirname(path.dirname(entry)), 'package.json'), JSON.stringify({ type:'module', private:true }), { flag:'wx', mode:0o600 })
   await writeFile(entry, `import fs from 'node:fs'
 const fds = []
@@ -102,18 +105,21 @@ try {
   try {
     for (let branch = 0; branch < sessionCount / 8; branch++) {
       const mainId = randomUUID(), rootFile = path.join(sessions, mainId + '.jsonl'), branchDirectory = path.join(sessions, mainId)
+      const projectDirectory = projectDirectories[branch % projectDirectories.length]
       await mkdir(branchDirectory, { mode: 0o700 })
       const descriptors = []
       for (let index = 0; index < 8; index++) {
         const id = index ? randomUUID() : mainId
         const file = index ? path.join(branchDirectory, `worker-${index}.jsonl`) : rootFile
-        const header = { type: 'session', version: 3, id, timestamp: new Date().toISOString(), cwd: manifest.root, ...(index ? { parentSession: rootFile } : {}) }
-        await writeFile(file, JSON.stringify(header) + '\n' + JSON.stringify({ type: 'model_change', model: fixtureModel }) + '\n', { flag: 'wx', mode: 0o600 })
+        const cwd = index === 7 ? sharedDirectory : projectDirectory
+        const title = index ? `协作子任务 ${index}` : ['探索系统', '构建界面', '检查变更', '验证交付'][branch % 4]
+        const header = { type: 'session', version: 3, id, timestamp: new Date().toISOString(), cwd, ...(index ? { parentSession: rootFile } : {}) }
+        await writeFile(file, JSON.stringify({ type: 'title', title, v: 1 }) + '\n' + JSON.stringify(header) + '\n' + JSON.stringify({ type: 'model_change', model: fixtureModel }) + '\n', { flag: 'wx', mode: 0o600 })
         const lease = path.join(owners, id + '.lock')
         await writeFile(lease, '', { flag: 'wx', mode: 0o600 })
         descriptors.push(file, lease); ids.push(`omp:${id}`); files.push(file)
       }
-      const child = spawn(process.execPath, ['--input-type=module', '-e', launcherSource, entry], { cwd: manifest.root, env: { PATH: process.env.PATH, HOME: manifest.home, OC_ACCEPTANCE_FILES: JSON.stringify(descriptors) }, stdio: ['pipe', 'pipe', 'pipe'] })
+      const child = spawn(process.execPath, ['--input-type=module', '-e', launcherSource, entry], { cwd: projectDirectory, env: { PATH: process.env.PATH, HOME: manifest.home, OC_ACCEPTANCE_FILES: JSON.stringify(descriptors) }, stdio: ['pipe', 'pipe', 'pipe'] })
       // Node automatically destroys child.stdin when the launcher exits. Transfer
       // ownership so only smoke closes the inherited input pipe and delivers EOF.
       const state = { child, stdin: child.stdin, pid: undefined, launcherDone: false, stopping: false, failures: new Map(), rejectStartup: undefined }

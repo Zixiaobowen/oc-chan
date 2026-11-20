@@ -91,7 +91,7 @@ function controls({ main, renderer, record, capture }) {
             rect: element.getBoundingClientRect().toJSON()
           })), rootText: document.getElementById('root')?.innerText.slice(0, 2048)
         }))()`))
-      record('renderer-failure-state', await evaluate(`(async () => ({ errors: window.__ocSmokeRendererErrors, hidden: document.hidden, visibilityState: document.visibilityState, displayLive: document.querySelector('.app-shell')?.dataset.displayLive, rootChildren: document.getElementById('root')?.childElementCount, topology: { floor: document.querySelector('.topology-3d-picker select')?.value ?? null, visibleEmployees: Array.from(document.querySelectorAll('.topology-3d-label:not([hidden])'), label => label.dataset.id).slice(0, 32), canvas: (() => { const canvas = document.querySelector('.topology-3d-webgl'); return canvas ? { width: canvas.width, height: canvas.height, clientWidth: canvas.clientWidth, clientHeight: canvas.clientHeight } : null; })() }, sources: Object.fromEntries(Object.entries(await window.monitor.snapshot()).map(([section, state]) => [section, state.data?.sources.map(({id, state, capabilities, diagnostics}) => ({id, state, capabilities, diagnostics}))])) }))()`))
+      record('renderer-failure-state', await evaluate(`(async () => ({ errors: window.__ocSmokeRendererErrors, hidden: document.hidden, visibilityState: document.visibilityState, displayLive: document.querySelector('.app-shell')?.dataset.displayLive, rootChildren: document.getElementById('root')?.childElementCount, topology: { task: document.querySelector('.topology-3d-picker select')?.value ?? null, visibleAgents: Array.from(document.querySelectorAll('.topology-3d-label:not([hidden])'), label => label.dataset.id).slice(0, 32), canvas: (() => { const canvas = document.querySelector('.topology-3d-webgl'); return canvas ? { width: canvas.width, height: canvas.height, clientWidth: canvas.clientWidth, clientHeight: canvas.clientHeight } : null; })() }, sources: Object.fromEntries(Object.entries(await window.monitor.snapshot()).map(([section, state]) => [section, state.data?.sources.map(({id, state, capabilities, diagnostics}) => ({id, state, capabilities, diagnostics}))])) }))()`))
       } catch (diagnosticError) {
         diagnosticErrors.push(diagnosticError)
         record('renderer-failure-diagnostics-error', failureEvidence(diagnosticError))
@@ -338,9 +338,11 @@ export async function exerciseSmoke({ main, renderer, manifest, record, capture,
       const failed = Object.entries(snapshot).filter(([,state]) => state.error).map(([section,state]) => [section,state.error]);
       if (failed.length) throw new Error(JSON.stringify(failed));
       if (!['agents','schedules','system','events'].every(section => snapshot[section].data && !snapshot[section].refreshing)) return false;
+      const fixtureAgent = snapshot.agents.data.agents.find(agent => ${JSON.stringify(manifest.agentIds)}.includes(agent.id) && agent.kind === 'main');
+      if (!fixtureAgent) return false;
       return {
         sections: Object.fromEntries(['agents','schedules','system','events'].map(section => [section, {error:snapshot[section].error, sources:snapshot[section].data.sources.map(source => ({id:source.id,state:source.state}))}])),
-        agent: snapshot.agents.data.agents[0], agentCount: snapshot.agents.data.agents.length,
+        agent: snapshot.agents.data.agents[0], fixtureAgent, agentCount: snapshot.agents.data.agents.length,
         fixtureAgentCount: snapshot.agents.data.agents.filter(agent => ${JSON.stringify(manifest.agentIds)}.includes(agent.id)).length,
         activeSubagentCount: snapshot.agents.data.activeSubagentCount,
         taskCount: snapshot.schedules.data.jobs.length,
@@ -374,7 +376,7 @@ export async function exerciseSmoke({ main, renderer, manifest, record, capture,
     const notifications = await exerciseNotifications({ ui, main, renderer, manifest, capture })
     return { settings: { notifications } }
   }
-  const topology = await exerciseTopology({ ui, renderer, record, agent: initial.agent })
+  const topology = await exerciseTopology({ ui, renderer, record, agent: initial.fixtureAgent, overviewAgent: initial.agent, fixtureAgentIds: manifest.agentIds })
   if (scenario === 'topology') return topology
 
   await exerciseEmptyEvents(ui)
@@ -641,14 +643,14 @@ export async function verifyRestart({ main, renderer, savedSettings, record, cap
     return
   }
   if (scenario === 'topology') {
-    await ui.stage('restart-office-and-theme', async () => {
+    await ui.stage('restart-galaxy-and-theme', async () => {
       await ui.dom('restarted real renderer is ready', `!!window.desktopSettings && !!${$('.app-shell')}`)
       await ui.info()
       const snapshot = await ui.evaluate('window.desktopSettings.snapshot()')
       assert.equal(snapshot.settings.appearance, savedSettings.appearance)
       assert.equal(snapshot.resolvedTheme, 'dark')
       await ui.navigate('协作拓扑', 'Agent topology')
-      await ui.dom('restart opens the office with the saved appearance', `!!${$('.topology-3d-webgl')} && !${$('.topology-3d-message')} && document.documentElement.dataset.theme === 'dark'`)
+      await ui.dom('restart opens the galaxy with the saved appearance', `!!${$('.topology-3d-webgl')} && !${$('.topology-3d-message')} && document.documentElement.dataset.theme === 'dark'`)
       return { appearance: snapshot.settings.appearance, topology: '3D', nativeWindowAcceptance: false }
     })
     return

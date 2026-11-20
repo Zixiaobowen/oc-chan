@@ -90,8 +90,8 @@ export default memo(function AgentsView({ data, enabled, error, pausedAt, intent
     const node = document.querySelector<HTMLElement>(`.react-flow__node[data-id="${CSS.escape(pending.id)}"]`)
     if (node && getComputedStyle(node).visibility === 'hidden') return
     focusReturn.current = null
-    const employee = document.querySelector<HTMLElement>(`.topology-3d-label[data-id="${CSS.escape(pending.id)}"]:not([hidden])`)
-    ;(node ?? employee ?? document.querySelector<HTMLElement>('.topology-3d-webgl') ?? searchRef.current)?.focus({ preventScroll: true })
+    const celestialLabel = document.querySelector<HTMLElement>(`.topology-3d-label[data-id="${CSS.escape(pending.id)}"]:not([hidden])`)
+    ;(node ?? celestialLabel ?? document.querySelector<HTMLElement>('.topology-3d-webgl') ?? searchRef.current)?.focus({ preventScroll: true })
   }, [])
   const agents = useRecentAgents(data?.agents ?? EMPTY_AGENTS, pausedAt)
   const liveIds = useMemo(() => new Set(agents.map(agent => agent.id)), [agents])
@@ -123,11 +123,13 @@ export default memo(function AgentsView({ data, enabled, error, pausedAt, intent
     const agent = agents.find(item => item.id === id)
     if (!agent) return
     focusReturn.current = null
+    setRevealId(null)
     revealPending.current = true
     patchView({ selectedId: id, identity: agentTarget(agent).identity, unavailable: false, open: true, topologyPage: pageOrder.pageById.get(id) ?? null })
   }, [agents, pageOrder, patchView])
   const close = useCallback(() => {
     focusReturn.current = selectedVisible && selectedId ? { id: selectedId, from: document.activeElement } : null
+    setRevealId(null)
     patchView({ selectedId: null, identity: null, unavailable: false, open: false })
     if (!focusReturn.current) searchRef.current?.focus({ preventScroll: true })
   }, [patchView, selectedVisible, selectedId])
@@ -212,7 +214,7 @@ export default memo(function AgentsView({ data, enabled, error, pausedAt, intent
         {!data ? <div className="topology-empty"><Empty title={!enabled ? t('Agent 采集已停用', 'Agent collection disabled') : error ? t('尚未取得 Agent 数据', 'Agent data unavailable') : t('正在连接本机 Agent', 'Connecting to local agents')}>{!enabled ? t('尚无快照。可在数据来源中开启采集，不会影响 Agent 的运行。', 'No snapshot yet. Enable collection in Data sources; running agents are unaffected.') : error ? t('请查看上方错误信息并重试。', 'Review the error above and retry.') : t('读取活动进程与父子关系。', 'Reading active processes and parent-child relationships.')}</Empty></div>
           : <div className="topology-stage">
             {topologyView === '3d'
-              ? <AgentTopology3D graph={graph} selectedId={selected ? selectedId : null} onSelect={select} onToggleCollapse={toggleCollapse} filtering={filtering} evidenceCurrent={enabled && !paused && !error} liveIds={liveIds} session={memory.office} revealId={revealId} onRevealed={finishReveal} onNodesReady={restoreNodeFocus} />
+              ? <AgentTopology3D graph={graph} agents={agents} selectedId={selected ? selectedId : null} onSelect={select} onToggleCollapse={toggleCollapse} filtering={filtering} evidenceCurrent={enabled && !paused && !error} liveIds={liveIds} session={memory.galaxy} revealId={revealId} onRevealed={finishReveal} onNodesReady={restoreNodeFocus} />
               : <AgentTopology graph={topologyPage.graph} pageIndex={topologyPage.index} selectedId={selected ? selectedId : null} onSelect={select} onToggleCollapse={toggleCollapse} filterKey={filterKey} memory={memory} revealId={revealId} onRevealed={finishReveal} onNodesReady={restoreNodeFocus} />}
             {!graph.nodes.length && <div className="topology-empty topology-empty-overlay"><Empty title={filtering ? t('没有匹配的 Agent', 'No matching agents') : !enabled ? t('旧快照中没有 Agent', 'No agents in the retained snapshot') : t('当前未发现运行中的 Agent', 'No running agents found')}>{filtering ? t('调整类型、活跃状态或搜索词。活跃筛选保留命中节点的父链与子树。', 'Adjust type, activity or search. Active filters preserve ancestors and descendants of matching nodes.') : !enabled ? t('在数据来源中重新开启采集以获取新状态。', 'Enable collection in Data sources for a fresh sample.') : t('启动 Agent 后等待下次采样；覆盖范围见数据来源。', 'Start an agent and wait for the next sample. See Data sources for coverage.')}</Empty>{filtering && <button className="button secondary" onClick={() => { setQuery(''); setKind('all'); setActivity('all') }}>{t('清除筛选', 'Clear filters')}</button>}</div>}
           </div>}

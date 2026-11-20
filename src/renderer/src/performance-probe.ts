@@ -102,7 +102,7 @@ const probe = {
     visibilityOverridden = true
   },
   topology(count: number) {
-    if (![128, 500, 2000].includes(count) || !current?.agents.data || !setter) throw new Error('Topology fixture unavailable')
+    if (![128, 500, 1200, 2000].includes(count) || !current?.agents.data || !setter) throw new Error('Topology fixture unavailable')
     const originals = current.agents.data.agents.filter(agent => !agent.id.startsWith('performance-render:'))
     if (!originals.length) throw new Error('Topology needs a real collected agent')
     const agents = Array.from({ length: count }, (_, index) => ({ ...originals[index % originals.length], id: `performance-render:${index}`, parentId: undefined }))
