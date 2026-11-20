@@ -10,18 +10,34 @@ export const sha256 = value => createHash('sha256').update(value).digest('hex')
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 function requireThat(value, message) { if (!value) throw new Error(message) }
 function within(root, file) { const relative = path.relative(root, file); return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative) }
-export function readBounded(file, limit = RUST_LIMITS.metadata) {
+function sameFile(before, after) {
+  return before.dev === after.dev && before.ino === after.ino && before.size === after.size
+    && before.mtimeNs === after.mtimeNs && before.ctimeNs === after.ctimeNs
+}
+function withBoundedFile(file, limit, read) {
   requireThat(Number.isSafeInteger(limit) && limit >= 0 && limit <= RUST_LIMITS.metadata, 'Invalid metadata budget')
   const fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
   try {
-    const before = fstatSync(fd)
-    requireThat(before.isFile() && Number.isSafeInteger(before.size) && before.size >= 0 && before.size <= limit, `File exceeds metadata budget or is not regular: ${file}`)
-    const buffer = Buffer.alloc(before.size + 1); let offset = 0
-    while (offset < buffer.length) { const count = readSync(fd, buffer, offset, buffer.length - offset, null); if (!count) break; offset += count }
-    const after = fstatSync(fd)
-    requireThat(offset === before.size && before.dev === after.dev && before.ino === after.ino && before.size === after.size && before.mtimeMs === after.mtimeMs && before.ctimeMs === after.ctimeMs, `File changed while reading: ${file}`)
-    return buffer.subarray(0, offset)
+    const before = fstatSync(fd, { bigint: true })
+    requireThat(before.isFile() && before.size >= 0n && before.size <= BigInt(limit), `File exceeds metadata budget or is not regular: ${file}`)
+    const value = read(fd, before)
+    requireThat(sameFile(before, fstatSync(fd, { bigint: true })), `File changed while reading: ${file}`)
+    return value
   } finally { closeSync(fd) }
+}
+function readSizedFile(fd, size, file) {
+  const buffer = Buffer.alloc(Number(size) + 1)
+  let offset = 0
+  while (offset < buffer.length) {
+    const count = readSync(fd, buffer, offset, buffer.length - offset, null)
+    if (!count) break
+    offset += count
+  }
+  requireThat(offset === Number(size), `File changed while reading: ${file}`)
+  return buffer.subarray(0, offset)
+}
+export function readBounded(file, limit = RUST_LIMITS.metadata) {
+  return withBoundedFile(file, limit, (fd, stat) => readSizedFile(fd, stat.size, file))
 }
 function lockChecksums(bytes) {
   const text = bytes.toString('utf8'); requireThat(/^version = [34]\s*$/m.test(text), 'Unsupported Cargo.lock format')
@@ -111,13 +127,24 @@ export function collectCargoLegalFiles(item, checksum, budget, supplemental) {
   const directory = path.dirname(item.manifest_path), packageName = `${item.name}-${item.version}`
   requireThat(path.isAbsolute(directory) && realpathSync(directory) === directory && lstatSync(directory).isDirectory() && path.basename(directory) === packageName && path.basename(path.dirname(path.dirname(directory))) === 'src', 'Cargo registry source is not a canonical registry package directory')
   const archive = path.join(path.dirname(path.dirname(path.dirname(directory))), 'cache', path.basename(path.dirname(directory)), `${packageName}.crate`)
-  const compressed = readBounded(archive)
-  requireThat(sha256(compressed) === checksum, 'Cargo registry archive SHA256 differs from exact Cargo.lock')
+  const archiveIdentity = withBoundedFile(archive, RUST_LIMITS.metadata, (fd, stat) => {
+    const compressed = readSizedFile(fd, stat.size, archive)
+    requireThat(sha256(compressed) === checksum, `Cargo registry archive SHA256 differs from exact Cargo.lock: ${packageName}`)
+    return stat
+  })
   function tar(args, maximum) {
-    const result = spawnSync('/usr/bin/tar', args, { input: compressed, timeout: 30000, maxBuffer: maximum, killSignal: 'SIGKILL' })
-    requireThat(!result.error && !result.signal && result.status === 0, `Cargo legal archive read failed (${result.error?.code ?? result.signal ?? result.status})`)
-    requireThat(result.stdout.length <= maximum, 'Cargo legal archive output exceeds budget')
-    return result.stdout
+    // Open at offset zero and pass the verified regular file as stdin.
+    return withBoundedFile(archive, RUST_LIMITS.metadata, (fd, stat) => {
+      requireThat(sameFile(archiveIdentity, stat), `Cargo registry archive changed after checksum verification: ${packageName}`)
+      const result = spawnSync('/usr/bin/tar', args, { stdio: [fd, 'pipe', 'pipe'], timeout: 30000, maxBuffer: maximum, killSignal: 'SIGKILL' })
+      if (result.error || result.signal || result.status !== 0) {
+        const operation = args[3] ?? 'archive listing'
+        const detail = result.stderr?.subarray(0, 1024).toString('utf8').replace(/\s+/g, ' ').trim()
+        throw new Error(`Cargo legal archive read failed for ${packageName} (${operation}, ${stat.size} bytes, ${result.error?.code ?? result.signal ?? result.status})${detail ? `: ${detail}` : ''}`, { cause: result.error })
+      }
+      requireThat(result.stdout.length <= maximum, 'Cargo legal archive output exceeds budget')
+      return result.stdout
+    })
   }
   const listing = new TextDecoder('utf-8', { fatal: true }).decode(tar(['-tf', '-'], 4 * 1024 * 1024))
   requireThat(listing.endsWith('\n'), 'Incomplete Cargo registry archive listing')

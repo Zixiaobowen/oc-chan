@@ -36,6 +36,7 @@ test('renderer smoke follows executable and UI changes, while documentation and 
     ['src-tauri/src/windows.rs'], ['crates/oc-core/src/agents/runtime.rs'],
     ['scripts/smoke-renderer.mjs', 'scripts/smoke/scenarios.mjs'],
     ['scripts/develop.mjs'], ['src-tauri/src/acceptance.rs'],
+    ['scripts/rust-dependencies.mjs'],
     ['package-lock.json'], ['.github/workflows/build.yml']
   ]) assert.equal(selectTests(files).rendererSmoke, true, files.join(', '))
   assert.equal(selectTests([], '版本标签').rendererSmoke, true)

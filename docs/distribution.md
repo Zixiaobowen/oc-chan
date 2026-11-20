@@ -110,7 +110,7 @@ Actions产物可在成功运行记录中下载`oc-chan-macos-arm64-<运行编号
 
 产物只允许主程序及其打包的React页面资源、Rust worker、Swift导航助手、Tern插件资源、原生系统插件包、图标、完整 Sparkle 2.10.1 framework 和依赖许可。Sparkle 官方归档由 SHA-256 及逐文件 pin 校验；保留上游签名 helpers，Headers/Modules 也属于上游签名封印，不得裁剪或重签 helpers。旧在线安装助手不再打包。Vite打包真实renderer依赖，ReactFlow与Three.js属于界面运行依赖；WKWebView由系统提供。Rust闭包按目标平台、精确Cargo.lock、运行/构建依赖关系和crate摘要追踪；renderer npm闭包与仅开发工具分别审查。
 
-Rust许可生成器校验锁定crate归档，收集完整LICENSE/NOTICE。未随crate发布的许可按精确VCS commit与上游文本摘要补齐，证据保留在`resources/rust-license-supplements/manifest.json`。产物使用明确的license-only目录，清单保留原始sourcePath和hash，不复制crate源码树。缺许可或来源不能证明时构建失败。
+Rust 许可生成器核对锁定 crate 归档的 SHA-256，通过常规文件描述符列出和读取归档成员，并验证读取的是同一未变化的文件。它收集完整的 LICENSE/NOTICE，缺许可、来源无法证明或归档读取失败时终止构建。读取错误包含包名、归档操作及有界的 `tar` 错误输出。未随 crate 发布的许可由精确的归档声明或 VCS commit 与已审查文本摘要绑定，证据保留在 `resources/rust-license-supplements/manifest.json`。产物使用明确的 license-only 目录，清单保留原始 `sourcePath` 和摘要。
 
 ```sh
 npm run audit:dependencies -- --output release/dependency-review-arm64.json

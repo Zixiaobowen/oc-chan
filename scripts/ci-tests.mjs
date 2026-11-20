@@ -94,7 +94,7 @@ export function selectTests(files, fullReason, removedFiles = []) {
     rule[1].forEach(group => suites[group].forEach(item => selected.add(item))); rule[2].forEach(item => rust.add(item)); reasons.add(rule[3])
   }
   if (rust.has('core')) for (const key of [...rust]) if (key !== 'core' && rustSuites[key].package === 'oc-core') rust.delete(key)
-  const rendererSmoke = files.some(file => removed.has(file) && retiredRules.some(([pattern]) => pattern.test(file)) || !/\.test\.(?:ts|mjs)$/.test(file) && /^(?:src\/|src-tauri\/|native\/|crates\/|plugins\/|plugin-market\/|resources\/|scripts\/(?:smoke|develop|build-app|build-plugin-market-rust|build-marketplace-fixtures|probes\/wk\/)|(?:package(?:-lock)?\.json|Cargo\.(?:toml|lock)|rust-toolchain(?:\.toml)?|tsconfig\.json|vite\.config\.ts)$|\.github\/workflows\/)/.test(file))
+  const rendererSmoke = files.some(file => removed.has(file) && retiredRules.some(([pattern]) => pattern.test(file)) || !/\.test\.(?:ts|mjs)$/.test(file) && /^(?:src\/|src-tauri\/|native\/|crates\/|plugins\/|plugin-market\/|resources\/|scripts\/(?:smoke|develop|build-app|build-plugin-market-rust|build-marketplace-fixtures|rust-dependencies\.mjs$|probes\/wk\/)|(?:package(?:-lock)?\.json|Cargo\.(?:toml|lock)|rust-toolchain(?:\.toml)?|tsconfig\.json|vite\.config\.ts)$|\.github\/workflows\/)/.test(file))
   return { tests: [...selected].sort(), rust: [...rust].sort(), reasons: [...reasons].sort(), rendererSmoke }
 }
 export function validateTestCoverage(files) {
