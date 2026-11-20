@@ -136,7 +136,18 @@ fn wait_for_unreaped_exit(pid: u32) {
 async fn command_cancel_after_exit_accepts_proven_zombie_group_and_reaps() {
     let root = tempfile::tempdir().unwrap(); let pid_file = root.path().join("pid");
     let io = BoundedIo::new(ResourceBudget::default()); let cancel = CancellationToken::new();
-    let mut spec = CommandSpec::new("/bin/sh", vec![OsString::from("-c"), OsString::from("printf '%s' $$ > \"$1\"; printf x; exit 0"), OsString::from("io-test"), pid_file.as_os_str().to_owned()], 4096, Duration::from_secs(3));
+    // The process collector uses setuid ps, whose full BSD status can be restricted.
+    let mut spec = CommandSpec::new(
+        "/bin/sh",
+        vec![
+            OsString::from("-c"),
+            OsString::from("printf '%s' $$ > \"$1\"; exec /bin/ps -p \"$$\" -o pid="),
+            OsString::from("io-test"),
+            pid_file.as_os_str().to_owned(),
+        ],
+        4096,
+        Duration::from_secs(3),
+    );
     let observed_pid = Arc::new(std::sync::atomic::AtomicU32::new(0));
     spec.stdout_observer = Some(Arc::new({
         let cancel = cancel.clone(); let observed_pid = observed_pid.clone();

@@ -63,6 +63,8 @@ SDK只提供已授权的固定命令和只读路径能力；host按manifest能�
 
 host启动的每项命令登记`pluginId/generation/call/io/pid/birth/pgid`；它可能不是plugin子进程，取消不能只杀plugin进程组。取消顺序：撤销发布和新IO准入→取消该call所有已登记IO→发送cancel→等待IO/stdio/插件确认。deadline到期按已登记身份终止并wait；归属不明时保留诊断，不按PID或进程名盲杀。清理失败使代次不可重启、文件不可卸载，应用退出继续清理其他插件并聚合失败。
 
+macOS 对只剩僵尸进程的命令组可能返回 `EPERM`。宿主保持组长未回收，通过 Darwin 的简要进程状态核对每个成员的 PID、进程组与退出状态，再核对成员列表。仅在所有成员都已退出且名单完整一致时继续回收组长，其他错误仍上报。
+
 ## 安装事务
 
 沿用download/validate→pending fsync→stop旧代→current改rollback→pending改current→按目标分区启用状态注册→删除rollback的提交顺序。安装与设置启停共用串行协调锁，提交依据锁内一致状态：启用时启动新代并等待真实首采样成功；停用时只验证静态契约并登记dormant，不spawn、不initialize、不采样即可提交，后续显式启用再真实初始化，失败如实报告。下载和验证阶段旧版继续工作；下载或签名错误不停止旧版。激活失败先排空新代再恢复旧目录与runtime；停不掉不得删除文件或并行运行另一版。

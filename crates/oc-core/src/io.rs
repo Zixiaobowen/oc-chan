@@ -335,22 +335,44 @@ fn command_group_is_zombies(pid: u32) -> Result<bool> {
         pids[..count].sort_unstable();
         Ok(count)
     }
+    // sys/proc_info.h exposes this status flavor without the full BSD record's UID check.
+    const PROC_PIDT_SHORTBSDINFO: libc::c_int = 13;
+    #[repr(C)]
+    struct ProcBsdShortInfo {
+        pid: u32,
+        _ppid: u32,
+        pgid: u32,
+        status: u32,
+        _comm: [libc::c_char; 16],
+        _flags: u32,
+        _uid: libc::uid_t,
+        _gid: libc::gid_t,
+        _ruid: libc::uid_t,
+        _rgid: libc::gid_t,
+        _svuid: libc::uid_t,
+        _svgid: libc::gid_t,
+        _reserved: u32,
+    }
+
     let mut pids = [0; 256];
     let count = members(pid, &mut pids)?;
     if !pids[..count].contains(&(pid as i32)) {
         return Err(Error::new("OC_COMMAND_IDENTITY", "Unreaped command leader is absent from its group"));
     }
     for member in &pids[..count] {
-        let mut info = std::mem::MaybeUninit::<libc::proc_bsdinfo>::uninit();
-        let size = std::mem::size_of::<libc::proc_bsdinfo>() as i32;
-        // arg=1 explicitly includes zombies; arg=0 reports ESRCH for them.
-        let bytes = unsafe { libc::proc_pidinfo(*member, libc::PROC_PIDTBSDINFO, 1, info.as_mut_ptr().cast(), size) };
-        if bytes != size { return Err(Error::io("command group member status", std::io::Error::last_os_error())); }
+        let mut info = std::mem::MaybeUninit::<ProcBsdShortInfo>::uninit();
+        let size = std::mem::size_of::<ProcBsdShortInfo>() as i32;
+        // arg=1 includes unreaped exited members in the lookup.
+        let bytes = unsafe { libc::proc_pidinfo(*member, PROC_PIDT_SHORTBSDINFO, 1, info.as_mut_ptr().cast(), size) };
+        if bytes == 0 { return Err(Error::io("command group member status", std::io::Error::last_os_error())); }
+        if bytes != size {
+            return Err(Error::new("OC_COMMAND_IDENTITY", format!("Incomplete command group member status ({bytes}/{size} bytes)")));
+        }
         let info = unsafe { info.assume_init() };
-        if info.pbi_pid != *member as u32 || info.pbi_pgid != pid {
+        if info.pid != *member as u32 || info.pgid != pid {
             return Err(Error::new("OC_COMMAND_IDENTITY", "Command group member identity changed"));
         }
-        if info.pbi_status != libc::SZOMB { return Ok(false); }
+        if info.status != libc::SZOMB { return Ok(false); }
     }
     // A member could have forked before becoming a zombie during inspection.
     let mut confirmed = [0; 256];
